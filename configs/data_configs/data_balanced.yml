@@ -1,0 +1,35 @@
+dataset_name: bio_base
+source_dataset_name: animalspeak
+dataset_version: 0.0
+dataset_source: ./animalspeak.csv   # REMOVE
+balance: false
+balance_attribute: canonical_name   # balance data across via this attribute
+custom_balancing: false
+balancing_method: upsample
+subset_percentage: 1.0              # <1 to consider a subset of data
+label_column: canonical_name
+label_type: supervised
+audio_max_length_seconds: 10
+
+transformations:
+  # 1. Keep only recordings from the specified sources
+  - xeno_filter:
+      property: source
+      values:
+        - xeno-canto
+        - iNaturalist
+        - Watkins
+      operation: include             # include rows whose `source` matches one of the values above
+
+  # 2. Sub‑sample each class at different rates
+  - class_subsample:
+      property: class
+      operation: subsample
+      ratios:                        # mapping: {class value : proportion of rows to keep}
+        birds:        0.20           # keep 20 % of bird rows
+        mammals:      0.50           # keep 50 % of mammal rows
+        amphibians:   0.70           # keep 70 % of amphibian rows
+        reptiles:     1.00           # keep all reptile rows
+        fish:         1.00           # keep all fish rows
+        insects:      1.00          # keep all insect rows
+        other:        1.00           # keep all rows that don't match this

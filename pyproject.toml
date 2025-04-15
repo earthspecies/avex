@@ -3,7 +3,7 @@
 # According to your needs.
 
 [project]
-name = "PyStarterPack"
+name = "Representation Learning"
 version = "1.0.0"
 description = "A simple boiler plate for continuous integration and good practices of ESP projects."
 readme = "README.md"
