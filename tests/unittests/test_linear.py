@@ -1,0 +1,22 @@
+"""Tests for checking basic linear transformation.
+
+Header info specific to ESP
+"""
+
+import torch
+import torch.nn
+
+
+def test_linear(device: str) -> None:
+    """Test our linear implementation against the torch basic
+    one.
+    """
+
+    from my_dummy_library.linear import Linear
+
+    inputs = torch.rand(1, 2, 4, device=device)
+    lin_t = Linear(n_neurons=4, input_size=inputs.shape[-1], bias=False)
+    lin_t.w.weight = torch.nn.Parameter(torch.eye(inputs.shape[-1], device=device))
+    outputs = lin_t(inputs)
+    assert torch.all(torch.eq(inputs, outputs))
+    assert torch.jit.trace(lin_t, inputs)

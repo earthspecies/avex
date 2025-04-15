@@ -1,0 +1,48 @@
+# Boiler plate test suit for ESP projects
+# NOTE: Caching should be benchmarked, unsure about the benefits
+# TODO (OSS): change my_dummy_library with the folder of your
+# own library to test.
+
+name: ESP Project CI
+
+# Runs on pushes to master and all pull requests
+on:    # yamllint disable-line rule:truthy
+    push:
+        branches: [main]
+    pull_request:
+
+jobs:
+    tests:
+        name: Tests
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: [3.12]
+        steps:
+            - uses: actions/checkout@v2
+            - name: Enable caching
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v5
+              with:
+                  python-version: ${{ matrix.python-version }}
+            - name: Full dependencies
+              run: |
+                  uv pip install --system -r requirements.txt
+                  uv pip install --system -r requirements-dev.txt
+            - name: Display Python version
+              run: python -c "import sys; print(sys.version)"
+            - name: Consistency tests with pytest
+              run: |
+                  pytest tests/consistency --base_folder my_dummy_library
+            - name: Unittests with pytest
+              run: |
+                  pytest tests/unittests
+            - name: Doctests with pytest
+              run: |
+                  pytest --doctest-modules my_dummy_library
+            - name: Integration tests with pytest
+              run: |
+                  pytest tests/integration
