@@ -1,7 +1,8 @@
 from representation_learning.models.efficientnetb0 import Model as EfficientNetB0
-from representation_learning.configs import ModelConfig, ModelBase
+from representation_learning.configs import ModelSpec
+from representation_learning.models.base_model import ModelBase
 
-def get_model(model_config: ModelConfig, num_classes: int) -> ModelBase:
+def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     """
     Factory function to obtain a model instance based on a static list of supported models.
     Model implementations are expected to reside in their own modules (e.g. efficientnetb0.py)

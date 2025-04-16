@@ -10,10 +10,12 @@ import random
 from torch import Tensor
 from typing import Optional, Tuple, Literal, Union
 
+from representation_learning.configs import AudioConfig
+
 def pad_or_window(
     wav: np.ndarray,
     target_len: int,
-    window_selection: str = "random",
+    window_selection: str = "random"
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Ensure the waveform has exactly `target_len` samples.
@@ -54,120 +56,100 @@ def pad_or_window(
     return padded.astype(np.float32), mask
 
 class AudioProcessor:
-    """Processes raw audio waveforms into various representations."""
-    
-    def __init__(
-        self,
-        sample_rate: int,
-        n_fft: int = 2048,
-        hop_length: Optional[int] = None,
-        win_length: Optional[int] = None,
-        window: Literal["hann", "hamming"] = "hann",
-        n_mels: int = 128,
-        representation: Literal["spectrogram", "mel_spectrogram", "raw"] = "mel_spectrogram",
-        normalize: bool = True,
-        target_length: Optional[int] = None,
-        window_selection: str = "random",
-    ):
-        """
-        Initialize the audio processor.
-        
-        Args:
-            sample_rate: Audio sample rate
-            n_fft: Number of FFT bins
-            hop_length: Hop length between STFT windows
-            win_length: Window length for STFT
-            window: Window function type
-            n_mels: Number of mel bands
-            representation: Type of audio representation to use
-            normalize: Whether to normalize the output
-            target_length: Target length in samples for padding/windowing
-            window_selection: Method for selecting windows ("random" or "center")
-        """
-        self.sample_rate = sample_rate
-        self.n_fft = n_fft
-        self.hop_length = hop_length or n_fft // 4
-        self.win_length = win_length or n_fft
-        self.window = window
-        self.n_mels = n_mels
-        self.representation = representation
-        self.normalize = normalize
-        self.target_length = target_length
-        self.window_selection = window_selection
-        
-        # Initialize mel basis if needed
-        if representation == "mel_spectrogram":
+    """Processes raw audio waveforms according to an `AudioConfig`."""
+
+    def __init__(self, cfg: AudioConfig) -> None:
+        self.cfg = cfg
+
+        # Convenience aliases
+        self.sr = cfg.sample_rate
+        self.n_fft = cfg.n_fft
+        self.hop_length = cfg.hop_length or self.n_fft // 4
+        self.win_length = cfg.win_length or self.n_fft
+        self.window_type = cfg.window
+        self.n_mels = cfg.n_mels
+        self.representation = cfg.representation
+        self.normalize = cfg.normalize
+        self.target_length = cfg.target_length
+        self.window_selection = cfg.window_selection
+
+        # Pre‑compute mel filter bank if required
+        if self.representation == "mel_spectrogram":
             self.mel_basis = torchaudio.transforms.MelScale(
-                n_mels=n_mels,
-                sample_rate=sample_rate,
-                n_stft=n_fft // 2 + 1
+                n_mels=self.n_mels,
+                sample_rate=self.sr,
+                n_stft=self.n_fft // 2 + 1,
             )
-    
+
+    # ------------------------------------------------------------------ #
+    #  Public API
+    # ------------------------------------------------------------------ #
     def __call__(self, waveform: Union[Tensor, np.ndarray]) -> Tensor:
         """
-        Convert raw waveform to the specified representation.
-        
-        Args:
-            waveform: Input waveform tensor of shape (batch_size, time_steps)
-            
-        Returns:
-            Processed audio representation tensor
+        Args
+        ----
+        waveform : (T,) or (B, T)
+            Raw mono waveform in **float32** PCM (‑1 … 1).
+
+        Returns
+        -------
+        Tensor
+            • raw →  (B, T)  
+            • spectrogram / mel_spectrogram →  (B, F, T')
         """
-        # Convert numpy array to tensor if needed
         if isinstance(waveform, np.ndarray):
             waveform = torch.from_numpy(waveform)
-            
-        # Apply padding/windowing if target length is specified
+
+        # Ensure (B, T) shape
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)
+
+        # Pad / crop to fixed length if requested
         if self.target_length is not None:
-            # Convert to numpy for pad_or_window
-            wav_np = waveform.numpy()
-            wav_np, _ = pad_or_window(wav_np, self.target_length, self.window_selection)
+            wav_np, _ = pad_or_window(
+                waveform.numpy(),
+                target_len=self.target_length,
+                window_selection=self.window_selection,
+                sr=self.sr,
+            )
             waveform = torch.from_numpy(wav_np)
-            
+
         if self.representation == "raw":
             return waveform
-            
-        # Compute STFT
+
+        # STFT → power spectrogram
         stft = torch.stft(
             waveform,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
-            window=self._get_window(),
-            return_complex=True
+            window=self._get_window().to(waveform.device),
+            return_complex=True,
         )
-        
-        # Convert to power spectrogram
-        spectrogram = torch.abs(stft) ** 2
-        
+        spectrogram = stft.abs().pow(2)
+
         if self.representation == "spectrogram":
             output = spectrogram
         elif self.representation == "mel_spectrogram":
             output = self.mel_basis(spectrogram)
         else:
-            raise ValueError(f"Unknown representation type: {self.representation}")
-            
-        # Normalize if requested
-        if self.normalize:
-            output = self._normalize(output)
-            
-        return output
-    
+            raise ValueError(f"Unknown representation: {self.representation}")
+
+        return self._normalize(output) if self.normalize else output
+
+    # ------------------------------------------------------------------ #
+    #  Helpers
+    # ------------------------------------------------------------------ #
     def _get_window(self) -> Tensor:
-        """Get the window function tensor."""
-        if self.window == "hann":
+        if self.window_type == "hann":
             return torch.hann_window(self.win_length)
-        elif self.window == "hamming":
+        if self.window_type == "hamming":
             return torch.hamming_window(self.win_length)
-        else:
-            raise ValueError(f"Unknown window type: {self.window}")
-    
-    def _normalize(self, x: Tensor) -> Tensor:
-        """Normalize the spectrogram."""
-        # Add small epsilon to avoid log(0)
-        x = torch.log(x + 1e-6)
-        
-        # Normalize to [0, 1]
-        x = (x - x.min()) / (x.max() - x.min())
-        
-        return x
+        raise ValueError(f"Unknown window type: {self.window_type}")
+
+    @staticmethod
+    def _normalize(x: Tensor) -> Tensor:
+        x = x = torch.log(x + 1e-6)
+        return (x - x.amin(dim=(-2, -1), keepdim=True)) / (
+            x.amax(dim=(-2, -1), keepdim=True) - x.amin(dim=(-2, -1), keepdim=True) + 1e-8
+        )

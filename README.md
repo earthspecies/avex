@@ -5,8 +5,9 @@
 
 # Repo TODO:
 - Add augmentations
-- Add preprocessors (activity detection)
-- Add first SSL model (which?)
-- Add first 
+- Add preprocessors (mostly activity detection)
+- Pick and add first SSL model
 - Verify EfficientNetB0 training run
 - Add evaluation
+- See if the tests run
+- Test the wandb and mlflow backends

@@ -4,14 +4,17 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from io import StringIO
+import yaml
 
 import numpy as np
 import pandas as pd
-from representation_learning.data.data_utils import GSPath, get_dataset_from_name
 import soundfile as sf
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
+from representation_learning.data.data_utils import GSPath, get_dataset_from_name
+from representation_learning.data.transformations import build_transforms
+from representation_learning.configs import load_config
 from representation_learning.data.audio_utils import pad_or_window  # type: ignore
 
 
@@ -45,9 +48,8 @@ class Collater:
         for item in batch:
             wav, pad_mask = pad_or_window(
                 item["raw_wav"],
-                target_len=self.audio_max_length_seconds,
+                target_len=self.audio_max_length_seconds * self.sr,
                 window_selection=self.window_selection,
-                sr=self.sr
             )
             audios.append(wav)
             masks.append(pad_mask)
@@ -89,10 +91,9 @@ class AudioDataset(Dataset):
         super().__init__()
         self.metadata = metadata_df.reset_index(drop=True)
         self.data_config = data_config
-        self.transform = transform
         self.preprocessor = preprocessor
 
-        self.audio_path_col = "filepath"  # modify if your CSV uses a different name
+        self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
         self.label_col = data_config.label_column
 
         # Build a label → index mapping for numeric targets
@@ -120,22 +121,18 @@ class AudioDataset(Dataset):
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
-        # --- Optional augmentation / transform --------------------------------
-        if self.transform is not None:
-            audio = self.transform(audio)
-
         return {
             "raw_wav": audio.astype(np.float32),
             "text_label": row[self.label_col],
             "label": self.label2idx[row[self.label_col]],
             "path": str(audio_path),
         }
-    
+
 
 def get_dataset_dummy(
     data_config: Any,
-    transform: Optional[Callable] = None,
     preprocessor: Optional[Callable] = None,
+    validation: bool = False
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -144,17 +141,9 @@ def get_dataset_dummy(
     2. Applies any filtering / subsampling specified in `data_config.transformations`.
     3. Returns an `AudioDataset` instance.
     """
+    
     # Check if the dataset CSV path is a gs:// path
-    if str(data_config.dataset_source).startswith("gs://"):
-        if GSPath is None:
-            raise ImportError("cloudpathlib is required to handle gs:// paths.")
-        csv_path = GSPath(data_config.dataset_source)
-    else:
-        csv_path = Path(data_config.dataset_source)
-
-    # Read CSV content
-    csv_text = csv_path.read_text(encoding="utf-8")
-    df = pd.read_csv(StringIO(csv_text))
+    df = get_dataset_from_name(data_config.dataset_name, validation)
 
     # Apply transformations if specified
     if hasattr(data_config, 'transformations') and data_config.transformations:
@@ -165,6 +154,61 @@ def get_dataset_dummy(
     return AudioDataset(
         metadata_df=df,
         data_config=data_config,
-        transform=transform,
         preprocessor=preprocessor,
     )
+
+
+def build_dataloaders(cfg, device="cpu"):
+    """
+    Build training and validation dataloaders from configuration.
+    
+    Args:
+        cfg: Run configuration
+        device: Device to use for data loading
+    
+    Returns:
+        Tuple of (train_dataloader, val_dataloader)
+    """
+    # Load dataset configuration
+    
+    data_config = load_config(cfg.dataset_config, config_type = "data")
+    
+    # Create dataset using the updated get_dataset_dummy
+    ds_train = get_dataset_dummy(
+        data_config=data_config,
+        preprocessor=None,  # Add any audio preprocessing here if needed
+        validation=True #TEMP: for testing speed
+    )
+    ds_eval = get_dataset_dummy(
+        data_config=data_config,
+        preprocessor=None,  # Add any audio preprocessing here if needed
+        validation=True
+    )
+    
+    # Create collater
+    collate_fn = Collater(
+        audio_max_length_seconds=cfg.model_spec.audio_config.target_length,
+        sr=cfg.model_spec.audio_config.sample_rate,
+        window_selection=cfg.model_spec.audio_config.window_selection
+    )
+    
+    # Create dataloaders
+    train_dl = DataLoader(
+        ds_train,
+        batch_size=cfg.training_params.batch_size,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+        collate_fn=collate_fn,
+        pin_memory=(device != "cpu"),
+    )
+    
+    val_dl = DataLoader(
+        ds_eval,
+        batch_size=cfg.training_params.batch_size,
+        shuffle=False,
+        num_workers=cfg.num_workers,
+        collate_fn=collate_fn,
+        pin_memory=(device != "cpu"),
+    )
+    
+    return train_dl, val_dl

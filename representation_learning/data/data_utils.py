@@ -1,83 +1,36 @@
 import pandas as pd
 import yaml
-
-# representation_learning/data/data_utils.py  (example)
 from torch.utils.data import DataLoader
 import pandas as pd
 import cloudpathlib
 from google.cloud.storage.client import Client
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Callable
+from io import StringIO
 
-from representation_learning.data.dataset import get_dataset, Collater
 from representation_learning.data.transformations import build_transforms
 
-ANIMALSPEAK_PATH = "path_on_cluster.csv"
+ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
+ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
 
-def get_dataset_from_name(name: str):
+def get_dataset_from_name(name: str, validation = False):
+    name = name.lower().strip()
+
     if name == "animalspeak":
-        return pd.read_csv(ANIMALSPEAK_PATH)
+        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if validation else ANIMALSPEAK_PATH
+        if ANIMALSPEAK_PATH.startswith("gs://"):
+            csv_path = GSPath(anaimspeak_path)
+        else:
+            csv_path = Path(anaimspeak_path)
+
+        # Read CSV content
+        csv_text = csv_path.read_text(encoding="utf-8")
+        df = pd.read_csv(StringIO(csv_text))
+        df["gs_path"] = df["local_path"].apply(lambda x: "gs://" + x) # AnimalSpeak missing gs path
+        return df
     else:
         raise NotImplementedError("Only AnimalSpeak dataset supported")
-
-
-def build_dataloaders(cfg, device="cpu"):
-    """
-    Build training and validation dataloaders from configuration.
-    
-    Args:
-        cfg: Run configuration
-        device: Device to use for data loading
-    
-    Returns:
-        Tuple of (train_dataloader, val_dataloader)
-    """
-    # Load dataset configuration
-    dataset_config_path = Path(cfg.dataset_config)
-    if not dataset_config_path.exists():
-        raise FileNotFoundError(f"Dataset config not found: {dataset_config_path}")
-    
-    with dataset_config_path.open("r") as f:
-        data_config = yaml.safe_load(f)
-    
-    # Create dataset using the updated get_dataset_dummy
-    ds = get_dataset_dummy(
-        data_config=data_config,
-        transform=None,  # Add any audio transformations here if needed
-        preprocessor=None  # Add any audio preprocessing here if needed
-    )
-    
-    # Create collater
-    collate_fn = Collater(
-        audio_max_length_seconds=cfg.audio_config.target_length,
-        sr=cfg.audio_config.sample_rate,
-        window_selection=cfg.audio_config.window_selection
-    )
-    
-    # Create dataloaders
-    train_dl = DataLoader(
-        ds,
-        batch_size=cfg.training_params.batch_size,
-        shuffle=True,
-        num_workers=cfg.num_workers,
-        collate_fn=collate_fn,
-        pin_memory=(device != "cpu"),
-    )
-    
-    # For now, use the same dataset for validation
-    # TODO: Implement proper validation split
-    val_dl = DataLoader(
-        ds,
-        batch_size=cfg.training_params.batch_size,
-        shuffle=False,
-        num_workers=cfg.num_workers,
-        collate_fn=collate_fn,
-        pin_memory=(device != "cpu"),
-    )
-    
-    return train_dl, val_dl
-
 
 def balance_by_attribute(dataset, attribute, strategy='undersample', target_count=None, random_state=42):
     """
@@ -148,8 +101,6 @@ def balance_by_attribute(dataset, attribute, strategy='undersample', target_coun
 
 def resample():
     pass
-
-
 
 @lru_cache(maxsize=1)
 def _get_client():

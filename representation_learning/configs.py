@@ -1,150 +1,188 @@
 """
 configs.py
 ~~~~~~~~~~
-Dataclasses for the training‑run YAML.
+Canonical **Pydantic v2** data‑classes for training‑run YAML files.
+
+The schema is deliberately strict (`extra='forbid'`) so that typos in
+configuration files raise immediately.
 
 Usage
 -----
->>> from pathlib import Path
->>> import yaml
+>>> from pathlib import Path, yaml
 >>> from configs import RunConfig
->>>
->>> cfg_dict = yaml.safe_load(Path("run.yml").read_text())
->>> cfg      = RunConfig.model_validate(cfg_dict)   # validated & parsed
+>>> cfg = RunConfig.model_validate(yaml.safe_load(Path("run.yml").read_text()))
 """
 
 from __future__ import annotations
 
-from typing import List, Tuple, Union, Literal, Optional, Any, Dict
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from pathlib import Path
 import yaml
-from dataclasses import dataclass, field
 
-from pydantic import BaseModel, Field, field_validator
+# --------------------------------------------------------------------------- #
+#  3rd‑party imports
+# --------------------------------------------------------------------------- #
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic.dataclasses import dataclass  # validates dataclass fields
+from dataclasses import field as dc_field
 
+# --------------------------------------------------------------------------- #
+#  Training‑level hyper‑parameters
+# --------------------------------------------------------------------------- #
 
 class TrainingParams(BaseModel):
+    """Hyper‑parameters that control optimisation."""
+
     train_epochs: int = Field(..., ge=1, description="Number of training epochs")
     lr: float = Field(..., gt=0, description="Learning rate")
     batch_size: int = Field(..., ge=1, description="Batch size for training")
-    optimizer: Literal["adamw", "adam"] = Field(default="adamw", description="Optimizer to use")
-    weight_decay: float = Field(default=0.0, ge=0, description="Weight decay for regularization")
-    amp: bool = False
-    amp_dtype: str = "bf16"  # or "fp16"
+    optimizer: Literal["adamw", "adam"] = Field("adamw", description="Optimizer to use")
+    weight_decay: float = Field(0.0, ge=0, description="Weight decay for regularisation")
 
-    def __post_init__(self):
-        """Validate parameters."""
-        if self.amp_dtype not in ["bf16", "fp16"]:
-            raise ValueError("amp_dtype must be either 'bf16' or 'fp16'")
+    amp: bool = False
+    amp_dtype: Literal["bf16", "fp16"] = "bf16"
+
+    model_config = ConfigDict(extra="forbid")
+
+# --------------------------------------------------------------------------- #
+#  Data‑augmentation sections
+# --------------------------------------------------------------------------- #
 
 class NoiseAugment(BaseModel):
-    kind: Literal["noise"] = Field(default="noise", description="Type of augmentation")
-    noise_dirs: List[str] = Field(..., description="Directories containing noise files")
-    snr_db_range: Tuple[int, int] = Field(..., min_items=2, max_items=2, description="SNR range in dB")
-    augmentation_prob: float = Field(..., ge=0, le=1, description="Probability of applying this augmentation")
+    kind: Literal["noise"] = "noise"
+    noise_dirs: List[str]
+    snr_db_range: Tuple[int, int] = Field(..., min_length=2, max_length=2)
+    augmentation_prob: float = Field(..., ge=0, le=1)
+
+    model_config = ConfigDict(extra="forbid")
+
 
 class MixupAugment(BaseModel):
-    kind: Literal["mixup"] = Field(default="mixup", description="Type of augmentation")
-    alpha: float = Field(..., gt=0, description="Mixup alpha parameter")
-    augmentation_prob: float = Field(..., ge=0, le=1, description="Probability of applying this augmentation")
+    kind: Literal["mixup"] = "mixup"
+    alpha: float = Field(..., gt=0)
+    augmentation_prob: float = Field(..., ge=0, le=1)
 
-# Union of the augmentation types
+    model_config = ConfigDict(extra="forbid")
+
+
 Augment = Union[NoiseAugment, MixupAugment]
 
+
+# --------------------------------------------------------------------------- #
+#  Audio & model configuration
+# --------------------------------------------------------------------------- #
+
 class AudioConfig(BaseModel):
-    """Configuration for audio processing."""
-    sample_rate: int = Field(default=16000, description="Audio sample rate")
-    n_fft: int = Field(default=2048, description="Number of FFT bins")
-    hop_length: Optional[int] = Field(default=None, description="Hop length between STFT windows")
-    win_length: Optional[int] = Field(default=None, description="Window length for STFT")
-    window: Literal["hann", "hamming"] = Field(default="hann", description="Window function type")
-    n_mels: int = Field(default=128, description="Number of mel bands")
-    representation: Literal["spectrogram", "mel_spectrogram", "raw"] = Field(
-        default="mel_spectrogram",
-        description="Type of audio representation to use"
-    )
-    normalize: bool = Field(default=True, description="Whether to normalize the output")
-    target_length: Optional[int] = Field(default=None, description="Target length in samples for padding/windowing")
-    window_selection: Literal["random", "center"] = Field(default="random", description="Method for selecting windows")
+    sample_rate: int = 16000
+    n_fft: int = 2048
+    hop_length: Optional[int] = None
+    win_length: Optional[int] = None
+    window: Literal["hann", "hamming"] = "hann"
+    n_mels: int = 128
+    representation: Literal["spectrogram", "mel_spectrogram", "raw"] = "mel_spectrogram"
+    normalize: bool = True
+    target_length: Optional[int] = None
+    window_selection: Literal["random", "center"] = "random"
 
-class ModelConfig(BaseModel):
-    """Configuration for model instantiation."""
-    name: str = Field(..., description="Name of the model to use")
-    pretrained: bool = Field(default=True, description="Whether to use pretrained weights")
-    device: str = Field(default="cuda", description="Device to run on (cuda/cpu)")
-    audio_config: Optional[AudioConfig] = Field(default=None, description="Audio processing configuration")
+    model_config = ConfigDict(extra="forbid")
 
-@dataclass
-class FilterConfig:
-    """Configuration for filtering data based on property values."""
+
+class ModelSpec(BaseModel):
+    """All parameters required to *instantiate* the network."""
+
+    name: str
+    pretrained: bool = True
+    device: str = "cuda"
+    audio_config: Optional[AudioConfig] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+# --------------------------------------------------------------------------- #
+#  Dataset‑filtering helpers
+# --------------------------------------------------------------------------- #
+
+class FilterConfig(BaseModel):
     property: str
     values: List[str]
-    operation: str = "include"  # "include" or "exclude"
+    operation: Literal["include", "exclude"] = "include"
 
-@dataclass
-class SubsampleConfig:
-    """Configuration for subsampling data based on property ratios."""
+
+class SubsampleConfig(BaseModel):
     property: str
-    operation: str = "subsample"
-    ratios: Dict[str, float] = field(default_factory=dict)
+    operation: Literal["subsample"] = "subsample"
+    ratios: Dict[str, float] = dc_field(default_factory=dict)
 
-@dataclass
-class DataConfig:
-    """Configuration for data loading and processing."""
-    data_path: Union[str, Path]
+TransformCfg = Union[FilterConfig, SubsampleConfig]
+
+
+class DataConfig(BaseModel):
+    dataset_name: str
     label_column: str
-    label_type: str  # "supervised" or "unsupervised"
-    transformations: Optional[List[Dict[str, Union[FilterConfig, SubsampleConfig]]]] = None
-    read_csv_kwargs: Dict = field(default_factory=dict)
+    label_type: Literal["supervised", "self-supervised"]
+    transformations: Optional[List[TransformCfg]] = None        # <- changed
+    read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
+
+# --------------------------------------------------------------------------- #
+#  Top‑level run‑configuration
+# --------------------------------------------------------------------------- #
 
 class RunConfig(BaseModel):
-    # Core
-    model_config: ModelConfig = Field(..., description="Model configuration")
-    dataset_config: str = Field(..., description="Path to dataset configuration")
-    preprocessing: Optional[str] = Field(None, description="Optional preprocessing step")
-    sr: int = Field(default=16000, description="Target sample rate")
-    logging: Literal["mlflow", "wandb"] = Field(default="mlflow", description="Logging framework to use")
-    training_params: TrainingParams = Field(..., description="Training parameters")
-    augmentations: List[Augment] = Field(..., description="List of data augmentations")
-    loss_function: Literal["cross_entropy", "bce"] = Field(..., description="Loss function to use")
-    
-    # Additional parameters found in codebase
-    device: str = Field(default="cuda", description="Device to run on (cuda/cpu)")
-    seed: int = Field(default=42, description="Random seed")
-    num_workers: int = Field(default=4, description="Number of data loader workers")
-    run_name: Optional[str] = Field(None, description="Name of the run for logging")
-    wandb_project: str = Field(default="audio-experiments", description="Weights & Biases project name")
+    """Everything needed for a single *training run*."""
 
+    # required
+    model_spec: ModelSpec
+    training_params: TrainingParams
+    dataset_config: str
+
+    # optional / misc
+    preprocessing: Optional[str] = None
+    sr: int = 16000
+    logging: Literal["mlflow", "wandb"] = "mlflow"
+
+    augmentations: List[Augment] = Field(default_factory=list)
+    loss_function: Literal["cross_entropy", "bce"]
+
+    device: str = "cuda"
+    seed: int = 42
+    num_workers: int = 4
+    run_name: Optional[str] = None
+    wandb_project: str = "audio‑experiments"
+
+    # ------------------------------
+    # custom pre‑processing of augments
+    # ------------------------------
     @field_validator("augmentations", mode="before")
     @classmethod
-    def _parse_augments(cls, raw_list: List[Any]) -> List[Dict[str, Any]]:
+    def _flatten_augments(cls, raw: Any) -> Any:
+        """Convert YAML single‑key mapping style into flat dicts.
+
+        YAML allows:
+            - noise: {noise_dirs: [...], snr_db_range: [-5, 20], augmentation_prob: 0.5}
+        This turns into {kind:"noise", noise_dirs: [...], ...} so the discriminated
+        union resolves correctly.
         """
-        Convert the YAML representation (each item is a *single‑key* dict)
-        into proper Augment objects.
-        """
-        parsed: List[Dict[str, Any]] = []
+        if not raw:
+            return []
 
-        for item in raw_list:
-            if not isinstance(item, dict) or len(item) != 1:
-                raise ValueError(
-                    "Each augmentation entry must be a one‑key mapping, "
-                    "e.g.  - mixup: {alpha: 0.4, augmentation_prob: 0.3}"
-                )
-
-            aug_type, params = next(iter(item.items()))
-            params = params or {}  # allow e.g. `- mixup`
-
-            # Add the kind field to help with discriminated union
-            if isinstance(params, dict):
+        processed: List[Dict[str, Any]] = []
+        for item in raw:
+            if isinstance(item, dict) and len(item) == 1:
+                aug_type, params = next(iter(item.items()))
+                params = params or {}
                 params["kind"] = aug_type
+                processed.append(params)
+            else:
+                processed.append(item)
+        return processed
 
-            parsed.append(params)
+    model_config = ConfigDict(extra="forbid")
 
-        return parsed
+# --------------------------------------------------------------------------- #
+#  Convenience loader
+# --------------------------------------------------------------------------- #
 
-
-def load_config(path: str | Path) -> RunConfig:
-    """Read YAML at *path*, validate, and return a RunConfig instance."""
+def load_config(path: str | Path, config_type = "run") -> RunConfig:
+    """Read YAML at *path*, validate, and return a **RunConfig** instance."""
 
     path = Path(path).expanduser()
     if not path.exists():
@@ -152,11 +190,10 @@ def load_config(path: str | Path) -> RunConfig:
 
     with path.open("r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
-
-    try:
-        cfg = RunConfig.model_validate(raw)
-    except Exception as e:
-        print("Config validation failed:", e)
-        raise
-
-    return cfg
+    
+    if config_type == "run":
+        return RunConfig.model_validate(raw)
+    elif config_type == "data":
+        return DataConfig.model_validate(raw)
+    else:
+        raise NotImplementedError("Can only load from run config or data config.")

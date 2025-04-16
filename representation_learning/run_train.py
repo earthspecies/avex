@@ -6,17 +6,15 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-
-from representation_learning.training.optimisers import get_optimizer
 import torch
 
-# --------------------------------------------------------------------------- #
-#  Internal imports (make sure representation_learning is on PYTHONPATH)
-# --------------------------------------------------------------------------- #
+
 from representation_learning.configs import load_config, RunConfig  # type: ignore
-from representation_learning.models.get_model import get_model                # factory in models/__init__.py
-from representation_learning.data.data_utils import build_dataloaders  # returns (train_dl, val_dl)
-from representation_learning.training.train import Trainer         # high‑level training loop
+from representation_learning.models.get_model import get_model
+from representation_learning.data.dataset import build_dataloaders  # returns (train_dl, val_dl)
+from representation_learning.training.train import Trainer
+from representation_learning.training.optimisers import get_optimizer
+from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger("run_train")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s: %(message)s")
@@ -54,10 +52,11 @@ def main() -> None:
     logger.info("Number of labels: %d", num_labels)
 
     # 4. Build the model
-    model = get_model(cfg.model_config, num_classes=num_labels).to(device)
+    model = get_model(cfg.model_spec, num_classes=num_labels).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
 
-    optim = get_optimizer(cfg.training_params)
+    optim = get_optimizer(model.parameters(), cfg.training_params)
+    exp_logger = ExperimentLogger.from_config(cfg)
 
     trainer = Trainer(
         model=model,
@@ -66,6 +65,7 @@ def main() -> None:
         val_loader=val_dl,
         device=device,
         cfg=cfg,
+        exp_logger=exp_logger
     )
 
     trainer.train(num_epochs=cfg.training_params.train_epochs)

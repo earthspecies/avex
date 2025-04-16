@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 import numpy as np
 
-from representation_learning.configs import FilterConfig, SubsampleConfig
+from representation_learning.configs import FilterConfig, SubsampleConfig, TransformCfg
 
 class DataTransform(ABC):
     """Base class for data transformations."""
@@ -56,97 +56,100 @@ class Filter(DataTransform):
         else:
             return {k: v for k, v in data.items() if v[self.config.property] not in self.values}
 
+
 class Subsample(DataTransform):
     """Subsample data based on property ratios."""
-    
+
     def __init__(self, config: SubsampleConfig):
-        """
-        Initialize the subsampler.
-        
-        Args:
-            config: Subsample configuration
-        """
-        self.config = config
-        
         if config.operation != "subsample":
-            raise ValueError(f"Operation must be 'subsample', got {config.operation}")
-        
+            raise ValueError("SubsampleConfig.operation must be 'subsample'")
         if not all(0 <= r <= 1 for r in config.ratios.values()):
-            raise ValueError("All ratios must be between 0 and 1")
-    
-    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]) -> Union[pd.DataFrame, Dict[str, Any]]:
-        """Subsample the data based on property ratios."""
+            raise ValueError("All ratios must be in [0, 1]")
+        self.cfg = config
+
+    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):
         if isinstance(data, pd.DataFrame):
             return self._subsample_dataframe(data)
-        elif isinstance(data, dict):
+        if isinstance(data, dict):
             return self._subsample_dict(data)
-        else:
-            raise TypeError(f"Unsupported data type: {type(data)}")
-    
-    def _subsample_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Subsample a pandas DataFrame."""
-        result = []
-        for value, ratio in self.config.ratios.items():
-            value_data = df[df[self.config.property] == value]
-            if ratio < 1.0:
-                n_samples = int(len(value_data) * ratio)
-                value_data = value_data.sample(n=n_samples, random_state=42)
-            result.append(value_data)
-        
-        # Handle "other" value if specified
-        if "other" in self.config.ratios:
-            other_values = set(self.config.ratios.keys()) - {"other"}
-            other_data = df[~df[self.config.property].isin(other_values)]
-            if self.config.ratios["other"] < 1.0:
-                n_samples = int(len(other_data) * self.config.ratios["other"])
-                other_data = other_data.sample(n=n_samples, random_state=42)
-            result.append(other_data)
-        
-        return pd.concat(result, ignore_index=True)
-    
-    def _subsample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Subsample a dictionary of data."""
-        result = {}
-        for value, ratio in self.config.ratios.items():
-            value_data = {k: v for k, v in data.items() if v[self.config.property] == value}
-            if ratio < 1.0:
-                n_samples = int(len(value_data) * ratio)
-                keys = np.random.choice(list(value_data.keys()), size=n_samples, replace=False)
-                value_data = {k: value_data[k] for k in keys}
-            result.update(value_data)
-        
-        # Handle "other" value if specified
-        if "other" in self.config.ratios:
-            other_values = set(self.config.ratios.keys()) - {"other"}
-            other_data = {k: v for k, v in data.items() if v[self.config.property] not in other_values}
-            if self.config.ratios["other"] < 1.0:
-                n_samples = int(len(other_data) * self.config.ratios["other"])
-                keys = np.random.choice(list(other_data.keys()), size=n_samples, replace=False)
-                other_data = {k: other_data[k] for k in keys}
-            result.update(other_data)
-        
-        return result
+        raise TypeError(f"Unsupported data type: {type(data)}")
 
-def build_transforms(transform_configs: List[Dict[str, Any]]) -> List[DataTransform]:
+    def _choose_keys(self, keys: List[Any], ratio: float) -> List[Any]:
+        """Return a subsample of *keys* of size `ceil(len(keys)*ratio)`."""
+        if ratio >= 1.0 or len(keys) == 0:
+            return keys
+        n = int(len(keys) * ratio)
+        rng = np.random.default_rng(seed=42)
+        return rng.choice(keys, size=n, replace=False).tolist()
+
+    def _subsample_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        prop = self.cfg.property
+        ratios = self.cfg.ratios
+        groups = []
+
+        for val, ratio in ratios.items():
+            if val == "other":
+                continue
+            idx = df.index[df[prop] == val].tolist()
+            chosen = self._choose_keys(idx, ratio)
+            groups.append(df.loc[chosen])
+
+        if "other" in ratios:
+            mask_other = ~df[prop].isin(ratios.keys() - {"other"})
+            idx_other = df.index[mask_other].tolist()
+            chosen_other = self._choose_keys(idx_other, ratios["other"])
+            groups.append(df.loc[chosen_other])
+
+        return pd.concat(groups, ignore_index=True)
+
+    def _subsample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        prop = self.cfg.property
+        ratios = self.cfg.ratios
+        selected: Dict[str, Any] = {}
+
+        for val, ratio in ratios.items():
+            if val == "other":
+                continue
+            keys = [k for k, v in data.items() if v[prop] == val]
+            for k in self._choose_keys(keys, ratio):
+                selected[k] = data[k]
+
+        if "other" in ratios:
+            other_keys = [
+                k for k, v in data.items() if v[prop] not in (ratios.keys() - {"other"})
+            ]
+            for k in self._choose_keys(other_keys, ratios["other"]):
+                selected[k] = data[k]
+
+        return selected
+
+
+def build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
     """
-    Build a list of transformations from configuration.
-    
-    Args:
-        transform_configs: List of transformation configurations
-        
-    Returns:
-        List of DataTransform instances
+    Build the transformation pipeline from **validated** configs.
+
+    Parameters
+    ----------
+    transform_configs : list[FilterConfig | SubsampleConfig]
+        The `transformations` field that comes straight out of a validated
+        `DataConfig`.  No raw YAML dictionaries are accepted.
+
+    Returns
+    -------
+    list[DataTransform]
+        Callable objects that can be applied in sequence.
     """
-    transforms = []
-    for config in transform_configs:
-        transform_type = next(iter(config))
-        params = config[transform_type]
-        
-        if transform_type == "filter":
-            transforms.append(Filter(FilterConfig(**params)))
-        elif transform_type == "subsample":
-            transforms.append(Subsample(SubsampleConfig(**params)))
-        else:
-            raise ValueError(f"Unknown transform type: {transform_type}")
-    
-    return transforms 
+    transforms: List[DataTransform] = []
+
+    for cfg in transform_configs:
+        if isinstance(cfg, FilterConfig):
+            transforms.append(Filter(cfg))
+        elif isinstance(cfg, SubsampleConfig):
+            transforms.append(Subsample(cfg))
+        else:  # this should never happen if DataConfig was validated
+            raise TypeError(
+                "build_transforms() received an unexpected config type: "
+                f"{type(cfg).__name__}"
+            )
+
+    return transforms

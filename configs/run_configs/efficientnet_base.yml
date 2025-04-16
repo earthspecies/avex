@@ -1,10 +1,21 @@
 # Model configuration
-model_config:
+model_spec:
   name: efficientnetb0
   pretrained: true
+  audio_config:
+    sample_rate: 16000
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length: 160000  # 10 seconds at 16kHz
+    window_selection: random
 
 # Where to find the (now‑completed) dataset config created earlier
-dataset_config: configs/data_configs/data_balanced.yml
+dataset_config: configs/data_configs/data_base.yml
 
 # Optional waveform preprocessing step; keep as null / None if you handle it
 # inside the dataloader or model
@@ -15,19 +26,6 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
-
-# Audio processing configuration
-audio_config:
-  sample_rate: 16000
-  n_fft: 2048
-  hop_length: 512
-  win_length: 2048
-  window: hann
-  n_mels: 128
-  representation: mel_spectrogram
-  normalize: true
-  target_length: 160000  # 10 seconds at 16kHz
-  window_selection: random
 
 training_params:
   train_epochs: 10
@@ -41,17 +39,17 @@ training_params:
 augmentations:
   # Add background noise at random SNRs
   - noise:
-      noise_dirs:
-        - ./data/noise/esc50_background # this should be a gs path?
-        - ./data/noise/freesound_misc
-        - ./data/noise/dcase_synthetic
+      noise_dirs: # DUMMY: not implemented!
+        - gs://foundation-model-data/data/noise/esc50_background # this should be a gs path
+        - gs://foundation-model-data/data/noise/freesound_misc
+        - gs://foundation-model-data/data/noise/dcase_synthetic
       snr_db_range: [-5, 20]     # mix noise between 5 dB and 20 dB SNR
       augmentation_prob: 0.5
 
 # Multi‑class (single‑label) classification ⇒ standard cross‑entropy
 loss_function: cross_entropy
 
-device: cuda
+device: cpu
 
 seed: 42
 

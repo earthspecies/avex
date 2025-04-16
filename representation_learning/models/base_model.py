@@ -15,7 +15,7 @@ class ModelBase(nn.Module):
         self.device = device
         
         # Initialize audio processor if config is provided
-        self.audio_processor = AudioProcessor(**audio_config) if audio_config else None
+        self.audio_processor = AudioProcessor(audio_config) if audio_config else None
 
     def prepare_inference(self):
         self.model.eval()

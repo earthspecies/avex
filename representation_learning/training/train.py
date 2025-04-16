@@ -70,7 +70,7 @@ class Trainer:
         # Log static hyper‑parameters once
         self.log.log_params(
             {
-                "model_name": cfg.model_name,
+                "model_name": cfg.model_spec.name,
                 "epochs": cfg.training_params.train_epochs,
                 "lr": cfg.training_params.lr,
                 "batch_size": cfg.training_params.batch_size,
