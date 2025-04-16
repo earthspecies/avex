@@ -1,8 +1,12 @@
 # A repo for representation learning in bioacoustics
 
-#  🗣️ To run:
+#  To run:
 - uv sync
 - uv run python representation_learning/run_train.py --config configs/run_configs/efficientnet_base.yml
+
+#  To extend:
+To add a model, subclass ModelBase in representation_learning/models/base_model.py and add it to get_model in
+representation_learning/models/get_model.py.
 
 
 # Repo TODO:

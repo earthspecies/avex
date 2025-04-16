@@ -5,10 +5,6 @@ from typing import Optional, Dict, Any
 
 from representation_learning.data.audio_utils import AudioProcessor
 
-AVAILABLE_MODELS = {
-    "efficientnetb0": "efficientnetb0",  # Value is the module name; the class inside must be named 'Model'
-}
-
 class ModelBase(nn.Module):
     def __init__(self, device: str, audio_config: Optional[Dict[str, Any]] = None):
         super(ModelBase, self).__init__()

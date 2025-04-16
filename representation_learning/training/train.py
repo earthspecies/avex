@@ -1,34 +1,50 @@
 """
 representation_learning.training.train
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A compact yet full‑featured training loop that supports:
+
+* Automatic Mixed Precision (fp16 / bf16)
+* Gradient‑scaling when using fp16 AMP
+* Proper no‑grad evaluation
+* Check‑pointing of the best model
+* Parameter & metric logging via `ExperimentLogger`
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import torch
 import torch.nn as nn
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-logger = logging.getLogger(__name__)
+from representation_learning.utils import ExperimentLogger  # type: ignore
 
-from representation_learning.utils import ExperimentLogger
+logger = logging.getLogger(__name__)
 
 
 def _build_criterion(name: str) -> nn.Module:
-    if name == "cross_entropy":
+    """Factory for common loss functions."""
+    name = name.lower()
+    if name in {"cross_entropy", "ce"}:
         return nn.CrossEntropyLoss()
-    if name in {"bce", "binary_cross_entropy_with_logits"}:
+    if name in {"bce", "binary_cross_entropy_with_logits", "bce_with_logits"}:
         return nn.BCEWithLogitsLoss()
     raise ValueError(f"Unknown loss_function: {name}")
 
 
+# --------------------------------------------------------------------------- #
+#  Trainer
+# --------------------------------------------------------------------------- #
 class Trainer:
     """
+    Generic supervised trainer.
+
     Parameters
     ----------
     model         : nn.Module
@@ -37,9 +53,10 @@ class Trainer:
     val_loader    : DataLoader
     device        : torch.device
     cfg           : RunConfig (or any object with the referenced fields)
-    exp_logger    : object with `.log_params`, `.log_metrics`, `.finalize`
+    exp_logger    : ExperimentLogger
     """
 
+    # ----------------------------- initialisation -------------------------- #
     def __init__(
         self,
         *,
@@ -51,7 +68,7 @@ class Trainer:
         cfg: Any,
         exp_logger: ExperimentLogger,
     ) -> None:
-        self.model = model
+        self.model = model.to(device)
         self.optimizer = optimizer
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -59,10 +76,10 @@ class Trainer:
         self.cfg = cfg
         self.log = exp_logger
 
-        # Setup AMP
-        self.amp_enabled = cfg.training_params.amp
+        # AMP
+        self.amp_enabled: bool = cfg.training_params.amp
         self.amp_dtype = torch.bfloat16 if cfg.training_params.amp_dtype == "bf16" else torch.float16
-        self.scaler = GradScaler() if self.amp_dtype == torch.float16 else None
+        self.scaler: GradScaler | None = GradScaler() if (self.amp_enabled and self.amp_dtype == torch.float16) else None
 
         self.criterion = _build_criterion(cfg.loss_function)
         self.best_val_acc: float = 0.0
@@ -81,14 +98,13 @@ class Trainer:
         )
 
         # Checkpoint directory
-        self.ckpt_dir = Path("checkpoints")
-        self.ckpt_dir.mkdir(exist_ok=True)
+        self.ckpt_dir = Path(cfg.output_dir or "checkpoints")
+        self.ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    # --------------------------------------------------------------------- #
-    #  Public API
-    # --------------------------------------------------------------------- #
-    def train(self, num_epochs: int) -> None:
-        for epoch in range(1, num_epochs + 1):
+    # ----------------------------- public API ------------------------------ #
+    def train(self) -> None:
+        """Run the full training loop for the configured number of epochs."""
+        for epoch in range(1, self.cfg.training_params.train_epochs + 1):
             train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
             val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
 
@@ -99,12 +115,8 @@ class Trainer:
             )
 
             # Log epoch‑level metrics
-            self.log.log_metrics(
-                {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
-            )
-            self.log.log_metrics(
-                {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
-            )
+            self.log.log_metrics({"loss": train_loss, "acc": train_acc}, step=epoch, split="train")
+            self.log.log_metrics({"loss": val_loss, "acc": val_acc}, step=epoch, split="val")
 
             # Save best model
             if val_acc > self.best_val_acc:
@@ -113,25 +125,30 @@ class Trainer:
 
         self.log.finalize()
 
-    # --------------------------------------------------------------------- #
-    #  Internal helpers
-    # --------------------------------------------------------------------- #
+    # --------------------------- internal helpers -------------------------- #
     def _run_epoch(self, *, train: bool, epoch: int) -> Tuple[float, float]:
+        """
+        Iterate once over the loader.
+
+        Returns
+        -------
+        Tuple[float, float] : mean loss, mean accuracy
+        """
         loader = self.train_loader if train else self.val_loader
-        mode = "train" if train else "eval"
-        self.model.train(mode == "train")
+        self.model.train(train)  # train=True -> .train(); train=False -> .eval()
 
         total_loss, total_correct, total_samples = 0.0, 0, 0
-        pbar = tqdm(loader, desc=f"{mode.title()} Epoch {epoch}", leave=False)
+        pbar = tqdm(loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False)
 
-        for batch in pbar:
-            loss, correct, n = self._forward(batch, train=train)
+        grad_ctx = contextlib.nullcontext() if train else torch.no_grad()
 
-            total_loss += loss * n
-            total_correct += correct
-            total_samples += n
-
-            pbar.set_postfix(loss=loss, acc=correct / n)
+        with grad_ctx:
+            for batch in pbar:
+                loss, correct, n = self._forward(batch, train=train)
+                total_loss += loss * n
+                total_correct += correct
+                total_samples += n
+                pbar.set_postfix(loss=loss, acc=correct / n)
 
         return total_loss / total_samples, total_correct / total_samples
 
@@ -141,23 +158,20 @@ class Trainer:
         *,
         train: bool,
     ) -> Tuple[float, int, int]:
+        """Single forward/backward step (if `train=True`)."""
         wav = batch["raw_wav"].to(self.device)
         mask = batch.get("padding_mask")
         if mask is not None:
             mask = mask.to(self.device)
         labels = batch["label"].to(self.device)
 
-        # Forward pass with AMP
+        # Forward (AMP works in both modes)
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
-            logits = (
-                self.model(wav, padding_mask=mask)
-                if mask is not None
-                else self.model(wav)
-            )
+            logits = self.model(wav, padding_mask=mask) if mask is not None else self.model(wav)
             loss = self.criterion(logits, labels)
 
         if train:
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             if self.amp_enabled and self.scaler is not None:
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
