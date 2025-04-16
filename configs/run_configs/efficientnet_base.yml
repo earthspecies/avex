@@ -1,4 +1,7 @@
-model_name: efficientnetb0
+# Model configuration
+model_config:
+  name: efficientnetb0
+  pretrained: true
 
 # Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_balanced.yml
@@ -13,12 +16,27 @@ sr: 16000
 # Log training runs to MLflow
 logging: mlflow
 
+# Audio processing configuration
+audio_config:
+  sample_rate: 16000
+  n_fft: 2048
+  hop_length: 512
+  win_length: 2048
+  window: hann
+  n_mels: 128
+  representation: mel_spectrogram
+  normalize: true
+  target_length: 160000  # 10 seconds at 16kHz
+  window_selection: random
+
 training_params:
   train_epochs: 10
   lr: 0.0001
   batch_size: 16
   optimizer: adamw          # common default for AudioMAE
   weight_decay: 0.01        # mild regularisation
+  amp: true
+  amp_dtype: bf16
 
 augmentations:
   # Add background noise at random SNRs
@@ -32,3 +50,13 @@ augmentations:
 
 # Multi‑class (single‑label) classification ⇒ standard cross‑entropy
 loss_function: cross_entropy
+
+device: cuda
+
+seed: 42
+
+num_workers: 0
+
+run_name: efficientnet_base
+
+wandb_project: representation_learning

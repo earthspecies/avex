@@ -13,7 +13,7 @@ audio_max_length_seconds: 10
 
 transformations:
   # 1. Keep only recordings from the specified sources
-  - xeno_filter:
+  - filter:
       property: source
       values:
         - xeno-canto
@@ -22,7 +22,7 @@ transformations:
       operation: include             # include rows whose `source` matches one of the values above
 
   # 2. Sub‑sample each class at different rates
-  - class_subsample:
+  - subsample:
       property: class
       operation: subsample
       ratios:                        # mapping: {class value : proportion of rows to keep}

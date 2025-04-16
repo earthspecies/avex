@@ -10,6 +10,7 @@ from typing import Any, Dict, Tuple
 
 import torch
 import torch.nn as nn
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -58,6 +59,11 @@ class Trainer:
         self.cfg = cfg
         self.log = exp_logger
 
+        # Setup AMP
+        self.amp_enabled = cfg.training_params.amp
+        self.amp_dtype = torch.bfloat16 if cfg.training_params.amp_dtype == "bf16" else torch.float16
+        self.scaler = GradScaler() if self.amp_dtype == torch.float16 else None
+
         self.criterion = _build_criterion(cfg.loss_function)
         self.best_val_acc: float = 0.0
 
@@ -69,6 +75,8 @@ class Trainer:
                 "lr": cfg.training_params.lr,
                 "batch_size": cfg.training_params.batch_size,
                 "loss_fn": cfg.loss_function,
+                "amp": self.amp_enabled,
+                "amp_dtype": cfg.training_params.amp_dtype,
             }
         )
 
@@ -139,18 +147,24 @@ class Trainer:
             mask = mask.to(self.device)
         labels = batch["label"].to(self.device)
 
-        logits = (
-            self.model(wav, padding_mask=mask)
-            if mask is not None
-            else self.model(wav)
-        )
-
-        loss = self.criterion(logits, labels)
+        # Forward pass with AMP
+        with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
+            logits = (
+                self.model(wav, padding_mask=mask)
+                if mask is not None
+                else self.model(wav)
+            )
+            loss = self.criterion(logits, labels)
 
         if train:
             self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+            if self.amp_enabled and self.scaler is not None:
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                loss.backward()
+                self.optimizer.step()
 
         preds = logits.argmax(dim=-1)
         correct = (preds == labels).sum().item()

@@ -138,27 +138,29 @@ def get_dataset_dummy(
     preprocessor: Optional[Callable] = None,
 ) -> AudioDataset:
     """
-    Dummy dataset entry point.
+    Dataset entry point that supports both local and GS paths, with transformations.
     
-    1. Loads metadata CSV (path specified in `data_config.dataset_name`).
-    2. Applies any filtering / subsampling (if needed).
+    1. Loads metadata CSV (path specified in `data_config.dataset_source`).
+    2. Applies any filtering / subsampling specified in `data_config.transformations`.
     3. Returns an `AudioDataset` instance.
     """
-    dataset_path = get_dataset_from_name(data_config.dataset_name)
-
-    # Check if the dataset CSV path is a gs:// path.
-    if str(dataset_path).startswith("gs://"):
+    # Check if the dataset CSV path is a gs:// path
+    if str(data_config.dataset_source).startswith("gs://"):
         if GSPath is None:
             raise ImportError("cloudpathlib is required to handle gs:// paths.")
-        csv_path = GSPath(dataset_path)
+        csv_path = GSPath(data_config.dataset_source)
     else:
-        csv_path = Path(dataset_path)
+        csv_path = Path(data_config.dataset_source)
 
-    # Read CSV content.
+    # Read CSV content
     csv_text = csv_path.read_text(encoding="utf-8")
     df = pd.read_csv(StringIO(csv_text))
 
-    # TODO: Apply transformations specified in data_config.transformations, if any.
+    # Apply transformations if specified
+    if hasattr(data_config, 'transformations') and data_config.transformations:
+        transforms = build_transforms(data_config.transformations)
+        for transform in transforms:
+            df = transform(df)
 
     return AudioDataset(
         metadata_df=df,

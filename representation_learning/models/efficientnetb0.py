@@ -7,10 +7,9 @@ from representation_learning.models.base_model import ModelBase
 
 # EfficientNetB0. Each class should be called "Model."
 class Model(ModelBase):
-    def __init__(self, num_classes=1000, pretrained=True, device='cuda'):
-        # Call initializers for both parent classes.
-        ModelBase.__init__(self, device)
-        nn.Module.__init__(self)
+    def __init__(self, num_classes=1000, pretrained=True, device='cuda', audio_config=None):
+        # Call parent initializer with audio config
+        super().__init__(device=device, audio_config=audio_config)
         
         # Load a pre-trained EfficientNet B0 from torchvision.
         self.model = efficientnet_b0(pretrained=pretrained)
@@ -20,6 +19,20 @@ class Model(ModelBase):
         if num_classes != 1000:
             in_features = self.model.classifier[1].in_features
             self.model.classifier[1] = nn.Linear(in_features, num_classes)
+    
+    def process_audio(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Process audio input and adapt it for EfficientNet's 3-channel input.
+        """
+        # First use parent's audio processing
+        x = super().process_audio(x)
+        
+        # EfficientNet expects 3 channels, so we need to repeat the spectrogram
+        if x.dim() == 3:  # (batch, freq, time)
+            x = x.unsqueeze(1)  # Add channel dimension
+            x = x.repeat(1, 3, 1, 1)  # Repeat across channels
+            
+        return x
         
     def forward(self, x):
         # Forward pass: simply call the underlying EfficientNet.

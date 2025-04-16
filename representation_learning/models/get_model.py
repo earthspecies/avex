@@ -1,24 +1,36 @@
 from representation_learning.models.efficientnetb0 import Model as EfficientNetB0
+from representation_learning.configs import ModelConfig, ModelBase
 
-def get_model(model_config, num_classes):
+def get_model(model_config: ModelConfig, num_classes: int) -> ModelBase:
     """
     Factory function to obtain a model instance based on a static list of supported models.
     Model implementations are expected to reside in their own modules (e.g. efficientnetb0.py)
     and define a class (always called 'Model'). This function currently supports the 'efficientnetb0' model.
 
     Args:
-        model_config (str): The model configuration name (e.g., "efficientnetb0").
-        num_classes (int): The number of classes to be used in the model.
+        model_config: Model configuration object containing:
+            - name: Name of the model to instantiate
+            - pretrained: Whether to use pretrained weights
+            - device: Device to run on
+            - audio_config: Audio processing configuration
+        num_classes: The number of classes to be used in the model.
 
     Returns:
-        An instance of the corresponding model configured with the provided num_classes.
+        An instance of the corresponding model configured with the provided parameters.
 
     Raises:
         NotImplementedError: If the model_config does not match any supported models.
     """
-    if model_config.lower() == "efficientnetb0":
-        return EfficientNetB0(num_classes=num_classes)
+    model_name = model_config.name.lower()
+    
+    if model_name == "efficientnetb0":
+        return EfficientNetB0(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config
+        )
     else:
         raise NotImplementedError(
-            f"Model '{model_config}' is not implemented. Supported models: 'efficientnetb0'."
+            f"Model '{model_name}' is not implemented. Supported models: 'efficientnetb0'."
         )

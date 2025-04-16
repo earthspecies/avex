@@ -1,4 +1,5 @@
 import pandas as pd
+import yaml
 
 # representation_learning/data/data_utils.py  (example)
 from torch.utils.data import DataLoader
@@ -6,8 +7,11 @@ import pandas as pd
 import cloudpathlib
 from google.cloud.storage.client import Client
 from functools import lru_cache
+from pathlib import Path
+from typing import Dict, List, Optional, Union, Any
 
 from representation_learning.data.dataset import get_dataset, Collater
+from representation_learning.data.transformations import build_transforms
 
 ANIMALSPEAK_PATH = "path_on_cluster.csv"
 
@@ -19,10 +23,39 @@ def get_dataset_from_name(name: str):
 
 
 def build_dataloaders(cfg, device="cpu"):
-    ds = get_dataset(cfg.data_config)
-
-    collate_fn = Collater(audio_max_length=cfg.data_config.audio_max_length, window_selection=cfg.data_config.window_selection)
-
+    """
+    Build training and validation dataloaders from configuration.
+    
+    Args:
+        cfg: Run configuration
+        device: Device to use for data loading
+    
+    Returns:
+        Tuple of (train_dataloader, val_dataloader)
+    """
+    # Load dataset configuration
+    dataset_config_path = Path(cfg.dataset_config)
+    if not dataset_config_path.exists():
+        raise FileNotFoundError(f"Dataset config not found: {dataset_config_path}")
+    
+    with dataset_config_path.open("r") as f:
+        data_config = yaml.safe_load(f)
+    
+    # Create dataset using the updated get_dataset_dummy
+    ds = get_dataset_dummy(
+        data_config=data_config,
+        transform=None,  # Add any audio transformations here if needed
+        preprocessor=None  # Add any audio preprocessing here if needed
+    )
+    
+    # Create collater
+    collate_fn = Collater(
+        audio_max_length_seconds=cfg.audio_config.target_length,
+        sr=cfg.audio_config.sample_rate,
+        window_selection=cfg.audio_config.window_selection
+    )
+    
+    # Create dataloaders
     train_dl = DataLoader(
         ds,
         batch_size=cfg.training_params.batch_size,
@@ -32,7 +65,18 @@ def build_dataloaders(cfg, device="cpu"):
         pin_memory=(device != "cpu"),
     )
     
-    return train_dl, train_dl #TODO: val
+    # For now, use the same dataset for validation
+    # TODO: Implement proper validation split
+    val_dl = DataLoader(
+        ds,
+        batch_size=cfg.training_params.batch_size,
+        shuffle=False,
+        num_workers=cfg.num_workers,
+        collate_fn=collate_fn,
+        pin_memory=(device != "cpu"),
+    )
+    
+    return train_dl, val_dl
 
 
 def balance_by_attribute(dataset, attribute, strategy='undersample', target_count=None, random_state=42):
@@ -118,4 +162,3 @@ class GSPath(cloudpathlib.GSPath):
     """
     def __init__(self, client_path, client=_get_client()):
         super().__init__(client_path, client=client)
-
