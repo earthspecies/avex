@@ -1,21 +1,18 @@
-
 from __future__ import annotations
 
 import logging
-import random
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from io import StringIO
 
 import numpy as np
 import pandas as pd
+from representation_learning.data.data_utils import GSPath, get_dataset_from_name
 import soundfile as sf
 import torch
 from torch.utils.data import Dataset
 
 from representation_learning.data.audio_utils import pad_or_window  # type: ignore
-
-
-logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -59,7 +56,7 @@ class Collater:
                 text_labels.append(item["text_label"])
 
         audio_tensor = torch.from_numpy(np.stack(audios))  # [B, T]  float32
-        mask_tensor = torch.from_numpy(np.stack(masks))    # [B, T]  bool
+        mask_tensor = torch.from_numpy(np.stack(masks))      # [B, T]  bool
         label_tensor = torch.tensor(labels, dtype=torch.long)
 
         out = {
@@ -70,18 +67,16 @@ class Collater:
         }
         return out
 
-
 # --------------------------------------------------------------------------- #
 #  Dataset
 # --------------------------------------------------------------------------- #
 class AudioDataset(Dataset):
     """
     Reads metadata from a CSV, loads audio, and yields a sample dict.
-
-    Expected columns in the CSV
-    ---------------------------
-    * 'filepath'  : str – path to the audio file on disk
-    * <label_col> : str – value used for the target (e.g. species name)
+    
+    Expected columns in the CSV:
+    * 'filepath'  : str – path to the audio file on disk or a gs:// path.
+    * <label_col> : str – value used for the target (e.g. species name).
     """
 
     def __init__(
@@ -109,13 +104,19 @@ class AudioDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         row = self.metadata.iloc[idx]
+        path_str: str = row[self.audio_path_col]
 
-        audio_path = Path(row[self.audio_path_col])
-        label_str: str = row[self.label_col]
-        label_idx: int = self.label2idx[label_str]
+        # Use GSPath for gs:// paths if available, otherwise use the local Path.
+        if path_str.startswith("gs://"):
+            if GSPath is None:
+                raise ImportError("cloudpathlib is required to handle gs:// paths.")
+            audio_path = GSPath(path_str)
+        else:
+            audio_path = Path(path_str)
 
-        # --- Load audio -------------------------------------------------------
-        audio, sr = sf.read(audio_path)
+        # Open the audio file. Using the .open('rb') method works for both local and GSPath objects.
+        with audio_path.open("rb") as f:
+            audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
@@ -125,11 +126,11 @@ class AudioDataset(Dataset):
 
         return {
             "raw_wav": audio.astype(np.float32),
-            "text_label": label_str,
-            "label": label_idx,
+            "text_label": row[self.label_col],
+            "label": self.label2idx[row[self.label_col]],
             "path": str(audio_path),
         }
-
+    
 
 def get_dataset_dummy(
     data_config: Any,
@@ -137,22 +138,27 @@ def get_dataset_dummy(
     preprocessor: Optional[Callable] = None,
 ) -> AudioDataset:
     """
-    TODO: ---This is the dummy dataset entry point----
-    It will be replaced with the real interface.
-    -----
-    1. Load metadata CSV (path in `data_config.dataset_source`).
-    2. Apply any filtering / subsampling outside this function (or add here).
-    3. Return an `AudioDataset` instance.
-    -----
+    Dummy dataset entry point.
+    
+    1. Loads metadata CSV (path specified in `data_config.dataset_name`).
+    2. Applies any filtering / subsampling (if needed).
+    3. Returns an `AudioDataset` instance.
     """
-    csv_path = Path(data_config.dataset_name)
-    if not csv_path.exists():
-        raise FileNotFoundError(csv_path)
+    dataset_path = get_dataset_from_name(data_config.dataset_name)
 
-    df = pd.read_csv(csv_path)
+    # Check if the dataset CSV path is a gs:// path.
+    if str(dataset_path).startswith("gs://"):
+        if GSPath is None:
+            raise ImportError("cloudpathlib is required to handle gs:// paths.")
+        csv_path = GSPath(dataset_path)
+    else:
+        csv_path = Path(dataset_path)
 
-    # TODO: apply transformations described in
-    #       data_config.transformations here
+    # Read CSV content.
+    csv_text = csv_path.read_text(encoding="utf-8")
+    df = pd.read_csv(StringIO(csv_text))
+
+    # TODO: Apply transformations specified in data_config.transformations, if any.
 
     return AudioDataset(
         metadata_df=df,

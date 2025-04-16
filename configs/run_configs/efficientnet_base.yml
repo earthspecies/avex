@@ -1,4 +1,4 @@
-model_name: audiomae
+model_name: efficientnetb0
 
 # Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_balanced.yml

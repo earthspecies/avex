@@ -3,6 +3,9 @@ import pandas as pd
 # representation_learning/data/data_utils.py  (example)
 from torch.utils.data import DataLoader
 import pandas as pd
+import cloudpathlib
+from google.cloud.storage.client import Client
+from functools import lru_cache
 
 from representation_learning.data.dataset import get_dataset, Collater
 
@@ -11,6 +14,8 @@ ANIMALSPEAK_PATH = "path_on_cluster.csv"
 def get_dataset_from_name(name: str):
     if name == "animalspeak":
         return pd.read_csv(ANIMALSPEAK_PATH)
+    else:
+        raise NotImplementedError("Only AnimalSpeak dataset supported")
 
 
 def build_dataloaders(cfg, device="cpu"):
@@ -26,8 +31,8 @@ def build_dataloaders(cfg, device="cpu"):
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),
     )
-    # build val_dl similarly ...
-    return train_dl, val_dl
+    
+    return train_dl, train_dl #TODO: val
 
 
 def balance_by_attribute(dataset, attribute, strategy='undersample', target_count=None, random_state=42):
@@ -99,3 +104,18 @@ def balance_by_attribute(dataset, attribute, strategy='undersample', target_coun
 
 def resample():
     pass
+
+
+
+@lru_cache(maxsize=1)
+def _get_client():
+    return cloudpathlib.GSClient(storage_client=Client())
+
+class GSPath(cloudpathlib.GSPath):
+    """
+    A wrapper for the cloudpathlib GSPath that provides a default client.
+    This avoids issues when the GOOGLE_APPLICATION_CREDENTIALS variable is not set.
+    """
+    def __init__(self, client_path, client=_get_client()):
+        super().__init__(client_path, client=client)
+
