@@ -1,0 +1,13 @@
+data_path: benchmark
+
+datasets:
+  - name: bats
+    type: classification
+    label_column: label
+    audio_path_col: path
+    multi_label: false
+    path: egyptian_fruit_bats
+    train_path: benchmark/egyptian_fruit_bats/annotations.train.csv
+    valid_path: benchmark/egyptian_fruit_bats/annotations.valid.csv
+    test_path: benchmark/egyptian_fruit_bats/annotations.test.csv
+    metrics: accuracy, balanced_accuracy
