@@ -3,37 +3,44 @@ Data transformation utilities for filtering and subsampling datasets.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
-import pandas as pd
-import numpy as np
+from typing import Any, Dict, List, Union
 
-from representation_learning.configs import FilterConfig, SubsampleConfig, TransformCfg
+import numpy as np
+import pandas as pd
+
+from representation_learning.configs import FilterConfig, SubsampleConfig
+
 
 class DataTransform(ABC):
     """Base class for data transformations."""
-    
+
     @abstractmethod
     def __call__(self, data: Any) -> Any:
         """Apply the transformation to the data."""
         pass
 
+
 class Filter(DataTransform):
     """Filter data based on property values."""
-    
+
     def __init__(self, config: FilterConfig):
         """
         Initialize the filter.
-        
+
         Args:
             config: Filter configuration
         """
         self.config = config
         self.values = set(config.values)
-        
+
         if config.operation not in ["include", "exclude"]:
-            raise ValueError(f"Operation must be 'include' or 'exclude', got {config.operation}")
-    
-    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]) -> Union[pd.DataFrame, Dict[str, Any]]:
+            raise ValueError(
+                f"Operation must be 'include' or 'exclude', got {config.operation}"
+            )
+
+    def __call__(
+        self, data: Union[pd.DataFrame, Dict[str, Any]]
+    ) -> Union[pd.DataFrame, Dict[str, Any]]:
         """Filter the data based on property values."""
         if isinstance(data, pd.DataFrame):
             return self._filter_dataframe(data)
@@ -41,20 +48,26 @@ class Filter(DataTransform):
             return self._filter_dict(data)
         else:
             raise TypeError(f"Unsupported data type: {type(data)}")
-    
+
     def _filter_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter a pandas DataFrame."""
         if self.config.operation == "include":
             return df[df[self.config.property].isin(self.values)]
         else:
             return df[~df[self.config.property].isin(self.values)]
-    
+
     def _filter_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter a dictionary of data."""
         if self.config.operation == "include":
-            return {k: v for k, v in data.items() if v[self.config.property] in self.values}
+            return {
+                k: v for k, v in data.items() if v[self.config.property] in self.values
+            }
         else:
-            return {k: v for k, v in data.items() if v[self.config.property] not in self.values}
+            return {
+                k: v
+                for k, v in data.items()
+                if v[self.config.property] not in self.values
+            }
 
 
 class Subsample(DataTransform):
@@ -122,34 +135,3 @@ class Subsample(DataTransform):
                 selected[k] = data[k]
 
         return selected
-
-
-def build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
-    """
-    Build the transformation pipeline from **validated** configs.
-
-    Parameters
-    ----------
-    transform_configs : list[FilterConfig | SubsampleConfig]
-        The `transformations` field that comes straight out of a validated
-        `DataConfig`.  No raw YAML dictionaries are accepted.
-
-    Returns
-    -------
-    list[DataTransform]
-        Callable objects that can be applied in sequence.
-    """
-    transforms: List[DataTransform] = []
-
-    for cfg in transform_configs:
-        if isinstance(cfg, FilterConfig):
-            transforms.append(Filter(cfg))
-        elif isinstance(cfg, SubsampleConfig):
-            transforms.append(Subsample(cfg))
-        else:  # this should never happen if DataConfig was validated
-            raise TypeError(
-                "build_transforms() received an unexpected config type: "
-                f"{type(cfg).__name__}"
-            )
-
-    return transforms
