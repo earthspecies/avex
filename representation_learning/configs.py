@@ -15,20 +15,22 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+
 import yaml
 
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from pydantic.dataclasses import dataclass  # validates dataclass fields
-from dataclasses import field as dc_field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from esp_data_temp.dataset import DataConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
 # --------------------------------------------------------------------------- #
+
 
 class TrainingParams(BaseModel):
     """Hyper‑parameters that control optimisation."""
@@ -37,16 +39,20 @@ class TrainingParams(BaseModel):
     lr: float = Field(..., gt=0, description="Learning rate")
     batch_size: int = Field(..., ge=1, description="Batch size for training")
     optimizer: Literal["adamw", "adam"] = Field("adamw", description="Optimizer to use")
-    weight_decay: float = Field(0.0, ge=0, description="Weight decay for regularisation")
+    weight_decay: float = Field(
+        0.0, ge=0, description="Weight decay for regularisation"
+    )
 
     amp: bool = False
     amp_dtype: Literal["bf16", "fp16"] = "bf16"
 
     model_config = ConfigDict(extra="forbid")
 
+
 # --------------------------------------------------------------------------- #
 #  Data‑augmentation sections
 # --------------------------------------------------------------------------- #
+
 
 class NoiseAugment(BaseModel):
     kind: Literal["noise"] = "noise"
@@ -71,6 +77,7 @@ Augment = Union[NoiseAugment, MixupAugment]
 # --------------------------------------------------------------------------- #
 #  Audio & model configuration
 # --------------------------------------------------------------------------- #
+
 
 class AudioConfig(BaseModel):
     sample_rate: int = 16000
@@ -97,34 +104,11 @@ class ModelSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-# --------------------------------------------------------------------------- #
-#  Dataset‑filtering helpers
-# --------------------------------------------------------------------------- #
-
-class FilterConfig(BaseModel):
-    property: str
-    values: List[str]
-    operation: Literal["include", "exclude"] = "include"
-
-
-class SubsampleConfig(BaseModel):
-    property: str
-    operation: Literal["subsample"] = "subsample"
-    ratios: Dict[str, float] = dc_field(default_factory=dict)
-
-TransformCfg = Union[FilterConfig, SubsampleConfig]
-
-
-class DataConfig(BaseModel):
-    dataset_name: str
-    label_column: str
-    label_type: Literal["supervised", "self-supervised"]
-    transformations: Optional[List[TransformCfg]] = None        # <- changed
-    read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
 
 # --------------------------------------------------------------------------- #
 #  Top‑level run‑configuration
 # --------------------------------------------------------------------------- #
+
 
 class RunConfig(BaseModel):
     """Everything needed for a single *training run*."""
@@ -177,11 +161,13 @@ class RunConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
 
-def load_config(path: str | Path, config_type = "run") -> RunConfig:
+
+def load_config(path: str | Path, config_type="run") -> RunConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance."""
 
     path = Path(path).expanduser()
@@ -190,7 +176,7 @@ def load_config(path: str | Path, config_type = "run") -> RunConfig:
 
     with path.open("r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
-    
+
     if config_type == "run":
         return RunConfig.model_validate(raw)
     elif config_type == "data":

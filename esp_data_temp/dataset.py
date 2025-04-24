@@ -1,16 +1,18 @@
+from dataclasses import field as dc_field
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Self, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Self
 
 import cloudpathlib
 import numpy as np
 import pandas as pd
 import soundfile as sf
 from google.cloud.storage.client import Client
+from pydantic import BaseModel
 
-# TODO: bring into esp_data!!
-from representation_learning.configs import (
+from .transformations import (
+    DataTransform,
     FilterConfig,
     SubsampleConfig,
     TransformCfg,
@@ -18,6 +20,15 @@ from representation_learning.configs import (
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
+
+
+class DataConfig(BaseModel):
+    dataset_name: str
+    label_column: str
+    label_type: Literal["supervised", "self-supervised"]
+    transformations: Optional[List[TransformCfg]] = None  # <- changed
+    # TODO (milad) what is dc_field? 🤔
+    read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +43,9 @@ class GSPath(cloudpathlib.GSPath):
     """
 
     def __init__(
-        self, client_path: Union[str, Self, "CloudPath"], client=_get_client()
+        self,
+        client_path: str | Self | "CloudPath",
+        client: cloudpathlib.GSClient = _get_client(),
     ) -> None:
         super().__init__(client_path, client=client)
 
@@ -42,14 +55,14 @@ class AudioDataset:
     Reads metadata from a CSV, loads audio, and yields a sample dict.
 
     Expected columns in the CSV:
-    * 'filepath'  : str – path to the audio file on disk or a gs:// path.
-    * <label_col> : str – value used for the target (e.g. species name).
+    * 'filepath'  : str - path to the audio file on disk or a gs:// path.
+    * <label_col> : str - value used for the target (e.g. species name).
     """
 
     def __init__(
         self,
         metadata_df: pd.DataFrame,
-        data_config: Any,
+        data_config: DataConfig,
         transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
         preprocessor: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
     ) -> None:
@@ -148,7 +161,9 @@ def get_dataset_from_name(name: str, validation=False):
 
 
 def get_dataset_dummy(
-    data_config: Any, preprocessor: Optional[Callable] = None, validation: bool = False
+    data_config: DataConfig,
+    preprocessor: Optional[Callable] = None,
+    validation: bool = False,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.

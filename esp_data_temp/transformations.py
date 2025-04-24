@@ -3,12 +3,28 @@ Data transformation utilities for filtering and subsampling datasets.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import field as dc_field
 from typing import Any, Dict, List, Union
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
+from typing_extensions import Literal
 
-from representation_learning.configs import FilterConfig, SubsampleConfig
+
+class FilterConfig(BaseModel):
+    property: str
+    values: List[str]
+    operation: Literal["include", "exclude"] = "include"
+
+
+class SubsampleConfig(BaseModel):
+    property: str
+    operation: Literal["subsample"] = "subsample"
+    ratios: Dict[str, float] = dc_field(default_factory=dict)
+
+
+TransformCfg = Union[FilterConfig, SubsampleConfig]
 
 
 class DataTransform(ABC):
