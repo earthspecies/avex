@@ -149,7 +149,7 @@ def build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfor
 def _get_dataset_from_name(
     name: str,
     validation: bool = False,
-):
+) -> pd.DataFrame:
     name = name.lower().strip()
 
     if name == "animalspeak":
