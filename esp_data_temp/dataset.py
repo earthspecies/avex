@@ -13,7 +13,9 @@ from pydantic import BaseModel
 
 from .transformations import (
     DataTransform,
+    Filter,
     FilterConfig,
+    Subsample,
     SubsampleConfig,
     TransformCfg,
 )
