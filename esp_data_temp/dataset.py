@@ -110,7 +110,7 @@ class AudioDataset:
         }
 
 
-def build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
+def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
     """
     Build the transformation pipeline from **validated** configs.
 
@@ -193,7 +193,7 @@ def get_dataset_dummy(
 
     # Apply transformations if specified
     if hasattr(data_config, "transformations") and data_config.transformations:
-        transforms = build_transforms(data_config.transformations)
+        transforms = _build_transforms(data_config.transformations)
         for transform in transforms:
             df = transform(df)
 
