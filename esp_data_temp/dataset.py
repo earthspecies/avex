@@ -1,16 +1,15 @@
-from dataclasses import field as dc_field
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Self
+from typing import Any, Callable, Dict, List, Optional, Self
 
 import cloudpathlib
 import numpy as np
 import pandas as pd
 import soundfile as sf
 from google.cloud.storage.client import Client
-from pydantic import BaseModel
 
+from .config import DataConfig
 from .transformations import (
     DataTransform,
     Filter,
@@ -22,15 +21,6 @@ from .transformations import (
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
-
-
-class DataConfig(BaseModel):
-    dataset_name: str
-    label_column: str
-    label_type: Literal["supervised", "self-supervised"]
-    transformations: Optional[List[TransformCfg]] = None  # <- changed
-    # TODO (milad) what is dc_field? 🤔
-    read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
 
 
 @lru_cache(maxsize=1)
