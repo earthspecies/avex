@@ -120,6 +120,11 @@ def build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfor
         The `transformations` field that comes straight out of a validated
         `DataConfig`.  No raw YAML dictionaries are accepted.
 
+    Raises
+    ------
+    TypeError
+        If the input is not a `FilterConfig` or `SubsampleConfig`.
+
     Returns
     -------
     list[DataTransform]
@@ -141,7 +146,10 @@ def build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfor
     return transforms
 
 
-def get_dataset_from_name(name: str, validation=False):
+def _get_dataset_from_name(
+    name: str,
+    validation: bool = False,
+):
     name = name.lower().strip()
 
     if name == "animalspeak":
@@ -173,10 +181,15 @@ def get_dataset_dummy(
     1. Loads metadata CSV (path specified in `data_config.dataset_source`).
     2. Applies any filtering / subsampling specified in `data_config.transformations`.
     3. Returns an `AudioDataset` instance.
+
+    Returns
+    -------
+    AudioDataset
+        An instance of the dataset with the specified transformations applied.
     """
 
     # Check if the dataset CSV path is a gs:// path
-    df = get_dataset_from_name(data_config.dataset_name, validation)
+    df = _get_dataset_from_name(data_config.dataset_name, validation)
 
     # Apply transformations if specified
     if hasattr(data_config, "transformations") and data_config.transformations:
