@@ -73,6 +73,8 @@ class AudioDataset:
     def __len__(self) -> int:
         return len(self.metadata)
 
+    # TODO (milad) we mostly care about iteration so define __iter__
+
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         row = self.metadata.iloc[idx]
         path_str: str = row[self.audio_path_col]
