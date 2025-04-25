@@ -167,7 +167,7 @@ class RunConfig(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
-def load_config(path: str | Path, config_type="run") -> RunConfig:
+def load_config(path: str | Path, config_type="run") -> RunConfig | DataConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance."""
 
     path = Path(path).expanduser()
