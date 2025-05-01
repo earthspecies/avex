@@ -9,6 +9,7 @@ A compact yet full‑featured training loop that supports:
 * Check‑pointing of the best model
 * Parameter & metric logging via `ExperimentLogger`
 * Distributed training with proper synchronization
+* Learning rate scheduling with warmup
 """
 
 from __future__ import annotations
@@ -32,36 +33,11 @@ from representation_learning.training.distributed import (
     reduce_dict,
     setup_distributed,
 )
+from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger  # type: ignore
+from representation_learning.training.losses import _build_criterion
 
 logger = logging.getLogger(__name__)
-
-
-def _build_criterion(name: str) -> nn.Module:
-    """Factory for common loss functions.
-
-    Parameters
-    ----------
-    name : str
-        Name of the loss function to create
-
-    Returns
-    -------
-    nn.Module
-        The requested loss function module
-
-    Raises
-    ------
-    ValueError
-        If the loss function name is unknown
-    """
-    name = name.lower()
-    if name in {"cross_entropy", "ce"}:
-        return nn.CrossEntropyLoss()
-    if name in {"bce", "binary_cross_entropy_with_logits", "bce_with_logits"}:
-        return nn.BCEWithLogitsLoss()
-    raise ValueError(f"Unknown loss_function: {name}")
-
 
 # --------------------------------------------------------------------------- #
 #  Trainer
@@ -127,6 +103,10 @@ class Trainer:
             else None
         )
 
+        # Setup learning rate scheduler
+        total_steps = len(train_loader) * cfg.training_params.train_epochs
+        self.scheduler = build_scheduler(optimizer, cfg, total_steps)
+
         self.criterion = _build_criterion(cfg.loss_function)
         self.best_val_acc: float = 0.0
 
@@ -143,6 +123,9 @@ class Trainer:
                     "amp_dtype": cfg.training_params.amp_dtype,
                     "distributed": self.is_distributed,
                     "world_size": self.world_size,
+                    "scheduler": cfg.scheduler.name,
+                    "warmup_steps": cfg.scheduler.warmup_steps,
+                    "min_lr": cfg.scheduler.min_lr,
                 }
             )
 
@@ -162,17 +145,26 @@ class Trainer:
                 train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
                 val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
 
+                # Step the scheduler
+                self.scheduler.step()
+
                 # Log only on master process
                 if is_master_process():
+                    current_lr = self.optimizer.param_groups[0]["lr"]
                     logger.info(
                         f"[Epoch {epoch:03d}] "
                         f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
-                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f} | "
+                        f"lr={current_lr:.2e}"
                     )
 
                     # Log epoch‑level metrics
                     self.log.log_metrics(
-                        {"loss": train_loss, "acc": train_acc},
+                        {
+                            "loss": train_loss,
+                            "acc": train_acc,
+                            "learning_rate": current_lr,
+                        },
                         step=epoch,
                         split="train",
                     )
@@ -259,12 +251,18 @@ class Trainer:
             (loss, number of correct predictions, batch size)
         """
         # Move batch to device
-        batch = {k: v.to(self.device) for k, v in batch.items()}
+        batch = {k: v.to(self.device) if torch.is_tensor(v) else v for k, v in batch.items()}
 
         # Forward pass with optional AMP
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
-            logits = self.model(batch["raw_wav"])
-            loss = self.criterion(logits, batch["label"])
+            if self._is_clip_mode():
+                loss, correct, batch_size = self._forward_clip(batch)
+            else:
+                logits = self.model(batch["raw_wav"], batch["padding_mask"])
+                loss = self.criterion(logits, batch["label"])
+                pred = logits.argmax(dim=-1)
+                correct = (pred == batch["label"]).sum().item()
+                batch_size = len(batch["label"])
 
         if train:
             # Backward pass with optional gradient scaling
@@ -277,10 +275,27 @@ class Trainer:
                 self.optimizer.step()
             self.optimizer.zero_grad()
 
-        # Compute accuracy
+        return loss.item(), correct, batch_size
+
+    def _is_clip_mode(self) -> bool:
+        """Check if the current model/loss setup is CLIP-style contrastive learning."""
+        return (
+            isinstance(self.criterion, nn.Module) and
+            self.criterion.__class__.__name__.lower() == 'cliploss'
+        )
+
+    def _forward_clip(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, int, int]:
+        """Forward and loss computation for CLIPModel + ClipLoss."""
+        audio = batch["raw_wav"]
+        text = batch["text_label"]
+        audio_emb, text_emb, logits = self.model(audio, text)
+        logit_scale = 1.0 / self.model.temperature if hasattr(self.model, 'temperature') else 1.0
+        loss = self.criterion(audio_emb, text_emb, logit_scale)
+        labels = torch.arange(logits.size(0), device=logits.device)
         pred = logits.argmax(dim=-1)
-        correct = (pred == batch["label"]).sum().item()
-        return loss.item(), correct, len(batch["label"])
+        correct = (pred == labels).sum().item()
+        batch_size = logits.size(0)
+        return loss, correct, batch_size
 
     def _save_checkpoint(self, name: str) -> None:
         """Save model checkpoint.

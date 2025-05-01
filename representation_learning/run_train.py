@@ -8,12 +8,12 @@ import logging
 from pathlib import Path
 import torch
 
-
 from representation_learning.configs import load_config, RunConfig  # type: ignore
 from representation_learning.models.get_model import get_model
 from representation_learning.data.dataset import build_dataloaders  # returns (train_dl, val_dl)
 from representation_learning.training.train import Trainer
 from representation_learning.training.optimisers import get_optimizer
+from representation_learning.training.distributed import setup_distributed
 from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger("run_train")
@@ -37,7 +37,20 @@ def main() -> None:
     cfg: RunConfig = load_config(args.config)
     logger.info("Loaded run config from %s", args.config)
 
-    device = torch.device(cfg.device)
+    # Initialize distributed training if needed
+    local_rank, world_size, _ = setup_distributed(
+        backend=cfg.distributed_backend,
+        port=cfg.distributed_port,
+    )
+    is_distributed = local_rank is not None
+
+    # Set device based on distributed setup
+    if is_distributed:
+        logger.info("Running in distributed mode with world size %s", world_size)
+        device = torch.device(f"cuda:{local_rank}")
+    else:
+        device = torch.device(cfg.device)
+
     torch.manual_seed(cfg.seed)
 
     # 2. Build the dataloaders.
@@ -69,7 +82,6 @@ def main() -> None:
     )
 
     trainer.train()
-
 
 
 if __name__ == "__main__":

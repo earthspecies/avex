@@ -59,7 +59,7 @@ class AudioDataset:
         preprocessor: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
     ) -> None:
         super().__init__()
-        self.metadata = metadata_df.reset_index(drop=True)
+        self.metadata = metadata_df.reset_index(drop=True).dropna(subset=[data_config.label_column])
         self.data_config = data_config
         self.preprocessor = preprocessor
 

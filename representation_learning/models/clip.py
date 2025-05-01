@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
 
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.efficientnetb0 import EfficientNetB0
+from representation_learning.models.efficientnetb0 import Model as EfficientNetB0
 
 
 class CLIPModel(ModelBase):
@@ -23,7 +23,7 @@ class CLIPModel(ModelBase):
         super().__init__(device, audio_config)
 
         # Initialize audio encoder (EfficientNetB0)
-        self.audio_encoder = EfficientNetB0(device, audio_config)
+        self.audio_encoder = EfficientNetB0(device=device, audio_config=audio_config)
 
         # Initialize text encoder (RoBERTa)
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
@@ -87,7 +87,7 @@ class CLIPModel(ModelBase):
 
     def forward(
         self, audio: torch.Tensor, text: list[str]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass computing audio and text embeddings and their similarity.
 
@@ -96,39 +96,10 @@ class CLIPModel(ModelBase):
             text: List of text strings of length batch_size
 
         Returns:
-            Tuple of (audio_embeddings, text_embeddings, logits)
+            Tuple of (audio_embeddings, text_embeddings)
         """
         # Get normalized embeddings
         audio_embeddings = self.encode_audio(audio)
         text_embeddings = self.encode_text(text)
 
-        # Compute similarity matrix
-        logits = torch.matmul(audio_embeddings, text_embeddings.t()) / self.temperature
-
-        return audio_embeddings, text_embeddings, logits
-
-    def compute_loss(
-        self,
-        audio_embeddings: torch.Tensor,
-        text_embeddings: torch.Tensor,
-        logits: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Compute contrastive loss between audio and text embeddings.
-
-        Args:
-            audio_embeddings: Audio embeddings tensor
-            text_embeddings: Text embeddings tensor
-            logits: Similarity matrix
-
-        Returns:
-            Contrastive loss value
-        """
-        batch_size = logits.size(0)
-        labels = torch.arange(batch_size, device=self.device)
-
-        # Compute cross entropy loss in both directions
-        loss_audio = F.cross_entropy(logits, labels)
-        loss_text = F.cross_entropy(logits.t(), labels)
-
-        return (loss_audio + loss_text) / 2
+        return audio_embeddings, text_embeddings

@@ -110,6 +110,22 @@ class ModelSpec(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
+class SchedulerConfig(BaseModel):
+    """Configuration for learning rate schedulers."""
+
+    name: Literal["cosine", "linear", "none"] = Field(
+        "none", description="Scheduler type to use"
+    )
+    warmup_steps: int = Field(
+        0, ge=0, description="Number of steps to warm up learning rate"
+    )
+    min_lr: float = Field(
+        0.0, ge=0, description="Minimum learning rate for cosine annealing"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class RunConfig(BaseModel):
     """Everything needed for a single *training run*."""
 
@@ -153,6 +169,10 @@ class RunConfig(BaseModel):
     num_workers: int = 4
     run_name: Optional[str] = None
     wandb_project: str = "audio‑experiments"
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+
+    # Debug mode
+    debug_mode: bool = False
 
     # ------------------------------
     # custom pre‑processing of augments

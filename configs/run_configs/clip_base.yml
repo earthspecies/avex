@@ -44,6 +44,12 @@ training_params:
   amp: false
   amp_dtype: bf16
 
+# Learning rate scheduler configuration
+scheduler:
+  name: cosine
+  warmup_steps: 1000
+  min_lr: 1e-6
+
 augmentations:
   # Add background noise at random SNRs
   - noise:

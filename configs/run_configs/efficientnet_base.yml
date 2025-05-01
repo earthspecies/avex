@@ -16,9 +16,11 @@ model_spec:
     window_selection: random
 
 # Where to find the (now‑completed) dataset config created earlier
-dataset_config: configs/data_configs/data_balanced.yml
+dataset_config: configs/data_configs/data_base.yml
 
+# How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised
+debug_mode: false
 
 # Optional waveform preprocessing step; keep as null / None if you handle it
 # inside the dataloader or model
@@ -29,7 +31,7 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./repl_run"
+output_dir: "./distnet"
 distributed: true
 
 training_params:
@@ -40,6 +42,12 @@ training_params:
   weight_decay: 0.01        # mild regularisation
   amp: false
   amp_dtype: bf16
+
+# Learning rate scheduler configuration
+scheduler:
+  name: cosine
+  warmup_steps: 1000
+  min_lr: 1e-6
 
 augmentations:
   # Add background noise at random SNRs
@@ -52,7 +60,7 @@ augmentations:
       snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
       augmentation_prob: 0.5
 
-# Multi‑class (single‑label) classification ⇒ standard cross‑entropy
+# Cross entropy loss for classification
 loss_function: cross_entropy
 
 device: cuda

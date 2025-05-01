@@ -5,6 +5,7 @@ from typing import Any, Optional, Tuple
 
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
+import torch.distributed as dist
 
 from esp_data_temp.dataset import get_dataset_dummy
 from representation_learning.configs import RunConfig, load_config
@@ -94,7 +95,7 @@ def build_dataloaders(
     ds_train = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=False,  # TEMP: for testing speed
+        validation=cfg.debug_mode,  # Use validation set in debug mode
     )
     ds_eval = get_dataset_dummy(
         data_config=data_config,
@@ -105,7 +106,7 @@ def build_dataloaders(
     # Create samplers for distributed training
     train_sampler = None
     val_sampler = None
-    if cfg.distributed or is_slurm_available():
+    if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
         train_sampler = DistributedSampler(ds_train)
         val_sampler = DistributedSampler(ds_eval, shuffle=False)
 
