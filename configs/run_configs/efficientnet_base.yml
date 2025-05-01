@@ -1,0 +1,63 @@
+---
+# Model configuration
+model_spec:
+  name: efficientnetb0
+  pretrained: false
+  audio_config:
+    sample_rate: 16000
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+# Where to find the (now‑completed) dataset config created earlier
+dataset_config: configs/data_configs/data_balanced.yml
+
+# Optional waveform preprocessing step; keep as null / None if you handle it
+# inside the dataloader or model
+preprocessing: null
+
+# Target sample‑rate expected by the model
+sr: 16000
+
+# Log training runs to MLflow
+logging: mlflow
+output_dir: "./repl_run"
+
+training_params:
+  train_epochs: 10
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw          # common default for AudioMAE
+  weight_decay: 0.01        # mild regularisation
+  amp: false
+  amp_dtype: bf16
+
+augmentations:
+  # Add background noise at random SNRs
+  - noise:
+      noise_dirs:  # DUMMY: not implemented!
+        # this should be a gs path
+        - gs://foundation-model-data/data/noise/esc50_background
+        - gs://foundation-model-data/data/noise/freesound_misc
+        - gs://foundation-model-data/data/noise/dcase_synthetic
+      snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
+      augmentation_prob: 0.5
+
+# Multi‑class (single‑label) classification ⇒ standard cross‑entropy
+loss_function: cross_entropy
+
+device: cuda
+
+seed: 42
+
+num_workers: 1
+
+run_name: efficientnet_base
+
+wandb_project: representation_learning
