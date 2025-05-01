@@ -121,6 +121,10 @@ class AudioProcessor:
         if self.representation == "raw":
             return waveform
 
+        # Move mel basis to same device as input if needed
+        if self.representation == "mel_spectrogram":
+            self.mel_basis = self.mel_basis.to(waveform.device)
+
         # STFT → power spectrogram
         stft = torch.stft(
             waveform,

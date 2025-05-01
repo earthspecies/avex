@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 from typing import Any, Optional, Tuple
 
 import torch
@@ -28,12 +29,14 @@ class Collater:
         window_selection: str = "random",
         keep_text: bool = False,
         preprocessor: Optional[str] = None,
+        device: str = "cpu",
     ) -> None:
         self.audio_max_length_seconds = audio_max_length_seconds
         self.window_selection = window_selection
         self.keep_text = keep_text
         self.preprocessor = preprocessor
         self.sr = sr
+        self.device = device
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
         audios, masks, labels, text_labels = [], [], [], []
@@ -49,6 +52,7 @@ class Collater:
             if self.keep_text:
                 text_labels.append(item["text_label"])
 
+        # Keep tensors on CPU for pinning
         audio_tensor = torch.stack(audios)  # [B, T] float32
         mask_tensor = torch.stack(masks)  # [B, T] bool
         label_tensor = torch.tensor(labels, dtype=torch.long)
@@ -78,8 +82,11 @@ def build_dataloaders(
     Tuple[DataLoader, DataLoader]
         Tuple of (train_dataloader, val_dataloader)
     """
-    # Load dataset configuration
+    # Set multiprocessing start method to 'spawn' for CUDA compatibility
+    if device != "cpu":
+        multiprocessing.set_start_method("spawn", force=True)
 
+    # Load dataset configuration
     data_config = load_config(cfg.dataset_config, config_type="data")
 
     # Create dataset using the updated get_dataset_dummy
@@ -99,6 +106,7 @@ def build_dataloaders(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
+        device=device,
     )
 
     # Create dataloaders

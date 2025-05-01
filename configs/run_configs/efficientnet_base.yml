@@ -52,7 +52,7 @@ augmentations:
 # Multi‑class (single‑label) classification ⇒ standard cross‑entropy
 loss_function: cross_entropy
 
-device: cpu
+device: cuda
 
 seed: 42
 
