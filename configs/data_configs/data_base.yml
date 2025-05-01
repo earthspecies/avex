@@ -9,3 +9,5 @@ custom_balancing: false
 balancing_method: upsample
 subset_percentage: 1.0              # <1 to consider a subset of data
 transformations: None
+label_column: canonical_name
+label_type: supervised

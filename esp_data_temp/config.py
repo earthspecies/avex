@@ -14,5 +14,7 @@ class DataConfig(BaseModel):
     # label_type: Literal["supervised", "self-supervised"]
 
     transformations: Optional[List[TransformCfg]] = None  # <- changed
+    label_column: str
+    label_type: str
     # TODO (milad) what is dc_field? 🤔
     read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)

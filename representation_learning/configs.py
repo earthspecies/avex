@@ -117,6 +117,7 @@ class RunConfig(BaseModel):
     model_spec: ModelSpec
     training_params: TrainingParams
     dataset_config: str
+    output_dir: str
 
     # optional / misc
     preprocessing: Optional[str] = None

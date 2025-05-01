@@ -15,7 +15,7 @@ model_spec:
     window_selection: random
 
 # Where to find the (now‑completed) dataset config created earlier
-dataset_config: configs/data_configs/data_base.yml
+dataset_config: configs/data_configs/data_balanced.yml
 
 # Optional waveform preprocessing step; keep as null / None if you handle it
 # inside the dataloader or model
@@ -26,14 +26,15 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
+output_dir: "./repl_run"
 
 training_params:
   train_epochs: 10
   lr: 0.0001
-  batch_size: 16
+  batch_size: 1
   optimizer: adamw          # common default for AudioMAE
   weight_decay: 0.01        # mild regularisation
-  amp: true
+  amp: False
   amp_dtype: bf16
 
 augmentations:

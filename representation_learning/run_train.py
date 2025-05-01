@@ -68,7 +68,7 @@ def main() -> None:
         exp_logger=exp_logger
     )
 
-    trainer.train(num_epochs=cfg.training_params.train_epochs)
+    trainer.train()
 
 
 
