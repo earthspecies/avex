@@ -88,7 +88,7 @@ class AudioConfig(BaseModel):
     n_mels: int = 128
     representation: Literal["spectrogram", "mel_spectrogram", "raw"] = "mel_spectrogram"
     normalize: bool = True
-    target_length: Optional[int] = None
+    target_length_seconds: Optional[int] = None
     window_selection: Literal["random", "center"] = "random"
 
     model_config = ConfigDict(extra="forbid")
@@ -138,13 +138,18 @@ class RunConfig(BaseModel):
     # ------------------------------
     @field_validator("augmentations", mode="before")
     @classmethod
-    def _flatten_augments(cls, raw: Any) -> Any:
+    def _flatten_augments(cls, raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert YAML single‑key mapping style into flat dicts.
 
         YAML allows:
             - noise: {noise_dirs: [...], snr_db_range: [-5, 20], augmentation_prob: 0.5}
         This turns into {kind:"noise", noise_dirs: [...], ...} so the discriminated
         union resolves correctly.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of flattened augmentation dictionaries
         """
         if not raw:
             return []
@@ -168,8 +173,30 @@ class RunConfig(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
-def load_config(path: str | Path, config_type="run") -> RunConfig | DataConfig:
-    """Read YAML at *path*, validate, and return a **RunConfig** instance."""
+def load_config(
+    path: str | Path, config_type: Literal["run", "data"] = "run"
+) -> RunConfig | DataConfig:
+    """Read YAML at *path*, validate, and return a **RunConfig** instance.
+
+    Parameters
+    ----------
+    path : str | Path
+        Path to the YAML configuration file
+    config_type : Literal["run", "data"]
+        Type of configuration to load
+
+    Returns
+    -------
+    RunConfig | DataConfig
+        Validated configuration object
+
+    Raises
+    ------
+    FileNotFoundError
+        If the configuration file does not exist
+    NotImplementedError
+        If config_type is not "run" or "data"
+    """
 
     path = Path(path).expanduser()
     if not path.exists():

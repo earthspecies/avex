@@ -1,7 +1,8 @@
+---
 # Model configuration
 model_spec:
   name: efficientnetb0
-  pretrained: true
+  pretrained: false
   audio_config:
     sample_rate: 16000
     n_fft: 2048
@@ -10,8 +11,8 @@ model_spec:
     window: hann
     n_mels: 128
     representation: mel_spectrogram
-    normalize: true
-    target_length: 160000  # 10 seconds at 16kHz
+    normalize: false
+    target_length_seconds: 10
     window_selection: random
 
 # Where to find the (now‑completed) dataset config created earlier
@@ -31,20 +32,21 @@ output_dir: "./repl_run"
 training_params:
   train_epochs: 10
   lr: 0.0001
-  batch_size: 1
+  batch_size: 32
   optimizer: adamw          # common default for AudioMAE
   weight_decay: 0.01        # mild regularisation
-  amp: False
+  amp: false
   amp_dtype: bf16
 
 augmentations:
   # Add background noise at random SNRs
   - noise:
-      noise_dirs: # DUMMY: not implemented!
-        - gs://foundation-model-data/data/noise/esc50_background # this should be a gs path
+      noise_dirs:  # DUMMY: not implemented!
+        # this should be a gs path
+        - gs://foundation-model-data/data/noise/esc50_background
         - gs://foundation-model-data/data/noise/freesound_misc
         - gs://foundation-model-data/data/noise/dcase_synthetic
-      snr_db_range: [-5, 20]     # mix noise between 5 dB and 20 dB SNR
+      snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
       augmentation_prob: 0.5
 
 # Multi‑class (single‑label) classification ⇒ standard cross‑entropy
@@ -54,7 +56,7 @@ device: cpu
 
 seed: 42
 
-num_workers: 0
+num_workers: 1
 
 run_name: efficientnet_base
 

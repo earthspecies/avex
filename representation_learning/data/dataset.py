@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional, Tuple
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 from esp_data_temp.dataset import get_dataset_dummy
-from representation_learning.configs import load_config
+from representation_learning.configs import RunConfig, load_config
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
@@ -36,15 +35,13 @@ class Collater:
         self.preprocessor = preprocessor
         self.sr = sr
 
-    def __call__(self, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-        audios, masks, labels = [], [], []
-        text_labels: List[str] = []
+    def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
+        audios, masks, labels, text_labels = [], [], [], []
 
         for item in batch:
+            wav = torch.as_tensor(item["raw_wav"])  # (T,)
             wav, pad_mask = pad_or_window(
-                item["raw_wav"],
-                target_len=self.audio_max_length_seconds * self.sr,
-                window_selection=self.window_selection,
+                wav, self.audio_max_length_seconds * self.sr, self.window_selection
             )
             audios.append(wav)
             masks.append(pad_mask)
@@ -52,28 +49,33 @@ class Collater:
             if self.keep_text:
                 text_labels.append(item["text_label"])
 
-        audio_tensor = torch.from_numpy(np.stack(audios))  # [B, T]  float32
-        mask_tensor = torch.from_numpy(np.stack(masks))  # [B, T]  bool
+        audio_tensor = torch.stack(audios)  # [B, T] float32
+        mask_tensor = torch.stack(masks)  # [B, T] bool
         label_tensor = torch.tensor(labels, dtype=torch.long)
 
-        out = {
+        return {
             "raw_wav": audio_tensor,
             "padding_mask": mask_tensor,
             "label": label_tensor,
             "text_label": text_labels,
         }
-        return out
 
 
-def build_dataloaders(cfg, device="cpu"):
-    """
-    Build training and validation dataloaders from configuration.
+def build_dataloaders(
+    cfg: RunConfig, device: str = "cpu"
+) -> Tuple[DataLoader, DataLoader]:
+    """Build training and validation dataloaders from configuration.
 
-    Args:
-        cfg: Run configuration
-        device: Device to use for data loading
+    Parameters
+    ----------
+    cfg : RunConfig
+        Run configuration containing dataset and training parameters
+    device : str
+        Device to use for data loading
 
-    Returns:
+    Returns
+    -------
+    Tuple[DataLoader, DataLoader]
         Tuple of (train_dataloader, val_dataloader)
     """
     # Load dataset configuration
@@ -94,7 +96,7 @@ def build_dataloaders(cfg, device="cpu"):
 
     # Create collater
     collate_fn = Collater(
-        audio_max_length_seconds=cfg.model_spec.audio_config.target_length,
+        audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
     )

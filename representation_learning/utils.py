@@ -1,7 +1,7 @@
 """
 exp_logger.py
 ~~~~~~~~~~~~~
-Backend‑agnostic experiment logger supporting **MLflow** and **Weights & Biases**.
+Backend‑agnostic experiment logger supporting **MLflow** and **Weights & Biases**.
 
 Usage
 -----
@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import importlib
 import logging
-from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
+
+from representation_learning.configs import RunConfig
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class ExperimentLogger:
 
     # ------------------------ construction helpers ------------------------ #
     @classmethod
-    def from_config(cls, cfg) -> "ExperimentLogger":
+    def from_config(cls, cfg: RunConfig) -> "ExperimentLogger":
         backend = str(getattr(cfg, "logging", "none")).lower()
         run_name = getattr(cfg, "run_name", None)
 
@@ -62,14 +63,13 @@ class ExperimentLogger:
             logger.warning("mlflow not installed – logging disabled.")
             return cls(backend="none")
 
+        mlflow.set_tracking_uri(uri="http://100.89.114.62:8080")
         mlflow.start_run(run_name=run_name)
         logger.info("MLflow run started (%s).", run_name)
         return cls(backend="mlflow", handle=mlflow)
 
     @classmethod
-    def _build_wandb(
-        cls, project: str, run_name: Optional[str]
-    ) -> "ExperimentLogger":
+    def _build_wandb(cls, project: str, run_name: Optional[str]) -> "ExperimentLogger":
         try:
             wandb = importlib.import_module("wandb")
         except ModuleNotFoundError:
@@ -77,7 +77,7 @@ class ExperimentLogger:
             return cls(backend="none")
 
         handle = wandb.init(project=project, name=run_name, config={})
-        logger.info("Weights & Biases run initialised (%s).", run_name)
+        logger.info("Weights & Biases run initialised (%s).", run_name)
         return cls(backend="wandb", handle=handle)
 
     @classmethod
@@ -86,7 +86,16 @@ class ExperimentLogger:
         return cls(backend="none")
 
     # ------------------------------ dunder ------------------------------- #
-    def __init__(self, *, backend: str, handle: ModuleType | Any | None = None):
+    def __init__(self, *, backend: str, handle: Union[ModuleType, None] = None) -> None:
+        """Initialize the experiment logger.
+
+        Parameters
+        ----------
+        backend : str
+            The logging backend to use ("mlflow", "wandb", or "none")
+        handle : Union[ModuleType, None]
+            The backend-specific handle (mlflow module, wandb run, or None)
+        """
         self.backend = backend
         self.handle = handle  # mlflow module OR wandb run OR None
 
@@ -124,9 +133,18 @@ class ExperimentLogger:
 _instance: ExperimentLogger | None = None
 
 
-def get_logger(cfg) -> ExperimentLogger:
-    """
-    Create (or return existing) ExperimentLogger for this process.
+def get_logger(cfg: RunConfig) -> ExperimentLogger:
+    """Create (or return existing) ExperimentLogger for this process.
+
+    Parameters
+    ----------
+    cfg : RunConfig
+        Configuration object containing logging settings
+
+    Returns
+    -------
+    ExperimentLogger
+        Logger instance for the current process
     """
     global _instance  # pylint: disable=global-statement
     if _instance is None:

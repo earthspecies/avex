@@ -15,7 +15,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Dict, Tuple
 
 import torch
 import torch.nn as nn
@@ -23,13 +23,30 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from representation_learning.configs import RunConfig
 from representation_learning.utils import ExperimentLogger  # type: ignore
 
 logger = logging.getLogger(__name__)
 
 
 def _build_criterion(name: str) -> nn.Module:
-    """Factory for common loss functions."""
+    """Factory for common loss functions.
+
+    Parameters
+    ----------
+    name : str
+        Name of the loss function to create
+
+    Returns
+    -------
+    nn.Module
+        The requested loss function module
+
+    Raises
+    ------
+    ValueError
+        If the loss function name is unknown
+    """
     name = name.lower()
     if name in {"cross_entropy", "ce"}:
         return nn.CrossEntropyLoss()
@@ -65,7 +82,7 @@ class Trainer:
         train_loader: DataLoader,
         val_loader: DataLoader,
         device: torch.device,
-        cfg: Any,
+        cfg: RunConfig,
         exp_logger: ExperimentLogger,
     ) -> None:
         self.model = model.to(device)
@@ -78,8 +95,14 @@ class Trainer:
 
         # AMP
         self.amp_enabled: bool = cfg.training_params.amp
-        self.amp_dtype = torch.bfloat16 if cfg.training_params.amp_dtype == "bf16" else torch.float16
-        self.scaler: GradScaler | None = GradScaler() if (self.amp_enabled and self.amp_dtype == torch.float16) else None
+        self.amp_dtype = (
+            torch.bfloat16 if cfg.training_params.amp_dtype == "bf16" else torch.float16
+        )
+        self.scaler: GradScaler | None = (
+            GradScaler()
+            if (self.amp_enabled and self.amp_dtype == torch.float16)
+            else None
+        )
 
         self.criterion = _build_criterion(cfg.loss_function)
         self.best_val_acc: float = 0.0
@@ -105,6 +128,7 @@ class Trainer:
     def train(self) -> None:
         """Run the full training loop for the configured number of epochs."""
         for epoch in range(1, self.cfg.training_params.train_epochs + 1):
+            print("running epoch")
             train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
             val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
 
@@ -115,8 +139,12 @@ class Trainer:
             )
 
             # Log epoch‑level metrics
-            self.log.log_metrics({"loss": train_loss, "acc": train_acc}, step=epoch, split="train")
-            self.log.log_metrics({"loss": val_loss, "acc": val_acc}, step=epoch, split="val")
+            self.log.log_metrics(
+                {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
+            )
+            self.log.log_metrics(
+                {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
+            )
 
             # Save best model
             if val_acc > self.best_val_acc:
@@ -138,9 +166,12 @@ class Trainer:
         self.model.train(train)  # train=True -> .train(); train=False -> .eval()
 
         total_loss, total_correct, total_samples = 0.0, 0, 0
-        pbar = tqdm(loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False)
+        pbar = tqdm(
+            loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
+        )
 
         grad_ctx = contextlib.nullcontext() if train else torch.no_grad()
+        print("starting looping")
 
         with grad_ctx:
             for batch in pbar:
@@ -158,7 +189,20 @@ class Trainer:
         *,
         train: bool,
     ) -> Tuple[float, int, int]:
-        """Single forward/backward step (if `train=True`)."""
+        """Single forward/backward step (if `train=True`).
+
+        Parameters
+        ----------
+        batch : Dict[str, torch.Tensor]
+            Input batch containing raw_wav, padding_mask (optional), and label
+        train : bool
+            Whether this is a training step (affects gradient computation)
+
+        Returns
+        -------
+        Tuple[float, int, int]
+            Tuple of (loss value, number of correct predictions, batch size)
+        """
         wav = batch["raw_wav"].to(self.device)
         mask = batch.get("padding_mask")
         if mask is not None:
@@ -167,7 +211,11 @@ class Trainer:
 
         # Forward (AMP works in both modes)
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
-            logits = self.model(wav, padding_mask=mask) if mask is not None else self.model(wav)
+            logits = (
+                self.model(wav, padding_mask=mask)
+                if mask is not None
+                else self.model(wav)
+            )
             loss = self.criterion(logits, labels)
 
         if train:
