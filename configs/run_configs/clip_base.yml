@@ -1,7 +1,7 @@
 ---
 # Model configuration
 model_spec:
-  name: efficientnetb0
+  name: clip
   pretrained: false
   audio_config:
     sample_rate: 16000
@@ -14,11 +14,15 @@ model_spec:
     normalize: false
     target_length_seconds: 10
     window_selection: random
+  text_model_name: roberta-base
+  projection_dim: 512
+  temperature: 0.07
 
 # Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_balanced.yml
 
-label_type: supervised
+# How to use the labels (supervised: use class indices, text: use text labels)
+label_type: text
 
 # Optional waveform preprocessing step; keep as null / None if you handle it
 # inside the dataloader or model
@@ -30,7 +34,6 @@ sr: 16000
 # Log training runs to MLflow
 logging: mlflow
 output_dir: "./repl_run"
-distributed: true
 
 training_params:
   train_epochs: 10
@@ -52,15 +55,15 @@ augmentations:
       snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
       augmentation_prob: 0.5
 
-# Multi‑class (single‑label) classification ⇒ standard cross‑entropy
-loss_function: cross_entropy
+# Contrastive loss for CLIP training
+loss_function: contrastive
 
 device: cuda
 
 seed: 42
 
-num_workers: 12
+num_workers: 1
 
-run_name: efficientnet_base
+run_name: clip_base
 
 wandb_project: representation_learning

@@ -24,6 +24,7 @@ dependencies = [
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
+  "transformers>=4.51.3",
 ]
 
 [dependency-groups]

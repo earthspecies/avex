@@ -1,5 +1,5 @@
 from dataclasses import field as dc_field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -15,6 +15,5 @@ class DataConfig(BaseModel):
 
     transformations: Optional[List[TransformCfg]] = None  # <- changed
     label_column: str
-    label_type: str
     # TODO (milad) what is dc_field? 🤔
     read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)

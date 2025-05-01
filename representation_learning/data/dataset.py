@@ -4,13 +4,14 @@ import multiprocessing
 from typing import Any, Optional, Tuple
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 
 from esp_data_temp.dataset import get_dataset_dummy
 from representation_learning.configs import RunConfig, load_config
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
+from representation_learning.training.distributed import is_slurm_available
 
 
 # --------------------------------------------------------------------------- #
@@ -101,11 +102,19 @@ def build_dataloaders(
         validation=True,
     )
 
+    # Create samplers for distributed training
+    train_sampler = None
+    val_sampler = None
+    if cfg.distributed or is_slurm_available():
+        train_sampler = DistributedSampler(ds_train)
+        val_sampler = DistributedSampler(ds_eval, shuffle=False)
+
     # Create collater
     collate_fn = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
+        keep_text=(cfg.label_type == "text"),  # Keep text labels for CLIP training
         device=device,
     )
 
@@ -113,7 +122,8 @@ def build_dataloaders(
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
-        shuffle=True,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
         num_workers=cfg.num_workers,
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),
@@ -123,6 +133,7 @@ def build_dataloaders(
         ds_eval,
         batch_size=cfg.training_params.batch_size,
         shuffle=False,
+        sampler=val_sampler,
         num_workers=cfg.num_workers,
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),

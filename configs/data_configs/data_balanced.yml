@@ -1,3 +1,4 @@
+---
 data_config_name: bio_base
 dataset_name: animalspeak
 dataset_version: 0.0
@@ -7,7 +8,6 @@ custom_balancing: false
 balancing_method: upsample
 subset_percentage: 1.0              # <1 to consider a subset of data
 label_column: canonical_name
-label_type: supervised
 audio_max_length_seconds: 10
 
 transformations:
@@ -20,10 +20,10 @@ transformations:
   - property: class
     operation: subsample
     ratios:
-      birds:       0.20
-      mammals:     0.50
-      amphibians:  0.70
-      reptiles:    1.00
-      fish:        1.00
-      insects:     1.00
-      other:       1.00
+      birds: 0.20
+      mammals: 0.50
+      amphibians: 0.70
+      reptiles: 1.00
+      fish: 1.00
+      insects: 1.00
+      other: 1.00

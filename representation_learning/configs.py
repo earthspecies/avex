@@ -123,6 +123,27 @@ class RunConfig(BaseModel):
     preprocessing: Optional[str] = None
     sr: int = 16000
     logging: Literal["mlflow", "wandb"] = "mlflow"
+    label_type: Literal["supervised", "text"] = Field(
+        "supervised",
+        description=(
+            "How to use labels: 'supervised' for classification, "
+            "'text' for CLIP training"
+        ),
+    )
+
+    # Distributed training options
+    distributed: bool = Field(
+        False,
+        description=(
+            "Whether to use distributed training (automatically enabled in Slurm)"
+        ),
+    )
+    distributed_backend: Literal["nccl"] = Field(
+        "nccl", description="Backend for distributed training (nccl for GPU training)"
+    )
+    distributed_port: int = Field(
+        29500, description="Base port for distributed training communication"
+    )
 
     augmentations: List[Augment] = Field(default_factory=list)
     loss_function: Literal["cross_entropy", "bce"]
