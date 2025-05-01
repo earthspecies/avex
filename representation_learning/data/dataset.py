@@ -93,7 +93,7 @@ def build_dataloaders(
     ds_train = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=True,  # TEMP: for testing speed
+        validation=False,  # TEMP: for testing speed
     )
     ds_eval = get_dataset_dummy(
         data_config=data_config,
