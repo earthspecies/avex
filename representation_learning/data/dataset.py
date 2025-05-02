@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from esp_data_temp.dataset import get_dataset_dummy
-from representation_learning.configs import RunConfig, load_config
+from representation_learning.configs import RunConfig, DataConfig, load_config
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
@@ -66,7 +66,7 @@ class Collater:
 
 
 def build_dataloaders(
-    cfg: RunConfig, device: str = "cpu"
+    cfg: RunConfig, data_config: DataConfig = None, device: str = "cpu"
 ) -> Tuple[DataLoader, DataLoader]:
     """Build training and validation dataloaders from configuration.
 
@@ -74,6 +74,8 @@ def build_dataloaders(
     ----------
     cfg : RunConfig
         Run configuration containing dataset and training parameters
+    data_config : DataConfig
+        Data configuration containing dataset details
     device : str
         Device to use for data loading
 
@@ -85,21 +87,31 @@ def build_dataloaders(
     # Set multiprocessing start method to 'spawn' for CUDA compatibility
     if device != "cpu":
         multiprocessing.set_start_method("spawn", force=True)
-
-    # Load dataset configuration
-    data_config = load_config(cfg.dataset_config, config_type="data")
+        
+    if data_config is None:
+        dataset_config = cfg.dataset_config
+        # Load dataset configuration
+        data_config = load_config(dataset_config, config_type="data")
 
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=False,  # TEMP: for testing speed
+        split="train",
     )
-    ds_eval = get_dataset_dummy(
+    ds_val = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=True,
+        split="valid",
     )
+    if 'test_path' in data_config:
+        ds_test = get_dataset_dummy(
+            data_config=data_config,
+            preprocessor=None,  # Add any audio preprocessing here if needed
+            split="test",
+        )
+    else:
+        ds_test = None
 
     # Create collater
     collate_fn = Collater(
@@ -120,7 +132,7 @@ def build_dataloaders(
     )
 
     val_dl = DataLoader(
-        ds_eval,
+        ds_val,
         batch_size=cfg.training_params.batch_size,
         shuffle=False,
         num_workers=cfg.num_workers,
@@ -128,4 +140,16 @@ def build_dataloaders(
         pin_memory=(device != "cpu"),
     )
 
-    return train_dl, val_dl
+    if ds_test is not None:
+        test_dl = DataLoader(
+            ds_test,
+            batch_size=cfg.training_params.batch_size,
+            shuffle=False,
+            num_workers=cfg.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=(device != "cpu"),
+        )
+    else:
+        test_dl = None
+
+    return train_dl, val_dl, test_dl
