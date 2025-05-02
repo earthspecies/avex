@@ -4,7 +4,7 @@ dataset_config: configs/data_configs/benchmark_base.yml
 training_params:
   train_epochs: 10
   lr: 0.0001
-  batch_size: 2
+  batch_size: 1
   optimizer: adamw          # common default for AudioMAE
   weight_decay: 0.01        # mild regularisation
   amp: false
@@ -23,8 +23,8 @@ experiments:
 # Where to save the evaluation results
 save_dir: evaluation_results
 
-device: cuda
+device: cpu
 
 seed: 42
 
-num_workers: 2
+num_workers: 0  # Enable workers for better memory management

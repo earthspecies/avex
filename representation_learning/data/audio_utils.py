@@ -2,68 +2,82 @@
 Audio processing utilities for converting raw waveforms to various representations.
 """
 
-from typing import Literal, Tuple, Union
-
-import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio
+import numpy as np
+import random
+import librosa
 from torch import Tensor
+from typing import Optional, Tuple, Literal, Union
 
 from representation_learning.configs import AudioConfig
 
-
 def pad_or_window(
-    wav: torch.Tensor,
+    wav: np.ndarray,
     target_len: int,
-    window_selection: Literal["random", "center"] = "random",
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Pad or window a waveform to a target length.
-
-    Parameters
-    ----------
-    wav : torch.Tensor
-        Input waveform tensor
-    target_len : int
-        Target length to pad or window to
-    window_selection : Literal["random", "center"]
-        How to select the window if cropping is needed
+    window_selection: str = "random"
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Ensure the waveform has exactly `target_len` samples.
 
     Returns
     -------
-    Tuple[torch.Tensor, torch.Tensor]
-        Tuple of (processed waveform, mask)
+    windowed_wav : np.ndarray [target_len]          – either truncated or padded
+    padding_mask : np.ndarray [target_len] bool     – True where audio is real
 
-    Raises
-    ------
-    ValueError
-        If window_selection is not "random" or "center"
+    Notes
+    -----
+    * **Longer** than target_len → choose a window of length `target_len`.
+      - `mode="random"` picks a random start index.
+      - Other modes can be added later (e.g. "center").
+    * **Shorter** than target_len → pad **zeros** at the end.
     """
-    wav_len = wav.size(-1)
+    if window_selection != "random":
+            raise NotImplementedError(f"Window mode '{window_selection}' not implemented")
+    
+    wav_len = len(wav)
 
     if wav_len == target_len:
-        mask = torch.ones(target_len, dtype=torch.bool)
-        return wav, mask
+        mask = np.ones(target_len, dtype=bool)
+        return wav.astype(np.float32), mask
 
-    if wav_len > target_len:  # crop
-        if window_selection == "random":
-            start = torch.randint(0, wav_len - target_len + 1, ()).item()
-            end = start + target_len
-            return wav[..., start:end], torch.ones(target_len, dtype=torch.bool)
-        elif window_selection == "center":
-            start = (wav_len - target_len) // 2
-            end = start + target_len
-            return wav[..., start:end], torch.ones(target_len, dtype=torch.bool)
-        else:
-            raise ValueError(f"Unknown window selection: {window_selection}")
+    if wav_len > target_len:  # need to crop
+        start = random.randint(0, wav_len - target_len)
+        end   = start + target_len
+        window = wav[start:end]
+        mask   = np.ones(target_len, dtype=bool)
+        return window.astype(np.float32), mask
 
-    # pad
+    # wav_len < target_len  → pad zeros
     pad_len = target_len - wav_len
-    padded = F.pad(wav, (0, pad_len))
-    mask = torch.zeros(target_len, dtype=torch.bool)
+    padded  = np.pad(wav, (0, pad_len), mode="constant")
+    mask    = np.zeros(target_len, dtype=bool)
     mask[:wav_len] = True
-    return padded, mask
+    return padded.astype(np.float32), mask
 
+def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+    """
+    Resample audio to target sample rate using librosa.
+    
+    Args:
+        audio: Input audio array
+        orig_sr: Original sample rate
+        target_sr: Target sample rate
+        
+    Returns:
+        Resampled audio array
+    """
+    if orig_sr == target_sr:
+        return audio
+        
+    # Use librosa's resampling
+    return librosa.resample(
+        y=audio,
+        orig_sr=orig_sr,
+        target_sr=target_sr,
+        res_type='kaiser_best'  # High-quality resampling
+    )
 
 class AudioProcessor:
     """Processes raw audio waveforms according to an `AudioConfig`."""
@@ -80,7 +94,7 @@ class AudioProcessor:
         self.n_mels = cfg.n_mels
         self.representation = cfg.representation
         self.normalize = cfg.normalize
-        self.target_length_seconds = cfg.target_length_seconds
+        self.target_length = cfg.target_length
         self.window_selection = cfg.window_selection
 
         # Pre‑compute mel filter bank if required
@@ -95,35 +109,37 @@ class AudioProcessor:
     #  Public API
     # ------------------------------------------------------------------ #
     def __call__(self, waveform: Union[Tensor, np.ndarray]) -> Tensor:
-        """Process a waveform into the configured representation.
-
-        Parameters
-        ----------
-        waveform : Union[Tensor, np.ndarray]
+        """
+        Args
+        ----
+        waveform : (T,) or (B, T)
             Raw mono waveform in **float32** PCM (‑1 … 1).
-            Shape: (T,) or (B, T)
 
         Returns
         -------
         Tensor
-            • raw →  (B, T)
+            • raw →  (B, T)  
             • spectrogram / mel_spectrogram →  (B, F, T')
-
-        Raises
-        ------
-        ValueError
-            If the representation type is unknown
         """
+        if isinstance(waveform, np.ndarray):
+            waveform = torch.from_numpy(waveform)
+
         # Ensure (B, T) shape
         if waveform.dim() == 1:
             waveform = waveform.unsqueeze(0)
 
+        # Pad / crop to fixed length if requested
+        if self.target_length is not None:
+            wav_np, _ = pad_or_window(
+                waveform.numpy(),
+                target_len=self.target_length,
+                window_selection=self.window_selection,
+                sr=self.sr,
+            )
+            waveform = torch.from_numpy(wav_np)
+
         if self.representation == "raw":
             return waveform
-
-        # Move mel basis to same device as input if needed
-        if self.representation == "mel_spectrogram":
-            self.mel_basis = self.mel_basis.to(waveform.device)
 
         # STFT → power spectrogram
         stft = torch.stft(
@@ -159,7 +175,5 @@ class AudioProcessor:
     def _normalize(x: Tensor) -> Tensor:
         x = x = torch.log(x + 1e-6)
         return (x - x.amin(dim=(-2, -1), keepdim=True)) / (
-            x.amax(dim=(-2, -1), keepdim=True)
-            - x.amin(dim=(-2, -1), keepdim=True)
-            + 1e-8
+            x.amax(dim=(-2, -1), keepdim=True) - x.amin(dim=(-2, -1), keepdim=True) + 1e-8
         )

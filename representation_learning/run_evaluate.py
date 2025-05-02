@@ -14,6 +14,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 import h5py
+from torch.utils.data import DataLoader
 
 from representation_learning.configs import load_config, RunConfig, EvaluateConfig  # type: ignore
 from representation_learning.models.get_model import get_model
@@ -58,26 +59,43 @@ def get_embeddings(model: torch.nn.Module, x: torch.Tensor, layers: List[str]) -
     embeddings = []
     
     def hook_fn(module, input, output):
-        embeddings.append(output)
+        # Immediately detach and move to CPU to save GPU memory
+        detached = output.detach().cpu()
+        # Clear the original output tensor
+        del output
+        embeddings.append(detached)
     
     hooks = []
-    for name, module in model.named_modules():
-        if name in layers:
-            hooks.append(module.register_forward_hook(hook_fn))
+    try:
+        for name, module in model.named_modules():
+            if name in layers:
+                hooks.append(module.register_forward_hook(hook_fn))
+        
+        # Forward pass
+        with torch.no_grad():
+            model(x)
+        
+        # Concatenate embeddings
+        if not embeddings:
+            raise ValueError(f"No layers found matching: {layers}")
+        
+        # Process embeddings in chunks to avoid memory spikes
+        result = []
+        for emb in embeddings:
+            # Flatten and move to CPU if not already there
+            flattened = emb.flatten(start_dim=1)
+            result.append(flattened)
+            # Clear the original embedding
+            del emb
+        
+        return torch.cat(result, dim=1)
     
-    # Forward pass
-    with torch.no_grad():
-        model(x)
-    
-    # Remove hooks
-    for hook in hooks:
-        hook.remove()
-    
-    # Concatenate embeddings
-    if not embeddings:
-        raise ValueError(f"No layers found matching: {layers}")
-    
-    return torch.cat([e.flatten(start_dim=1) for e in embeddings], dim=1)
+    finally:
+        # Ensure hooks are always removed
+        for hook in hooks:
+            hook.remove()
+        # Clear any remaining references
+        del embeddings
 
 def save_embeddings_to_disk(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, 
                           layer_names: List[str], save_dir: Path, split: str) -> None:
@@ -112,77 +130,66 @@ def save_embeddings_to_disk(model: torch.nn.Module, dataloader: torch.utils.data
         logger.info(f"File descriptor limits - soft: {soft}, hard: {hard}")
     except Exception as e:
         logger.warning(f"Could not get file descriptor limits: {e}")
-    
-    try:
-        with h5py.File(h5_path, 'w', libver='latest') as h5f:
-            # Get first batch to determine shapes
-            first_batch = next(iter(dataloader))
-            sample_embeddings = get_embeddings(model, first_batch[0], layer_names)
-            embedding_dim = sample_embeddings.shape[1]
-            total_samples = len(dataloader.dataset)
-            
-            # Calculate optimal chunk size based on available memory
-            available_memory = torch.cuda.get_device_properties(0).total_memory if torch.cuda.is_available() else 8 * 1024 * 1024 * 1024  # 8GB default
-            chunk_size = min(100, max(1, int(available_memory / (embedding_dim * 4 * 1024 * 1024))))  # 4 bytes per float32
-            
-            logger.info(f"Embedding dimension: {embedding_dim}")
-            logger.info(f"Chunk size: {chunk_size}")
-            
-            # Create resizable datasets with compression
-            embeddings_dset = h5f.create_dataset(
-                'embeddings',
-                shape=(total_samples, embedding_dim),
-                maxshape=(None, embedding_dim),
-                dtype=np.float32,
-                chunks=(chunk_size, embedding_dim),
-                compression='gzip',
-                compression_opts=4
-            )
-            labels_dset = h5f.create_dataset(
-                'labels',
-                shape=(total_samples,),
-                maxshape=(None,),
-                dtype=np.int64,
-                chunks=(chunk_size,),
-                compression='gzip',
-                compression_opts=4
-            )
-            
-            # Save embeddings and labels in chunks
-            start_idx = 0
-            with torch.no_grad():
-                for batch_idx, (x, y) in enumerate(tqdm(dataloader, desc=f"Saving {split} embeddings")):
-                    try:
-                        # Log progress every 10 batches
-                        if batch_idx % 10 == 0:
-                            logger.info(f"Processing batch {batch_idx}/{len(dataloader)}")
+    first_batch = next(iter(dataloader))
+    print(first_batch.shape)
+    with h5py.File(h5_path, 'w', libver='latest') as h5f:
+        # Get first batch to determine shapes
+        first_batch = next(iter(dataloader))
+        sample_embeddings = get_embeddings(model, first_batch[0], layer_names)
+        embedding_dim = sample_embeddings.shape[1]
+        total_samples = len(dataloader.dataset)
+        
+        # Calculate optimal chunk size based on available memory
+        available_memory = torch.cuda.get_device_properties(0).total_memory if torch.cuda.is_available() else 8 * 1024 * 1024 * 1024  # 8GB default
+        chunk_size = min(100, max(1, int(available_memory / (embedding_dim * 4 * 1024 * 1024))))  # 4 bytes per float32
+        
+        logger.info(f"Embedding dimension: {embedding_dim}")
+        logger.info(f"Chunk size: {chunk_size}")
+        
+        # Create resizable datasets with compression
+        embeddings_dset = h5f.create_dataset(
+            'embeddings',
+            shape=(total_samples, embedding_dim),
+            maxshape=(None, embedding_dim),
+            dtype=np.float32,
+            chunks=(chunk_size, embedding_dim),
+            compression='gzip',
+            compression_opts=4
+        )
+        labels_dset = h5f.create_dataset(
+            'labels',
+            shape=(total_samples,),
+            maxshape=(None,),
+            dtype=np.int64,
+            chunks=(chunk_size,),
+            compression='gzip',
+            compression_opts=4
+        )
+        
+        # Save embeddings and labels in chunks
+        start_idx = 0
+        with torch.no_grad():
+            for batch_idx, (x, y) in enumerate(tqdm(dataloader, desc=f"Saving {split} embeddings")):
+                # Log progress every 10 batches
+                if batch_idx % 10 == 0:
+                    logger.info(f"Processing batch {batch_idx}/{len(dataloader)}")
+                
+                embeddings = get_embeddings(model, x, layer_names)
+                batch_size = len(embeddings)
+                # Write to HDF5
+                embeddings_dset[start_idx:start_idx + batch_size] = embeddings.cpu().numpy()
+                labels_dset[start_idx:start_idx + batch_size] = y.numpy()
+                
+                start_idx += batch_size
+                
+                # Clear memory
+                del embeddings
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                
+                # Force flush to disk periodically
+                if batch_idx % 100 == 0:
+                    h5f.flush()
                         
-                        embeddings = get_embeddings(model, x, layer_names)
-                        batch_size = len(embeddings)
-                        
-                        # Write to HDF5
-                        embeddings_dset[start_idx:start_idx + batch_size] = embeddings.cpu().numpy()
-                        labels_dset[start_idx:start_idx + batch_size] = y.numpy()
-                        
-                        start_idx += batch_size
-                        
-                        # Clear memory
-                        del embeddings
-                        torch.cuda.empty_cache() if torch.cuda.is_available() else None
-                        
-                        # Force flush to disk periodically
-                        if batch_idx % 100 == 0:
-                            h5f.flush()
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing batch {batch_idx} at index {start_idx}: {str(e)}")
-                        raise
-                        
-    except Exception as e:
-        logger.error(f"Error saving embeddings to {h5_path}: {str(e)}")
-        if h5_path.exists():
-            h5_path.unlink()  # Remove partial file
-        raise
 
 def load_embeddings_from_disk(save_dir: Path, split: str) -> torch.utils.data.Dataset:
     """
@@ -244,11 +251,24 @@ def run_experiment(
     original_run_cfg: RunConfig = load_config(experiment_config.run_config)
 
     # 2. Build the dataloaders
+    logger.info("Building dataloaders...")
     train_dl, val_dl = build_evaluation_dataloaders(eval_cfg, original_run_cfg.model_spec, dataset_config, device=device)
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl), len(val_dl)
     )
+    
+    # Log dataset sizes
+    logger.info("Training dataset size: %d samples", len(train_dl.dataset))
+    logger.info("Validation dataset size: %d samples", len(val_dl.dataset))
+    
+    # Log memory usage before loading first batch
+    if torch.cuda.is_available():
+        logger.info("GPU Memory before loading: %d MB", torch.cuda.memory_allocated() / 1024 / 1024)
+    else:
+        import psutil
+        process = psutil.Process()
+        logger.info("RAM Usage before loading: %d MB", process.memory_info().rss / 1024 / 1024)
     
     # 3. Get number of classes
     num_labels = len(train_dl.dataset.label2idx)
@@ -280,7 +300,7 @@ def run_experiment(
     
     # 6. Save embeddings to disk
     logger.info("Saving embeddings to disk...")
-    save_embeddings_to_disk(model, train_dl, layer_names, save_dir, "train")
+    #save_embeddings_to_disk(model, train_dl, layer_names, save_dir, "train")
     save_embeddings_to_disk(model, val_dl, layer_names, save_dir, "val")
     
     # 7. Create datasets from saved embeddings
