@@ -25,7 +25,7 @@ ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
-    return cloudpathlib.GSClient(storage_client=Client())
+    return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
 
 
 class GSPath(cloudpathlib.GSPath):
