@@ -62,8 +62,8 @@ def main() -> None:
 
     torch.manual_seed(config.seed)
 
-    # Create dataloaders
-    train_dl, val_dl = build_dataloaders(config, device)
+    # 2. Build the dataloaders.
+    train_dl, val_dl, _ = build_dataloaders(cfg, device=device)
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl),

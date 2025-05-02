@@ -21,6 +21,9 @@ from .transformations import (
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
+BATS_PATH = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.train.csv"
+BATS_PATH_VALID = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.valid.csv"
+BATS_PATH_TEST = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
 
 
 @lru_cache(maxsize=1)
@@ -140,12 +143,12 @@ def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfo
 
 def _get_dataset_from_name(
     name: str,
-    validation: bool = False,
+    split: str = "train",
 ) -> pd.DataFrame:
     name = name.lower().strip()
 
     if name == "animalspeak":
-        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if validation else ANIMALSPEAK_PATH
+        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if split=="valid" else ANIMALSPEAK_PATH
         if ANIMALSPEAK_PATH.startswith("gs://"):
             csv_path = GSPath(anaimspeak_path)
         else:
@@ -158,14 +161,21 @@ def _get_dataset_from_name(
             lambda x: "gs://" + x
         )  # AnimalSpeak missing gs path
         return df
+    elif name == "bats":
+        csv_file = BATS_PATH_TEST if split=="test" else BATS_PATH_VALID if split=="valid" else BATS_PATH
+        if csv_file.startswith("gs://"):
+            csv_path = GSPath(csv_file)
+        else:
+            csv_path = Path(csv_file)
+        return pd.read_csv(csv_path)
     else:
-        raise NotImplementedError("Only AnimalSpeak dataset supported")
+        raise NotImplementedError("Dataset not supported")
 
 
 def get_dataset_dummy(
     data_config: DataConfig,
     preprocessor: Optional[Callable] = None,
-    validation: bool = False,
+    split: bool = False,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -181,7 +191,7 @@ def get_dataset_dummy(
     """
 
     # Check if the dataset CSV path is a gs:// path
-    df = _get_dataset_from_name(data_config.dataset_name, validation)
+    df = _get_dataset_from_name(data_config.dataset_name, split)
 
     # Apply transformations if specified
     if hasattr(data_config, "transformations") and data_config.transformations:
