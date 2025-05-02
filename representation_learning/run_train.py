@@ -1,23 +1,27 @@
 """
 Entry‑point script for training experiments.
 """
+
 from __future__ import annotations
 
 import argparse
 import logging
 from pathlib import Path
+
 import torch
 
-
-from representation_learning.configs import load_config, RunConfig  # type: ignore
+from representation_learning.configs import RunConfig, load_config  # type: ignore
+from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
-from representation_learning.data.dataset import build_dataloaders  # returns (train_dl, val_dl)
-from representation_learning.training.train import Trainer
 from representation_learning.training.optimisers import get_optimizer
+from representation_learning.training.train import Trainer
 from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger("run_train")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s: %(message)s"
+)
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train an audio representation model")
@@ -25,7 +29,7 @@ def _parse_args() -> argparse.Namespace:
         "--config",
         type=Path,
         required=True,
-        help="Path to the run‑config YAML (see configs/*)"
+        help="Path to the run‑config YAML (see configs/*)",
     )
     return parser.parse_args()
 
@@ -44,11 +48,13 @@ def main() -> None:
     train_dl, val_dl = build_dataloaders(cfg, device=device)
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
-        len(train_dl), len(val_dl)
+        len(train_dl),
+        len(val_dl),
     )
 
-    # 3. Retrieve the number of labels from the training dataset (Even if not needed for model type.)
-    num_labels = len(train_dl.dataset.label2idx)
+    # 3. Retrieve the number of labels from the training dataset (Even if not needed for
+    #    model type.)
+    num_labels = train_dl.dataset.metadata["num_classes"]
     logger.info("Number of labels: %d", num_labels)
 
     # 4. Build the model
@@ -65,11 +71,10 @@ def main() -> None:
         val_loader=val_dl,
         device=device,
         cfg=cfg,
-        exp_logger=exp_logger
+        exp_logger=exp_logger,
     )
 
     trainer.train()
-
 
 
 if __name__ == "__main__":

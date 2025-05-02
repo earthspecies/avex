@@ -1,7 +1,8 @@
+from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Self
+from typing import Any, Dict, Iterator, Optional, Self
 
 import cloudpathlib
 import numpy as np
@@ -9,15 +10,8 @@ import pandas as pd
 import soundfile as sf
 from google.cloud.storage.client import Client
 
-from .config import DataConfig
-from .transformations import (
-    DataTransform,
-    Filter,
-    FilterConfig,
-    Subsample,
-    SubsampleConfig,
-    TransformCfg,
-)
+from .config import DatasetConfig
+from .transformations import build_transforms
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
@@ -25,7 +19,7 @@ ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
-    return cloudpathlib.GSClient(storage_client=Client())
+    return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
 
 
 class GSPath(cloudpathlib.GSPath):
@@ -53,30 +47,45 @@ class AudioDataset:
 
     def __init__(
         self,
-        metadata_df: pd.DataFrame,
-        data_config: DataConfig,
+        df: pd.DataFrame,
+        data_config: DatasetConfig,
         transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
         preprocessor: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
+        metadata: dict | None = None,
     ) -> None:
         super().__init__()
-        self.metadata = metadata_df.reset_index(drop=True)
+
+        # TODO (milad) transform arg here?
+
+        self.df = df.reset_index(drop=True)
         self.data_config = data_config
         self.preprocessor = preprocessor
 
         self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
-        self.label_col = data_config.label_column
 
-        # Build a label → index mapping for numeric targets
-        unique_labels = sorted(self.metadata[self.label_col].unique())
-        self.label2idx: Dict[str, int] = {lbl: i for i, lbl in enumerate(unique_labels)}
+        self.metadata = metadata
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # TODO
+        pass
 
     def __len__(self) -> int:
-        return len(self.metadata)
+        return len(self.df)
 
-    # TODO (milad) we mostly care about iteration so define __iter__
+    def __iter__(self) -> Iterator:
+        # TODO (milad) do this properly
+        for i in range(len(self)):
+            yield self[i]
+
+    def __repr__(self) -> str:
+        # TODO
+        return "TODO"
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        row = self.metadata.iloc[idx]
+        row = self.df.iloc[idx]
         path_str: str = row[self.audio_path_col]
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
@@ -96,46 +105,10 @@ class AudioDataset:
 
         return {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row[self.label_col],
-            "label": self.label2idx[row[self.label_col]],
+            "text_label": row["label"],  # TODO (milad) we assume supervisor, fix
+            "label": row.label,
             "path": str(audio_path),
         }
-
-
-def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
-    """
-    Build the transformation pipeline from **validated** configs.
-
-    Parameters
-    ----------
-    transform_configs : list[FilterConfig | SubsampleConfig]
-        The `transformations` field that comes straight out of a validated
-        `DataConfig`.  No raw YAML dictionaries are accepted.
-
-    Raises
-    ------
-    TypeError
-        If the input is not a `FilterConfig` or `SubsampleConfig`.
-
-    Returns
-    -------
-    list[DataTransform]
-        Callable objects that can be applied in sequence.
-    """
-    transforms: List[DataTransform] = []
-
-    for cfg in transform_configs:
-        if isinstance(cfg, FilterConfig):
-            transforms.append(Filter(cfg))
-        elif isinstance(cfg, SubsampleConfig):
-            transforms.append(Subsample(cfg))
-        else:  # this should never happen if DataConfig was validated
-            raise TypeError(
-                "build_transforms() received an unexpected config type: "
-                f"{type(cfg).__name__}"
-            )
-
-    return transforms
 
 
 def _get_dataset_from_name(
@@ -163,14 +136,14 @@ def _get_dataset_from_name(
 
 
 def get_dataset_dummy(
-    data_config: DataConfig,
+    data_config: DatasetConfig,
     preprocessor: Optional[Callable] = None,
     validation: bool = False,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
 
-    1. Loads metadata CSV (path specified in `data_config.dataset_source`).
+    1. Loads datasets
     2. Applies any filtering / subsampling specified in `data_config.transformations`.
     3. Returns an `AudioDataset` instance.
 
@@ -183,14 +156,21 @@ def get_dataset_dummy(
     # Check if the dataset CSV path is a gs:// path
     df = _get_dataset_from_name(data_config.dataset_name, validation)
 
-    # Apply transformations if specified
-    if hasattr(data_config, "transformations") and data_config.transformations:
-        transforms = _build_transforms(data_config.transformations)
+    metadata = {}
+
+    if data_config.transformations:
+        transforms = build_transforms(data_config.transformations)
         for transform in transforms:
-            df = transform(df)
+            df, md = transform(df)
+
+            # TODO (milad): hacky but let's think about it
+            # TODO (test if keys already exist and shout?)
+            if md:
+                metadata.update(md)
 
     return AudioDataset(
-        metadata_df=df,
+        df=df,
         data_config=data_config,
         preprocessor=preprocessor,
+        metadata=metadata,
     )
