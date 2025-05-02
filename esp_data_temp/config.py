@@ -1,20 +1,21 @@
-from dataclasses import field as dc_field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
-from .transformations import TransformCfg
+from .transformations import RegisteredTransforms
 
 
-class DataConfig(BaseModel):
+class DatasetConfig(BaseModel):
     dataset_name: str
+    transformations: list[RegisteredTransforms] | None = None  # <- changed
 
-    # TODO (milad) do we need these?
-    # label_column: str
-    # label_type: Literal["supervised", "self-supervised"]
+    # TODO (milad) Commented out until find a reason to enable
+    #              dc_field -> from dataclasses import field as dc_field
+    # read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
 
-    transformations: Optional[List[TransformCfg]] = None  # <- changed
-    label_column: str
-    label_type: str
-    # TODO (milad) what is dc_field? 🤔
-    read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
+    @field_validator("transformations", mode="before")
+    @classmethod
+    def convert_none(cls, v: Any) -> Any:
+        if v in ("None", "none"):
+            return None
+        return v

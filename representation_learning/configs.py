@@ -25,7 +25,7 @@ import yaml
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from esp_data_temp.dataset import DataConfig
+from esp_data_temp.dataset import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -175,7 +175,7 @@ class RunConfig(BaseModel):
 
 def load_config(
     path: str | Path, config_type: Literal["run", "data"] = "run"
-) -> RunConfig | DataConfig:
+) -> RunConfig | DatasetConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance.
 
     Parameters
@@ -208,6 +208,6 @@ def load_config(
     if config_type == "run":
         return RunConfig.model_validate(raw)
     elif config_type == "data":
-        return DataConfig.model_validate(raw)
+        return DatasetConfig.model_validate(raw)
     else:
         raise NotImplementedError("Can only load from run config or data config.")
