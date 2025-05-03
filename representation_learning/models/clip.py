@@ -6,7 +6,9 @@ import torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
 
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.efficientnetb0 import Model as EfficientNetB0
+from representation_learning.models.efficientnetb0 import (
+    Model as EfficientNetB0,
+)
 
 
 class CLIPModel(ModelBase):
@@ -75,9 +77,9 @@ class CLIPModel(ModelBase):
         torch.Tensor
             Normalized text embeddings
         """
-        # Tokenize text
+        # Tokenize text with max length of 50 tokens
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, return_tensors="pt"
+            text, padding=True, truncation=True, max_length=50, return_tensors="pt"
         ).to(self.device)
 
         # Get text embeddings
@@ -89,7 +91,7 @@ class CLIPModel(ModelBase):
         self, audio: torch.Tensor, text: list[str]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Forward pass computing audio and text embeddings and their similarity.
+        Forward pass computing audio and text embeddings.
 
         Args:
             audio: Audio tensor of shape (batch_size, time_steps)
@@ -102,4 +104,5 @@ class CLIPModel(ModelBase):
         audio_embeddings = self.encode_audio(audio)
         text_embeddings = self.encode_text(text)
 
+        # Return embeddings only - logits are computed in the loss function
         return audio_embeddings, text_embeddings

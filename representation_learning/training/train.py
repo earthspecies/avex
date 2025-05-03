@@ -33,11 +33,12 @@ from representation_learning.training.distributed import (
     reduce_dict,
     setup_distributed,
 )
+from representation_learning.training.losses import _build_criterion
 from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger  # type: ignore
-from representation_learning.training.losses import _build_criterion
 
 logger = logging.getLogger(__name__)
+
 
 # --------------------------------------------------------------------------- #
 #  Trainer
@@ -55,6 +56,8 @@ class Trainer:
     device        : torch.device
     cfg           : RunConfig (or any object with the referenced fields)
     exp_logger    : ExperimentLogger
+    checkpoint_freq : int, optional
+        How often to save checkpoints (in epochs), defaults to 1 (once per epoch)
     """
 
     # ----------------------------- initialisation -------------------------- #
@@ -68,6 +71,7 @@ class Trainer:
         device: torch.device,
         cfg: RunConfig,
         exp_logger: ExperimentLogger,
+        checkpoint_freq: int = 1,
     ) -> None:
         # Setup distributed training if needed
         self.local_rank, self.world_size, _ = setup_distributed(
@@ -91,6 +95,7 @@ class Trainer:
         self.device = device
         self.cfg = cfg
         self.log = exp_logger
+        self.checkpoint_freq = checkpoint_freq
 
         # AMP
         self.amp_enabled: bool = cfg.training_params.amp
@@ -126,6 +131,7 @@ class Trainer:
                     "scheduler": cfg.scheduler.name,
                     "warmup_steps": cfg.scheduler.warmup_steps,
                     "min_lr": cfg.scheduler.min_lr,
+                    "checkpoint_freq": self.checkpoint_freq,
                 }
             )
 
@@ -177,7 +183,13 @@ class Trainer:
                         self.best_val_acc = val_acc
                         self._save_checkpoint("best.pt")
 
+                    # Save periodic checkpoint based on frequency
+                    if epoch % self.checkpoint_freq == 0:
+                        self._save_checkpoint(f"checkpoint_epoch_{epoch:03d}.pt")
+
+            # Save final checkpoint
             if is_master_process():
+                self._save_checkpoint("final.pt")
                 self.log.finalize()
         finally:
             # Cleanup distributed training
@@ -251,7 +263,9 @@ class Trainer:
             (loss, number of correct predictions, batch size)
         """
         # Move batch to device
-        batch = {k: v.to(self.device) if torch.is_tensor(v) else v for k, v in batch.items()}
+        batch = {
+            k: v.to(self.device) if torch.is_tensor(v) else v for k, v in batch.items()
+        }
 
         # Forward pass with optional AMP
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
@@ -278,19 +292,43 @@ class Trainer:
         return loss.item(), correct, batch_size
 
     def _is_clip_mode(self) -> bool:
-        """Check if the current model/loss setup is CLIP-style contrastive learning."""
+        """Check if the current model/loss setup is CLIP-style contrastive learning.
+
+        Returns
+        -------
+        bool
+            True if using CLIP-style contrastive learning
+        """
         return (
-            isinstance(self.criterion, nn.Module) and
-            self.criterion.__class__.__name__.lower() == 'cliploss'
+            isinstance(self.criterion, nn.Module)
+            and self.criterion.__class__.__name__.lower() == "cliploss"
         )
 
-    def _forward_clip(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, int, int]:
-        """Forward and loss computation for CLIPModel + ClipLoss."""
+    def _forward_clip(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, int, int]:
+        """Forward and loss computation for CLIPModel + ClipLoss.
+
+        Parameters
+        ----------
+        batch : Dict[str, torch.Tensor]
+            Input batch containing raw_wav and text_label
+
+        Returns
+        -------
+        Tuple[torch.Tensor, int, int]
+            (loss, number of correct predictions, batch size)
+        """
         audio = batch["raw_wav"]
         text = batch["text_label"]
-        audio_emb, text_emb, logits = self.model(audio, text)
-        logit_scale = 1.0 / self.model.temperature if hasattr(self.model, 'temperature') else 1.0
-        loss = self.criterion(audio_emb, text_emb, logit_scale)
+        audio_emb, text_emb = self.model(audio, text)
+        logit_scale = (
+            1.0 / self.model.temperature if hasattr(self.model, "temperature") else 1.0
+        )
+        # Get loss and logits from criterion
+        loss, logits = self.criterion(
+            audio_emb, text_emb, logit_scale, output_logits=True
+        )
         labels = torch.arange(logits.size(0), device=logits.device)
         pred = logits.argmax(dim=-1)
         correct = (pred == labels).sum().item()
@@ -320,6 +358,8 @@ class Trainer:
                 "optimizer": self.optimizer.state_dict(),
                 "epoch": self.cfg.training_params.train_epochs,
                 "best_val_acc": self.best_val_acc,
+                "scaler": self.scaler.state_dict() if self.scaler is not None else None,
             },
             self.ckpt_dir / name,
         )
+        logger.info(f"Saved checkpoint: {self.ckpt_dir / name}")
