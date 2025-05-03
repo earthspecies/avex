@@ -18,10 +18,11 @@ import contextlib
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.parallel as parallel
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
@@ -38,9 +39,10 @@ from representation_learning.training.distributed import (
     reduce_dict,
     setup_distributed,
 )
-from representation_learning.training.losses import _build_criterion
-from representation_learning.training.optimisers import _build_optimizer, _build_scheduler
-from representation_learning.utils import ExperimentLogger  # type: ignore
+from representation_learning.training.losses import ClipLoss, _build_criterion
+from representation_learning.training.optimisers import _build_optimizer
+from representation_learning.training.training_utils import build_scheduler
+from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +57,41 @@ class Trainer:
     Parameters
     ----------
     model         : nn.Module
+        Network to train
     optimizer     : torch.optim.Optimizer
-    train_loader  : DataLoader
-    val_loader    : DataLoader
-    device        : torch.device
-    cfg           : RunConfig (or any object with the referenced fields)
-    exp_logger    : ExperimentLogger
+        Optimizer instance
+    train_dl  : DataLoader
+        Training data loader
+    eval_dl    : DataLoader
+        Validation data loader
+    model_dir : Union[str, Path]
+        Directory to save checkpoints
+    criterion : str, optional
+        Loss function name, by default "cross_entropy"
+    lr : float, optional
+        Learning rate, by default 3e-4
+    weight_decay : float, optional
+        Weight decay, by default 0.0
+    max_epochs : int, optional
+        Maximum number of epochs, by default 10
+    amp : bool, optional
+        Whether to use automatic mixed precision, by default False
+    amp_dtype : str, optional
+        AMP data type, one of: 'fp16', 'bf16', by default "bf16"
+    scheduler_config : Optional[Dict], optional
+        LR scheduler config, by default None
+    is_clip_mode : bool, optional
+        Whether we're in CLIP training mode, by default False
     checkpoint_freq : int, optional
-        How often to save checkpoints (in epochs), defaults to 1 (once per epoch)
+        Frequency of checkpointing (in epochs), defaults to 1 (once per epoch)
+    augmentation_processor : Optional[AugmentationProcessor], optional
+        Processor for applying data augmentations, by default None
+    exp_logger : Optional[ExperimentLogger], optional
+        Experiment logger instance, by default None
+    batch_size : int, optional
+        Batch size (used for logging only), by default 32
+    device : Optional[Union[str, torch.device]], optional
+        Device to run training on, by default uses model device
     """
 
     # ----------------------------- initialisation -------------------------- #
@@ -71,97 +100,114 @@ class Trainer:
         *,
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
-        device: torch.device,
-        cfg: RunConfig,
-        exp_logger: ExperimentLogger,
+        train_dl: DataLoader,
+        eval_dl: DataLoader,
+        model_dir: Union[str, Path],
+        criterion: str = "cross_entropy",
+        lr: float = 3e-4,
+        weight_decay: float = 0.0,
+        max_epochs: int = 10,
+        amp: bool = False,
+        amp_dtype: str = "bf16",  # one of: 'fp16', 'bf16'
+        scheduler_config: Optional[Dict] = None,
+        is_clip_mode: bool = False,
         checkpoint_freq: int = 1,
         augmentation_processor: Optional[AugmentationProcessor] = None,
+        exp_logger: Optional[ExperimentLogger] = None,  # Make exp_logger optional
+        batch_size: int = 32, # Add batch size to init
+        device: Optional[Union[str, torch.device]] = None # Allow device to be passed
     ) -> None:
-        # Setup distributed training if needed
-        self.local_rank, self.world_size, _ = setup_distributed(
-            backend=cfg.distributed_backend,
-            port=cfg.distributed_port,
-        )
-        self.is_distributed = self.local_rank is not None
+        self.model = model
+        self.train_dataloader = train_dl
+        self.eval_dataloader = eval_dl
+        self.model_dir = Path(model_dir)
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+        self.is_clip_mode = is_clip_mode
+        self.checkpoint_freq = checkpoint_freq
+        self.max_epochs = max_epochs
+        self.augmentation_processor = augmentation_processor
+        self.log = exp_logger
+        
+        # Determine device
+        if device is None:
+             self.device = next(self.model.parameters()).device
+        else:
+             self.device = torch.device(device)
+        self.model.to(self.device)
 
-        # Move model to device and wrap with DDP if needed
-        self.model = model.to(device)
+        # Distributed setup
+        self.local_rank, self.world_size, self.is_distributed = setup_distributed()
         if self.is_distributed:
+            # Ensure model is on correct device before wrapping
+            self.model.to(self.device)
             self.model = parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.local_rank],
                 output_device=self.local_rank,
             )
+            self.model_unwrapped = self.model.module
+        else:
+            self.model_unwrapped = self.model
 
+        # Optimizer, Criterion, Scheduler
         self.optimizer = optimizer
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.device = device
-        self.cfg = cfg
-        self.log = exp_logger
-        self.checkpoint_freq = checkpoint_freq
+        self.criterion = _build_criterion(criterion)
+        self.scheduler = build_scheduler(
+            self.optimizer,
+            scheduler_config or {},
+            len(self.train_dataloader) * max_epochs,
+        )
 
         # AMP
-        self.amp_enabled: bool = cfg.training_params.amp
-        self.amp_dtype = (
-            torch.bfloat16 if cfg.training_params.amp_dtype == "bf16" else torch.float16
-        )
-        self.scaler: GradScaler | None = (
-            GradScaler()
-            if (self.amp_enabled and self.amp_dtype == torch.float16)
-            else None
-        )
+        self.amp_enabled = amp
+        self.amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}[amp_dtype]
+        self.scaler = GradScaler() if self.amp_enabled and self.amp_dtype == torch.float16 else None
 
-        # Setup learning rate scheduler
-        total_steps = len(train_loader) * cfg.training_params.train_epochs
-        self.scheduler = build_scheduler(optimizer, cfg, total_steps)
-
-        self.criterion = _build_criterion(cfg.loss_function)
+        # State
         self.best_val_acc: float = 0.0
 
         # Log static hyper‑parameters once (only on master process)
-        if is_main_process():
+        if is_main_process() and self.log:
+            try:
+                # Attempt to get model name from unwrapped model
+                model_name = self.model_unwrapped.__class__.__name__
+            except AttributeError:
+                model_name = "Unknown"
             self.log.log_params(
                 {
-                    "model_name": cfg.model_spec.name,
-                    "epochs": cfg.training_params.train_epochs,
-                    "lr": cfg.training_params.lr,
-                    "batch_size": cfg.training_params.batch_size,
-                    "loss_fn": cfg.loss_function,
+                    "model_name": model_name,
+                    "epochs": max_epochs,
+                    "lr": lr,
+                    "batch_size": batch_size,
+                    "loss_fn": criterion,
+                    "optimizer": optimizer.__class__.__name__,
+                    "weight_decay": weight_decay,
                     "amp": self.amp_enabled,
-                    "amp_dtype": cfg.training_params.amp_dtype,
+                    "amp_dtype": amp_dtype,
                     "distributed": self.is_distributed,
                     "world_size": self.world_size,
-                    "scheduler": cfg.scheduler.name,
-                    "warmup_steps": cfg.scheduler.warmup_steps,
-                    "min_lr": cfg.scheduler.min_lr,
+                    "scheduler": scheduler_config.get('name', 'none') if scheduler_config else 'none',
+                    "warmup_steps": scheduler_config.get('warmup_steps', 0) if scheduler_config else 0,
+                    "min_lr": scheduler_config.get('min_lr', 0) if scheduler_config else 0,
                     "checkpoint_freq": self.checkpoint_freq,
                 }
             )
-
-            # Checkpoint directory
-            self.ckpt_dir = Path(cfg.output_dir or "checkpoints")
-            self.ckpt_dir.mkdir(parents=True, exist_ok=True)
-
-        # Augmentations
-        self.augmentation_processor = augmentation_processor
 
     # ----------------------------- public API ------------------------------ #
     def train(self) -> None:
         """Run the full training loop for the configured number of epochs."""
         try:
-            for epoch in range(1, self.cfg.training_params.train_epochs + 1):
+            for epoch in range(1, self.max_epochs + 1):
                 # Set epoch for distributed sampler
                 if self.is_distributed:
-                    self.train_loader.sampler.set_epoch(epoch)
+                    # Check if sampler exists and has set_epoch method
+                    if hasattr(self.train_dataloader.sampler, "set_epoch"):
+                        self.train_dataloader.sampler.set_epoch(epoch)
+                    if hasattr(self.eval_dataloader.sampler, "set_epoch"):
+                         self.eval_dataloader.sampler.set_epoch(epoch) # Needed for consistent eval
 
                 train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
                 val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
-
-                # Step the scheduler
-                self.scheduler.step()
 
                 # Log only on master process
                 if is_main_process():
@@ -174,32 +220,35 @@ class Trainer:
                     )
 
                     # Log epoch‑level metrics
-                    self.log.log_metrics(
-                        {
-                            "loss": train_loss,
-                            "acc": train_acc,
-                            "learning_rate": current_lr,
-                        },
-                        step=epoch,
-                        split="train",
-                    )
-                    self.log.log_metrics(
-                        {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
-                    )
+                    if self.log:
+                        self.log.log_metrics(
+                            {
+                                "loss": train_loss,
+                                "acc": train_acc,
+                                "learning_rate": current_lr,
+                            },
+                            step=epoch,
+                            split="train",
+                        )
+                        self.log.log_metrics(
+                            {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
+                        )
 
                     # Save best model
                     if val_acc > self.best_val_acc:
+                        logger.info(f"New best validation accuracy: {val_acc:.4f} (prev: {self.best_val_acc:.4f})")
                         self.best_val_acc = val_acc
-                        self._save_checkpoint("best.pt")
-
+                        self._save_checkpoint(epoch, is_best=True)
+                    
                     # Save periodic checkpoint based on frequency
-                    if epoch % self.checkpoint_freq == 0:
-                        self._save_checkpoint(f"checkpoint_epoch_{epoch:03d}.pt")
+                    if epoch % self.checkpoint_freq == 0 and epoch != self.max_epochs:
+                        self._save_checkpoint(epoch)
 
             # Save final checkpoint
             if is_main_process():
-                self._save_checkpoint("final.pt")
-                self.log.finalize()
+                self._save_checkpoint(self.max_epochs, final=True)
+                if self.log:
+                    self.log.finalize()
         finally:
             # Cleanup distributed training
             if self.is_distributed:
@@ -214,12 +263,13 @@ class Trainer:
         -------
         Tuple[float, float] : mean loss, mean accuracy
         """
-        loader = self.train_loader if train else self.val_loader
+        loader = self.train_dataloader if train else self.eval_dataloader
         self.model.train(train)  # train=True -> .train(); train=False -> .eval()
 
         total_loss, total_correct, total_samples = 0.0, 0, 0
         pbar = tqdm(
-            loader,
+            enumerate(loader),
+            total=len(loader),
             desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
             leave=False,
             disable=not is_main_process(),  # Only show progress bar on master
@@ -228,151 +278,230 @@ class Trainer:
         grad_ctx = contextlib.nullcontext() if train else torch.no_grad()
 
         with grad_ctx:
-            for batch in pbar:
-                loss, correct, n = self._forward(batch, train=train)
-                total_loss += loss * n
+            for step, batch in pbar:
+                loss_tensor, correct, n = self._forward(batch, train=train)
+                
+                # Backward pass if training
+                if train:
+                    self._backward(loss_tensor)
+                    
+                # Accumulate metrics (ensure loss is detached and moved to CPU for aggregation)
+                # Convert correct predictions count (int) to tensor for reduction
+                batch_loss = loss_tensor.detach().item() * n
+                total_loss += batch_loss
                 total_correct += correct
                 total_samples += n
 
                 # Update progress bar (only on master)
                 if is_main_process():
-                    pbar.set_postfix(loss=loss, acc=correct / n)
+                    current_acc = total_correct / total_samples if total_samples > 0 else 0
+                    # Display average loss per sample
+                    avg_loss_so_far = total_loss / total_samples if total_samples > 0 else 0
+                    pbar.set_postfix(
+                        loss=f"{avg_loss_so_far:.4f}", 
+                        acc=f"{current_acc:.4f}",
+                    )
 
-        # Reduce metrics across processes
-        metrics = {
-            "loss": torch.tensor(total_loss, device=self.device),
-            "correct": torch.tensor(total_correct, device=self.device),
-            "samples": torch.tensor(total_samples, device=self.device),
-        }
-        reduced_metrics = reduce_dict(metrics)
+        # Reduce metrics across processes if distributed
+        if self.is_distributed:
+            metrics = torch.tensor([total_loss, total_correct, total_samples], device=self.device)
+            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+            total_loss, total_correct, total_samples = metrics.tolist()
+            total_correct = int(total_correct) # Convert back to int after reduction
+            total_samples = int(total_samples)
 
-        return (
-            reduced_metrics["loss"].item() / reduced_metrics["samples"].item(),
-            reduced_metrics["correct"].item() / reduced_metrics["samples"].item(),
-        )
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0
+        avg_acc = total_correct / total_samples if total_samples > 0 else 0
+        return avg_loss, avg_acc
 
-    def _forward(
+    def _forward( 
         self,
-        batch: Dict[str, torch.Tensor],
+        batch: Dict[str, Any], # Allow Any for flexibility with augmentations
         *,
         train: bool,
-    ) -> Tuple[float, int, int]:
-        """Single forward/backward step (if `train=True`).
+    ) -> Tuple[torch.Tensor, int, int]:
+        """Single forward pass (backward is handled in _run_epoch).
 
         Parameters
         ----------
-        batch : Dict[str, torch.Tensor]
-            Input batch containing raw_wav, padding_mask (optional), and label
+        batch : Dict[str, Any]
+            Input batch
         train : bool
-            Whether this is a training step (affects gradient computation)
+            Whether this is a training step
 
         Returns
         -------
-        Tuple[float, int, int]
-            (loss, number of correct predictions, batch size)
+        Tuple[torch.Tensor, int, int]
+            (loss tensor, number of correct predictions, batch size)
         """
         # Move batch to device
         batch = {
-            k: v.to(self.device) if torch.is_tensor(v) else v for k, v in batch.items()
+            k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
+            for k, v in batch.items()
         }
-
+        
         # Apply augmentations during training if available
         if train and self.augmentation_processor is not None:
             batch = self.augmentation_processor.apply_augmentations(batch)
-
+        
         # Forward pass with optional AMP
-        with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
-            if self._is_clip_mode():
+        context_manager = autocast(enabled=self.amp_enabled, dtype=self.amp_dtype)
+        with context_manager:
+            if self.is_clip_mode:
                 loss, correct, batch_size = self._forward_clip(batch)
             else:
-                logits = self.model(batch["raw_wav"], batch["padding_mask"])
-                loss = self.criterion(logits, batch["label"])
-                pred = logits.argmax(dim=-1)
-                correct = (pred == batch["label"]).sum().item()
-                batch_size = len(batch["label"])
+                loss, correct, batch_size = self._forward_supervised(batch)
 
-        if train:
-            # Backward pass with optional gradient scaling
-            if self.scaler is not None:
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                loss.backward()
-                self.optimizer.step()
-            self.optimizer.zero_grad()
+        return loss, correct, batch_size
 
-        return loss.item(), correct, batch_size
+    def _forward_supervised(
+        self, batch: Dict[str, Any]
+    ) -> Tuple[torch.Tensor, int, int]:
+        """Forward and loss computation for standard supervised learning.
 
-    def _is_clip_mode(self) -> bool:
-        """Check if the current model/loss setup is CLIP-style contrastive learning.
+        Parameters
+        ----------
+        batch : Dict[str, Any]
+            Input batch containing raw_wav and label
 
         Returns
         -------
-        bool
-            True if using CLIP-style contrastive learning
+        Tuple[torch.Tensor, int, int]
+            (loss tensor, number of correct predictions, batch size)
         """
-        return (
-            isinstance(self.criterion, nn.Module)
-            and self.criterion.__class__.__name__.lower() == "cliploss"
-        )
+        # Get the inputs
+        audio = batch["raw_wav"]
+        target = batch["label"]
+        padding_mask = batch.get("padding_mask") # Handle optional mask
+        
+        # Mixed labels from mixup augmentation if available
+        mixed_target = batch.get("mixed_labels")
+        
+        # Forward pass
+        outputs = self.model(audio, padding_mask=padding_mask)
+        
+        # Calculate loss - either with mixed labels or regular
+        if mixed_target is not None:
+            # For mixup - use soft labels (e.g., BCE or KLDiv)
+            # Assuming outputs are logits, apply log_softmax for KLDiv or keep as is for BCE
+            if isinstance(self.criterion, nn.CrossEntropyLoss):
+                 log_probs = F.log_softmax(outputs, dim=1)
+                 loss = F.kl_div(log_probs, mixed_target, reduction='batchmean')
+            elif isinstance(self.criterion, nn.BCEWithLogitsLoss):
+                 loss = self.criterion(outputs, mixed_target)
+            else:
+                raise NotImplementedError(f"Mixup not implemented for criterion {type(self.criterion).__name__}")
+        else:
+            loss = self.criterion(outputs, target)
+        
+        # Calculate accuracy
+        with torch.no_grad():
+            if mixed_target is not None:
+                _, predicted = outputs.max(1)
+                _, true_targets = mixed_target.max(1)
+                correct = (predicted == true_targets).sum().item()
+            else:
+                _, predicted = outputs.max(1)
+                correct = (predicted == target).sum().item()
+        
+        return loss, correct, target.size(0)
 
     def _forward_clip(
-        self, batch: Dict[str, torch.Tensor]
+        self, batch: Dict[str, Any]
     ) -> Tuple[torch.Tensor, int, int]:
         """Forward and loss computation for CLIPModel + ClipLoss.
 
         Parameters
         ----------
-        batch : Dict[str, torch.Tensor]
+        batch : Dict[str, Any]
             Input batch containing raw_wav and text_label
 
         Returns
         -------
         Tuple[torch.Tensor, int, int]
-            (loss, number of correct predictions, batch size)
+            (loss tensor, number of correct predictions, batch size)
         """
         audio = batch["raw_wav"]
         text = batch["text_label"]
-        audio_emb, text_emb = self.model(audio, text)
-        logit_scale = (
-            1.0 / self.model.temperature if hasattr(self.model, "temperature") else 1.0
-        )
+        
+        # Ensure model has temperature attribute if needed by loss
+        logit_scale = 1.0 # Default
+        model_to_check = self.model_unwrapped
+        if isinstance(self.criterion, ClipLoss) and hasattr(model_to_check, "temperature"):
+            logit_scale = 1.0 / model_to_check.temperature
+        
+        audio_emb, text_emb = self.model(audio, text=text) # Pass text explicitly if model expects it
+
         # Get loss and logits from criterion
-        loss, logits = self.criterion(
-            audio_emb, text_emb, logit_scale, output_logits=True
-        )
-        labels = torch.arange(logits.size(0), device=logits.device)
-        pred = logits.argmax(dim=-1)
-        correct = (pred == labels).sum().item()
-        batch_size = logits.size(0)
+        if isinstance(self.criterion, ClipLoss):
+            loss, logits = self.criterion(
+                audio_emb, text_emb, logit_scale, output_logits=True
+            )
+        else:
+            loss = self.criterion(audio_emb, text_emb, logit_scale)
+            with torch.no_grad(): # Compute logits without grad if not returned by loss
+                logits = audio_emb @ text_emb.T * logit_scale # Apply scale here if loss doesn't
+
+        # For CLIP, accuracy is based on matching audio to correct text
+        with torch.no_grad():
+            ground_truth = torch.arange(len(audio), dtype=torch.long, device=self.device)
+            pred_indices = torch.argmax(logits, dim=1)
+            correct = (pred_indices == ground_truth).sum().item()
+        
+        batch_size = audio.size(0)
         return loss, correct, batch_size
 
-    def _save_checkpoint(self, name: str) -> None:
+    def _backward(self, loss: torch.Tensor) -> None:
+        """Backwards step with AMP support."""
+        self.optimizer.zero_grad(set_to_none=True)
+        if self.scaler is not None:  # fp16
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:  # bf16 or full precision
+            loss.backward()
+            self.optimizer.step()
+        
+        # Step the scheduler after the optimizer step
+        if self.scheduler is not None:
+            self.scheduler.step()
+    
+    def _save_checkpoint(self, epoch: int, is_best: bool = False, final: bool = False) -> None:
         """Save model checkpoint.
 
         Parameters
         ----------
-        name : str
-            Name of the checkpoint file
+        epoch : int
+            Current epoch
+        is_best : bool, optional
+            Whether this is the best model so far, by default False
+        final : bool, optional
+            Whether this is the final model checkpoint, by default False
         """
         if not is_main_process():
             return
-
-        # Get state dict from DDP model if needed
-        if self.is_distributed:
-            state_dict = self.model.module.state_dict()
+        
+        save_model = self.model_unwrapped # Always save unwrapped model
+        
+        checkpoint = {
+            "epoch": epoch,
+            "model_state_dict": save_model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+            "scaler_state_dict": self.scaler.state_dict() if self.scaler else None, # Save scaler state
+            "best_val_acc": self.best_val_acc,
+        }
+        
+        # Determine filename
+        if final:
+            filename = "final_model.pt"
+        elif is_best:
+            filename = "best_model.pt"
+        elif epoch % self.checkpoint_freq == 0:
+             filename = f"checkpoint_epoch_{epoch:03d}.pt"
         else:
-            state_dict = self.model.state_dict()
-
-        torch.save(
-            {
-                "model": state_dict,
-                "optimizer": self.optimizer.state_dict(),
-                "epoch": self.cfg.training_params.train_epochs,
-                "best_val_acc": self.best_val_acc,
-                "scaler": self.scaler.state_dict() if self.scaler is not None else None,
-            },
-            self.ckpt_dir / name,
-        )
-        logger.info(f"Saved checkpoint: {self.ckpt_dir / name}")
+            return # Don't save if not periodic, best, or final
+            
+        model_path = self.model_dir / filename
+        torch.save(checkpoint, model_path)
+        logger.info(f"Saved checkpoint to {model_path}")
