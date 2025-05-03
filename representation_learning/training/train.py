@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -27,14 +28,18 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import RunConfig
+from representation_learning.data.dataset import AugmentationProcessor
 from representation_learning.training.distributed import (
     cleanup_distributed,
-    is_master_process,
+    get_rank,
+    get_world_size,
+    is_distributed,
+    is_main_process,
     reduce_dict,
     setup_distributed,
 )
 from representation_learning.training.losses import _build_criterion
-from representation_learning.training.training_utils import build_scheduler
+from representation_learning.training.optimisers import _build_optimizer, _build_scheduler
 from representation_learning.utils import ExperimentLogger  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -72,6 +77,7 @@ class Trainer:
         cfg: RunConfig,
         exp_logger: ExperimentLogger,
         checkpoint_freq: int = 1,
+        augmentation_processor: Optional[AugmentationProcessor] = None,
     ) -> None:
         # Setup distributed training if needed
         self.local_rank, self.world_size, _ = setup_distributed(
@@ -116,7 +122,7 @@ class Trainer:
         self.best_val_acc: float = 0.0
 
         # Log static hyper‑parameters once (only on master process)
-        if is_master_process():
+        if is_main_process():
             self.log.log_params(
                 {
                     "model_name": cfg.model_spec.name,
@@ -139,6 +145,9 @@ class Trainer:
             self.ckpt_dir = Path(cfg.output_dir or "checkpoints")
             self.ckpt_dir.mkdir(parents=True, exist_ok=True)
 
+        # Augmentations
+        self.augmentation_processor = augmentation_processor
+
     # ----------------------------- public API ------------------------------ #
     def train(self) -> None:
         """Run the full training loop for the configured number of epochs."""
@@ -155,7 +164,7 @@ class Trainer:
                 self.scheduler.step()
 
                 # Log only on master process
-                if is_master_process():
+                if is_main_process():
                     current_lr = self.optimizer.param_groups[0]["lr"]
                     logger.info(
                         f"[Epoch {epoch:03d}] "
@@ -188,7 +197,7 @@ class Trainer:
                         self._save_checkpoint(f"checkpoint_epoch_{epoch:03d}.pt")
 
             # Save final checkpoint
-            if is_master_process():
+            if is_main_process():
                 self._save_checkpoint("final.pt")
                 self.log.finalize()
         finally:
@@ -213,7 +222,7 @@ class Trainer:
             loader,
             desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
             leave=False,
-            disable=not is_master_process(),  # Only show progress bar on master
+            disable=not is_main_process(),  # Only show progress bar on master
         )
 
         grad_ctx = contextlib.nullcontext() if train else torch.no_grad()
@@ -226,7 +235,7 @@ class Trainer:
                 total_samples += n
 
                 # Update progress bar (only on master)
-                if is_master_process():
+                if is_main_process():
                     pbar.set_postfix(loss=loss, acc=correct / n)
 
         # Reduce metrics across processes
@@ -266,6 +275,10 @@ class Trainer:
         batch = {
             k: v.to(self.device) if torch.is_tensor(v) else v for k, v in batch.items()
         }
+
+        # Apply augmentations during training if available
+        if train and self.augmentation_processor is not None:
+            batch = self.augmentation_processor.apply_augmentations(batch)
 
         # Forward pass with optional AMP
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
@@ -343,7 +356,7 @@ class Trainer:
         name : str
             Name of the checkpoint file
         """
-        if not is_master_process():
+        if not is_main_process():
             return
 
         # Get state dict from DDP model if needed
