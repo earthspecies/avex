@@ -1,7 +1,7 @@
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Self
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Self
 
 import cloudpathlib
 import numpy as np
@@ -19,13 +19,19 @@ from .transformations import (
     TransformCfg,
 )
 
+if TYPE_CHECKING:
+    from cloudpathlib import CloudPath
+
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
 
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
-    return cloudpathlib.GSClient(storage_client=Client())
+    return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
+
+
+default_client = _get_client()  # Create a module-level singleton
 
 
 class GSPath(cloudpathlib.GSPath):
@@ -37,7 +43,7 @@ class GSPath(cloudpathlib.GSPath):
     def __init__(
         self,
         client_path: str | Self | "CloudPath",
-        client: cloudpathlib.GSClient = _get_client(),
+        client: cloudpathlib.GSClient = default_client,  # Use singleton
     ) -> None:
         super().__init__(client_path, client=client)
 
@@ -59,7 +65,14 @@ class AudioDataset:
         preprocessor: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
     ) -> None:
         super().__init__()
-        self.metadata = metadata_df.reset_index(drop=True).dropna(subset=[data_config.label_column])
+        # Ensure label column exists before dropping NAs
+        if data_config.label_column not in metadata_df.columns:
+            raise ValueError(
+                f"Label column '{data_config.label_column}' not found in metadata."
+            )
+        self.metadata = metadata_df.reset_index(drop=True).dropna(
+            subset=[data_config.label_column]
+        )
         self.data_config = data_config
         self.preprocessor = preprocessor
 
