@@ -35,6 +35,9 @@ sr: 16000
 logging: mlflow
 output_dir: "./repl_run"
 
+# Path to checkpoint to resume from (set to null or a path)
+resume_from_checkpoint: null
+
 training_params:
   train_epochs: 10
   lr: 0.0001

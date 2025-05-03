@@ -8,11 +8,13 @@ This module provides functions for audio data augmentation, including:
 
 import random
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 import torchaudio
+
+from representation_learning.configs import RunConfig
 
 
 def add_noise(
@@ -194,3 +196,102 @@ def mixup(
         return mixed_audio.numpy(), lam
     else:
         return mixed_audio, lam
+
+
+class AugmentationProcessor:
+    """Applies audio augmentations based on configuration."""
+
+    def __init__(self, cfg: RunConfig, device: str = "cpu") -> None:
+        """
+        Initialize the augmentation processor.
+
+        Parameters
+        ----------
+        cfg : RunConfig
+            Configuration containing augmentation settings
+        device : str, optional
+            Device to perform augmentations on, by default "cpu"
+        """
+        self.augmentations = cfg.augmentations
+        self.device = device
+        self.sr = cfg.sr
+        from representation_learning.configs import (  # local import to avoid circular
+            MixupAugment,
+            NoiseAugment,
+        )
+
+        self.noise_augs = [
+            aug for aug in self.augmentations if isinstance(aug, NoiseAugment)
+        ]
+        self.mixup_augs = [
+            aug for aug in self.augmentations if isinstance(aug, MixupAugment)
+        ]
+
+    def apply_augmentations(self, batch: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply configured augmentations to a batch.
+
+        Parameters
+        ----------
+        batch : Dict[str, Any]
+            Batch dictionary containing 'raw_wav' tensor (B, T)
+
+        Returns
+        -------
+        Dict[str, Any]
+            Augmented batch with same structure
+        """
+        import random
+
+        import torch
+        import torch.nn.functional as F
+
+        from .augmentations import add_noise, mixup
+
+        augmented_batch = batch.copy()
+
+        # Get the audio from the batch
+        audio = batch["raw_wav"].to(self.device)
+
+        # Apply noise augmentation
+        for noise_aug in self.noise_augs:
+            if random.random() < noise_aug.augmentation_prob:
+                # Apply noise augmentation to each sample in the batch
+                for i in range(audio.shape[0]):
+                    if (
+                        random.random() < noise_aug.augmentation_prob
+                    ):  # Per-sample probability
+                        audio[i] = add_noise(
+                            audio[i],
+                            noise_dir=noise_aug.noise_dirs,
+                            snr_db_range=noise_aug.snr_db_range,
+                            sample_rate=self.sr,
+                        )
+
+        # Apply mixup augmentation
+        for mixup_aug in self.mixup_augs:
+            if random.random() < mixup_aug.augmentation_prob:
+                # Create pairs for mixup by shuffling the batch
+                indices = torch.randperm(audio.shape[0], device=self.device)
+                shuffled_audio = audio[indices]
+                shuffled_labels = batch["label"][indices]
+
+                # Apply mixup to the entire batch
+                mixed_audio, lam = mixup(audio, shuffled_audio, alpha=mixup_aug.alpha)
+
+                # Update audio and create mixed labels
+                audio = mixed_audio
+
+                # For supervised learning, we need to update the labels
+                if "label" in batch and not isinstance(batch["label"], list):
+                    # One-hot encode labels for mixup
+                    n_classes = batch["label"].max().item() + 1
+                    y_a = F.one_hot(batch["label"], num_classes=n_classes).float()
+                    y_b = F.one_hot(shuffled_labels, num_classes=n_classes).float()
+                    mixed_labels = lam * y_a + (1 - lam) * y_b
+                    augmented_batch["mixed_labels"] = mixed_labels
+
+        # Update the batch with augmented audio
+        augmented_batch["raw_wav"] = audio
+
+        return augmented_batch

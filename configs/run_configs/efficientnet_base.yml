@@ -37,7 +37,7 @@ distributed: true
 training_params:
   train_epochs: 10
   lr: 0.0001
-  batch_size: 32
+  batch_size: 2
   optimizer: adamw          # common default for AudioMAE
   weight_decay: 0.01        # mild regularisation
   amp: false
@@ -67,7 +67,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 12
+num_workers: 2
 
 run_name: efficientnet_base
 

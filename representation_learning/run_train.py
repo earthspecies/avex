@@ -6,13 +6,15 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 
 import torch
 import yaml
 
-from representation_learning.configs import RunConfig, load_config  # type: ignore
+from representation_learning.configs import (  # type: ignore
+    RunConfig,
+    load_config,
+)
 from representation_learning.data.dataset import (  # returns (train_dl, val_dl)
     build_dataloaders,
 )
@@ -75,7 +77,8 @@ def main() -> None:
         len(val_dl),
     )
 
-    # Retrieve the number of labels from the training dataset (Even if not needed for model type.)
+    # Retrieve the number of labels from the training dataset
+    # (Even if not needed for model type.)
     num_labels = len(train_dl.dataset.label2idx)
     logger.info("Number of labels: %d", num_labels)
 
@@ -89,7 +92,7 @@ def main() -> None:
 
     # Save the config
     with open(output_dir / "config.yml", "w") as f:
-        yaml.dump(config.model_dump(mode='json'), f)
+        yaml.dump(config.model_dump(mode="json"), f)
 
     # Create experiment logger
     exp_logger = ExperimentLogger.from_config(config)
@@ -110,13 +113,14 @@ def main() -> None:
         max_epochs=config.training_params.train_epochs,
         amp=config.training_params.amp,
         amp_dtype=config.training_params.amp_dtype,
-        scheduler_config=config.scheduler.model_dump(mode='json'),
+        scheduler_config=config.scheduler.model_dump(mode="json"),
         is_clip_mode=(config.label_type == "text"),
         checkpoint_freq=getattr(config, "checkpoint_freq", 1),
         augmentation_processor=augmentation_processor,
         exp_logger=exp_logger,
         batch_size=config.training_params.batch_size,
-        device=device
+        device=device,
+        resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
     )
 
     # Train

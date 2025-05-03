@@ -147,6 +147,9 @@ class RunConfig(BaseModel):
         ),
     )
 
+    # Resume from checkpoint
+    resume_from_checkpoint: Optional[str] = None
+
     # Distributed training options
     distributed: bool = Field(
         False,
