@@ -174,6 +174,7 @@ class ExperimentConfig(BaseModel):
     run_config: str = Field(..., description="Path to the run config YAML file")
     pretrained: bool = Field(True, description="Whether to use pretrained weights")
     layers: str = Field(..., description="List of layer names to extract embeddings from, comma separated")
+    subset_percentage: float = Field(1.0, ge=0.0, le=1.0, description="Percentage of data to use (0.0 to 1.0)")
 
     model_config = ConfigDict(extra="forbid")
 
@@ -204,19 +205,6 @@ class EvaluateConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-# class BenchmarkDatasetConfig(BaseModel):
-#     """Configuration for benchmark datasets in evaluation."""
-    
-#     name: str = Field(..., description="Name of the benchmark dataset")
-#     type: str = Field(..., description="Type of the dataset (e.g., classification)")
-#     label_column: str = Field(..., description="Name of the column containing labels")
-#     audio_path_col: str = Field(..., description="Name of the column containing audio paths")
-#     multi_label: bool = Field(False, description="Whether the dataset is multi-label")
-
-#     #metrics: str = Field(..., description="List of metrics to evaluate, comma separated")
-    
-#     model_config = ConfigDict(extra="forbid")
-
 class BenchmarkConfig(BaseModel):
     """Configuration for the entire benchmark suite containing multiple datasets."""
     
@@ -228,8 +216,6 @@ class BenchmarkConfig(BaseModel):
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
-
-
 def load_config(
     path: str | Path, config_type: Literal["run", "data"] = "run"
 ) -> RunConfig | DataConfig:
