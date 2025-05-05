@@ -1,8 +1,6 @@
 ---
 data_config_name: bio_base
 dataset_name: animalspeak
-train_path: gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv
-valid_path: gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv
 dataset_version: 0.0
 balance: false
 balance_attribute: canonical_name   # balance data across via this attribute
@@ -11,6 +9,7 @@ balancing_method: upsample
 subset_percentage: 1.0              # <1 to consider a subset of data
 label_column: canonical_name
 audio_max_length_seconds: 10
+multi_label: false
 
 transformations:
   # 1. Keep only recordings from the specified sources
