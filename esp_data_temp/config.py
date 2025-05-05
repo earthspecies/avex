@@ -18,3 +18,5 @@ class DataConfig(BaseModel):
     label_type: str
     # TODO (milad) what is dc_field? 🤔
     read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
+    multi_label: Optional[bool] = None
+    sample_rate: Optional[int] = None  # Sample rate for audio data
