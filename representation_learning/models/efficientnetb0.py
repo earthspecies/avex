@@ -16,18 +16,22 @@ class Model(ModelBase):
         pretrained: bool = True,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
+        return_features_only: bool = False,
     ) -> None:
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
+        # Store the flag
+        self.return_features_only = return_features_only
+
         # Load a pre-trained EfficientNet B0 from torchvision.
         self.model = efficientnet_b0(pretrained=pretrained)
 
-        # If you need a different number of output classes than the default 1000,
-        # modify the classifier. Here, classifier[1] is the final fully connected layer.
-        if num_classes != 1000:
+        # Modify the classifier only if not returning features and num_classes differs.
+        if not self.return_features_only and num_classes != 1000:
             in_features = self.model.classifier[1].in_features
             self.model.classifier[1] = nn.Linear(in_features, num_classes)
+        # No need to modify classifier if return_features_only is True
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """Process audio input and adapt it for EfficientNet's 3-channel input.
@@ -65,8 +69,19 @@ class Model(ModelBase):
         Returns
         -------
         torch.Tensor
-            Model output
+            Model output (logits or features based on init flag)
         """
-        # Forward pass: process and call the underlying EfficientNet.
+        # Process audio
         x = self.process_audio(x)
-        return self.model(x)
+
+        # Extract features
+        features = self.model.features(x)
+        pooled_features = self.model.avgpool(features)
+        flattened_features = torch.flatten(pooled_features, 1)
+
+        # Return features or logits based on the flag
+        if self.return_features_only:
+            return flattened_features
+        else:
+            logits = self.model.classifier(flattened_features)
+            return logits

@@ -28,6 +28,7 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from representation_learning.configs import RunConfig
 from representation_learning.data.augmentations import AugmentationProcessor
 from representation_learning.training.distributed import (
     cleanup_distributed,
@@ -88,6 +89,8 @@ class Trainer:
         Device to run training on, by default uses model device
     resume_from_checkpoint : Optional[str], optional
         Path to checkpoint to resume from, by default None
+    run_config : Optional[RunConfig], optional
+        Configuration for learning rate scheduler, by default None
     """
 
     # ----------------------------- initialisation -------------------------- #
@@ -113,6 +116,7 @@ class Trainer:
         batch_size: int = 32,  # Add batch size to init
         device: Optional[Union[str, torch.device]] = None,  # Allow device to be passed
         resume_from_checkpoint: Optional[str] = None,  # Path to checkpoint
+        run_config: Optional[RunConfig] = None,  # Pass the full config for scheduler
     ) -> None:
         self.model = model
         self.train_dataloader = train_dl
@@ -133,10 +137,12 @@ class Trainer:
         self.model.to(self.device)
 
         # Distributed setup
-        self.local_rank, self.world_size, self.is_distributed = setup_distributed()
+        self.local_rank, self.world_size, self.is_distributed, _ = setup_distributed()
         if self.is_distributed:
             # Ensure model is on correct device before wrapping
-            self.model.to(self.device)
+            # Note: DDP handles device placement based on local_rank
+            # self.model.to(self.device) # Redundant if setup_distributed sets device
+            logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
             self.model = parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.local_rank],
@@ -149,11 +155,15 @@ class Trainer:
         # Optimizer, Criterion, Scheduler
         self.optimizer = optimizer
         self.criterion = _build_criterion(criterion)
-        self.scheduler = build_scheduler(
-            self.optimizer,
-            scheduler_config or {},
-            len(self.train_dataloader) * max_epochs,
-        )
+        self.scheduler = (
+            build_scheduler(
+                self.optimizer,
+                run_config,  # Pass the full config object
+                len(self.train_dataloader) * max_epochs,
+            )
+            if run_config
+            else None
+        )  # Handle case where config isn't passed
 
         # AMP
         self.amp_enabled = amp
@@ -449,6 +459,7 @@ class Trainer:
         """
         audio = batch["raw_wav"]
         text = batch["text_label"]
+        padding_mask = batch.get("padding_mask")
 
         # Ensure model has temperature attribute if needed by loss
         logit_scale = 1.0  # Default
@@ -459,7 +470,7 @@ class Trainer:
             logit_scale = 1.0 / model_to_check.temperature
 
         audio_emb, text_emb = self.model(
-            audio, text=text
+            audio, text=text, padding_mask=padding_mask
         )  # Pass text explicitly if model expects it
 
         # Get loss and logits from criterion

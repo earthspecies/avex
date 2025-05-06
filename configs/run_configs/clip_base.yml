@@ -30,6 +30,7 @@ preprocessing: null
 
 # Target sample‑rate expected by the model
 sr: 16000
+debug_mode: true
 
 # Log training runs to MLflow
 logging: mlflow
@@ -58,9 +59,17 @@ augmentations:
   - noise:
       noise_dirs:  # DUMMY: not implemented!
         # this should be a gs path
-        - gs://foundation-model-data/data/noise/esc50_background
-        - gs://foundation-model-data/data/noise/freesound_misc
-        - gs://foundation-model-data/data/noise/dcase_synthetic
+        - "gs://foundation-model-data/audio_16k/noise/demand_10s"
+        - "gs://foundation-model-data/audio_16k/noise/idmt"
+        - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "gs://foundation-model-data/audio_16k/noise/urbansound"
+        - "gs://foundation-model-data/audio_16k/noise/freesound_10s"
+        - "gs://foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
+        - "gs://foundation-model-data/audio_16k/noise/deepship_10s"
+        - "gs://foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "gs://foundation-model-data/audio_16k/noise/wham_noise"
+        - "gs://foundation-model-data/audio_16k/noise/audioset"
+        - "gs://foundation-model-data/audio_16k/noise/ssw-detection"
       snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
       augmentation_prob: 0.5
 

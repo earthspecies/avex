@@ -102,6 +102,11 @@ class ModelSpec(BaseModel):
     device: str = "cuda"
     audio_config: Optional[AudioConfig] = None
 
+    # Fields specifically for CLIP models
+    text_model_name: Optional[str] = None
+    projection_dim: Optional[int] = None
+    temperature: Optional[float] = None
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -165,7 +170,7 @@ class RunConfig(BaseModel):
     )
 
     augmentations: List[Augment] = Field(default_factory=list)
-    loss_function: Literal["cross_entropy", "bce"]
+    loss_function: Literal["cross_entropy", "bce", "contrastive", "clip"]
 
     device: str = "cuda"
     seed: int = 42

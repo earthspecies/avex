@@ -54,18 +54,11 @@ def main() -> None:
     logger.info(f"Loaded config from {config_path}")
 
     # Initialize distributed training if needed
-    local_rank, world_size, _ = setup_distributed(
+    local_rank, world_size, is_distributed, master_addr = setup_distributed(
         backend=config.distributed_backend,
         port=config.distributed_port,
     )
-    is_distributed = local_rank is not None
-
-    # Set device based on distributed setup
-    if is_distributed:
-        logger.info("Running in distributed mode with world size %s", world_size)
-        device = torch.device(f"cuda:{local_rank}")
-    else:
-        device = torch.device(config.device)
+    device = torch.device(f"cuda:{local_rank}" if is_distributed else config.device)
 
     torch.manual_seed(config.seed)
 
@@ -121,6 +114,7 @@ def main() -> None:
         batch_size=config.training_params.batch_size,
         device=device,
         resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
+        run_config=config,
     )
 
     # Train

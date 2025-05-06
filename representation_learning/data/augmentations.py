@@ -51,6 +51,8 @@ def add_noise(
         If a noise directory does not exist
     ValueError
         If no audio files are found in the noise directories
+    RuntimeError
+        If loading a noise file fails (e.g., GCS access issue or corrupted file)
 
     Notes
     -----
@@ -76,9 +78,16 @@ def add_noise(
     noise_dirs = [noise_dir] if isinstance(noise_dir, str) else noise_dir
     noise_paths = []
 
+    from esp_data_temp.dataset import GSPath
+
     # Collect all noise file paths
     for dir_path in noise_dirs:
-        path = Path(dir_path)
+        # Use GSPath for gs:// paths if available, otherwise use local Path
+        if dir_path.startswith("gs://"):
+            path = GSPath(dir_path)
+        else:
+            path = Path(dir_path)
+
         if not path.exists():
             raise FileNotFoundError(f"Noise directory not found: {dir_path}")
 
@@ -97,7 +106,13 @@ def add_noise(
     noise_path = random.choice(noise_paths)
 
     # Load noise audio
-    noise, noise_sr = torchaudio.load(noise_path)
+    # torchaudio.load should handle CloudPath objects if fsspec/gcsfs are installed
+    try:
+        noise, noise_sr = torchaudio.load(noise_path)  # type: ignore
+        noise = noise.to(audio_tensor.device)
+    except Exception as e:
+        # Provide more context if loading fails, potentially due to GCS issues
+        raise RuntimeError(f"Failed to load noise file {noise_path}: {e}") from e
 
     # Convert to mono if stereo
     if noise.shape[0] > 1:

@@ -1,214 +1,154 @@
 """Distributed training setup utilities."""
 
-import os
-from typing import Optional, Tuple
-
-import torch
-import torch.distributed as dist
 import logging
-import subprocess
+import os
+import socket
+from typing import Tuple
 
-logger = logging.getLogger("run_train")
+import __builtin__
+import torch.distributed as dist
+
+logger = logging.getLogger(__name__)
 
 
-def setup_for_distributed(is_master):
+# Disable printing when not in master process
+def setup_for_distributed(is_master: bool) -> None:
     """
     This function disables printing when not in master process
     """
-    import builtins as __builtin__
-
     builtin_print = __builtin__.print
 
-    def print(*args, **kwargs):
+    def print(*args: object, **kwargs: object) -> None:
         force = kwargs.pop("force", False)
         if is_master or force:
             builtin_print(*args, **kwargs)
 
     __builtin__.print = print
 
-def is_slurm_available() -> bool:
-    """Check if running in a Slurm environment.
+
+def get_slurm_env() -> Tuple[int, int, int, int, str]:
+    """
+    Get SLURM environment variables for distributed training.
 
     Returns
     -------
-    bool
-        True if running in Slurm, False otherwise
+    Tuple[int, int, int, int, str]
+        node_id, local_rank, global_rank, world_size, master_addr
     """
-    return "SLURM_JOB_ID" in os.environ
-
-
-def _first_host(nodelist_var: str = "SLURM_JOB_NODELIST") -> str:
-    nodelist = os.environ[nodelist_var]
-    return subprocess.check_output(
-        ["scontrol", "show", "hostnames", nodelist], text=True
-    ).splitlines()[0]
-
-def get_slurm_env() -> Tuple[int, int, int, int, str]:
-    if not is_slurm_available():
-        return 0, 0, 0, 1, "localhost"
-
-    node_id     = int(os.environ["SLURM_NODEID"])
-    local_rank  = int(os.environ["SLURM_LOCALID"])
-    global_rank = int(os.environ["SLURM_PROCID"])
-    world_size  = int(os.environ["SLURM_NTASKS"])
-    master_addr = _first_host()          # JOB_NODELIST by default
-
+    node_id = int(os.environ.get("SLURM_NODEID", 0))
+    local_rank = int(os.environ.get("SLURM_LOCALID", 0))
+    global_rank = int(os.environ.get("SLURM_PROCID", 0))
+    world_size = int(os.environ.get("SLURM_NTASKS", 1))
+    master_addr = os.environ.get(
+        "SLURM_LAUNCH_NODE_IPADDR", socket.gethostbyname(socket.gethostname())
+    )
     return node_id, local_rank, global_rank, world_size, master_addr
 
 
+def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int, bool]:
+    """
+    Initialize distributed training.
 
-def setup_distributed(
-    backend: str = "nccl",
-    port: int = 29500,
-) -> Tuple[Optional[int], int, str]:
-    """Setup distributed training environment.
+    This function sets up the distributed training environment based on SLURM
+    environment variables. If SLURM variables are not found, it attempts to
+    initialize with `torch.distributed.init_process_group`.
 
     Parameters
     ----------
+    port : int, optional
+        Port number for the master node, by default 29500
     backend : str, optional
         Distributed backend to use, by default "nccl"
-    port : int, optional
-        Base port for distributed training, by default 29500
 
     Returns
     -------
-    Tuple[Optional[int], int, str]
-        (local_rank, world_size, master_addr)
-        If not in distributed mode, local_rank will be None
+    Tuple[int, int, bool]
+        Tuple of (rank, world_size, is_distributed)
     """
-    if not is_slurm_available():
-        return None, 1, "localhost"
+    is_distributed = False
+    rank = 0
+    world_size = 1
 
-    # Get Slurm environment variables
-    node_id, local_rank, global_rank, world_size, master_addr = get_slurm_env()
-    logger.info("slurm env variables: %s", get_slurm_env())
-
-    # Only initialize distributed training if we have multiple GPUs
-    if world_size <= 1:
-        return None, 1, master_addr
-
-    # Calculate the port for this job to avoid conflicts
-    job_port = port + int(os.environ["SLURM_JOB_ID"]) % 1000
-
-    # Initialize process group
-    if not dist.is_initialized():
-        dist.init_process_group(
-            backend=backend,
-            init_method=f"tcp://{master_addr}:{job_port}",
-            world_size=world_size,
-            rank=global_rank
+    # Check if SLURM environment variables are set
+    if "SLURM_PROCID" in os.environ and "SLURM_NTASKS" in os.environ:
+        node_id, local_rank, global_rank, world_size, master_addr = get_slurm_env()
+        logger.info(
+            "SLURM env variables: node_id=%s, local_rank=%s, global_rank=%s, "
+            "world_size=%s, master_addr=%s",
+            node_id,
+            local_rank,
+            global_rank,
+            world_size,
+            master_addr,
         )
-    
-    torch.distributed.barrier()
-    setup_for_distributed(local_rank == 0)
 
-    # Set device for this process
-    torch.cuda.set_device(local_rank)
+        # Only initialize distributed training if we have multiple GPUs/tasks
+        if world_size > 1:
+            rank = global_rank
+            os.environ["MASTER_ADDR"] = master_addr
+            # Use a unique port for each job to avoid conflicts
+            job_id_str = os.environ.get("SLURM_JOB_ID", "0")
+            try:
+                job_id = int(job_id_str)
+                job_port = port + job_id % 1000
+            except ValueError:
+                logger.warning(
+                    "Could not parse SLURM_JOB_ID: %s. Using default port.", job_id_str
+                )
+                job_port = port
+            os.environ["MASTER_PORT"] = str(job_port)
 
-    return local_rank, world_size, master_addr
+            logger.info(
+                f"Initializing distributed training with rank {rank}, "
+                f"world size {world_size}, master addr {master_addr}:{job_port}"
+            )
+            dist.init_process_group(
+                backend=backend,
+                world_size=world_size,
+                rank=rank,
+            )
+            setup_for_distributed(rank == 0)  # Only master process prints
+            is_distributed = True
+            logger.info("Distributed training initialized successfully.")
+        else:
+            logger.info(
+                "Single GPU/task detected (world_size=1). "
+                "Skipping distributed initialization."
+            )
+            setup_for_distributed(True)  # Standalone process is master
 
+    elif dist.is_available() and not dist.is_initialized():
+        # Fallback for non-SLURM environments if needed, e.g. torchrun
+        if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
+            rank = int(os.environ["RANK"])
+            world_size = int(os.environ["WORLD_SIZE"])
+            if world_size > 1:
+                dist.init_process_group(backend=backend, init_method="env://")
+                setup_for_distributed(rank == 0)
+                is_distributed = True
+                logger.info(
+                    f"Initialized torch.distributed via env:// "
+                    f"(rank {rank}, world_size {world_size})"
+                )
+            else:
+                setup_for_distributed(True)
+        else:
+            logger.info(
+                "Neither SLURM nor standard torch.distributed env vars found. "
+                "Running in non-distributed mode."
+            )
+            setup_for_distributed(True)  # Standalone process is master
+    elif dist.is_initialized():
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
+        is_distributed = world_size > 1
+        setup_for_distributed(rank == 0)
+        logger.info(
+            "torch.distributed already initialized "
+            f"(rank {rank}, world_size {world_size}, is_distributed={is_distributed})"
+        )
+    else:
+        logger.info("torch.distributed not available. Running in non-distributed mode.")
+        setup_for_distributed(True)  # Standalone process is master
 
-def cleanup_distributed() -> None:
-    """Cleanup distributed training environment."""
-    if dist.is_initialized():
-        dist.destroy_process_group()
-
-
-def is_master_process() -> bool:
-    """Check if current process is the master process.
-
-    Returns
-    -------
-    bool
-        True if this is the master process, False otherwise
-    """
-    if not dist.is_initialized():
-        return True
-    return dist.get_rank() == 0
-
-
-def get_world_size() -> int:
-    """Get the total number of processes.
-
-    Returns
-    -------
-    int
-        Total number of processes
-    """
-    if not dist.is_initialized():
-        return 1
-    return dist.get_world_size()
-
-
-def get_rank() -> int:
-    """Get the rank of the current process.
-
-    Returns
-    -------
-    int
-        Rank of the current process
-    """
-    if not dist.is_initialized():
-        return 0
-    return dist.get_rank()
-
-
-def all_gather_object(obj: any) -> list:
-    """Gather objects from all processes.
-
-    Parameters
-    ----------
-    obj : any
-        Object to gather
-
-    Returns
-    -------
-    list
-        List of objects from all processes
-    """
-    if not dist.is_initialized():
-        return [obj]
-
-    world_size = dist.get_world_size()
-    gathered_objects = [None for _ in range(world_size)]
-    dist.all_gather_object(gathered_objects, obj)
-    return gathered_objects
-
-
-def reduce_dict(input_dict: dict, average: bool = True) -> dict:
-    """Reduce dictionary across all processes.
-
-    Parameters
-    ----------
-    input_dict : dict
-        Dictionary to reduce
-    average : bool, optional
-        Whether to average the values, by default True
-
-    Returns
-    -------
-    dict
-        Reduced dictionary
-    """
-    if not dist.is_initialized():
-        return input_dict
-
-    world_size = dist.get_world_size()
-    if world_size < 2:
-        return input_dict
-
-    with torch.no_grad():
-        names = []
-        values = []
-        for k, v in sorted(input_dict.items()):
-            names.append(k)
-            values.append(v)
-
-        values = torch.stack(values, dim=0)
-        dist.all_reduce(values)
-
-        if average:
-            values /= world_size
-
-        reduced_dict = {k: v for k, v in zip(names, values)}
-    return reduced_dict 
+    return rank, world_size, is_distributed

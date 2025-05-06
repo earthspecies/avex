@@ -25,16 +25,20 @@ class CLIPModel(ModelBase):
         super().__init__(device, audio_config)
 
         # Initialize audio encoder (EfficientNetB0)
-        self.audio_encoder = EfficientNetB0(device=device, audio_config=audio_config)
+        self.audio_encoder = EfficientNetB0(
+            device=device,
+            audio_config=audio_config,
+            return_features_only=True,  # Get features before classifier
+        )
 
         # Initialize text encoder (RoBERTa)
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
 
         # Projection layers
-        self.audio_projection = nn.Linear(
-            self.audio_encoder.model.classifier.in_features, projection_dim
-        )
+        # EfficientNetB0 feature dimension before classifier is 1280
+        audio_feature_dim = 1280
+        self.audio_projection = nn.Linear(audio_feature_dim, projection_dim)
         self.text_projection = nn.Linear(
             self.text_encoder.config.hidden_size, projection_dim
         )
@@ -48,7 +52,9 @@ class CLIPModel(ModelBase):
         self.audio_projection.to(device)
         self.text_projection.to(device)
 
-    def encode_audio(self, audio: torch.Tensor) -> torch.Tensor:
+    def encode_audio(
+        self, audio: torch.Tensor, padding_mask: torch.Tensor
+    ) -> torch.Tensor:
         """Encode audio input using EfficientNetB0.
 
         Parameters
@@ -61,7 +67,7 @@ class CLIPModel(ModelBase):
         torch.Tensor
             Normalized audio embeddings
         """
-        features = self.audio_encoder(audio)
+        features = self.audio_encoder(audio, padding_mask)
         return F.normalize(self.audio_projection(features), dim=-1)
 
     def encode_text(self, text: list[str]) -> torch.Tensor:
@@ -88,7 +94,7 @@ class CLIPModel(ModelBase):
         return F.normalize(self.text_projection(features), dim=-1)
 
     def forward(
-        self, audio: torch.Tensor, text: list[str]
+        self, audio: torch.Tensor, text: list[str], padding_mask: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass computing audio and text embeddings.
@@ -101,7 +107,7 @@ class CLIPModel(ModelBase):
             Tuple of (audio_embeddings, text_embeddings)
         """
         # Get normalized embeddings
-        audio_embeddings = self.encode_audio(audio)
+        audio_embeddings = self.encode_audio(audio, padding_mask)
         text_embeddings = self.encode_text(text)
 
         # Return embeddings only - logits are computed in the loss function
