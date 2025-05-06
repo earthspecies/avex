@@ -5,7 +5,7 @@ from io import StringIO
 import pandas as pd
 from esp_data_temp.dataset import GSPath
 
-from base import RegisteredDataset, register_dataset
+from registry import RegisteredDataset, register_dataset
 
 
 @register_dataset
