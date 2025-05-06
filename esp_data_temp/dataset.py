@@ -30,7 +30,7 @@ class GSPath(cloudpathlib.GSPath):
 
     def __init__(
         self,
-        client_path: str | Self | "CloudPath",
+        client_path: str | Self | cloudpathlib.CloudPath,
         client: cloudpathlib.GSClient = _get_client(),
     ) -> None:
         super().__init__(client_path, client=client)
@@ -101,6 +101,8 @@ class AudioDataset:
         with audio_path.open("rb") as f:
             audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
+            # TODO it might be better to determine the channel axis rather than assume it is axis=1
+            # a lot of datasets aren't like this:
             audio = audio.mean(axis=1)
 
         return {
