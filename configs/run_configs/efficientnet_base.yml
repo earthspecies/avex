@@ -52,7 +52,7 @@ scheduler:
 augmentations:
   # Add background noise at random SNRs
   - noise:
-      noise_dirs:  # DUMMY: not implemented!
+      noise_dirs:
         # this should be a gs path
         - "gs://foundation-model-data/audio_16k/noise/demand_10s"
         - "gs://foundation-model-data/audio_16k/noise/idmt"
