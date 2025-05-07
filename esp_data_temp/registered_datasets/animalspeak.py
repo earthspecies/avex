@@ -1,11 +1,12 @@
 """AnimalSpeak dataset"""
 
-from typing import Literal
 from io import StringIO
-import pandas as pd
-from esp_data_temp.dataset import GSPath
+from typing import Literal
 
+import pandas as pd
 from registry import RegisteredDataset, register_dataset
+
+from esp_data_temp.dataset import GSPath
 
 
 @register_dataset
@@ -50,7 +51,8 @@ class AnimalSpeak(RegisteredDataset):
         """
         if split not in self.split_paths:
             raise ValueError(
-                f"Invalid split: {split}. Expected one of {list(self.split_paths.keys())}"
+                f"""Invalid split: {split}.
+                Expected one of {list(self.split_paths.keys())}"""
             )
         location = self.split_paths[split]
         # Read CSV content
@@ -59,3 +61,9 @@ class AnimalSpeak(RegisteredDataset):
         df["gs_path"] = df["local_path"].apply(lambda x: "gs://" + x)
 
         return df
+
+    # TODO
+    # def save_to_disk / export
+
+    # TODO (gagan)
+    # def merge / concatenate (self, other_dataset: RegisteredDataset) -> None:
