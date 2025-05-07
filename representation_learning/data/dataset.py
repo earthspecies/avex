@@ -70,7 +70,6 @@ def build_dataloaders(
     cfg: RunConfig, 
     data_config: DataConfig = None, 
     device: str = "cpu",
-    subset_percentage: float = 1.0,
 ) -> Tuple[DataLoader, DataLoader]:
     """Build training and validation dataloaders from configuration.
 
@@ -82,8 +81,6 @@ def build_dataloaders(
         Data configuration containing dataset details
     device : str
         Device to use for data loading
-    subset_percentage : float
-        Percentage of data to use (0.0 to 1.0)
 
     Returns
     -------
@@ -104,20 +101,17 @@ def build_dataloaders(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
         split="train",
-        subset_percentage=subset_percentage,
     )
     ds_val = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
         split="valid",
-        subset_percentage=subset_percentage,
     )
 
     ds_test = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,  # Add any audio preprocessing here if needed
         split="test",
-        subset_percentage=subset_percentage,
     )
 
     # Create collater

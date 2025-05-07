@@ -82,7 +82,6 @@ def run_experiment(
         original_run_cfg, 
         dataset_config, 
         device=device,
-        subset_percentage=experiment_config.subset_percentage
     )
     logger.info(
         "Dataset ready: %d training batches / %d validation batches / %d test batches",

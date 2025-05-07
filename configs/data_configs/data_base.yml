@@ -7,7 +7,11 @@ balance: false
 balance_attribute: canonical_name   # balance data across via this attribute
 custom_balancing: false
 balancing_method: upsample
+<<<<<<< HEAD
 subset_percentage: 1.0              # <1 to consider a subset of data
+=======
+transformations: None
+>>>>>>> 3b963cb (uniform sampling as a data transformation)
 label_column: canonical_name
 audio_max_length_seconds: 10
 label_type: supervised
