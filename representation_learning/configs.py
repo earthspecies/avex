@@ -174,7 +174,6 @@ class ExperimentConfig(BaseModel):
     run_config: str = Field(..., description="Path to the run config YAML file")
     pretrained: bool = Field(True, description="Whether to use pretrained weights")
     layers: str = Field(..., description="List of layer names to extract embeddings from, comma separated")
-    subset_percentage: float = Field(1.0, ge=0.0, le=1.0, description="Percentage of data to use (0.0 to 1.0)")
 
     model_config = ConfigDict(extra="forbid")
 

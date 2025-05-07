@@ -7,5 +7,8 @@ datasets:
     audio_path_col: path
     multi_label: false
     label_type: supervised
-    audio_max_length_seconds: 10
-    #metrics: accuracy, balanced_accuracy
+    audio_max_length_seconds: 2
+    transformations:
+      - property: label
+        operation: uniform_sample
+        ratio: 0.01

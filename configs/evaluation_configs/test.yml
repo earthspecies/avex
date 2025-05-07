@@ -19,7 +19,6 @@ experiments:
     layers: last_layer
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
-    subset_percentage: 0.01  # Use only 1% of the data for quick testing
 
 # Where to save the evaluation results
 save_dir: evaluation_results

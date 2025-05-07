@@ -19,6 +19,8 @@ from .transformations import (
     Subsample,
     SubsampleConfig,
     TransformCfg,
+    UniformSample,
+    UniformSampleConfig,
 )
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
@@ -122,14 +124,14 @@ def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfo
 
     Parameters
     ----------
-    transform_configs : list[FilterConfig | SubsampleConfig]
+    transform_configs : list[FilterConfig | SubsampleConfig | UniformSampleConfig]
         The `transformations` field that comes straight out of a validated
         `DataConfig`.  No raw YAML dictionaries are accepted.
 
     Raises
     ------
     TypeError
-        If the input is not a `FilterConfig` or `SubsampleConfig`.
+        If the input is not a `FilterConfig`, `SubsampleConfig`, or `UniformSampleConfig`.
 
     Returns
     -------
@@ -143,6 +145,8 @@ def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfo
             transforms.append(Filter(cfg))
         elif isinstance(cfg, SubsampleConfig):
             transforms.append(Subsample(cfg))
+        elif isinstance(cfg, UniformSampleConfig):
+            transforms.append(UniformSample(cfg))
         else:  # this should never happen if DataConfig was validated
             raise TypeError(
                 "build_transforms() received an unexpected config type: "
@@ -197,7 +201,6 @@ def get_dataset_dummy(
     data_config: DataConfig,
     preprocessor: Optional[Callable] = None,
     split: bool = False,
-    subset_percentage: float = 1.0,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -214,8 +217,6 @@ def get_dataset_dummy(
         Optional preprocessor function
     split : bool
         Whether to split the dataset
-    subset_percentage : float
-        Percentage of data to use (0.0 to 1.0)
 
     Returns
     -------
@@ -231,12 +232,6 @@ def get_dataset_dummy(
         transforms = _build_transforms(data_config.transformations)
         for transform in transforms:
             df = transform(df)
-    
-    # Apply subsetting if specified
-    if subset_percentage < 1.0:
-        rng = np.random.default_rng(seed=42)
-        n_samples = int(len(df) * subset_percentage)
-        df = df.iloc[rng.choice(len(df), size=n_samples, replace=False)]
 
     return AudioDataset(
         metadata_df=df,
