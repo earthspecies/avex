@@ -1,11 +1,13 @@
 import pathlib
+from typing import Optional, Protocol, TypeVar
+
 import semver
-from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from esp_data_temp.dataset import GSPath
 
 
-class RegisteredDataset(BaseModel):
+class DatasetInfo(BaseModel):
     """A Pydantic base model for a registered ESP dataset. All datasets
     should subclass this.
 
@@ -23,16 +25,18 @@ class RegisteredDataset(BaseModel):
     description : str
         Description of the dataset, could act as a README, preferably in markdown format
     sources : list[str] | str
-        Source(s) of the dataset e.g. 'Xeno-canto' or a url to website(s), or multiple sources in a comma-separated list
+        Source(s) of the dataset e.g. 'Xeno-canto' or a url to website(s),
+        or multiple sources in a comma-separated list
     license : Optional[str]
         License for the dataset, if applicable
     changelog : Optional[str]
         Changelog from previous version
-
+    **kwargs : Any (optional)
+        Not validated, but can be used to pass additional information
 
     Examples
     --------
-    >>> data = RegisteredDataset(
+    >>> data = DatasetInfo(
     ...     name="animalspeak",
     ...     owner="marius; masato",
     ...     split_paths={
@@ -51,6 +55,7 @@ class RegisteredDataset(BaseModel):
         arbitrary_types_allowed=True,
         validate_assignment=True,
         str_strip_whitespace=True,
+        extra="allow",
     )
 
     # required params
@@ -155,22 +160,15 @@ class RegisteredDataset(BaseModel):
                     Error: {str(e)}. See https://semver.org/ for details.""") from e
         return v
 
-    def update_changelog(self, new_log: str) -> None:
-        """Update changelog with new string"""
-        # append new changelog with datetime
-        if not self.changelog:
-            self.changelog = f"{new_log}"
-        else:
-            self.changelog += f"\n{new_log}"
 
-    def __str__(self) -> str:
-        return f"""# {self.name}
-        ## Version\n\n{self.version}\n\n
-        ## Owner\n\n{self.owner}\n\n
-        ## License\n\n{self.license}\n\n
-        ## Description\n\n{self.description}\n\n
-        ## Sources\n\n{self.sources}\n\n
-        ## Changelog\n\n{self.changelog}\n\n"""
+class RegisteredDatasetProtocol(Protocol):
+    """Protocol for registered dataset classes."""
+
+    info: DatasetInfo
+
+
+# Type variable for registered dataset classes
+RegisteredDataset = TypeVar("RegisteredDataset", bound=RegisteredDatasetProtocol)
 
 
 class DatasetRegistry:
@@ -191,7 +189,10 @@ class DatasetRegistry:
     def print(self) -> None:
         """Print all registered datasets"""
         for dataset in self.datasets.values():
-            print(dataset)
+            print(dataset.info.model_dump_json(indent=2))
+
+
+registry = DatasetRegistry()
 
 
 def register_dataset(cls: RegisteredDataset) -> RegisteredDataset:
@@ -199,16 +200,11 @@ def register_dataset(cls: RegisteredDataset) -> RegisteredDataset:
 
     Arguments
     ---------
-    cls : RegisteredDataset
-        The dataset class to register
+    cls : The dataset class to register
 
     Returns
     -------
-    RegisteredDataset
-        The decorated class
+    cls : The registered dataset class
     """
-    # Create an instance of the class
-    dataset = cls()
-    # Register the dataset in the registry
-    DatasetRegistry().datasets[dataset.name] = dataset
+    registry.datasets[cls.info.name] = cls
     return cls
