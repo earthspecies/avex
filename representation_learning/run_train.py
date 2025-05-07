@@ -19,7 +19,7 @@ from representation_learning.data.dataset import (  # returns (train_dl, val_dl)
     build_dataloaders,
 )
 from representation_learning.models.get_model import get_model
-from representation_learning.training.distributed import setup_distributed
+from representation_learning.training.distributed import init_distributed
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import Trainer
 from representation_learning.utils import ExperimentLogger
@@ -54,16 +54,16 @@ def main() -> None:
     logger.info(f"Loaded config from {config_path}")
 
     # Initialize distributed training if needed
-    local_rank, world_size, is_distributed, master_addr = setup_distributed(
-        backend=config.distributed_backend,
+    local_rank, world_size, is_distributed = init_distributed(
         port=config.distributed_port,
+        backend=config.distributed_backend,
     )
     device = torch.device(f"cuda:{local_rank}" if is_distributed else config.device)
 
     torch.manual_seed(config.seed)
 
     # Create dataloaders
-    train_dl, val_dl, augmentation_processor = build_dataloaders(config, device)
+    train_dl, val_dl = build_dataloaders(config, device)
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl),
@@ -100,6 +100,9 @@ def main() -> None:
         train_dl=train_dl,
         eval_dl=val_dl,
         model_dir=output_dir / "checkpoints",
+        local_rank=local_rank,
+        world_size=world_size,
+        is_distributed=is_distributed,
         criterion=config.loss_function,
         lr=config.training_params.lr,
         weight_decay=config.training_params.weight_decay,
@@ -109,7 +112,6 @@ def main() -> None:
         scheduler_config=config.scheduler.model_dump(mode="json"),
         is_clip_mode=(config.label_type == "text"),
         checkpoint_freq=getattr(config, "checkpoint_freq", 1),
-        augmentation_processor=augmentation_processor,
         exp_logger=exp_logger,
         batch_size=config.training_params.batch_size,
         device=device,

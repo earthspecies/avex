@@ -7,7 +7,10 @@ import cloudpathlib
 import numpy as np
 import pandas as pd
 import soundfile as sf
+import torch
 from google.cloud.storage.client import Client
+
+from representation_learning.data.augmentations import AugmentationProcessor
 
 from .config import DataConfig
 from .transformations import (
@@ -63,6 +66,7 @@ class AudioDataset:
         data_config: DataConfig,
         transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
         preprocessor: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
+        augmentation_processor: Optional[AugmentationProcessor] = None,
     ) -> None:
         super().__init__()
         # Ensure label column exists before dropping NAs
@@ -75,6 +79,7 @@ class AudioDataset:
         )
         self.data_config = data_config
         self.preprocessor = preprocessor
+        self.augmentation_processor = augmentation_processor
 
         self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
         self.label_col = data_config.label_column
@@ -100,19 +105,36 @@ class AudioDataset:
         else:
             audio_path = Path(path_str)
 
-        # Open the audio file. Using the .open('rb') method works for both local and
-        # GSPath objects.
+        # Open the audio file.
         with audio_path.open("rb") as f:
             audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
-        return {
-            "raw_wav": audio.astype(np.float32),
+        item = {
+            "raw_wav": audio.astype(np.float32),  # Keep as NumPy array initially
             "text_label": row[self.label_col],
             "label": self.label2idx[row[self.label_col]],
             "path": str(audio_path),
+            "sample_rate": sr,
         }
+
+        # Apply augmentations if processor is available
+        if self.augmentation_processor is not None:
+            # Convert raw_wav to tensor for augmentation processor
+            # The processor handles device internally (should be CPU here)
+            item["raw_wav"] = torch.from_numpy(item["raw_wav"])
+
+            # apply_augmentations now handles single items by
+            # unsqueezing/squeezing internally
+            item = self.augmentation_processor.apply_augmentations(item)
+
+            # Ensure raw_wav is a NumPy array for the collater
+            if isinstance(item["raw_wav"], torch.Tensor):
+                item["raw_wav"] = item["raw_wav"].cpu().numpy()
+            # Other fields like 'mixed_labels' might be added by augmentations
+
+        return item
 
 
 def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
@@ -179,6 +201,7 @@ def get_dataset_dummy(
     data_config: DataConfig,
     preprocessor: Optional[Callable] = None,
     validation: bool = False,
+    augmentation_processor: Optional[AugmentationProcessor] = None,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -206,4 +229,5 @@ def get_dataset_dummy(
         metadata_df=df,
         data_config=data_config,
         preprocessor=preprocessor,
+        augmentation_processor=augmentation_processor,
     )

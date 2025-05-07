@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 
 dependencies = [
+  "bitsandbytes>=0.45.5",
   "cloudpathlib>=0.21.0",
   "google-cloud-storage>=3.1.0",
   "joblib>=1.4.2",

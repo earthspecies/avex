@@ -37,16 +37,12 @@ class ClipLoss(nn.Module):
         local_loss: bool = False,
         gather_with_grad: bool = False,
         cache_labels: bool = False,
-        rank: int = 0,
-        world_size: int = 1,
         use_horovod: bool = False,
     ) -> None:
         super().__init__()
         self.local_loss = local_loss
         self.gather_with_grad = gather_with_grad
         self.cache_labels = cache_labels
-        self.rank = rank
-        self.world_size = world_size
         self.use_horovod = use_horovod
         self.prev_num_logits = 0
         self.labels: Dict[torch.device, torch.Tensor] = {}

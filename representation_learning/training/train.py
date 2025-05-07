@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -29,11 +30,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import RunConfig
-from representation_learning.data.augmentations import AugmentationProcessor
 from representation_learning.training.distributed import (
     cleanup_distributed,
     is_main_process,
-    setup_distributed,
 )
 from representation_learning.training.losses import ClipLoss, _build_criterion
 from representation_learning.training.training_utils import build_scheduler
@@ -79,8 +78,6 @@ class Trainer:
         Whether we're in CLIP training mode, by default False
     checkpoint_freq : int, optional
         Frequency of checkpointing (in epochs), defaults to 1 (once per epoch)
-    augmentation_processor : Optional[AugmentationProcessor], optional
-        Processor for applying data augmentations, by default None
     exp_logger : Optional[ExperimentLogger], optional
         Experiment logger instance, by default None
     batch_size : int, optional
@@ -91,6 +88,14 @@ class Trainer:
         Path to checkpoint to resume from, by default None
     run_config : Optional[RunConfig], optional
         Configuration for learning rate scheduler, by default None
+    local_rank : int
+        Local rank for distributed training
+    world_size : int
+        World size for distributed training
+    is_distributed : bool
+        Whether distributed training is enabled
+    log_steps : int, optional
+        Frequency of logging benchmarking results, by default 100
     """
 
     # ----------------------------- initialisation -------------------------- #
@@ -102,6 +107,9 @@ class Trainer:
         train_dl: DataLoader,
         eval_dl: DataLoader,
         model_dir: Union[str, Path],
+        local_rank: int,
+        world_size: int,
+        is_distributed: bool,
         criterion: str = "cross_entropy",
         lr: float = 3e-4,
         weight_decay: float = 0.0,
@@ -111,12 +119,12 @@ class Trainer:
         scheduler_config: Optional[Dict] = None,
         is_clip_mode: bool = False,
         checkpoint_freq: int = 1,
-        augmentation_processor: Optional[AugmentationProcessor] = None,
-        exp_logger: Optional[ExperimentLogger] = None,  # Make exp_logger optional
-        batch_size: int = 32,  # Add batch size to init
-        device: Optional[Union[str, torch.device]] = None,  # Allow device to be passed
-        resume_from_checkpoint: Optional[str] = None,  # Path to checkpoint
-        run_config: Optional[RunConfig] = None,  # Pass the full config for scheduler
+        exp_logger: Optional[ExperimentLogger] = None,
+        batch_size: int = 32,
+        device: Optional[Union[str, torch.device]] = None,
+        resume_from_checkpoint: Optional[str] = None,
+        run_config: Optional[RunConfig] = None,
+        log_steps: int = 1,
     ) -> None:
         self.model = model
         self.train_dataloader = train_dl
@@ -126,8 +134,12 @@ class Trainer:
         self.is_clip_mode = is_clip_mode
         self.checkpoint_freq = checkpoint_freq
         self.max_epochs = max_epochs
-        self.augmentation_processor = augmentation_processor
         self.log = exp_logger
+        self.log_steps = log_steps
+
+        # Timers for benchmarking (will be reset in _run_epoch and after each log
+        # interval)
+        self.timers: Dict[str, float] = {}
 
         # Determine device
         if device is None:
@@ -136,12 +148,12 @@ class Trainer:
             self.device = torch.device(device)
         self.model.to(self.device)
 
-        # Distributed setup
-        self.local_rank, self.world_size, self.is_distributed, _ = setup_distributed()
+        # Distributed setup - parameters are now passed in
+        self.local_rank = local_rank
+        self.world_size = world_size
+        self.is_distributed = is_distributed
+
         if self.is_distributed:
-            # Ensure model is on correct device before wrapping
-            # Note: DDP handles device placement based on local_rank
-            # self.model.to(self.device) # Redundant if setup_distributed sets device
             logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
             self.model = parallel.DistributedDataParallel(
                 self.model,
@@ -293,46 +305,164 @@ class Trainer:
         loader = self.train_dataloader if train else self.eval_dataloader
         self.model.train(train)  # train=True -> .train(); train=False -> .eval()
 
+        # Initialize/Reset timers and counters for the current epoch and log intervals
+        self.timers = {"to_device": 0.0, "model_compute": 0.0}
+        interval_dataloader_time = 0.0
+        interval_backward_time = 0.0
+        steps_since_last_log = 0
+
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        last_log_time_marker = time.perf_counter()  # For wall time of log interval
+
+        iter_data_wait_start_time = time.perf_counter()  # For individual data load time
+
         total_loss, total_correct, total_samples = 0.0, 0, 0
+        pbar_desc = f"{'Train' if train else 'Eval '} Epoch {epoch}"
         pbar = tqdm(
             enumerate(loader),
             total=len(loader),
-            desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+            desc=pbar_desc,
             leave=False,
-            disable=not is_main_process(),  # Only show progress bar on master
+            disable=not is_main_process(),
         )
 
         grad_ctx = contextlib.nullcontext() if train else torch.no_grad()
 
         with grad_ctx:
-            for _step, batch in pbar:
+            for batch_idx, batch in pbar:
+                if self.device.type == "cuda":
+                    torch.cuda.synchronize(self.device)
+                iter_data_ready_time = time.perf_counter()
+                current_iter_dataloader_time = (
+                    iter_data_ready_time - iter_data_wait_start_time
+                )
+                interval_dataloader_time += current_iter_dataloader_time
+                steps_since_last_log += 1
+
                 loss_tensor, correct, n = self._forward(batch, train=train)
 
-                # Backward pass if training
+                current_iter_backward_time = 0.0
                 if train:
+                    if self.device.type == "cuda":
+                        torch.cuda.synchronize(self.device)
+                    bwd_pass_start_time = time.perf_counter()
                     self._backward(loss_tensor)
+                    if self.device.type == "cuda":
+                        torch.cuda.synchronize(self.device)
+                    current_iter_backward_time = (
+                        time.perf_counter() - bwd_pass_start_time
+                    )
+                    interval_backward_time += current_iter_backward_time
 
-                # Accumulate metrics (ensure loss is detached
-                # and moved to CPU for aggregation)
-                # Convert correct predictions count (int) to tensor for reduction
                 batch_loss = loss_tensor.detach().item() * n
                 total_loss += batch_loss
                 total_correct += correct
                 total_samples += n
 
-                # Update progress bar (only on master)
                 if is_main_process():
                     current_acc = (
                         total_correct / total_samples if total_samples > 0 else 0
                     )
-                    # Display average loss per sample
                     avg_loss_so_far = (
                         total_loss / total_samples if total_samples > 0 else 0
                     )
                     pbar.set_postfix(
-                        loss=f"{avg_loss_so_far:.4f}",
-                        acc=f"{current_acc:.4f}",
+                        loss=f"{avg_loss_so_far:.4f}", acc=f"{current_acc:.4f}"
                     )
+
+                # Log benchmark times every self.log_steps
+                if is_main_process() and steps_since_last_log == self.log_steps:
+                    if self.device.type == "cuda":
+                        torch.cuda.synchronize(self.device)
+                    current_time_marker = time.perf_counter()
+                    interval_wall_time = current_time_marker - last_log_time_marker
+
+                    logger.info(
+                        f"--- Benchmarking Results for last {steps_since_last_log} "
+                        f"steps ("
+                    )
+                    logger.info(
+                        f"Epoch {epoch}, Batch {batch_idx + 1}, "
+                        f"{'Train' if train else 'Eval'}) ---"
+                    )
+                    logger.info(f"Wall Time for interval: {interval_wall_time:.4f}s")
+
+                    component_times = {
+                        "Dataloading": interval_dataloader_time,
+                        "Data-to-Device": self.timers["to_device"],
+                        "Model Forward Compute": self.timers["model_compute"],
+                        "Model Backward": interval_backward_time if train else 0.0,
+                    }
+
+                    total_accounted_time = sum(component_times.values())
+                    other_time = interval_wall_time - total_accounted_time
+
+                    if (
+                        interval_wall_time > 1e-6
+                    ):  # Avoid division by zero if interval is too short
+                        dataloading_s = component_times["Dataloading"]
+                        dataloading_pct = (dataloading_s / interval_wall_time) * 100
+                        data_to_device_s = component_times["Data-to-Device"]
+                        data_to_device_pct = (
+                            data_to_device_s / interval_wall_time
+                        ) * 100
+                        model_forward_s = component_times["Model Forward Compute"]
+                        model_forward_pct = (model_forward_s / interval_wall_time) * 100
+                        model_backward_s = component_times["Model Backward"]
+                        model_backward_pct = (
+                            model_backward_s / interval_wall_time
+                        ) * 100
+                        logger.info(
+                            f"  {'Dataloading:':<25} "
+                            f"{dataloading_s:.4f}s "
+                            f"({dataloading_pct:.2f}%)"
+                        )
+                        logger.info(
+                            f"  {'Data-to-Device:':<25} "
+                            f"{data_to_device_s:.4f}s "
+                            f"({data_to_device_pct:.2f}%)"
+                        )
+                        logger.info(
+                            f"  {'Model Forward Compute:':<25} "
+                            f"{model_forward_s:.4f}s "
+                            f"({model_forward_pct:.2f}%)"
+                        )
+                        if train:
+                            logger.info(
+                                f"  {'Model Backward:':<25} "
+                                f"{model_backward_s:.4f}s "
+                                f"({model_backward_pct:.2f}%)"
+                            )
+                        other_time_pct = (other_time / interval_wall_time) * 100
+                        logger.info(
+                            f"  {'Other/Overhead:':<25} "
+                            f"{other_time:.4f}s "
+                            f"({other_time_pct:.2f}%)"
+                        )
+                    else:
+                        logger.info(
+                            "Interval wall time too short for percentage breakdown."
+                        )
+                    logger.info("--- End Benchmarking Results ---")
+
+                    # Reset timers for the next interval
+                    self.timers = {"to_device": 0.0, "model_compute": 0.0}
+                    interval_dataloader_time = 0.0
+                    interval_backward_time = 0.0
+                    steps_since_last_log = 0
+                    if (
+                        self.device.type == "cuda"
+                    ):  # Ensure resets are captured before new timing
+                        torch.cuda.synchronize(self.device)
+                    last_log_time_marker = time.perf_counter()
+
+                if self.device.type == "cuda":
+                    torch.cuda.synchronize(self.device)
+                iter_data_wait_start_time = time.perf_counter()
+
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
 
         # Reduce metrics across processes if distributed
         if self.is_distributed:
@@ -369,22 +499,32 @@ class Trainer:
             (loss tensor, number of correct predictions, batch size)
         """
         # Move batch to device
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        t_start_to_device = time.perf_counter()
         batch = {
             k: v.to(self.device) if isinstance(v, torch.Tensor) else v
             for k, v in batch.items()
         }
-
-        # Apply augmentations during training if available
-        if train and self.augmentation_processor is not None:
-            batch = self.augmentation_processor.apply_augmentations(batch)
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        self.timers["to_device"] += time.perf_counter() - t_start_to_device
 
         # Forward pass with optional AMP
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(
+                self.device
+            )  # Ensure prev ops (like to_device) are done
+        t_start_model_compute = time.perf_counter()
         context_manager = autocast(enabled=self.amp_enabled, dtype=self.amp_dtype)
         with context_manager:
             if self.is_clip_mode:
                 loss, correct, batch_size = self._forward_clip(batch)
             else:
                 loss, correct, batch_size = self._forward_supervised(batch)
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        self.timers["model_compute"] += time.perf_counter() - t_start_model_compute
 
         return loss, correct, batch_size
 

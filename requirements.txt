@@ -4,6 +4,7 @@
 alembic==1.15.2
 annotated-types==0.7.0
 anyio==4.9.0
+bitsandbytes==0.45.5
 blinker==1.9.0
 cachetools==5.5.2
 certifi==2025.1.31

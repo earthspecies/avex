@@ -34,7 +34,7 @@ debug_mode: true
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./repl_run"
+output_dir: "./clip_baseline"
 
 # Path to checkpoint to resume from (set to null or a path)
 resume_from_checkpoint: null
@@ -42,10 +42,10 @@ resume_from_checkpoint: null
 training_params:
   train_epochs: 10
   lr: 0.0001
-  batch_size: 32
-  optimizer: adamw          # common default for AudioMAE
-  weight_decay: 0.01        # mild regularisation
-  amp: false
+  batch_size: 16
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
   amp_dtype: bf16
 
 # Learning rate scheduler configuration
@@ -56,21 +56,21 @@ scheduler:
 
 augmentations:
   # Add background noise at random SNRs
-  - noise:
-      noise_dirs:
-        - "gs://foundation-model-data/audio_16k/noise/demand_10s"
-        - "gs://foundation-model-data/audio_16k/noise/idmt"
-        - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"
-        - "gs://foundation-model-data/audio_16k/noise/urbansound"
-        - "gs://foundation-model-data/audio_16k/noise/freesound_10s"
-        - "gs://foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
-        - "gs://foundation-model-data/audio_16k/noise/deepship_10s"
-        - "gs://foundation-model-data/audio_16k/noise/shipsear_10s"
-        - "gs://foundation-model-data/audio_16k/noise/wham_noise"
-        - "gs://foundation-model-data/audio_16k/noise/audioset"
-        - "gs://foundation-model-data/audio_16k/noise/ssw-detection"
-      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
-      augmentation_prob: 0.5
+  # - noise:
+  #     noise_dirs:
+  #       - "gs://foundation-model-data/audio_16k/noise/demand_10s"
+  #       - "gs://foundation-model-data/audio_16k/noise/idmt"
+  #       - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"
+  #       - "gs://foundation-model-data/audio_16k/noise/urbansound"
+  #       - "gs://foundation-model-data/audio_16k/noise/freesound_10s"
+  #       - "gs://foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
+  #       - "gs://foundation-model-data/audio_16k/noise/deepship_10s"
+  #       - "gs://foundation-model-data/audio_16k/noise/shipsear_10s"
+  #       - "gs://foundation-model-data/audio_16k/noise/wham_noise"
+  #       - "gs://foundation-model-data/audio_16k/noise/audioset"
+  #       - "gs://foundation-model-data/audio_16k/noise/ssw-detection"
+  #     snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
+  #     augmentation_prob: 0.5
 
 # Contrastive loss for CLIP training
 loss_function: contrastive
@@ -79,7 +79,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 1
+num_workers: 8
 
 run_name: clip_base
 

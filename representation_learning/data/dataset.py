@@ -69,7 +69,7 @@ class Collater:
 
 def build_dataloaders(
     cfg: RunConfig, device: str = "cpu"
-) -> Tuple[DataLoader, DataLoader, Optional[AugmentationProcessor]]:
+) -> Tuple[DataLoader, DataLoader]:
     """Build training and validation dataloaders from configuration.
 
     Parameters
@@ -81,8 +81,8 @@ def build_dataloaders(
 
     Returns
     -------
-    Tuple[DataLoader, DataLoader, Optional[AugmentationProcessor]]
-        Tuple of (train_dataloader, val_dataloader, augmentation_processor)
+    Tuple[DataLoader, DataLoader]
+        Tuple of (train_dataloader, val_dataloader)
     """
     # Set multiprocessing start method to 'spawn' for CUDA compatibility
     if device != "cpu":
@@ -91,16 +91,27 @@ def build_dataloaders(
     # Load dataset configuration
     data_config = load_config(cfg.dataset_config, config_type="data")
 
+    # Create augmentation processor if augmentations are defined
+    # This is now done before creating the training dataset
+    train_aug_processor = None
+    if cfg.augmentations:
+        aug_device = "cpu"  # Augmentations in dataloader should ideally be CPU-bound
+        train_aug_processor = AugmentationProcessor(
+            cfg.augmentations, cfg.sr, aug_device
+        )
+
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=cfg.debug_mode,  # Use validation set in debug mode
+        preprocessor=None,
+        validation=cfg.debug_mode,
+        augmentation_processor=train_aug_processor,  # Pass to training dataset
     )
     ds_eval = get_dataset_dummy(
         data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
+        preprocessor=None,
         validation=True,
+        augmentation_processor=None,  # No augmentations for eval
     )
 
     # Create samplers for distributed training
@@ -140,9 +151,4 @@ def build_dataloaders(
         pin_memory=(device != "cpu"),
     )
 
-    # Create augmentation processor if augmentations are defined
-    aug_processor = None
-    if cfg.augmentations:
-        aug_processor = AugmentationProcessor(cfg, device)
-
-    return train_dl, val_dl, aug_processor
+    return train_dl, val_dl
