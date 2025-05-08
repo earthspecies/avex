@@ -19,3 +19,4 @@ class DataConfig(BaseModel):
     read_csv_kwargs: Dict[str, Any] = dc_field(default_factory=dict)
     multi_label: bool | None = None
     sample_rate: Optional[int] = None  # Sample rate for audio data
+    metrics: Optional[List[str]] = None

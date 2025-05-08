@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 import torch
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List
 from tqdm.auto import tqdm
 
 from representation_learning.configs import load_config, RunConfig, EvaluateConfig  # type: ignore
@@ -19,7 +19,14 @@ from representation_learning.training.train import FineTuneTrainer
 from representation_learning.models.linear_probe import LinearProbe
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.utils import ExperimentLogger
-from representation_learning.metrics.sklearn_metrics import Accuracy, BalancedAccuracy
+from representation_learning.metrics.sklearn_metrics import (
+    Accuracy,
+    BalancedAccuracy,
+    BinaryF1Score,
+    MulticlassBinaryF1Score,
+    MeanAveragePrecision
+)
+from representation_learning.metrics.metric_factory import get_metric_class
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s: %(message)s")
@@ -136,7 +143,6 @@ def run_experiment(
     exp_logger.log_dir = save_dir / dataset_name / experiment_name
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
 
-
     trainer = FineTuneTrainer(
         model=linear_probe,
         optimizer=optim,
@@ -157,8 +163,10 @@ def run_experiment(
     
     ### Compute test metrics
     linear_probe.eval()
-    accuracy_metric = Accuracy()
-    balanced_accuracy_metric = BalancedAccuracy()
+    
+    # Get metrics from dataset config
+    metric_names = dataset_config.metrics
+    metrics = [get_metric_class(name.strip(), num_labels) for name in metric_names]
     
     with torch.no_grad():
         for batch in test_dl:
@@ -174,15 +182,15 @@ def run_experiment(
                 else linear_probe(x)
             )
             
-            # Update metrics
-            accuracy_metric.update(logits, y)
-            balanced_accuracy_metric.update(logits, y)
+            # Update all metrics
+            for metric in metrics:
+                metric.update(logits, y)
     
     # Get final test metrics
-    test_metrics = {
-        "accuracy": accuracy_metric.get_primary_metric(),
-        "balanced_accuracy": balanced_accuracy_metric.get_primary_metric()
-    }
+    test_metrics = {}
+    for metric_name, metric in zip(metric_names, metrics):
+        metric_name = metric_name.strip()
+        test_metrics[metric_name] = metric.get_primary_metric()
     
     return ExperimentResult(
         dataset_name=dataset_name,
@@ -223,15 +231,14 @@ def main() -> None:
                 "Results for dataset '%s', experiment '%s':\n"
                 "  Train: loss=%.4f, acc=%.4f\n"
                 "  Val:   loss=%.4f, acc=%.4f\n"
-                "  Test:  accuracy=%.4f, balanced_accuracy=%.4f",
+                "  Test:  %s",
                 result.dataset_name,
                 result.experiment_name,
                 result.train_metrics["loss"],
                 result.train_metrics["acc"],
                 result.val_metrics["loss"],
                 result.val_metrics["acc"],
-                result.test_metrics["accuracy"],
-                result.test_metrics["balanced_accuracy"]
+                result.test_metrics
             )
     
 

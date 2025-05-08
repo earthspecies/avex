@@ -12,3 +12,6 @@ datasets:
       - property: label
         operation: uniform_sample
         ratio: 0.01
+    metrics:
+      - accuracy
+      - balanced_accuracy
