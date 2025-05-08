@@ -4,7 +4,8 @@ import multiprocessing
 from typing import Any, Optional, Tuple
 
 import torch
-from torch.utils.data import DataLoader
+import torch.distributed as dist
+from torch.utils.data import DataLoader, DistributedSampler
 
 from esp_data_temp.dataset import get_dataset_dummy
 from representation_learning.configs import RunConfig, load_config
@@ -89,23 +90,39 @@ def build_dataloaders(
     # Load dataset configuration
     data_config = load_config(cfg.dataset_config, config_type="data")
 
+    # Create augmentation processor if augmentations are defined
+    # train_aug_processor = None
+    # if cfg.augmentations:
+    #     aug_device = "cpu"  # Augmentations in dataloader should ideally be CPU-bound
+    #     train_aug_processor = AugmentationProcessor(
+    #         cfg.augmentations, cfg.sr, aug_device
+    #     )
+
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=False,  # TEMP: for testing speed
+        preprocessor=None,
+        validation=cfg.debug_mode,
     )
     ds_eval = get_dataset_dummy(
         data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
+        preprocessor=None,
         validation=True,
     )
+
+    # Create samplers for distributed training
+    train_sampler = None
+    val_sampler = None
+    if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
+        train_sampler = DistributedSampler(ds_train)
+        val_sampler = DistributedSampler(ds_eval, shuffle=False)
 
     # Create collater
     collate_fn = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
+        keep_text=(cfg.label_type == "text"),  # Keep text labels for CLIP training
         device=device,
     )
 
@@ -113,7 +130,8 @@ def build_dataloaders(
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
-        shuffle=True,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
         num_workers=cfg.num_workers,
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),
@@ -123,6 +141,7 @@ def build_dataloaders(
         ds_eval,
         batch_size=cfg.training_params.batch_size,
         shuffle=False,
+        sampler=val_sampler,
         num_workers=cfg.num_workers,
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),

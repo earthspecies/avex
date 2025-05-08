@@ -1,13 +1,14 @@
+---
 # Selects a raw dataset (AnimalSpeak)
-dataset_name: bio_base
-source_dataset_name: animalspeak
+data_config_name: bio_base
+dataset_name: animalspeak
 dataset_version: 0.0
-dataset_source: ./animalspeak.csv   # REMOVE
 balance: false
 balance_attribute: canonical_name   # balance data across via this attribute
 custom_balancing: false
 balancing_method: upsample
 subset_percentage: 1.0              # <1 to consider a subset of data
-transformations: None
 label_column: canonical_name
+audio_max_length_seconds: 10
 label_type: supervised
+transformations: []

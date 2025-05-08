@@ -5,8 +5,6 @@ the a complete run of your code is working.
 
 import torch
 
-from representation_learning.training import train
-
 
 def main(device: str = "cpu") -> None:
     torch.manual_seed(0)

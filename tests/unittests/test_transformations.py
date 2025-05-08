@@ -2,9 +2,6 @@
 Unit tests for data transformations.
 """
 
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -18,7 +15,7 @@ from representation_learning.data.transformations import (
 )
 
 
-def test_filter_dataframe():
+def test_filter_dataframe() -> None:
     """Test filtering a pandas DataFrame."""
     # Create test data
     df = pd.DataFrame(
@@ -50,7 +47,7 @@ def test_filter_dataframe():
     assert set(filtered_df["source"]) == {"Watkins", "other"}
 
 
-def test_filter_dict():
+def test_filter_dict() -> None:
     """Test filtering a dictionary of data."""
     # Create test data
     data = {
@@ -87,7 +84,7 @@ def test_filter_dict():
     ) == {"3", "4"}
 
 
-def test_subsample_dataframe():
+def test_subsample_dataframe() -> None:
     """Test subsampling a pandas DataFrame."""
     # Create test data with known class distribution
     df = pd.DataFrame(
@@ -126,7 +123,7 @@ def test_subsample_dataframe():
     assert abs(other_count / 200 - 0.2) < 0.1
 
 
-def test_subsample_dict():
+def test_subsample_dict() -> None:
     """Test subsampling a dictionary of data."""
     # Create test data with known class distribution
     data = {str(i): {"class": "birds", "value": i} for i in range(100)}
@@ -155,7 +152,7 @@ def test_subsample_dict():
     assert abs(class_counts["amphibians"] / 100 - 0.7) < 0.1
 
 
-def test_build_transforms():
+def test_build_transforms() -> None:
     """Test building transformations from configuration."""
     # Test building a single filter transform
     configs = [

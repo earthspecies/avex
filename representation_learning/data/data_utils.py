@@ -2,8 +2,12 @@ import pandas as pd
 
 
 def balance_by_attribute(
-    dataset, attribute, strategy="undersample", target_count=None, random_state=42
-):
+    dataset: pd.DataFrame,
+    attribute: str,
+    strategy: str = "undersample",
+    target_count: int = None,
+    random_state: int = 42,
+) -> pd.DataFrame:
     """
     Balance a pandas DataFrame by the specified attribute.
 
@@ -27,6 +31,9 @@ def balance_by_attribute(
     --------
     pandas.DataFrame
         Balanced dataset
+
+    Raises:
+        ValueError: If attribute is not found, or if strategy/target_count is invalid.
     """
     if attribute not in dataset.columns:
         raise ValueError(f"Attribute '{attribute}' not found in dataset columns")
@@ -79,5 +86,6 @@ def balance_by_attribute(
     )
 
 
-def resample():
+def resample() -> None:
+    """Placeholder for resample function."""
     pass

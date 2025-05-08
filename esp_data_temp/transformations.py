@@ -31,20 +31,32 @@ class DataTransform(ABC):
     """Base class for data transformations."""
 
     @abstractmethod
-    def __call__(self, data: Any) -> Any:
-        """Apply the transformation to the data."""
+    def __call__(
+        self, data: Union[pd.DataFrame, Dict[str, Any]]
+    ) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """Apply the transformation to the data.
+
+        Args:
+            data: The data to transform.
+
+        Returns:
+            The transformed data.
+        """
         pass
 
 
 class Filter(DataTransform):
     """Filter data based on property values."""
 
-    def __init__(self, config: FilterConfig):
+    def __init__(self, config: FilterConfig) -> None:
         """
         Initialize the filter.
 
         Args:
             config: Filter configuration
+
+        Raises:
+            ValueError: If the operation is not 'include' or 'exclude'.
         """
         self.config = config
         self.values = set(config.values)
@@ -57,7 +69,17 @@ class Filter(DataTransform):
     def __call__(
         self, data: Union[pd.DataFrame, Dict[str, Any]]
     ) -> Union[pd.DataFrame, Dict[str, Any]]:
-        """Filter the data based on property values."""
+        """Filter the data based on property values.
+
+        Args:
+            data: The data to filter (DataFrame or dict).
+
+        Returns:
+            The filtered data (same type as input).
+
+        Raises:
+            TypeError: If the data type is not supported.
+        """
         if isinstance(data, pd.DataFrame):
             return self._filter_dataframe(data)
         elif isinstance(data, dict):
@@ -66,14 +88,28 @@ class Filter(DataTransform):
             raise TypeError(f"Unsupported data type: {type(data)}")
 
     def _filter_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Filter a pandas DataFrame."""
+        """Filter a pandas DataFrame.
+
+        Args:
+            df: The DataFrame to filter.
+
+        Returns:
+            pd.DataFrame: The filtered DataFrame.
+        """
         if self.config.operation == "include":
             return df[df[self.config.property].isin(self.values)]
         else:
             return df[~df[self.config.property].isin(self.values)]
 
     def _filter_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter a dictionary of data."""
+        """Filter a dictionary of data.
+
+        Args:
+            data: The dictionary to filter.
+
+        Returns:
+            Dict[str, Any]: The filtered dictionary.
+        """
         if self.config.operation == "include":
             return {
                 k: v for k, v in data.items() if v[self.config.property] in self.values
@@ -89,14 +125,37 @@ class Filter(DataTransform):
 class Subsample(DataTransform):
     """Subsample data based on property ratios."""
 
-    def __init__(self, config: SubsampleConfig):
+    def __init__(self, config: SubsampleConfig) -> None:
+        """
+        Initialize the subsample transform.
+
+        Args:
+            config: Subsample configuration
+
+        Raises:
+            ValueError: If the operation is not 'subsample' or ratios are not in [0, 1].
+        """
         if config.operation != "subsample":
             raise ValueError("SubsampleConfig.operation must be 'subsample'")
         if not all(0 <= r <= 1 for r in config.ratios.values()):
             raise ValueError("All ratios must be in [0, 1]")
         self.cfg = config
 
-    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):
+    def __call__(
+        self, data: Union[pd.DataFrame, Dict[str, Any]]
+    ) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """
+        Apply the subsample transformation.
+
+        Args:
+            data: The data to subsample (DataFrame or dict).
+
+        Returns:
+            The subsampled data (same type as input).
+
+        Raises:
+            TypeError: If the data type is not supported.
+        """
         if isinstance(data, pd.DataFrame):
             return self._subsample_dataframe(data)
         if isinstance(data, dict):
@@ -104,7 +163,15 @@ class Subsample(DataTransform):
         raise TypeError(f"Unsupported data type: {type(data)}")
 
     def _choose_keys(self, keys: List[Any], ratio: float) -> List[Any]:
-        """Return a subsample of *keys* of size `ceil(len(keys)*ratio)`."""
+        """Return a subsample of *keys* of size `ceil(len(keys)*ratio)`.
+
+        Args:
+            keys: List of keys to subsample from.
+            ratio: Ratio of keys to select.
+
+        Returns:
+            List[Any]: The selected keys.
+        """
         if ratio >= 1.0 or len(keys) == 0:
             return keys
         n = int(len(keys) * ratio)
@@ -112,6 +179,14 @@ class Subsample(DataTransform):
         return rng.choice(keys, size=n, replace=False).tolist()
 
     def _subsample_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Subsample a pandas DataFrame.
+
+        Args:
+            df: The DataFrame to subsample.
+
+        Returns:
+            pd.DataFrame: The subsampled DataFrame.
+        """
         prop = self.cfg.property
         ratios = self.cfg.ratios
         groups = []
@@ -132,6 +207,14 @@ class Subsample(DataTransform):
         return pd.concat(groups, ignore_index=True)
 
     def _subsample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Subsample a dictionary of data.
+
+        Args:
+            data: The dictionary to subsample.
+
+        Returns:
+            Dict[str, Any]: The subsampled dictionary.
+        """
         prop = self.cfg.property
         ratios = self.cfg.ratios
         selected: Dict[str, Any] = {}
