@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -314,3 +314,37 @@ class AugmentationProcessor:
         random.shuffle(indices)
         pairs = [(indices[2 * k], indices[2 * k + 1]) for k in range(n_pairs)]
         return pairs
+
+
+# ------------------------------------------------------------------------------
+# Utility: Postprocessor wrapper for esp_data_temp datasets
+# ------------------------------------------------------------------------------
+def make_item_postprocessor(
+    aug_processor: "AugmentationProcessor",
+) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Returns a callable that wraps `aug_processor.apply_augmentations` for use as a
+    postprocessor in esp_data_temp datasets. Handles NumPy <-> torch conversion.
+
+    Example usage:
+        aug = AugmentationProcessor(...)
+        postproc = make_item_postprocessor(aug)
+        ds = get_dataset_dummy(..., postprocessors=[postproc])
+
+    Returns
+    -------
+    Callable[[Dict[str, Any]], Dict[str, Any]]
+        A function that takes a sample dict, applies augmentations, and returns
+        the processed dict.
+    """
+    import torch
+
+    def _postproc(item: dict) -> dict:
+        if not isinstance(item["raw_wav"], torch.Tensor):
+            item["raw_wav"] = torch.from_numpy(item["raw_wav"])
+        item = aug_processor.apply_augmentations(item)
+        if isinstance(item["raw_wav"], torch.Tensor):
+            item["raw_wav"] = item["raw_wav"].cpu().numpy()
+        return item
+
+    return _postproc

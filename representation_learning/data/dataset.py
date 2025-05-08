@@ -12,6 +12,10 @@ from representation_learning.configs import RunConfig, load_config
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
+from representation_learning.data.augmentations import (
+    AugmentationProcessor,
+    make_item_postprocessor,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -90,24 +94,24 @@ def build_dataloaders(
     # Load dataset configuration
     data_config = load_config(cfg.dataset_config, config_type="data")
 
-    # Create augmentation processor if augmentations are defined
-    # train_aug_processor = None
-    # if cfg.augmentations:
-    #     aug_device = "cpu"  # Augmentations in dataloader should ideally be CPU-bound
-    #     train_aug_processor = AugmentationProcessor(
-    #         cfg.augmentations, cfg.sr, aug_device
-    #     )
+    postprocessors = []
+    if cfg.augmentations:
+        aug_device = "cpu"  # dataloader augments on CPU
+        aug_processor = AugmentationProcessor(cfg.augmentations, cfg.sr, aug_device)
+        postprocessors.append(make_item_postprocessor(aug_processor))
 
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,
         validation=cfg.debug_mode,
+        postprocessors=postprocessors,
     )
     ds_eval = get_dataset_dummy(
         data_config=data_config,
         preprocessor=None,
         validation=True,
+        postprocessors=None,
     )
 
     # Create samplers for distributed training
