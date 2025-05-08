@@ -30,7 +30,7 @@ preprocessing: null
 
 # Target sample‑rate expected by the model
 sr: 16000
-debug_mode: false
+debug_mode: true
 
 # Log training runs to MLflow
 logging: mlflow
