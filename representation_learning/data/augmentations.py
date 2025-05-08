@@ -25,6 +25,8 @@ import torch
 import torch.nn.functional as F  # noqa: F401  – kept for downstream ops that often rely on F
 import torchaudio
 
+from esp_data_temp.dataset import GSPath
+
 # Ensure RunConfig is **not** imported at the top level.
 # from representation_learning.configs import RunConfig  # DO NOT ADD
 
@@ -40,46 +42,39 @@ def add_noise(
     snr_db_range: Tuple[float, float] = (-5.0, 20.0),
     sample_rate: int = 16000,
     max_noise_samples: int = 1000,
+    max_window_sec: float = 10.0,
 ) -> torch.Tensor:
-    """Add background noise to *mono* audio at a random SNR inside *snr_db_range*.
+    """Add background noise at a random SNR by *streaming* a window from disk.
 
-    Parameters
-    ----------
-    audio
-        1‑D or 2‑D (batch, time) tensor/ndarray.
-    noise_dir
-        Single directory or list of directories containing noise files.
-    snr_db_range, sample_rate, max_noise_samples
-        See original docstring for details.
+    * Loads **at most** ``max_window_sec`` seconds of noise to minimise I/O.
+    * Works with local paths and ``gs://`` buckets (via :class:`GSPath`).
+    * Keeps the original tensor/ndarray interface.
 
-    Returns
-    -------
-    torch.Tensor
-        Noisy audio with the same shape as the input.
+    Returns:
+        torch.Tensor: The audio with added noise.
 
-    Raises
-    ------
-    FileNotFoundError
-        If a noise directory is not found.
-    RuntimeError
-        If a noise file fails to load.
+    Raises:
+        FileNotFoundError: If the noise directory is not found.
+        RuntimeError: If noise file inspection or loading fails.
     """
 
+    # ------------------------------------------------------------------
+    # Prepare input audio tensor
+    # ------------------------------------------------------------------
     is_np = isinstance(audio, np.ndarray)
     audio_t = torch.from_numpy(audio) if is_np else audio  # shape (B, T) or (T,)
     if audio_t.ndim == 1:
         audio_t = audio_t.unsqueeze(0)
-
     audio_len = audio_t.shape[-1]
 
+    # ------------------------------------------------------------------
+    # Collect candidate noise files
+    # ------------------------------------------------------------------
     noise_dirs = [noise_dir] if isinstance(noise_dir, str) else list(noise_dir)
-    noise_paths: list[Path] = []
-
-    # import inside the function to avoid GCS dependency for users who don't use it
-    from esp_data_temp.dataset import GSPath  # type: ignore
+    noise_paths: List[Path] = []
 
     for dir_str in noise_dirs:
-        dir_path: Path | GSPath = (
+        dir_path: Path | "GSPath" = (
             GSPath(dir_str) if dir_str.startswith("gs://") else Path(dir_str)
         )
         if not dir_path.exists():
@@ -93,28 +88,48 @@ def add_noise(
             break
 
     if not noise_paths:
-        return audio_t if not is_np else audio  # no‑op
-
-    if len(noise_paths) > max_noise_samples:
-        noise_paths = random.sample(noise_paths, max_noise_samples)
+        return audio  # no‑op if no files
 
     noise_path = random.choice(noise_paths)
 
+    # ------------------------------------------------------------------
+    # Determine how many frames to read (avoid whole‑file load)
+    # ------------------------------------------------------------------
     try:
-        noise_wav, noise_sr = torchaudio.load(noise_path)
-    except Exception as exc:  # pragma: no cover – just re‑raise with context
+        info = torchaudio.info(noise_path)
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(f"Failed to inspect noise file {noise_path}: {exc}") from exc
+
+    noise_sr = info.sample_rate
+    total_frames = info.num_frames
+
+    target_frames = min(int(sample_rate * max_window_sec), audio_len)
+
+    if total_frames <= target_frames:
+        frame_offset = 0  # will read entire clip (short file)
+        num_frames = total_frames
+    else:
+        frame_offset = random.randint(0, total_frames - target_frames)
+        num_frames = target_frames
+
+    try:
+        noise_wav, _ = torchaudio.load(
+            noise_path, frame_offset=frame_offset, num_frames=num_frames
+        )
+    except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"Failed to load noise file {noise_path}: {exc}") from exc
 
-    # Force mono
+    # ------------------------------------------------------------------
+    # Normalise channels, resample, length‑match, and mix
+    # ------------------------------------------------------------------
     if noise_wav.shape[0] > 1:
         noise_wav = noise_wav.mean(dim=0, keepdim=True)
 
-    # Resample if required
     if noise_sr != sample_rate:
         resampler = torchaudio.transforms.Resample(noise_sr, sample_rate)
         noise_wav = resampler(noise_wav)
 
-    # Fit (or crop) to length
+    # Tile or crop to match the audio length
     if noise_wav.shape[1] < audio_len:
         reps = int(np.ceil(audio_len / noise_wav.shape[1]))
         noise_wav = noise_wav.repeat(1, reps)
@@ -122,11 +137,10 @@ def add_noise(
         start = random.randint(0, noise_wav.shape[1] - audio_len)
         noise_wav = noise_wav[:, start : start + audio_len]
 
-    # Match device
     noise_wav = noise_wav.to(audio_t.device)
     audio_t = audio_t.to(noise_wav.device)
 
-    # Compute scaling
+    # Scale noise to target SNR
     signal_power = (audio_t**2).mean(dim=1, keepdim=True)
     noise_power = (noise_wav**2).mean(dim=1, keepdim=True)
 
@@ -173,7 +187,6 @@ class AugmentationProcessor:
         self,
         augmentation_specs: Sequence[Any],
         sample_rate: int,
-        *,
         device: str = "cpu",
     ) -> None:
         from representation_learning.configs import (  # local import
@@ -229,11 +242,11 @@ class AugmentationProcessor:
     def apply_batch_augmentations(
         self, batch: Sequence[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Apply configured augmentations to an *entire* batch.
+        """Apply configured augmentations to an *entire* batch. Mostly for Mixup, others
+        can go in the per‑item processing for parallel processing.
 
         Workflow:
-        1. Noise augmentation per sample (independent).
-        2. For each MixupAugment spec: with probability *augmentation_prob*,
+        For each MixupAugment spec: with probability *augmentation_prob*,
            perform up to *n_mixup* random pairings within the batch.
 
         The mixed audio overwrites the *first* element in each pair and records
@@ -253,15 +266,7 @@ class AugmentationProcessor:
         """
         if not batch:
             return []
-
-        # 1. Noise augmentation --------------------------------------
-        aug_batch: list[Dict[str, Any]] = []
-        for item in batch:
-            wav: torch.Tensor = item["raw_wav"].to(self.device)
-            new_item = item.copy()
-            new_item["raw_wav"] = self._apply_noise(wav)
-            aug_batch.append(new_item)
-
+        aug_batch = list(batch)  # Fix: define aug_batch from batch
         # 2. Mixup augmentation --------------------------------------
         if len(aug_batch) < 2 or not self.mixup_aug_configs:
             return aug_batch  # nothing to mix

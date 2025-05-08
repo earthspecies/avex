@@ -38,7 +38,9 @@ class TrainingParams(BaseModel):
     train_epochs: int = Field(..., ge=1, description="Number of training epochs")
     lr: float = Field(..., gt=0, description="Learning rate")
     batch_size: int = Field(..., ge=1, description="Batch size for training")
-    optimizer: Literal["adamw", "adam"] = Field("adamw", description="Optimizer to use")
+    optimizer: Literal["adamw", "adam", "adamw8bit"] = Field(
+        "adamw", description="Optimizer to use"
+    )
     weight_decay: float = Field(
         0.0, ge=0, description="Weight decay for regularisation"
     )

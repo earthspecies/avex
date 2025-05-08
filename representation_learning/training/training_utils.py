@@ -4,8 +4,6 @@ representation_learning.training.training_utils
 Utility functions for training, including scheduler creation.
 """
 
-from typing import Optional
-
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, _LRScheduler
@@ -73,4 +71,4 @@ def build_scheduler(
             total_iters=total_steps,
         )
     else:
-        raise ValueError(f"Unknown scheduler: {cfg.scheduler.name}") 
+        raise ValueError(f"Unknown scheduler: {cfg.scheduler.name}")

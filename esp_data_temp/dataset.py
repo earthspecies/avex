@@ -24,31 +24,36 @@ from .transformations import (
 
 if TYPE_CHECKING:
     from cloudpathlib import CloudPath
-
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
 
 
+# -----------------------------------------------------------------------------
+# gcloud helpers
+# -----------------------------------------------------------------------------
 @lru_cache(maxsize=1)
-def _get_client() -> cloudpathlib.GSClient:
+def _get_client() -> cloudpathlib.GSClient:  # pragma: no cover
     return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
 
 
-default_client = _get_client()  # Create a module-level singleton
+default_client = _get_client()  # module‑level singleton
 
 
 class GSPath(cloudpathlib.GSPath):
-    """
-    A wrapper for the cloudpathlib GSPath that provides a default client.
-    This avoids issues when the GOOGLE_APPLICATION_CREDENTIALS variable is not set.
-    """
+    """Wrapper that injects a default GSClient so callers don't need env vars."""
 
     def __init__(
         self,
         client_path: str | Self | "CloudPath",
-        client: cloudpathlib.GSClient = default_client,  # Use singleton
-    ) -> None:
+        *,
+        client: cloudpathlib.GSClient = default_client,
+    ) -> None:  # type: ignore[override]
         super().__init__(client_path, client=client)
+
+
+# -----------------------------------------------------------------------------
+# Core dataset
+# -----------------------------------------------------------------------------
 
 
 class AudioDataset:
@@ -125,8 +130,8 @@ class AudioDataset:
             # The processor handles device internally (should be CPU here)
             item["raw_wav"] = torch.from_numpy(item["raw_wav"])
 
-            # apply_augmentations now handles single items by
-            # unsqueezing/squeezing internally
+            # apply_augmentations now handles single items by unsqueezing/squeezing
+            # internally
             item = self.augmentation_processor.apply_augmentations(item)
 
             # Ensure raw_wav is a NumPy array for the collater
@@ -137,90 +142,67 @@ class AudioDataset:
         return item
 
 
+# -----------------------------------------------------------------------------
+# Helper builders (unchanged apart from target_len plumbing)
+# -----------------------------------------------------------------------------
+
+
 def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransform]:
-    """
-    Build the transformation pipeline from **validated** configs.
-
-    Parameters
-    ----------
-    transform_configs : list[FilterConfig | SubsampleConfig]
-        The `transformations` field that comes straight out of a validated
-        `DataConfig`.  No raw YAML dictionaries are accepted.
-
-    Raises
-    ------
-    TypeError
-        If the input is not a `FilterConfig` or `SubsampleConfig`.
-
-    Returns
-    -------
-    list[DataTransform]
-        Callable objects that can be applied in sequence.
-    """
     transforms: List[DataTransform] = []
-
     for cfg in transform_configs:
         if isinstance(cfg, FilterConfig):
             transforms.append(Filter(cfg))
         elif isinstance(cfg, SubsampleConfig):
             transforms.append(Subsample(cfg))
-        else:  # this should never happen if DataConfig was validated
+        else:
             raise TypeError(
                 "build_transforms() received an unexpected config type: "
                 f"{type(cfg).__name__}"
             )
-
     return transforms
 
 
-def _get_dataset_from_name(
-    name: str,
-    validation: bool = False,
-) -> pd.DataFrame:
+def _get_dataset_from_name(name: str, *, validation: bool = False) -> pd.DataFrame:  # noqa: D401
     name = name.lower().strip()
 
     if name == "animalspeak":
-        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if validation else ANIMALSPEAK_PATH
-        if ANIMALSPEAK_PATH.startswith("gs://"):
-            csv_path = GSPath(anaimspeak_path)
+        animalspeak_path = ANIMALSPEAK_PATH_EVAL if validation else ANIMALSPEAK_PATH
+        csv_path: Path | GSPath
+        if animalspeak_path.startswith("gs://"):
+            csv_path = GSPath(animalspeak_path)
         else:
-            csv_path = Path(anaimspeak_path)
+            csv_path = Path(animalspeak_path)
 
-        # Read CSV content
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
         df["gs_path"] = df["local_path"].apply(
-            lambda x: "gs://" + x
-        )  # AnimalSpeak missing gs path
+            lambda x: (
+                "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
+                + x
+            )
+            # lambda x: "gs://foundation-model-data/audio_16k/" + x
+        )
         return df
-    else:
-        raise NotImplementedError("Only AnimalSpeak dataset supported")
+
+    raise NotImplementedError("Only AnimalSpeak dataset supported right now")
 
 
 def get_dataset_dummy(
     data_config: DataConfig,
+    *,
     preprocessor: Optional[Callable] = None,
     validation: bool = False,
     augmentation_processor: Optional[AugmentationProcessor] = None,
 ) -> AudioDataset:
-    """
-    Dataset entry point that supports both local and GS paths, with transformations.
+    """Entry point that returns an ``AudioDataset`` with optional transforms.
 
-    1. Loads metadata CSV (path specified in `data_config.dataset_source`).
-    2. Applies any filtering / subsampling specified in `data_config.transformations`.
-    3. Returns an `AudioDataset` instance.
-
-    Returns
-    -------
-    AudioDataset
-        An instance of the dataset with the specified transformations applied.
+    Returns:
+        AudioDataset: The constructed audio dataset with optional transforms applied.
     """
 
-    # Check if the dataset CSV path is a gs:// path
-    df = _get_dataset_from_name(data_config.dataset_name, validation)
+    df = _get_dataset_from_name(data_config.dataset_name, validation=validation)
 
-    # Apply transformations if specified
-    if hasattr(data_config, "transformations") and data_config.transformations:
+    if getattr(data_config, "transformations", None):
         transforms = _build_transforms(data_config.transformations)
         for transform in transforms:
             df = transform(df)

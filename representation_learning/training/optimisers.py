@@ -64,10 +64,12 @@ def get_optimizer(
     elif opt_name == "adam":
         optimiser_cls = torch.optim.Adam
         kwargs = {"lr": lr, "weight_decay": weight_decay}
-    elif opt_name == "adamw_8bit":
+    elif opt_name == "adamw8bit":
         optimiser_cls: Type[Optimizer] = bnb.optim.PagedAdamW8bit
         kwargs = {"lr": lr, "weight_decay": weight_decay}
     else:
-        raise ValueError(f"Unsupported optimizer '{opt_name}'. Available: adamw, adam.")
+        raise ValueError(
+            f"Unsupported optimizer '{opt_name}'. Available: adamw, adam, adamw8bit."
+        )
 
     return optimiser_cls(params, **kwargs)

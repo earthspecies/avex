@@ -30,7 +30,7 @@ preprocessing: null
 
 # Target sample‑rate expected by the model
 sr: 16000
-debug_mode: true
+debug_mode: false
 
 # Log training runs to MLflow
 logging: mlflow
@@ -40,10 +40,10 @@ output_dir: "./clip_baseline"
 resume_from_checkpoint: null
 
 training_params:
-  train_epochs: 10
+  train_epochs: 80
   lr: 0.0001
-  batch_size: 16
-  optimizer: adamw
+  batch_size: 680
+  optimizer: adamw8bit
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
@@ -51,24 +51,37 @@ training_params:
 # Learning rate scheduler configuration
 scheduler:
   name: cosine
-  warmup_steps: 1000
+  warmup_steps: 500
   min_lr: 1e-6
 
 augmentations:
   # Add background noise at random SNRs
   # - noise:
   #     noise_dirs:
-  #       - "gs://foundation-model-data/audio_16k/noise/demand_10s"
-  #       - "gs://foundation-model-data/audio_16k/noise/idmt"
-  #       - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"
-  #       - "gs://foundation-model-data/audio_16k/noise/urbansound"
-  #       - "gs://foundation-model-data/audio_16k/noise/freesound_10s"
-  #       - "gs://foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
-  #       - "gs://foundation-model-data/audio_16k/noise/deepship_10s"
-  #       - "gs://foundation-model-data/audio_16k/noise/shipsear_10s"
-  #       - "gs://foundation-model-data/audio_16k/noise/wham_noise"
-  #       - "gs://foundation-model-data/audio_16k/noise/audioset"
-  #       - "gs://foundation-model-data/audio_16k/noise/ssw-detection"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/\
+  #         orcasound_shipnoise_10s"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+  #       - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #         foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+  #       # - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+  #       #   foundation-model-storage/foundation-model-data/audio_16k/noise/\
+  #       #   ssw-detection"
   #     snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
   #     augmentation_prob: 0.5
 
@@ -79,7 +92,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 8
+num_workers: 12
 
 run_name: clip_base
 
