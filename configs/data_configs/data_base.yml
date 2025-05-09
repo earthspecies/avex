@@ -1,9 +1,9 @@
-dataset_name: animalspesak
+dataset_name: animalspeak
 dataset_version: 0.0
 balance: false
 balance_attribute: canonical_name   # balance data across via this attribute
 custom_balancing: false
 balancing_method: upsample
 subset_percentage: 1.0              # <1 to consider a subset of data
-transformations: None
 label_column: canonical_name
+audio_max_length_seconds: 10

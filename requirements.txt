@@ -4,6 +4,7 @@
 alembic==1.15.2
 annotated-types==0.7.0
 anyio==4.9.0
+bitsandbytes==0.45.5
 blinker==1.9.0
 cachetools==5.5.2
 certifi==2025.1.31
@@ -38,6 +39,7 @@ graphql-relay==3.2.0
 greenlet==3.2.1 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
 gunicorn==23.0.0 ; sys_platform != 'win32'
 h11==0.16.0
+huggingface-hub==0.30.2
 idna==3.10
 importlib-metadata==8.6.1
 itsdangerous==2.2.0
@@ -85,8 +87,10 @@ python-dateutil==2.9.0.post0
 pytz==2025.2
 pywin32==310 ; sys_platform == 'win32'
 pyyaml==6.0.2
+regex==2024.11.6
 requests==2.32.3
 rsa==4.9
+safetensors==0.5.3
 scikit-learn==1.6.1
 scipy==1.15.2
 six==1.17.0
@@ -98,10 +102,12 @@ sqlparse==0.5.3
 starlette==0.46.2
 sympy==1.13.1
 threadpoolctl==3.6.0
+tokenizers==0.21.1
 torch==2.2.1
 torchaudio==2.2.1
 torchvision==0.17.1
 tqdm==4.67.1
+transformers==4.51.3
 triton==2.2.0 ; python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'
 typing-extensions==4.12.2
 typing-inspection==0.4.0

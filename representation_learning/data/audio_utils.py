@@ -125,7 +125,6 @@ class AudioProcessor:
         if self.representation == "mel_spectrogram":
             self.mel_basis = self.mel_basis.to(waveform.device)
 
-        # STFT → power spectrogram
         stft = torch.stft(
             waveform,
             n_fft=self.n_fft,

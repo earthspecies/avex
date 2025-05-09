@@ -38,7 +38,9 @@ class TrainingParams(BaseModel):
     train_epochs: int = Field(..., ge=1, description="Number of training epochs")
     lr: float = Field(..., gt=0, description="Learning rate")
     batch_size: int = Field(..., ge=1, description="Batch size for training")
-    optimizer: Literal["adamw", "adam"] = Field("adamw", description="Optimizer to use")
+    optimizer: Literal["adamw", "adam", "adamw8bit"] = Field(
+        "adamw", description="Optimizer to use"
+    )
     weight_decay: float = Field(
         0.0, ge=0, description="Weight decay for regularisation"
     )
@@ -102,12 +104,33 @@ class ModelSpec(BaseModel):
     device: str = "cuda"
     audio_config: Optional[AudioConfig] = None
 
+    # Fields specifically for CLIP models
+    text_model_name: Optional[str] = None
+    projection_dim: Optional[int] = None
+    temperature: Optional[float] = None
+
     model_config = ConfigDict(extra="forbid")
 
 
 # --------------------------------------------------------------------------- #
 #  Top‑level run‑configuration
 # --------------------------------------------------------------------------- #
+
+
+class SchedulerConfig(BaseModel):
+    """Configuration for learning rate schedulers."""
+
+    name: Literal["cosine", "linear", "none"] = Field(
+        "none", description="Scheduler type to use"
+    )
+    warmup_steps: int = Field(
+        0, ge=0, description="Number of steps to warm up learning rate"
+    )
+    min_lr: float = Field(
+        0.0, ge=0, description="Minimum learning rate for cosine annealing"
+    )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class RunConfig(BaseModel):
@@ -123,15 +146,43 @@ class RunConfig(BaseModel):
     preprocessing: Optional[str] = None
     sr: int = 16000
     logging: Literal["mlflow", "wandb"] = "mlflow"
+    label_type: Literal["supervised", "text"] = Field(
+        "supervised",
+        description=(
+            "How to use labels: 'supervised' for classification, "
+            "'text' for CLIP training"
+        ),
+    )
+
+    # Resume from checkpoint
+    resume_from_checkpoint: Optional[str] = None
+
+    # Distributed training options
+    distributed: bool = Field(
+        False,
+        description=(
+            "Whether to use distributed training (automatically enabled in Slurm)"
+        ),
+    )
+    distributed_backend: Literal["nccl"] = Field(
+        "nccl", description="Backend for distributed training (nccl for GPU training)"
+    )
+    distributed_port: int = Field(
+        29500, description="Base port for distributed training communication"
+    )
 
     augmentations: List[Augment] = Field(default_factory=list)
-    loss_function: Literal["cross_entropy", "bce"]
+    loss_function: Literal["cross_entropy", "bce", "contrastive", "clip"]
 
     device: str = "cuda"
     seed: int = 42
     num_workers: int = 4
     run_name: Optional[str] = None
     wandb_project: str = "audio‑experiments"
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+
+    # Debug mode
+    debug_mode: bool = False
 
     # ------------------------------
     # custom pre‑processing of augments
@@ -168,11 +219,64 @@ class RunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ExperimentConfig(BaseModel):
+    """Configuration for a single experiment in evaluation."""
+
+    run_name: str = Field(..., description="Name of the experiment run")
+    run_config: str = Field(..., description="Path to the run config YAML file")
+    pretrained: bool = Field(True, description="Whether to use pretrained weights")
+    layers: str = Field(
+        ...,
+        description="List of layer names to extract embeddings from, comma separated",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class EvaluateConfig(BaseModel):
+    """Configuration for running evaluation experiments."""
+
+    experiments: List[ExperimentConfig] = Field(
+        ..., description="List of experiments to run"
+    )
+    dataset_config: str = Field(..., description="Path to the dataset config YAML file")
+    save_dir: str = Field(..., description="Directory to save evaluation results")
+
+    # Fine-tuning parameters for linear probing
+    training_params: TrainingParams = Field(
+        default_factory=lambda: TrainingParams(
+            train_epochs=10,
+            lr=0.0001,
+            batch_size=2,
+            optimizer="adamw",
+            weight_decay=0.01,
+            amp=False,
+            amp_dtype="bf16",
+        ),
+        description="Training parameters for fine-tuning during evaluation",
+    )
+
+    device: str = Field(..., description="Device to run the evaluation on")
+    seed: int = Field(..., description="Random seed for reproducibility")
+    num_workers: int = Field(..., description="Number of workers for evaluation")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class BenchmarkConfig(BaseModel):
+    """Configuration for the entire benchmark suite containing multiple datasets."""
+
+    data_path: str = Field(..., description="Base path for all benchmark datasets")
+    datasets: List[DataConfig] = Field(
+        ..., description="List of benchmark datasets to evaluate"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
-
-
 def load_config(
     path: str | Path, config_type: Literal["run", "data"] = "run"
 ) -> RunConfig | DatasetConfig:
@@ -209,5 +313,9 @@ def load_config(
         return RunConfig.model_validate(raw)
     elif config_type == "data":
         return DatasetConfig.model_validate(raw)
+    elif config_type == "evaluate":
+        return EvaluateConfig.model_validate(raw)
+    elif config_type == "benchmark":
+        return BenchmarkConfig.model_validate(raw)
     else:
         raise NotImplementedError("Can only load from run config or data config.")
