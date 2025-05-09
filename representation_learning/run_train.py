@@ -11,9 +11,13 @@ from pathlib import Path
 import torch
 import yaml
 
-from representation_learning.configs import RunConfig, load_config  # type: ignore
+from representation_learning.configs import (  # type: ignore
+    RunConfig,
+    load_config,
+)
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
+from representation_learning.training.distributed import init_distributed
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import Trainer
 from representation_learning.utils import ExperimentLogger
@@ -57,7 +61,7 @@ def main() -> None:
     torch.manual_seed(config.seed)
 
     # 2. Build the dataloaders.
-    train_dl, val_dl, _ = build_dataloaders(cfg, device=device)
+    train_dl, val_dl, _ = build_dataloaders(config, device=device)
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl),

@@ -189,8 +189,8 @@ def _get_dataset_from_name(
 
 def get_dataset_dummy(
     data_config: DatasetConfig,
+    split: str,
     preprocessor: Optional[Callable] = None,
-    split: bool = False,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.

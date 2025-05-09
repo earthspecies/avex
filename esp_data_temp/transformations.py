@@ -34,8 +34,8 @@ class SubsampleConfig(BaseModel):
 
 
 class UniformSampleConfig(BaseModel):
+    type: Literal["uniform_sample"]
     property: str
-    operation: Literal["uniform_sample"] = "uniform_sample"
     ratio: float
 
 
@@ -299,16 +299,10 @@ def build_transforms(transform_configs: list[RegisteredTransforms]) -> list[Call
                 f"{type(cfg).__name__}"
             )
 
-        else:  # this should never happen if DataConfig was validated
-            raise TypeError(
-                "build_transforms() received an unexpected config type: "
-                f"{type(cfg).__name__}"
-            )
-
     return transforms
 
 
-class UniformSample(DataTransform):
+class UniformSample:
     """Uniformly sample data based on a property."""
 
     def __init__(self, config: UniformSampleConfig):
