@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import field as dc_field
 from functools import partial
-from typing import Annotated, Any, Dict, List, Type, Union
+from typing import Annotated, Any, Dict, List, Union
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
 logger = logging.Logger("esp_data")
+
 
 class FilterConfig(BaseModel):
     type: Literal["filter"]

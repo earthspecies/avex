@@ -2,7 +2,8 @@ from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Self
+from types import TracebackType
+from typing import Any, Iterator, Optional, Self, Type
 
 import cloudpathlib
 import numpy as np
@@ -30,7 +31,7 @@ class GSPath(cloudpathlib.GSPath):
 
     def __init__(
         self,
-        client_path: str | Self | "CloudPath",
+        client_path: str | Self | cloudpathlib.AnyPath,
         client: cloudpathlib.GSClient = _get_client(),
     ) -> None:
         super().__init__(client_path, client=client)
@@ -65,10 +66,15 @@ class AudioDataset:
 
         self.metadata = metadata
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
         # TODO
         pass
 
@@ -84,7 +90,7 @@ class AudioDataset:
         # TODO
         return "TODO"
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         row = self.df.iloc[idx]
         path_str: str = row[self.audio_path_col]
 
