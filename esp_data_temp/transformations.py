@@ -24,7 +24,13 @@ class SubsampleConfig(BaseModel):
     ratios: Dict[str, float] = dc_field(default_factory=dict)
 
 
-TransformCfg = Union[FilterConfig, SubsampleConfig]
+class UniformSampleConfig(BaseModel):
+    property: str
+    operation: Literal["uniform_sample"] = "uniform_sample"
+    ratio: float
+
+
+TransformCfg = Union[FilterConfig, SubsampleConfig, UniformSampleConfig]
 
 
 class DataTransform(ABC):
@@ -233,4 +239,61 @@ class Subsample(DataTransform):
             for k in self._choose_keys(other_keys, ratios["other"]):
                 selected[k] = data[k]
 
+        return selected
+
+
+class UniformSample(DataTransform):
+    """Uniformly sample data based on a property."""
+
+    def __init__(self, config: UniformSampleConfig):
+        if config.operation != "uniform_sample":
+            raise ValueError("UniformSampleConfig.operation must be 'uniform_sample'")
+        if not 0 <= config.ratio <= 1:
+            raise ValueError("Ratio must be in [0, 1]")
+        self.cfg = config
+
+    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):
+        if isinstance(data, pd.DataFrame):
+            return self._uniform_sample_dataframe(data)
+        if isinstance(data, dict):
+            return self._uniform_sample_dict(data)
+        raise TypeError(f"Unsupported data type: {type(data)}")
+
+    def _uniform_sample_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Uniformly sample a pandas DataFrame."""
+        prop = self.cfg.property
+        ratio = self.cfg.ratio
+        
+        # Group by the property and sample uniformly
+        groups = []
+        for _, group in df.groupby(prop):
+            n_samples = max(1, int(len(group) * ratio))
+            rng = np.random.default_rng(seed=42)
+            sampled_indices = rng.choice(len(group), size=n_samples, replace=False)
+            groups.append(group.iloc[sampled_indices])
+        
+        return pd.concat(groups, ignore_index=True)
+
+    def _uniform_sample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Uniformly sample a dictionary of data."""
+        prop = self.cfg.property
+        ratio = self.cfg.ratio
+        selected: Dict[str, Any] = {}
+        
+        # Group by the property
+        groups: Dict[str, List[str]] = {}
+        for k, v in data.items():
+            val = v[prop]
+            if val not in groups:
+                groups[val] = []
+            groups[val].append(k)
+        
+        # Sample uniformly from each group
+        for keys in groups.values():
+            n_samples = max(1, int(len(keys) * ratio))
+            rng = np.random.default_rng(seed=42)
+            sampled_keys = rng.choice(keys, size=n_samples, replace=False)
+            for k in sampled_keys:
+                selected[k] = data[k]
+        
         return selected

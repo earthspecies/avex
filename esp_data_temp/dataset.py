@@ -2,12 +2,14 @@ from functools import lru_cache
 from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Self
-
+import os
 import cloudpathlib
 import numpy as np
 import pandas as pd
 import soundfile as sf
 from google.cloud.storage.client import Client
+import librosa
+
 
 from .config import DataConfig
 from .transformations import (
@@ -17,10 +19,15 @@ from .transformations import (
     Subsample,
     SubsampleConfig,
     TransformCfg,
+    UniformSample,
+    UniformSampleConfig,
 )
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
+BATS_PATH = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.train.csv"
+BATS_PATH_VALID = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.valid.csv"
+BATS_PATH_TEST = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
 
 
 @lru_cache(maxsize=1)
@@ -93,6 +100,15 @@ class AudioDataset:
             audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
+        
+        if 'sample_rate' in self.data_config and sr != self.data_config.sample_rate:
+            resampler = librosa.resampler.Resampler(
+                orig_sr=sr,
+                target_sr=self.data_config.sample_rate,
+                res_type="kaiser_fast",
+            )
+            audio = resampler(audio)
+            sr = self.data_config.sample_rate
 
         return {
             "raw_wav": audio.astype(np.float32),
@@ -108,14 +124,14 @@ def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfo
 
     Parameters
     ----------
-    transform_configs : list[FilterConfig | SubsampleConfig]
+    transform_configs : list[FilterConfig | SubsampleConfig | UniformSampleConfig]
         The `transformations` field that comes straight out of a validated
         `DataConfig`.  No raw YAML dictionaries are accepted.
 
     Raises
     ------
     TypeError
-        If the input is not a `FilterConfig` or `SubsampleConfig`.
+        If the input is not a `FilterConfig`, `SubsampleConfig`, or `UniformSampleConfig`.
 
     Returns
     -------
@@ -129,6 +145,8 @@ def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfo
             transforms.append(Filter(cfg))
         elif isinstance(cfg, SubsampleConfig):
             transforms.append(Subsample(cfg))
+        elif isinstance(cfg, UniformSampleConfig):
+            transforms.append(UniformSample(cfg))
         else:  # this should never happen if DataConfig was validated
             raise TypeError(
                 "build_transforms() received an unexpected config type: "
@@ -140,12 +158,14 @@ def _build_transforms(transform_configs: List[TransformCfg]) -> List[DataTransfo
 
 def _get_dataset_from_name(
     name: str,
-    validation: bool = False,
+    split: str = "train",
 ) -> pd.DataFrame:
     name = name.lower().strip()
 
     if name == "animalspeak":
-        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if validation else ANIMALSPEAK_PATH
+        if split == "test":
+            return None
+        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if split=="valid" else ANIMALSPEAK_PATH
         if ANIMALSPEAK_PATH.startswith("gs://"):
             csv_path = GSPath(anaimspeak_path)
         else:
@@ -158,14 +178,29 @@ def _get_dataset_from_name(
             lambda x: "gs://" + x
         )  # AnimalSpeak missing gs path
         return df
+    elif name == "bats":
+        csv_file = BATS_PATH_TEST if split=="test" else BATS_PATH_VALID if split=="valid" else BATS_PATH
+        base_path = os.path.dirname(csv_file).split("egyptian_fruit_bats")[0]
+        if csv_file.startswith("gs://"):
+            csv_path = GSPath(csv_file)
+        else:
+            csv_path = Path(csv_file)
+        
+        # Read CSV content
+        csv_text = csv_path.read_text(encoding="utf-8")
+        df = pd.read_csv(StringIO(csv_text))
+        df["gs_path"] = df["path"].apply(
+            lambda x: base_path + "egyptian_fruit_bats" + x.split("egyptian_fruit_bats")[1]
+        )  # bats missing gs path
+        return df
     else:
-        raise NotImplementedError("Only AnimalSpeak dataset supported")
+        raise NotImplementedError("Dataset not supported")
 
 
 def get_dataset_dummy(
     data_config: DataConfig,
     preprocessor: Optional[Callable] = None,
-    validation: bool = False,
+    split: bool = False,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -174,6 +209,15 @@ def get_dataset_dummy(
     2. Applies any filtering / subsampling specified in `data_config.transformations`.
     3. Returns an `AudioDataset` instance.
 
+    Parameters
+    ----------
+    data_config : DataConfig
+        Configuration for the dataset
+    preprocessor : Optional[Callable]
+        Optional preprocessor function
+    split : bool
+        Whether to split the dataset
+
     Returns
     -------
     AudioDataset
@@ -181,7 +225,7 @@ def get_dataset_dummy(
     """
 
     # Check if the dataset CSV path is a gs:// path
-    df = _get_dataset_from_name(data_config.dataset_name, validation)
+    df = _get_dataset_from_name(data_config.dataset_name, split)
 
     # Apply transformations if specified
     if hasattr(data_config, "transformations") and data_config.transformations:
