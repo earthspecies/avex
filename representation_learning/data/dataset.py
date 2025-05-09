@@ -103,7 +103,7 @@ def build_dataloaders(
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
-        split="valid",
+        split="train",
         preprocessor=None,  # Add any audio preprocessing here if needed
     )
     ds_val = get_dataset_dummy(
