@@ -112,11 +112,16 @@ def build_dataloaders(
         preprocessor=None,  # Add any audio preprocessing here if needed
     )
 
-    ds_test = get_dataset_dummy(
-        data_config=data_config,
-        split="test",
-        preprocessor=None,  # Add any audio preprocessing here if needed
-    )
+    # TODO (milad) This is temporary fix. The code expected get_dataset_dummy() to
+    # return None which is not a good pattern.
+    try:
+        ds_test = get_dataset_dummy(
+            data_config=data_config,
+            split="test",
+            preprocessor=None,  # Add any audio preprocessing here if needed
+        )
+    except:
+        ds_test = None
 
     # Create samplers for distributed training
     train_sampler = None
