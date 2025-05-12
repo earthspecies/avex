@@ -319,6 +319,12 @@ class EvaluateConfig(BaseModel):
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
 
+    # Whether to freeze the backbone and train only the linear probe
+    frozen: bool = Field(
+        True,
+        description="If True, do not update base model weights during linear probing.",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -337,20 +343,21 @@ class BenchmarkConfig(BaseModel):
 #  Convenience loader
 # --------------------------------------------------------------------------- #
 def load_config(
-    path: str | Path, config_type: Literal["run", "data"] = "run"
-) -> RunConfig | DatasetConfig:
+    path: str | Path,
+    config_type: Literal["run", "data", "evaluate", "benchmark"] = "run",
+) -> RunConfig | DatasetConfig | EvaluateConfig | BenchmarkConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance.
 
     Parameters
     ----------
     path : str | Path
         Path to the YAML configuration file
-    config_type : Literal["run", "data"]
+    config_type : Literal["run", "data", "evaluate", "benchmark"]
         Type of configuration to load
 
     Returns
     -------
-    RunConfig | DataConfig
+    RunConfig | DatasetConfig | EvaluateConfig | BenchmarkConfig
         Validated configuration object
 
     Raises
@@ -358,7 +365,7 @@ def load_config(
     FileNotFoundError
         If the configuration file does not exist
     NotImplementedError
-        If config_type is not "run" or "data"
+        If *config_type* is unrecognised
     """
 
     path = Path(path).expanduser()

@@ -286,12 +286,14 @@ class Trainer:
             # Save final checkpoint
             if is_main_process():
                 self._save_checkpoint(self.max_epochs, final=True)
-                if self.log:
-                    self.log.finalize()
         finally:
             # Cleanup distributed training
             if self.is_distributed:
                 cleanup_distributed()
+
+            # Finalise experiment logging once training loop & cleanup are done.
+            if is_main_process() and self.log:
+                self.log.finalize()
 
     # --------------------------- internal helpers -------------------------- #
     def _run_epoch(self, *, train: bool, epoch: int) -> Tuple[float, float]:
@@ -826,7 +828,10 @@ class FineTuneTrainer:
                 self.best_val_acc = val_acc
                 self._save_checkpoint("best.pt")
 
-        self.log.finalize()
+        train_metrics = {"loss": train_loss, "acc": train_acc}
+        val_metrics = {"loss": val_loss, "acc": val_acc}
+
+        return train_metrics, val_metrics
 
     def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
         """Run one epoch of training or validation.

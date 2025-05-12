@@ -305,14 +305,13 @@ def build_transforms(transform_configs: list[RegisteredTransforms]) -> list[Call
 class UniformSample:
     """Uniformly sample data based on a property."""
 
-    def __init__(self, config: UniformSampleConfig):
-        if config.operation != "uniform_sample":
-            raise ValueError("UniformSampleConfig.operation must be 'uniform_sample'")
+    def __init__(self, config: UniformSampleConfig) -> None:
+        # Pydantic enforcement guarantees `config.type == 'uniform_sample'`.
         if not 0 <= config.ratio <= 1:
             raise ValueError("Ratio must be in [0, 1]")
         self.cfg = config
 
-    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):
+    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):  # noqa: ANN201
         if isinstance(data, pd.DataFrame):
             return self._uniform_sample_dataframe(data)
         if isinstance(data, dict):

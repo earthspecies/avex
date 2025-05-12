@@ -111,7 +111,11 @@ class ModelBase(nn.Module):
                 else:
                     # For backward compatibility, create a padding mask of ones
                     padding_mask = torch.ones(x.size(0), x.size(1), device=x.device)
-                    self(x, padding_mask)
+                    if self.__class__.__name__ == "CLIPModel":
+                        dummy_text = ["" for _ in range(x.size(0))]
+                        self(x, dummy_text, padding_mask)
+                    else:
+                        self(x, padding_mask)
 
             # Concatenate embeddings
             if not embeddings:

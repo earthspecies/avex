@@ -93,6 +93,14 @@ def run_experiment(
     original_run_cfg.model_spec.audio_config.window_selection = "center"
     original_run_cfg.training_params = eval_cfg.training_params
 
+    # ------------------------------------------------------------------ #
+    #  Disable training-time augmentations (e.g. mixup, noise) for evaluation
+    # ------------------------------------------------------------------ #
+    if hasattr(original_run_cfg, "augmentations"):
+        original_run_cfg.augmentations = []
+    else:
+        original_run_cfg.augmentations = []
+
     # add sample rate to dataset config
     dataset_config.sample_rate = original_run_cfg.model_spec.audio_config.sample_rate
 
@@ -149,7 +157,9 @@ def run_experiment(
             )
 
         # Load checkpoint
-        base_model.load_state_dict(torch.load(ckpt_path, map_location=device))
+        base_model.load_state_dict(
+            torch.load(ckpt_path, map_location=device)["model_state_dict"]
+        )
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
     base_model.eval()
@@ -176,8 +186,17 @@ def run_experiment(
         sum(p.numel() for p in linear_probe.parameters()),
     )
 
-    # Create optimizer and trainer
-    optim = get_optimizer(linear_probe.parameters(), eval_cfg.training_params)
+    # ------------------------------------------------------------------ #
+    #  Freeze backbone if requested and build optimizer on trainable params
+    # ------------------------------------------------------------------ #
+
+    if eval_cfg.frozen:
+        logger.info("Freezing backbone parameters (eval_cfg.frozen=True)")
+        for p in base_model.parameters():
+            p.requires_grad = False
+
+    trainable_params = filter(lambda p: p.requires_grad, linear_probe.parameters())
+    optim = get_optimizer(trainable_params, eval_cfg.training_params)
 
     # Create experiment-specific logger
     exp_logger = ExperimentLogger.from_config(experiment_config)
@@ -196,14 +215,8 @@ def run_experiment(
     )
 
     # Train the linear probe
-    trainer.train(num_epochs=eval_cfg.training_params.train_epochs)
-
-    # Get final metrics
-    train_metrics = trainer._run_epoch(
-        train=True, epoch=eval_cfg.training_params.train_epochs
-    )
-    val_metrics = trainer._run_epoch(
-        train=False, epoch=eval_cfg.training_params.train_epochs
+    train_metrics, val_metrics = trainer.train(
+        num_epochs=eval_cfg.training_params.train_epochs
     )
 
     # Compute test metrics
@@ -238,11 +251,22 @@ def run_experiment(
         metric_name = metric_name.strip()
         test_metrics[metric_name] = metric.get_primary_metric()
 
+    # ------------------------------------------------------------------ #
+    #  Persist results to the ExperimentLogger backend
+    # ------------------------------------------------------------------ #
+
+    exp_logger.log_metrics(train_metrics, step=0, split="train_final")
+    exp_logger.log_metrics(val_metrics, step=0, split="val_final")
+    exp_logger.log_metrics(test_metrics, step=0, split="test")
+
+    # Flush & close backend; no further logging in this run.
+    exp_logger.finalize()
+
     return ExperimentResult(
         dataset_name=dataset_name,
         experiment_name=experiment_name,
-        train_metrics={"loss": train_metrics[0], "acc": train_metrics[1]},
-        val_metrics={"loss": val_metrics[0], "acc": val_metrics[1]},
+        train_metrics=train_metrics,
+        val_metrics=val_metrics,
         test_metrics=test_metrics,
     )
 
