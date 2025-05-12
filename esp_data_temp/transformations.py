@@ -2,56 +2,91 @@
 Data transformation utilities for filtering and subsampling datasets.
 """
 
-from abc import ABC, abstractmethod
+import logging
+from collections.abc import Callable
 from dataclasses import field as dc_field
-from typing import Any, Dict, List, Union
+from functools import partial
+from typing import Annotated, Any, Dict, List, Union
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import Literal
+
+logger = logging.Logger("esp_data")
 
 
 class FilterConfig(BaseModel):
+    type: Literal["filter"]
+    mode: Literal["include", "exclude"] = "include"
     property: str
     values: List[str]
-    operation: Literal["include", "exclude"] = "include"
 
 
 class SubsampleConfig(BaseModel):
+    type: Literal["subsample"]
     property: str
-    operation: Literal["subsample"] = "subsample"
     ratios: Dict[str, float] = dc_field(default_factory=dict)
+
+    # TODO (milad) add a validator that does below:
+    #         if not all(0 <= r <= 1 for r in config.ratios.values()):
+    # raise ValueError("All ratios must be in [0, 1]")
 
 
 class UniformSampleConfig(BaseModel):
+    type: Literal["uniform_sample"]
     property: str
-    operation: Literal["uniform_sample"] = "uniform_sample"
     ratio: float
 
 
-TransformCfg = Union[FilterConfig, SubsampleConfig, UniformSampleConfig]
+class LabelFromFeature(BaseModel):
+    type: Literal["label_from_feature"]
+    feature: str
+    num_classes: int | Literal["auto"] = "auto"
+    output_feature: str = "label"
+    override: bool = False
 
 
-class DataTransform(ABC):
-    """Base class for data transformations."""
-
-    @abstractmethod
-    def __call__(
-        self, data: Union[pd.DataFrame, Dict[str, Any]]
-    ) -> Union[pd.DataFrame, Dict[str, Any]]:
-        """Apply the transformation to the data.
-
-        Args:
-            data: The data to transform.
-
-        Returns:
-            The transformed data.
-        """
-        pass
+# TODO (this list in union should come from registry)
+# TODO do we want a base model for transforms that forces "type"?
+RegisteredTransforms = Annotated[
+    Union[FilterConfig, SubsampleConfig, LabelFromFeature, UniformSampleConfig],
+    Field(discriminator="type"),
+]
 
 
-class Filter(DataTransform):
+# TODO (milad) I kind what all these transform functions to have a simple interface so
+# maybe ban positional arguments once you've edited them all
+
+
+# TODO (milad) name too similar too config class
+# @register_transform(LabelFromFeature)
+def create_labels(
+    df: pd.DataFrame, cfg: LabelFromFeature
+) -> tuple[pd.DataFrame, dict | None]:
+    if cfg.output_feature in df and not cfg.override:
+        assert False, "TODO (milad)"
+
+    df_clean = df.dropna(subset=cfg.feature)
+    if len(df_clean) != len(df):
+        logger.warn(f"Dropped {len(df) - len(df_clean)} rows with {cfg.feature}=NaN")
+
+    uniques = sorted(df_clean[cfg.feature].unique())
+    label_mapping = {lbl: idx for idx, lbl in enumerate(uniques)}
+    df_clean[cfg.output_feature] = df_clean[cfg.feature].map(label_mapping)
+
+    # TODO (milad): hacky. Just here to make things run
+    # We should think about how transforms can add/modify dataset-wide properties
+    metadata = {
+        "label_map": label_mapping,
+        "label_feature": cfg.feature,
+        "num_classes": len(uniques) if cfg.num_classes == "auto" else cfg.num_classes,
+    }
+
+    return df_clean, metadata
+
+
+class Filter:
     """Filter data based on property values."""
 
     def __init__(self, config: FilterConfig) -> None:
@@ -66,11 +101,6 @@ class Filter(DataTransform):
         """
         self.config = config
         self.values = set(config.values)
-
-        if config.operation not in ["include", "exclude"]:
-            raise ValueError(
-                f"Operation must be 'include' or 'exclude', got {config.operation}"
-            )
 
     def __call__(
         self, data: Union[pd.DataFrame, Dict[str, Any]]
@@ -87,9 +117,9 @@ class Filter(DataTransform):
             TypeError: If the data type is not supported.
         """
         if isinstance(data, pd.DataFrame):
-            return self._filter_dataframe(data)
+            return self._filter_dataframe(data), None
         elif isinstance(data, dict):
-            return self._filter_dict(data)
+            return self._filter_dict(data), None
         else:
             raise TypeError(f"Unsupported data type: {type(data)}")
 
@@ -102,7 +132,7 @@ class Filter(DataTransform):
         Returns:
             pd.DataFrame: The filtered DataFrame.
         """
-        if self.config.operation == "include":
+        if self.config.mode == "include":
             return df[df[self.config.property].isin(self.values)]
         else:
             return df[~df[self.config.property].isin(self.values)]
@@ -116,7 +146,7 @@ class Filter(DataTransform):
         Returns:
             Dict[str, Any]: The filtered dictionary.
         """
-        if self.config.operation == "include":
+        if self.config.mode == "include":
             return {
                 k: v for k, v in data.items() if v[self.config.property] in self.values
             }
@@ -128,21 +158,10 @@ class Filter(DataTransform):
             }
 
 
-class Subsample(DataTransform):
+class Subsample:
     """Subsample data based on property ratios."""
 
-    def __init__(self, config: SubsampleConfig) -> None:
-        """
-        Initialize the subsample transform.
-
-        Args:
-            config: Subsample configuration
-
-        Raises:
-            ValueError: If the operation is not 'subsample' or ratios are not in [0, 1].
-        """
-        if config.operation != "subsample":
-            raise ValueError("SubsampleConfig.operation must be 'subsample'")
+    def __init__(self, config: SubsampleConfig):
         if not all(0 <= r <= 1 for r in config.ratios.values()):
             raise ValueError("All ratios must be in [0, 1]")
         self.cfg = config
@@ -163,9 +182,9 @@ class Subsample(DataTransform):
             TypeError: If the data type is not supported.
         """
         if isinstance(data, pd.DataFrame):
-            return self._subsample_dataframe(data)
+            return self._subsample_dataframe(data), None
         if isinstance(data, dict):
-            return self._subsample_dict(data)
+            return self._subsample_dict(data), None
         raise TypeError(f"Unsupported data type: {type(data)}")
 
     def _choose_keys(self, keys: List[Any], ratio: float) -> List[Any]:
@@ -242,7 +261,49 @@ class Subsample(DataTransform):
         return selected
 
 
-class UniformSample(DataTransform):
+def build_transforms(transform_configs: list[RegisteredTransforms]) -> list[Callable]:
+    """
+    Build the transformation pipeline from **validated** configs.
+
+    Parameters
+    ----------
+    transform_configs : list[RegisteredTransforms]
+        The `transformations` field that comes straight out of a validated
+        `DataConfig`.  No raw YAML dictionaries are accepted.
+
+    Raises
+    ------
+    TypeError
+        If the input is not a `FilterConfig` or `SubsampleConfig`.
+
+    Returns
+    -------
+    list[Callable]
+        Callable objects that can be applied in sequence.
+    """
+    transforms: list[Callable] = []
+
+    # TODO (milad) replace with a Registry pattern?
+
+    for cfg in transform_configs:
+        if isinstance(cfg, FilterConfig):
+            transforms.append(Filter(cfg))
+        elif isinstance(cfg, SubsampleConfig):
+            transforms.append(Subsample(cfg))
+        elif isinstance(cfg, LabelFromFeature):
+            transforms.append(partial(create_labels, cfg=cfg))  # TODO (milad)
+        elif isinstance(cfg, UniformSampleConfig):
+            transforms.append(UniformSample(cfg))
+        else:  # this should never happen if DataConfig was validated
+            raise TypeError(
+                "build_transforms() received an unexpected config type: "
+                f"{type(cfg).__name__}"
+            )
+
+    return transforms
+
+
+class UniformSample:
     """Uniformly sample data based on a property."""
 
     def __init__(self, config: UniformSampleConfig):
@@ -263,7 +324,7 @@ class UniformSample(DataTransform):
         """Uniformly sample a pandas DataFrame."""
         prop = self.cfg.property
         ratio = self.cfg.ratio
-        
+
         # Group by the property and sample uniformly
         groups = []
         for _, group in df.groupby(prop):
@@ -271,7 +332,7 @@ class UniformSample(DataTransform):
             rng = np.random.default_rng(seed=42)
             sampled_indices = rng.choice(len(group), size=n_samples, replace=False)
             groups.append(group.iloc[sampled_indices])
-        
+
         return pd.concat(groups, ignore_index=True)
 
     def _uniform_sample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -279,7 +340,7 @@ class UniformSample(DataTransform):
         prop = self.cfg.property
         ratio = self.cfg.ratio
         selected: Dict[str, Any] = {}
-        
+
         # Group by the property
         groups: Dict[str, List[str]] = {}
         for k, v in data.items():
@@ -287,7 +348,7 @@ class UniformSample(DataTransform):
             if val not in groups:
                 groups[val] = []
             groups[val].append(k)
-        
+
         # Sample uniformly from each group
         for keys in groups.values():
             n_samples = max(1, int(len(keys) * ratio))
@@ -295,5 +356,5 @@ class UniformSample(DataTransform):
             sampled_keys = rng.choice(keys, size=n_samples, replace=False)
             for k in sampled_keys:
                 selected[k] = data[k]
-        
+
         return selected

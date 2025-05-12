@@ -25,7 +25,7 @@ import yaml
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from esp_data_temp.dataset import DataConfig
+from esp_data_temp.dataset import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -218,20 +218,27 @@ class RunConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+
 class ExperimentConfig(BaseModel):
     """Configuration for a single experiment in evaluation."""
-    
+
     run_name: str = Field(..., description="Name of the experiment run")
     run_config: str = Field(..., description="Path to the run config YAML file")
     pretrained: bool = Field(True, description="Whether to use pretrained weights")
-    layers: str = Field(..., description="List of layer names to extract embeddings from, comma separated")
+    layers: str = Field(
+        ...,
+        description="List of layer names to extract embeddings from, comma separated",
+    )
 
     model_config = ConfigDict(extra="forbid")
+
 
 class EvaluateConfig(BaseModel):
     """Configuration for running evaluation experiments."""
 
-    experiments: List[ExperimentConfig] = Field(..., description="List of experiments to run")
+    experiments: List[ExperimentConfig] = Field(
+        ..., description="List of experiments to run"
+    )
     dataset_config: str = Field(..., description="Path to the dataset config YAML file")
     save_dir: str = Field(..., description="Directory to save evaluation results")
 
@@ -244,31 +251,35 @@ class EvaluateConfig(BaseModel):
             optimizer="adamw",
             weight_decay=0.01,
             amp=False,
-            amp_dtype="bf16"
+            amp_dtype="bf16",
         ),
-        description="Training parameters for fine-tuning during evaluation"
+        description="Training parameters for fine-tuning during evaluation",
     )
-    
+
     device: str = Field(..., description="Device to run the evaluation on")
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
 
     model_config = ConfigDict(extra="forbid")
 
+
 class BenchmarkConfig(BaseModel):
     """Configuration for the entire benchmark suite containing multiple datasets."""
-    
+
     data_path: str = Field(..., description="Base path for all benchmark datasets")
-    datasets: List[DataConfig] = Field(..., description="List of benchmark datasets to evaluate")
-    
+    datasets: List[DataConfig] = Field(
+        ..., description="List of benchmark datasets to evaluate"
+    )
+
     model_config = ConfigDict(extra="forbid")
+
 
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
 def load_config(
     path: str | Path, config_type: Literal["run", "data"] = "run"
-) -> RunConfig | DataConfig:
+) -> RunConfig | DatasetConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance.
 
     Parameters
@@ -301,7 +312,7 @@ def load_config(
     if config_type == "run":
         return RunConfig.model_validate(raw)
     elif config_type == "data":
-        return DataConfig.model_validate(raw)
+        return DatasetConfig.model_validate(raw)
     elif config_type == "evaluate":
         return EvaluateConfig.model_validate(raw)
     elif config_type == "benchmark":

@@ -1,24 +1,26 @@
----
-data_config_name: bio_base
 dataset_name: animalspeak
 dataset_version: 0.0
 balance: false
 balance_attribute: canonical_name   # balance data across via this attribute
 custom_balancing: false
 balancing_method: upsample
-label_column: canonical_name
+subset_percentage: 1.0              # <1 to consider a subset of data
 audio_max_length_seconds: 10
 multi_label: false
 
 transformations:
-  # 1. Keep only recordings from the specified sources
-  - property: source
-    values: [xeno-canto, iNaturalist, Watkins]
-    operation: include
+  - type: label_from_feature
+    feature: canonical_name
 
-  # 2. Sub‑sample each class at different rates
-  - property: class
-    operation: subsample
+  # Only keep recordings from the specified sources
+  - type: filter
+    mode: include
+    property: source
+    values: [xeno-canto, iNaturalist, Watkins]
+
+  # Sub-sample each class at different rates
+  - type: subsample
+    property: class
     ratios:
       birds: 0.20
       mammals: 0.50

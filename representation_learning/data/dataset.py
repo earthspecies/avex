@@ -8,7 +8,11 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
 
 from esp_data_temp.dataset import get_dataset_dummy
-from representation_learning.configs import RunConfig, DataConfig, load_config
+from representation_learning.configs import (
+    DatasetConfig,
+    RunConfig,
+    load_config,
+)
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
@@ -67,8 +71,8 @@ class Collater:
 
 
 def build_dataloaders(
-    cfg: RunConfig, 
-    data_config: DataConfig = None, 
+    cfg: RunConfig,
+    data_config: DatasetConfig | None = None,
     device: str = "cpu",
 ) -> Tuple[DataLoader, DataLoader]:
     """Build training and validation dataloaders from configuration.
@@ -77,7 +81,7 @@ def build_dataloaders(
     ----------
     cfg : RunConfig
         Run configuration containing dataset and training parameters
-    data_config : DataConfig
+    data_config : DatasetConfig
         Data configuration containing dataset details
     device : str
         Device to use for data loading
@@ -90,7 +94,7 @@ def build_dataloaders(
     # Set multiprocessing start method to 'spawn' for CUDA compatibility
     if device != "cpu":
         multiprocessing.set_start_method("spawn", force=True)
-        
+
     if data_config is None:
         dataset_config = cfg.dataset_config
         # Load dataset configuration
@@ -99,21 +103,26 @@ def build_dataloaders(
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
         split="train",
+        preprocessor=None,  # Add any audio preprocessing here if needed
     )
     ds_val = get_dataset_dummy(
         data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
         split="valid",
+        preprocessor=None,  # Add any audio preprocessing here if needed
     )
 
-    ds_test = get_dataset_dummy(
-        data_config=data_config,
-        preprocessor=None,  # Add any audio preprocessing here if needed
-        split="test",
-    )
-    
+    # TODO (milad) This is temporary fix. The code expected get_dataset_dummy() to
+    # return None which is not a good pattern.
+    try:
+        ds_test = get_dataset_dummy(
+            data_config=data_config,
+            split="test",
+            preprocessor=None,  # Add any audio preprocessing here if needed
+        )
+    except:
+        ds_test = None
+
     # Create samplers for distributed training
     train_sampler = None
     val_sampler = None

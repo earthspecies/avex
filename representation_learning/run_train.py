@@ -15,9 +15,7 @@ from representation_learning.configs import (  # type: ignore
     RunConfig,
     load_config,
 )
-from representation_learning.data.dataset import (  # returns (train_dl, val_dl)
-    build_dataloaders,
-)
+from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
 from representation_learning.training.distributed import init_distributed
 from representation_learning.training.optimisers import get_optimizer
@@ -35,7 +33,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         "-c",
-        type=str,
+        type=Path,
         default="configs/run_configs/clip_base.yml",
         help="Path to the config file",
     )
@@ -63,7 +61,7 @@ def main() -> None:
     torch.manual_seed(config.seed)
 
     # 2. Build the dataloaders.
-    train_dl, val_dl, _ = build_dataloaders(cfg, device=device)
+    train_dl, val_dl, _ = build_dataloaders(config, device=device)
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl),
@@ -72,7 +70,7 @@ def main() -> None:
 
     # Retrieve the number of labels from the training dataset
     # (Even if not needed for model type.)
-    num_labels = len(train_dl.dataset.label2idx)
+    num_labels = train_dl.dataset.metadata["num_classes"]
     logger.info("Number of labels: %d", num_labels)
 
     # Build the model
