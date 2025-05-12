@@ -2,7 +2,7 @@
 # Model configuration
 model_spec:
   name: efficientnetb0
-  pretrained: false
+  pretrained: true
   audio_config:
     sample_rate: 16000
     n_fft: 2048
@@ -15,15 +15,13 @@ model_spec:
     target_length_seconds: 10
     window_selection: random
 
-# Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_base.yml
 
 # How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised
 debug_mode: false
 
-# Optional waveform preprocessing step; keep as null / None if you handle it
-# inside the dataloader or model
+# audio preprocessing (e.g. event detection)
 preprocessing: null
 
 # Target sample‑rate expected by the model
@@ -31,15 +29,14 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./distnet"
-distributed: true
+output_dir: "./efficientnet_base_no_mixup"
 
 training_params:
-  train_epochs: 10
+  train_epochs: 30
   lr: 0.0001
-  batch_size: 2
-  optimizer: adamw          # common default for AudioMAE
-  weight_decay: 0.01        # mild regularisation
+  batch_size: 256
+  optimizer: adamw
+  weight_decay: 0.01
   amp: false
   amp_dtype: bf16
 
@@ -49,24 +46,43 @@ scheduler:
   warmup_steps: 1000
   min_lr: 1e-6
 
+
 augmentations:
   # Add background noise at random SNRs
   - noise:
       noise_dirs:
-        # this should be a gs path
-        - "gs://foundation-model-data/audio_16k/noise/demand_10s"
-        - "gs://foundation-model-data/audio_16k/noise/idmt"
-        - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"
-        - "gs://foundation-model-data/audio_16k/noise/urbansound"
-        - "gs://foundation-model-data/audio_16k/noise/freesound_10s"
-        - "gs://foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
-        - "gs://foundation-model-data/audio_16k/noise/deepship_10s"
-        - "gs://foundation-model-data/audio_16k/noise/shipsear_10s"
-        - "gs://foundation-model-data/audio_16k/noise/wham_noise"
-        - "gs://foundation-model-data/audio_16k/noise/audioset"
-        - "gs://foundation-model-data/audio_16k/noise/ssw-detection"
-      snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/\
+          orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+        # - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+        #   foundation-model-storage/foundation-model-data/audio_16k/noise/\
+        #   ssw-detection"
+      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
       augmentation_prob: 0.5
+    # Mixup augmentation for audio samples
+  - mixup:
+      alpha: 0.4  # Controls the Beta distribution shape
+      n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+      augmentation_prob: 0.5  # Probability of applying mixup to a batch
+
 
 # Cross entropy loss for classification
 loss_function: cross_entropy
@@ -75,7 +91,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 2
+num_workers: 12
 
 run_name: efficientnet_base
 

@@ -1,12 +1,12 @@
 """
 representation_learning.training.train
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-A compact yet full‑featured training loop that supports:
+A compact training loop that supports:
 
 * Automatic Mixed Precision (fp16 / bf16)
 * Gradient‑scaling when using fp16 AMP
 * Proper no‑grad evaluation
-* Check‑pointing of the best model
+* Check‑pointing
 * Parameter & metric logging via `ExperimentLogger`
 * Distributed training with proper synchronization
 * Learning rate scheduling with warmup
@@ -23,13 +23,13 @@ from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.nn.parallel as parallel
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import RunConfig
+from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
     is_main_process,
@@ -476,6 +476,11 @@ class Trainer:
 
         avg_loss = total_loss / total_samples if total_samples > 0 else 0
         avg_acc = total_correct / total_samples if total_samples > 0 else 0
+
+        # Print profiling summary at the end of each epoch if we're training
+        if train and is_main_process():
+            print_profiling_summary()
+
         return avg_loss, avg_acc
 
     def _forward(
@@ -548,36 +553,23 @@ class Trainer:
         target = batch["label"]
         padding_mask = batch.get("padding_mask")  # Handle optional mask
 
-        # Mixed labels from mixup augmentation if available
-        mixed_target = batch.get("mixed_labels")
-
         # Forward pass
         outputs = self.model(audio, padding_mask=padding_mask)
 
-        # Calculate loss - either with mixed labels or regular
-        if mixed_target is not None:
-            # For mixup - use soft labels (e.g., BCE or KLDiv)
-            # Assuming outputs are logits, apply log_softmax for KLDiv
-            # or keep as is for BCE
-            if isinstance(self.criterion, nn.CrossEntropyLoss):
-                log_probs = F.log_softmax(outputs, dim=1)
-                loss = F.kl_div(log_probs, mixed_target, reduction="batchmean")
-            elif isinstance(self.criterion, nn.BCEWithLogitsLoss):
-                loss = self.criterion(outputs, mixed_target)
-            else:
-                raise NotImplementedError(
-                    f"Mixup not implemented for criterion "
-                    f"{type(self.criterion).__name__}"
-                )
-        else:
-            loss = self.criterion(outputs, target)
+        loss = self.criterion(outputs, target)
 
-        # Calculate accuracy
+        # --------------------------------------------------
+        # Accuracy calculation (single- vs multi-label)
+        # --------------------------------------------------
         with torch.no_grad():
-            if mixed_target is not None:
-                _, predicted = outputs.max(1)
-                _, true_targets = mixed_target.max(1)
-                correct = (predicted == true_targets).sum().item()
+            if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
+                # Multi-label: compute exact match accuracy as all labels must
+                # match after thresholding at 0.5 (sigmoid).
+                prob = torch.sigmoid(outputs)
+                pred = (prob > 0.5).float()
+                if target.dtype != torch.float32:
+                    target = target.float()
+                correct = (pred.eq(target).all(dim=1)).sum().item()
             else:
                 _, predicted = outputs.max(1)
                 correct = (predicted == target).sum().item()
@@ -654,19 +646,9 @@ class Trainer:
     def _save_checkpoint(
         self, epoch: int, is_best: bool = False, final: bool = False
     ) -> None:
-        """Save model checkpoint.
-
-        Parameters
-        ----------
-        epoch : int
-            Current epoch
-        is_best : bool, optional
-            Whether this is the best model so far, by default False
-        final : bool, optional
-            Whether this is the final model checkpoint, by default False
-        """
+        """Save a checkpoint of the model, optimizer, and training state."""
         if not is_main_process():
-            return
+            return  # Only the main process saves checkpoints
 
         save_model = self.model_unwrapped  # Always save unwrapped model
 

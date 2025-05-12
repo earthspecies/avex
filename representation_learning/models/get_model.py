@@ -44,6 +44,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
+
     elif model_name == "clip":
         return CLIPModel(
             device=model_config.device,

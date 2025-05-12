@@ -68,6 +68,7 @@ class NoiseAugment(BaseModel):
 class MixupAugment(BaseModel):
     kind: Literal["mixup"] = "mixup"
     alpha: float = Field(..., gt=0)
+    n_mixup: int = Field(1, ge=1, description="Number of mixup pairs per batch")
     augmentation_prob: float = Field(..., ge=0, le=1)
 
     model_config = ConfigDict(extra="forbid")
@@ -173,6 +174,9 @@ class RunConfig(BaseModel):
 
     augmentations: List[Augment] = Field(default_factory=list)
     loss_function: Literal["cross_entropy", "bce", "contrastive", "clip"]
+
+    # Enable multi-label classification
+    multilabel: bool = False
 
     device: str = "cuda"
     seed: int = 42

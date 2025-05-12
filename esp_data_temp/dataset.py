@@ -1,3 +1,4 @@
+import random
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
@@ -23,8 +24,8 @@ from .transformations import (
 
 if TYPE_CHECKING:
     from cloudpathlib import CloudPath
-ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
-ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
+ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
+ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
 
 # -----------------------------------------------------------------------------
@@ -90,7 +91,9 @@ class AudioDataset:
         self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
         self.label_col = data_config.label_column
 
-        # Build a label → index mapping for numeric targets
+        # ------------------------------------------------------------------
+        # Build a label → index mapping for numeric targets (single-label only)
+        # ------------------------------------------------------------------
         unique_labels = sorted(self.metadata[self.label_col].unique())
         self.label2idx: Dict[str, int] = {lbl: i for i, lbl in enumerate(unique_labels)}
 
@@ -101,34 +104,58 @@ class AudioDataset:
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         row = self.metadata.iloc[idx]
-        path_str: str = row[self.audio_path_col]
+        path_str = row[self.audio_path_col]
 
-        # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        if path_str.startswith("gs://"):
-            if GSPath is None:
-                raise ImportError("cloudpathlib is required to handle gs:// paths.")
-            audio_path = GSPath(path_str)
-        else:
-            audio_path = Path(path_str)
+        # Resolve path (local vs. GCS)
+        audio_path = (
+            GSPath(path_str) if path_str.startswith("gs://") else Path(path_str)
+        )
 
-        # Open the audio file.
+        # ------------------------------------------------------------
+        # 1.  Peek header → samplerate & total frames   (sf.info)
+        # 2.  Choose random offset if clip > 60 s
+        # 3.  Read window with sf.read(start=…, stop=…)
+        # ------------------------------------------------------------
         with audio_path.open("rb") as f:
-            audio, sr = sf.read(f)
+            info = sf.info(f)  # lightweight header read
+            sr = info.samplerate
+            n_fr = info.frames
+
+            window_frames = min(sr * 60, n_fr)  # cap at 60 s (or full length)
+            start_fr = (
+                random.randint(0, n_fr - window_frames) if n_fr > window_frames else 0
+            )
+            stop_fr = start_fr + window_frames
+
+            f.seek(0)  # rewind after sf.info
+            audio, _ = sf.read(
+                f,
+                start=start_fr,
+                stop=stop_fr,
+                dtype="float32",  # keeps downstream dtype unchanged
+            )
+
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
+        # ------------------------------------------------------------------
+        # Handle single- vs multi-label targets
+        # ------------------------------------------------------------------
+
+        raw_label_val = row[self.label_col]
+
+        # Single-label → integer index
+        label_val: Any = self.label2idx[raw_label_val]
+
         item = {
-            "raw_wav": audio.astype(np.float32),  # Keep as NumPy array initially
-            "text_label": row[self.label_col],
-            "label": self.label2idx[row[self.label_col]],
+            "raw_wav": audio,
+            "text_label": raw_label_val,
+            "label": label_val,
             "path": str(audio_path),
             "sample_rate": sr,
         }
 
-        # ------------------------------------------------------------------
-        # Optional post-processing (augmentations etc.) supplied by caller
-        # ------------------------------------------------------------------
-        for proc in self.postprocessors:
+        for proc in self.postprocessors:  # optional caller-supplied hooks
             item = proc(item)
 
         return item
