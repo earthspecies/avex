@@ -292,7 +292,7 @@ class Subsample:
 
     def _subsample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Subsample a dictionary of data.
-    def _uniform_sample_dict(self, data: dict[str, Any]) -> dict[str, Any]:
+
         Args:
             data: The dictionary to subsample.
 
