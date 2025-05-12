@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -5,6 +6,8 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from representation_learning.data.audio_utils import AudioProcessor
+
+logger = logging.getLogger(__name__)
 
 
 class ModelBase(nn.Module):
@@ -62,3 +65,70 @@ class ModelBase(nn.Module):
                 embedding = embedding.unsqueeze(0)
             embeds.append(embedding)
         return torch.cat(embeds, axis=0)
+
+    def extract_embeddings(self, x: torch.Tensor, layers: List[str]) -> torch.Tensor:
+        """
+        Extract embeddings from specified layers of the model.
+
+        Args:
+            x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
+            layers: List of layer names to extract embeddings from
+
+        Returns
+        -------
+        torch.Tensor
+            Concatenated embeddings from the requested layers.
+
+        Raises
+        ------
+        ValueError
+            If none of the supplied *layers* are found in the model.
+        """
+        embeddings = []
+
+        def hook_fn(
+            module: nn.Module,
+            input: tuple[torch.Tensor, ...],
+            output: torch.Tensor,
+        ) -> None:
+            # Keep on GPU, just detach to prevent gradient computation
+            detached = output.detach()
+            embeddings.append(detached)  # noqa: F821
+
+        hooks = []
+        try:
+            for name, module in self.named_modules():
+                if name in layers:
+                    hooks.append(module.register_forward_hook(hook_fn))
+
+            # Forward pass
+            with torch.no_grad():
+                if isinstance(x, dict):
+                    # If input is a dictionary, extract raw_wav and padding_mask
+                    raw_wav = x["raw_wav"]
+                    padding_mask = x["padding_mask"]
+                    self(raw_wav, padding_mask)
+                else:
+                    # For backward compatibility, create a padding mask of ones
+                    padding_mask = torch.ones(x.size(0), x.size(1), device=x.device)
+                    self(x, padding_mask)
+
+            # Concatenate embeddings
+            if not embeddings:
+                raise ValueError(f"No layers found matching: {layers}")
+
+            # Process embeddings
+            result = []
+            for emb in embeddings:
+                # Flatten while keeping on GPU
+                flattened = emb.flatten(start_dim=1)
+                result.append(flattened)
+
+            return torch.cat(result, dim=1)
+
+        finally:
+            # Ensure hooks are always removed
+            for hook in hooks:
+                hook.remove()
+            # Clear any remaining references
+            del embeddings

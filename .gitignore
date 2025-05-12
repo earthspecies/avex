@@ -1,3 +1,12 @@
+# Generated data
+benchmark/
+checkpoints/
+evaluation_results/
+
+# VSCode
+.vscode/
+*.code-workspace
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -172,3 +181,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Aider AI
+.aider*

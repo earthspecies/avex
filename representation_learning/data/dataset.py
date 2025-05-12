@@ -9,7 +9,11 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
 
 from esp_data_temp.dataset import get_dataset_dummy
-from representation_learning.configs import RunConfig, load_config
+from representation_learning.configs import (
+    DatasetConfig,
+    RunConfig,
+    load_config,
+)
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
@@ -25,7 +29,7 @@ from representation_learning.data.augmentations import (
 class Collater:
     """
     Combines samples into a batch, ensuring every audio clip has the same
-    length (`audio_max_length`) by truncating or zero‑padding as needed.
+    length (`audio_max_length`) by truncating or zero-padding as needed.
     """
 
     def __init__(
@@ -88,7 +92,6 @@ class Collater:
         # ------------------------------------
         # Stack into tensors (audio + mask)
         # ------------------------------------
-
         audio_tensor = torch.stack(audios)  # [B, T] float32
         mask_tensor = torch.stack(masks)  # [B, T] bool
 
@@ -96,7 +99,6 @@ class Collater:
         if all(isinstance(lbl, (int, np.integer)) for lbl in labels):
             label_tensor = torch.tensor(labels, dtype=torch.long)
         else:
-            # Convert each label (multi-hot) to tensor and stack along batch dim
             label_tensors = [
                 torch.as_tensor(lbl, dtype=torch.float32)
                 if not isinstance(lbl, torch.Tensor)
@@ -113,12 +115,11 @@ class Collater:
         }
 
 
-# Function moved outside of build_dataloaders to make it picklable
+# --------------------------------------------------------------------------- #
+#  Data-loader helpers
+# --------------------------------------------------------------------------- #
 def worker_init_fn(worker_id: int) -> None:
-    """Initialize worker process with proper logging and seeding.
-
-    This function is called by PyTorch DataLoader workers when they start.
-    """
+    """Initialize a DataLoader worker (seeding, logging, audio-info cache)."""
     import logging
     import random
 
@@ -127,9 +128,6 @@ def worker_init_fn(worker_id: int) -> None:
 
     from representation_learning.data.augmentations import _cached_audio_info
 
-    # Get global variables from the parent process
-    # These will be automatically inherited by worker processes through globals
-    # Configure worker-specific logging
     logging.basicConfig(
         level=logging.INFO,
         format=(
@@ -137,10 +135,8 @@ def worker_init_fn(worker_id: int) -> None:
         ),
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-
     logger = logging.getLogger("worker_init")
 
-    # Access the global worker_init_data dictionary
     global _worker_init_data
     if "_worker_init_data" not in globals():
         logger.warning(
@@ -159,106 +155,124 @@ def worker_init_fn(worker_id: int) -> None:
     torch.manual_seed(worker_seed)
     logger.debug(f"Worker {worker_id} initialized with seed {worker_seed}")
 
-    # Prefetch audio info cache for noise augmentations if this is worker 0
+    # Prefetch noise-sample audio headers (worker 0 only, truncated)
     if (
         worker_id == 0
         and aug_processor is not None
         and hasattr(aug_processor, "_noise_pools")
     ):
         logger.info(f"Worker {worker_id}: Prefetching audio info for noise samples")
-
-        # Prefetch a subset of files to avoid taking too long at startup
         for _cfg_id, noise_files in aug_processor._noise_pools.items():
-            # Prefetch a maximum of 100 files per noise config to avoid startup delay
-            prefetch_count = min(50, len(noise_files))
-            for noise_path in noise_files[:prefetch_count]:
+            for noise_path in noise_files[:50]:  # limit to 50 per pool
                 try:
                     _cached_audio_info(str(noise_path))
                 except Exception as e:
                     logger.warning(f"Failed to prefetch info for {noise_path}: {e}")
-        logger.info(f"Worker {worker_id}: Prefetching complete")
 
 
-# Global variable to store data for worker initialization
-_worker_init_data = {}
+# Will be populated before DataLoader construction
+_worker_init_data: dict[str, Any] = {}
 
 
+# --------------------------------------------------------------------------- #
+#  Main builder
+# --------------------------------------------------------------------------- #
 def build_dataloaders(
-    cfg: RunConfig, device: str = "cpu"
-) -> Tuple[DataLoader, DataLoader]:
-    """Build training and validation dataloaders from configuration.
-
-    Parameters
-    ----------
-    cfg : RunConfig
-        Run configuration containing dataset and training parameters
-    device : str
-        Device to use for data loading
+    cfg: RunConfig,
+    data_config: DatasetConfig | None = None,
+    device: str = "cpu",
+) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
+    """Create train/val/(optional) test :pyclass:`torch.utils.data.DataLoader`s.
 
     Returns
     -------
-    Tuple[DataLoader, DataLoader]
-        Tuple of (train_dataloader, val_dataloader)
+    tuple[DataLoader, DataLoader, DataLoader | None]
+        ``(train_dl, val_dl, test_dl)`` where *test_dl* may be ``None`` if the
+        dataset bundle does not include a test split.
     """
-    # Set multiprocessing start method to 'spawn' for CUDA compatibility
+
+    # CUDA requires "spawn" start method; safe on CPU too
     if device != "cpu":
         multiprocessing.set_start_method("spawn", force=True)
 
-    # Load dataset configuration
-    data_config = load_config(cfg.dataset_config, config_type="data")
+    # ------------------------------------------------------------------ #
+    # Dataset configuration
+    # ------------------------------------------------------------------ #
+    if data_config is None:
+        data_config = load_config(cfg.dataset_config, config_type="data")
 
-    postprocessors = []
-    aug_processor = None
+    # ------------------------------------------------------------------ #
+    # Augmentations & post-processing
+    # ------------------------------------------------------------------ #
+    postprocessors: list[Any] = []
+    aug_processor: Optional[AugmentationProcessor] = None
     if cfg.augmentations:
-        aug_device = "cpu"  # dataloader augments on CPU
+        aug_device = "cpu"  # DataLoader workers run on CPU
         aug_processor = AugmentationProcessor(cfg.augmentations, cfg.sr, aug_device)
         postprocessors.append(make_item_postprocessor(aug_processor))
 
-    # Create dataset using the updated get_dataset_dummy
+    # ------------------------------------------------------------------ #
+    # Datasets
+    # ------------------------------------------------------------------ #
     ds_train = get_dataset_dummy(
         data_config=data_config,
+        split="train",
         preprocessor=None,
-        validation=cfg.debug_mode,
-        postprocessors=postprocessors,
+        postprocessors=postprocessors if postprocessors else None,
     )
-    ds_eval = get_dataset_dummy(
+    ds_val = get_dataset_dummy(
         data_config=data_config,
+        split="valid",
         preprocessor=None,
-        validation=True,
         postprocessors=None,
     )
+    # Test set may not exist in every dataset bundle
+    try:
+        ds_test = get_dataset_dummy(
+            data_config=data_config,
+            split="test",
+            preprocessor=None,
+        )
+    except Exception:
+        ds_test = None
 
-    # Create samplers for distributed training
-    train_sampler = None
-    val_sampler = None
+    # ------------------------------------------------------------------ #
+    # Distributed training samplers
+    # ------------------------------------------------------------------ #
+    train_sampler = val_sampler = None
     if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
         train_sampler = DistributedSampler(ds_train)
-        val_sampler = DistributedSampler(ds_eval, shuffle=False)
+        val_sampler = DistributedSampler(ds_val, shuffle=False)
 
-    # Create collater
+    # ------------------------------------------------------------------ #
+    # Collaters
+    # ------------------------------------------------------------------ #
     collate_fn_train = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
-        keep_text=(cfg.label_type == "text"),  # Keep text labels for CLIP training
+        keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=aug_processor,
     )
-
     collate_fn_eval = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
         keep_text=(cfg.label_type == "text"),
         device=device,
-        batch_aug_processor=None,  # no augmentation during evaluation
+        batch_aug_processor=None,  # no augmentation during eval
     )
 
-    # Store the data needed for worker initialization in a global variable
+    # ------------------------------------------------------------------ #
+    # Persist worker init data for deterministic seeding
+    # ------------------------------------------------------------------ #
     global _worker_init_data
     _worker_init_data = {"seed": cfg.seed, "aug_processor": aug_processor}
 
-    # Create dataloaders with optimized settings
+    # ------------------------------------------------------------------ #
+    # DataLoaders
+    # ------------------------------------------------------------------ #
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
@@ -270,11 +284,10 @@ def build_dataloaders(
         worker_init_fn=worker_init_fn,
         persistent_workers=(cfg.num_workers > 0),
         prefetch_factor=2 if cfg.num_workers > 0 else None,
-        drop_last=True,  # Slight optimization for training - drops partial batches
+        drop_last=True,
     )
-
     val_dl = DataLoader(
-        ds_eval,
+        ds_val,
         batch_size=cfg.training_params.batch_size,
         shuffle=False,
         sampler=val_sampler,
@@ -285,5 +298,16 @@ def build_dataloaders(
         persistent_workers=(cfg.num_workers > 0),
         prefetch_factor=2 if cfg.num_workers > 0 else None,
     )
+    if ds_test is not None:
+        test_dl = DataLoader(
+            ds_test,
+            batch_size=cfg.training_params.batch_size,
+            shuffle=False,
+            num_workers=cfg.num_workers,
+            collate_fn=collate_fn_eval,  # eval collater (no aug)
+            pin_memory=(device != "cpu"),
+        )
+    else:
+        test_dl = None
 
-    return train_dl, val_dl
+    return train_dl, val_dl, test_dl

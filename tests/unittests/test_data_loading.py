@@ -74,7 +74,6 @@ def create_test_config(tmp_path: Path, csv_path: Path) -> RunConfig:
         "balance_attribute": "canonical_name",
         "custom_balancing": False,
         "balancing_method": "upsample",
-        "subset_percentage": 1.0,
         "label_column": "canonical_name",
         "label_type": "supervised",
         "audio_max_length_seconds": 10,

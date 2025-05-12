@@ -383,9 +383,9 @@ class AugmentationProcessor:
                 aug_batch[i]["raw_wav"] = mixed_wav  # type: ignore[assignment]
                 aug_batch[i]["mixup_lambda"] = lam
                 aug_batch[i]["mixup_partner_idx"] = j
-                # Optionally record partner label etc.
+
                 # --------------------------------------------------------
-                # Combine *numeric* labels if present (multi-label support)
+                # Combine labels if present (multi-label support)
                 # --------------------------------------------------------
                 if "label" in aug_batch[i] and "label" in aug_batch[j]:
                     lbl_i = aug_batch[i]["label"]
@@ -410,6 +410,8 @@ class AugmentationProcessor:
                         new_lbl = torch.maximum(tensor_i, tensor_j)
                         aug_batch[i]["label"] = new_lbl
                     # Case 2: single integer label – keep original (no mixing)
+
+                # Combine text labels if present (for CLIP training)
                 if "text_label" in aug_batch[i] and "text_label" in aug_batch[j]:
                     aug_batch[i]["text_label"] = combine_text_labels(
                         aug_batch[i]["text_label"], aug_batch[j]["text_label"]

@@ -25,7 +25,7 @@ import yaml
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from esp_data_temp.dataset import DataConfig
+from esp_data_temp.dataset import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -176,7 +176,9 @@ class RunConfig(BaseModel):
     loss_function: Literal["cross_entropy", "bce", "contrastive", "clip"]
 
     # Enable multi-label classification
-    multilabel: bool = False
+    multilabel: bool = Field(
+        False, description="Whether to use multi-label classification"
+    )
 
     device: str = "cuda"
     seed: int = 42
@@ -198,7 +200,14 @@ class RunConfig(BaseModel):
 
         YAML allows:
             - noise: {noise_dirs: [...], snr_db_range: [-5, 20], augmentation_prob: 0.5}
-        This turns into {kind:"noise", noise_dirs: [...], ...} so the discriminated
+
+        But we need:
+            - kind: noise
+              noise_dirs: [...]
+              snr_db_range: [-5, 20]
+              augmentation_prob: 0.5
+
+        This transformer ensures both styles work, which means the Pydantic
         union resolves correctly.
 
         Returns
@@ -220,17 +229,116 @@ class RunConfig(BaseModel):
                 processed.append(item)
         return processed
 
+    # ------------------------------
+    # validator for multilabel and loss_function
+    # ------------------------------
+    @field_validator("loss_function")
+    @classmethod
+    def validate_loss_function(cls, v: str, info: Any) -> str:  # noqa: ANN401
+        """Ensure the chosen loss is compatible with other config fields.
+
+        Returns
+        -------
+        str
+            The validated loss-function name.
+
+        Raises
+        ------
+        ValueError
+            If `multilabel` is ``True`` but the loss is not *BCE*, or when a
+            contrastive/CLIP loss is requested for a non-text label type.
+        """
+        data = info.data
+
+        # Check if multilabel is True but loss function isn't BCE
+        if data.get("multilabel", False) and v != "bce":
+            raise ValueError(
+                f"When multilabel=True, loss_function must be 'bce' (got '{v}' instead)"
+            )
+
+        # Check if loss is clip/contrastive but label_type isn't text
+        if v in ("clip", "contrastive") and data.get("label_type") != "text":
+            raise ValueError(
+                f"Loss function '{v}' requires label_type='text' "
+                f"(got '{data.get('label_type')}' instead)"
+            )
+
+        return v
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ExperimentConfig(BaseModel):
+    """Configuration for a single experiment in evaluation."""
+
+    run_name: str = Field(..., description="Name of the experiment run")
+    run_config: str = Field(..., description="Path to the run config YAML file")
+    pretrained: bool = Field(True, description="Whether to use pretrained weights")
+    layers: str = Field(
+        ...,
+        description="List of layer names to extract embeddings from, comma separated",
+    )
+
+    # Optional path to a trained model checkpoint (ignored when `pretrained=True`)
+    checkpoint_path: Optional[str] = Field(
+        None,
+        description=(
+            "Path to the model checkpoint to load when `pretrained` is false. "
+            "If not provided, defaults to 'checkpoints/best.pt' relative to the "
+            "current working directory."
+        ),
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class EvaluateConfig(BaseModel):
+    """Configuration for running evaluation experiments."""
+
+    experiments: List[ExperimentConfig] = Field(
+        ..., description="List of experiments to run"
+    )
+    dataset_config: str = Field(..., description="Path to the dataset config YAML file")
+    save_dir: str = Field(..., description="Directory to save evaluation results")
+
+    # Fine-tuning parameters for linear probing
+    training_params: TrainingParams = Field(
+        default_factory=lambda: TrainingParams(
+            train_epochs=10,
+            lr=0.0001,
+            batch_size=2,
+            optimizer="adamw",
+            weight_decay=0.01,
+            amp=False,
+            amp_dtype="bf16",
+        ),
+        description="Training parameters for fine-tuning during evaluation",
+    )
+
+    device: str = Field(..., description="Device to run the evaluation on")
+    seed: int = Field(..., description="Random seed for reproducibility")
+    num_workers: int = Field(..., description="Number of workers for evaluation")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class BenchmarkConfig(BaseModel):
+    """Configuration for the entire benchmark suite containing multiple datasets."""
+
+    data_path: str = Field(..., description="Base path for all benchmark datasets")
+    datasets: List[DatasetConfig] = Field(
+        ..., description="List of benchmark datasets to evaluate"
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
-
-
 def load_config(
     path: str | Path, config_type: Literal["run", "data"] = "run"
-) -> RunConfig | DataConfig:
+) -> RunConfig | DatasetConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance.
 
     Parameters
@@ -263,6 +371,10 @@ def load_config(
     if config_type == "run":
         return RunConfig.model_validate(raw)
     elif config_type == "data":
-        return DataConfig.model_validate(raw)
+        return DatasetConfig.model_validate(raw)
+    elif config_type == "evaluate":
+        return EvaluateConfig.model_validate(raw)
+    elif config_type == "benchmark":
+        return BenchmarkConfig.model_validate(raw)
     else:
         raise NotImplementedError("Can only load from run config or data config.")

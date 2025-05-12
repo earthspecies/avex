@@ -28,7 +28,7 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from representation_learning.configs import RunConfig
+from representation_learning.configs import EvaluateConfig, RunConfig
 from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
@@ -760,3 +760,140 @@ class Trainer:
             f"Resuming training from epoch {self.start_epoch} with best validation "
             f"accuracy {self.best_val_acc:.4f}"
         )
+
+
+class FineTuneTrainer:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        device: torch.device,
+        cfg: EvaluateConfig,
+        exp_logger: ExperimentLogger,
+        multi_label: bool = False,
+    ) -> None:
+        self.model = model
+        self.optimizer = optimizer
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.device = device
+        self.cfg = cfg
+        self.log = exp_logger
+        self.multi_label = multi_label
+
+        # Set up loss function
+        if self.multi_label:
+            self.criterion = torch.nn.BCEWithLogitsLoss()
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss()
+
+        # Log static hyper-parameters
+        self.log.log_params(
+            {
+                "epochs": cfg.training_params.train_epochs,
+                "lr": cfg.training_params.lr,
+                "batch_size": cfg.training_params.batch_size,
+                "loss_fn": "bce_with_logits" if self.multi_label else "cross_entropy",
+            }
+        )
+
+        self.best_val_acc = 0.0
+
+    def train(self, num_epochs: int) -> None:
+        """Run the full training loop for the configured number of epochs."""
+        for epoch in range(1, num_epochs + 1):
+            train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
+            val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
+
+            logger.info(
+                f"[Epoch {epoch:03d}] "
+                f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
+                f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+            )
+
+            # Log epoch-level metrics
+            self.log.log_metrics(
+                {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
+            )
+            self.log.log_metrics(
+                {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
+            )
+
+            # Save best model
+            if val_acc > self.best_val_acc:
+                self.best_val_acc = val_acc
+                self._save_checkpoint("best.pt")
+
+        self.log.finalize()
+
+    def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
+        """Run one epoch of training or validation.
+
+        Parameters
+        ----------
+        train : bool
+            If ``True`` performs a training step; otherwise runs evaluation.
+        epoch : int
+            Current epoch number (1-indexed).
+
+        Returns
+        -------
+        tuple[float, float]
+            A tuple ``(loss, accuracy)`` computed over the entire epoch.
+        """
+        loader = self.train_loader if train else self.val_loader
+
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        for batch in tqdm(
+            loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
+        ):
+            x = batch["raw_wav"].to(self.device)
+            mask = batch.get("padding_mask")
+            if mask is not None:
+                mask = mask.to(self.device)
+            y = batch["label"].to(self.device)
+
+            # Forward pass
+            logits = (
+                self.model(x, padding_mask=mask) if mask is not None else self.model(x)
+            )
+            loss = self.criterion(logits, y)
+
+            # Backward pass if training
+            if train:
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+            # Calculate accuracy
+            if self.multi_label:
+                pred = (torch.sigmoid(logits) > 0.5).float()
+                correct = (pred == y).all(dim=1).sum().item()
+            else:
+                pred = logits.argmax(dim=1)
+                correct = (pred == y).sum().item()
+
+            # Update metrics
+            total_loss += loss.item() * y.size(0)
+            total_correct += correct
+            total_samples += y.size(0)
+
+        return total_loss / total_samples, total_correct / total_samples
+
+    def _save_checkpoint(self, name: str) -> None:
+        """Save model checkpoint."""
+        ckpt_path = Path(self.cfg.save_dir) / name
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "best_val_acc": self.best_val_acc,
+            },
+            ckpt_path,
+        )
+        logger.info("Saved checkpoint → %s", ckpt_path)

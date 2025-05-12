@@ -1,0 +1,36 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark_base.yml
+
+training_params:
+  train_epochs: 2  # Reduced from 10 for quick testing
+  lr: 0.0001
+  batch_size: 8
+  optimizer: adamw          # common default for AudioMAE
+  weight_decay: 0.01        # mild regularisation
+  amp: false
+  amp_dtype: bf16
+
+
+# Which experiments to evaluate
+experiments:
+  # - run_name: efficientnet_base
+  #   run_config: configs/run_configs/efficientnet_base.yml
+  #   ### which layers to probe for embeddings
+  #   layers: last_layer
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: true
+  - run_name: clap
+    run_config: configs/run_configs/clip_base.yml
+    ### which layers to probe for embeddings
+    layers: last_layer
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    checkpoint_path: clip_baseline/checkpoints/checkpoint_epoch_059.pt
+# Where to save the evaluation results
+save_dir: evaluation_results
+
+device: cpu
+
+seed: 42
+
+num_workers: 0  # Enable workers for better memory management
