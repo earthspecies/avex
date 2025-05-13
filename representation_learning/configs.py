@@ -173,7 +173,14 @@ class RunConfig(BaseModel):
     )
 
     augmentations: List[Augment] = Field(default_factory=list)
-    loss_function: Literal["cross_entropy", "bce", "contrastive", "clip"]
+    # Allow common aliases for BCE to avoid validation errors in older configs
+    loss_function: Literal[
+        "cross_entropy",
+        "bce",
+        "binary_cross_entropy",
+        "contrastive",
+        "clip",
+    ]
 
     # Enable multi-label classification
     multilabel: bool = Field(
@@ -249,6 +256,10 @@ class RunConfig(BaseModel):
             contrastive/CLIP loss is requested for a non-text label type.
         """
         data = info.data
+
+        # Map alias to canonical form first
+        if v == "binary_cross_entropy":
+            v = "bce"
 
         # Check if multilabel is True but loss function isn't BCE
         if data.get("multilabel", False) and v != "bce":

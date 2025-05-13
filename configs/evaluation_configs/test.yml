@@ -2,9 +2,9 @@
 dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 4  # Reduced from 10 for quick testing
+  train_epochs: 20
   lr: 0.0001
-  batch_size: 8
+  batch_size: 32
   optimizer: adamw          # common default for AudioMAE
   weight_decay: 0.01        # mild regularisation
   amp: false
@@ -13,19 +13,20 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  # - run_name: efficientnet_base
-  #   run_config: configs/run_configs/efficientnet_base.yml
+  - run_name: efficientnet_base
+    run_config: configs/run_configs/efficientnet_base.yml
+    ### which layers to probe for embeddings
+    layers: features
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: true
+    checkpoint_path: runs/efficientnet_base_no_mixup/checkpoints/checkpoint_epoch_024.pt
+  # - run_name: clap
+  #   run_config: configs/run_configs/clip_base.yml
   #   ### which layers to probe for embeddings
-  #   layers: last_layer
+  #   layers: audio_projection
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   pretrained: true
-  - run_name: clap
-    run_config: configs/run_configs/clip_base.yml
-    ### which layers to probe for embeddings
-    layers: audio_projection
-    ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: false
-    checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
+  #   checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
 # Where to save the evaluation results
 save_dir: evaluation_results
 
@@ -36,4 +37,4 @@ seed: 42
 num_workers: 0  # Enable workers for better memory management
 
 # Whether to freeze the backbone (train only the linear probe)
-frozen: true
+frozen: false

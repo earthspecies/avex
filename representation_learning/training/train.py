@@ -558,6 +558,14 @@ class Trainer:
         # Forward pass
         outputs = self.model(audio, padding_mask=padding_mask)
 
+        # If we're in multi-label mode but the dataset still returns integer
+        # class indices, convert them to one-hot vectors so the BCE loss has
+        # matching dimensions.
+        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss) and target.dim() == 1:
+            target = torch.nn.functional.one_hot(
+                target, num_classes=outputs.size(1)
+            ).float()
+
         loss = self.criterion(outputs, target)
 
         # --------------------------------------------------
@@ -595,17 +603,10 @@ class Trainer:
         text = batch["text_label"]
         padding_mask = batch.get("padding_mask")
 
-        # Ensure model has temperature attribute if needed by loss
-        logit_scale = 1.0  # Default
-        model_to_check = self.model_unwrapped
-        if isinstance(self.criterion, ClipLoss) and hasattr(
-            model_to_check, "temperature"
-        ):
-            logit_scale = 1.0 / model_to_check.temperature
-
-        audio_emb, text_emb = self.model(
+        # Forward pass through CLIPModel – now returns embeddings *and* logit scale
+        audio_emb, text_emb, logit_scale = self.model(
             audio, text=text, padding_mask=padding_mask
-        )  # Pass text explicitly if model expects it
+        )
 
         # Get loss and logits from criterion
         if isinstance(self.criterion, ClipLoss):
@@ -677,9 +678,16 @@ class Trainer:
         else:
             return  # Don't save if not periodic, best, or final
 
-        model_path = self.model_dir / filename
-        torch.save(checkpoint, model_path)
-        logger.info(f"Saved checkpoint to {model_path}")
+        # Save inside the experiment-specific folder to avoid collisions across
+        # datasets / experiments that share the same EvaluateConfig.save_dir
+        if self.log is not None and hasattr(self.log, "log_dir"):
+            ckpt_dir = Path(self.log.log_dir)
+        else:
+            ckpt_dir = Path(self.model_dir)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = ckpt_dir / filename
+        torch.save(checkpoint, ckpt_path)
+        logger.info(f"Saved checkpoint to {ckpt_path}")
 
     def _load_checkpoint(self, checkpoint_path: str) -> None:
         """Load model, optimizer, scheduler, and scaler state from a checkpoint.
@@ -892,7 +900,14 @@ class FineTuneTrainer:
 
     def _save_checkpoint(self, name: str) -> None:
         """Save model checkpoint."""
-        ckpt_path = Path(self.cfg.save_dir) / name
+        # Save inside the experiment-specific folder to avoid collisions across
+        # datasets / experiments that share the same EvaluateConfig.save_dir
+        if self.log is not None and hasattr(self.log, "log_dir"):
+            ckpt_dir = Path(self.log.log_dir)
+        else:
+            ckpt_dir = Path(self.cfg.save_dir)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = ckpt_dir / name
         torch.save(
             {
                 "model_state_dict": self.model.state_dict(),

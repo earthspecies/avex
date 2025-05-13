@@ -91,9 +91,8 @@ class ModelBase(nn.Module):
             input: tuple[torch.Tensor, ...],
             output: torch.Tensor,
         ) -> None:
-            # Keep on GPU, just detach to prevent gradient computation
-            detached = output.detach()
-            embeddings.append(detached)  # noqa: F821
+            # Capture the tensor without detaching so gradients can propagate
+            embeddings.append(output)  # noqa: F821
 
         hooks = []
         try:
@@ -101,21 +100,20 @@ class ModelBase(nn.Module):
                 if name in layers:
                     hooks.append(module.register_forward_hook(hook_fn))
 
-            # Forward pass
-            with torch.no_grad():
-                if isinstance(x, dict):
-                    # If input is a dictionary, extract raw_wav and padding_mask
-                    raw_wav = x["raw_wav"]
-                    padding_mask = x["padding_mask"]
-                    self(raw_wav, padding_mask)
+            # Forward pass (no torch.no_grad to allow fine-tuning when requested)
+            if isinstance(x, dict):
+                # If input is a dictionary, extract raw_wav and padding_mask
+                raw_wav = x["raw_wav"]
+                padding_mask = x["padding_mask"]
+                self(raw_wav, padding_mask)
+            else:
+                # For backward compatibility, create a padding mask of ones
+                padding_mask = torch.ones(x.size(0), x.size(1), device=x.device)
+                if self.__class__.__name__ == "CLIPModel":
+                    dummy_text = ["" for _ in range(x.size(0))]
+                    self(x, dummy_text, padding_mask)
                 else:
-                    # For backward compatibility, create a padding mask of ones
-                    padding_mask = torch.ones(x.size(0), x.size(1), device=x.device)
-                    if self.__class__.__name__ == "CLIPModel":
-                        dummy_text = ["" for _ in range(x.size(0))]
-                        self(x, dummy_text, padding_mask)
-                    else:
-                        self(x, padding_mask)
+                    self(x, padding_mask)
 
             # Concatenate embeddings
             if not embeddings:

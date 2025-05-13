@@ -162,7 +162,7 @@ def run_experiment(
         )
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
-    base_model.eval()
+    base_model.eval()  # TODO: is this right?
     logger.info(
         "Model → %s parameters", sum(p.numel() for p in base_model.parameters())
     )

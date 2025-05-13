@@ -85,7 +85,7 @@ augmentations:
 
 
 # Cross entropy loss for classification
-loss_function: cross_entropy
+loss_function: binary_cross_entropy
 
 device: cuda
 

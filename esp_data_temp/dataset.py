@@ -151,13 +151,20 @@ class AudioDataset:
             )
             stop_fr = start_fr + window_frames
 
-            f.seek(0)  # rewind after sf.info
-            audio, _ = sf.read(
-                f,
-                start=start_fr,
-                stop=stop_fr,
-                dtype="float32",
-            )
+            try:
+
+                f.seek(0)  # rewind after sf.info
+                audio, _ = sf.read(
+                    f,
+                    start=start_fr,
+                    stop=stop_fr,
+                    dtype="float32",
+                )
+            except Exception as e:
+                audio, _ = sf.read(
+                    f,
+                    dtype="float32",
+                )
 
         # Convert stereo → mono
         if audio.ndim == 2:
