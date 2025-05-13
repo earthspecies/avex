@@ -1,13 +1,15 @@
 import os
-from abc import ABC, abstractmethod
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, Literal, Optional, Self
+from typing import Any, Dict, Iterator, Optional, Self, Literal
+from abc import ABC, abstractmethod
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+import semver
 
 import cloudpathlib
-import librosa
+import librosa  
 import numpy as np
 import pandas as pd
 import soundfile as sf
@@ -183,6 +185,7 @@ def _get_dataset_from_name(
 
 def get_dataset_dummy(
     data_config: DatasetConfig,
+    split: str,
     preprocessor: Optional[Callable] = None,
 ) -> AudioDataset:
     """
@@ -194,7 +197,11 @@ def get_dataset_dummy(
 
     Parameters
     ----------
-    data_config : DataConfigIt's like you need to create hidden file names while working on your features and then merge them.
+    data_config : DataConfig
+        Configuration for the dataset
+    preprocessor : Optional[Callable]
+        Optional preprocessor function
+    split : bool
         Whether to split the dataset
 
     Returns
@@ -203,25 +210,6 @@ def get_dataset_dummy(
         An instance of the dataset with the specified transformations applied.
     """
 
-        path_str: str = row[self.audio_path_col]
-
-        # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        if path_str.startswith("gs://"):
-            if GSPath is None:
-                raise ImportError("cloudpathlib is required to handle gs:// paths.")
-            audio_path = GSPath(path_str)
-        else:
-            audio_path = Path(path_str)
-
-        # Open the audio file. Using the .open('rb') method works for both local and
-        # GSPath objects.
-        with audio_path.open("rb") as f:
-            audio, sr = sf.read(f)
-        if audio.ndim == 2:  # stereo → mono
-            audio = audio.mean(axis=1)
-
-        if "sample_rate" in self.data_config and sr != self.data_config.sample_rate:
-            resampler = libros
     # Check if the dataset CSV path is a gs:// path
     df = _get_dataset_from_name(data_config.dataset_name, split)
 
@@ -247,115 +235,6 @@ def get_dataset_dummy(
 #######################################################################################
 # ANYTHING BELLOW IS A WIP FOR DATASET ABSTRACTION
 #######################################################################################
-
-class Dataset(ABC):
-    """Abstract base class defining the interface for ESP datasets.
-    Any new dataset should inherit from this class to be added to the registry
-    of available ESP datasets.
-
-    Attributes
-    ----------
-    info : DatasetInfo
-        Required attribute containing metadata about the dataset.
-        Must be defined by all implementing classes.
-
-    Methods
-    -------
-    load(split: Literal["train", "validation"]) -> pd.DataFrame
-        Required method to load a specific split of the dataset.
-    __len__() -> int
-        Required method to return the number of samples in the dataset.
-    __iter__() -> Iterator[Dict[str, Any]]
-        Required method to iterate over the samples in the dataset.
-    __getitem__(idx: int) -> Dict[str, Any]
-        Required method to get a specific sample from the dataset.
-    """
-
-    @property
-    @abstractmethod
-    def data(self) -> pd.DataFrame:
-        """Dataframe containing the dataset.
-
-        Returns
-        -------
-        panda.DataFrame
-            Dataframe containing the dataset. Transformations are applied if passed to the class.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def info(self) -> DatasetInfo:
-        """Dataset metadata and configuration.
-
-        Returns
-        -------
-        DatasetInfo
-            Object containing dataset metadata like name, version, paths, etc.
-        """
-        pass
-
-    @abstractmethod
-    def load(
-        self,
-        split: List[str]
-    ) -> Dict[str, pd.DataFrame]:
-        """Load one or more splits of the dataset.
-
-        Parameters
-        ----------
-        split : List[str]
-            Which split(s) of the dataset to load.
-
-        Returns
-        -------
-        Dict[str, pd.DataFrame]
-            Dictionary mapping split names to their corresponding pandas DataFrames.
-        """
-        pass
-
-    @abstractmethod
-    def __len__(self) -> int:
-        """Return the total number of samples in the dataset.
-
-        Returns
-        -------
-        int
-            Number of samples in the dataset
-        """
-        pass
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[Dict[str, Any]]:
-        """Get the iterator over the dataset.
-
-        Returns
-        -------
-        Iterator[Dict[str, Any]]
-            Iterator over samples in the dataset
-        """
-        pass
-
-    @abstractmethod
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
-        """Get a specific sample from the dataset.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the sample to get
-
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary containing the sample data
-
-        Raises
-        ------
-        IndexError
-            If the index is out of bounds
-        """
-        pass
 
 class DatasetInfo(BaseModel):
     """A Pydantic base model for a registered ESP dataset. All datasets
@@ -509,3 +388,112 @@ class DatasetInfo(BaseModel):
                             (MAJOR.MINOR.PATCH).
                     Error: {str(e)}. See https://semver.org/ for details.""") from e
         return v
+
+class Dataset(ABC):
+    """Abstract base class defining the interface for ESP datasets.
+    Any new dataset should inherit from this class to be added to the registry
+    of available ESP datasets.
+
+    Attributes
+    ----------
+    info : DatasetInfo
+        Required attribute containing metadata about the dataset.
+        Must be defined by all implementing classes.
+
+    Methods
+    -------
+    load(split: Literal["train", "validation"]) -> pd.DataFrame
+        Required method to load a specific split of the dataset.
+    __len__() -> int
+        Required method to return the number of samples in the dataset.
+    __iter__() -> Iterator[Dict[str, Any]]
+        Required method to iterate over the samples in the dataset.
+    __getitem__(idx: int) -> Dict[str, Any]
+        Required method to get a specific sample from the dataset.
+    """
+
+    @property
+    @abstractmethod
+    def data(self) -> pd.DataFrame:
+        """Dataframe containing the dataset.
+        
+        Returns
+        -------
+        panda.DataFrame
+            Dataframe containing the dataset. Transformations are applied if passed to the class. 
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def info(self) -> DatasetInfo:
+        """Dataset metadata and configuration.
+        
+        Returns
+        -------
+        DatasetInfo
+            Object containing dataset metadata like name, version, paths, etc.
+        """
+        pass
+
+    @abstractmethod
+    def load(
+        self,
+        split: str
+    ) -> pd.DataFrame:
+        """Load one or more splits of the dataset.
+        
+        Parameters
+        ----------
+        split : str
+            Which split of the dataset to load.
+
+        Returns
+        -------
+        pd.DataFrame
+            Dictionary mapping split names to their corresponding pandas DataFrames.
+        """
+        pass
+
+    @abstractmethod
+    def __len__(self) -> int:
+        """Return the total number of samples in the dataset.
+        
+        Returns
+        -------
+        int
+            Number of samples in the dataset
+        """
+        pass
+
+    @abstractmethod
+    def __iter__(self) -> Iterator[Dict[str, Any]]:
+        """Get the iterator over the dataset.
+        
+        Returns
+        -------
+        Iterator[Dict[str, Any]]
+            Iterator over samples in the dataset
+        """
+        pass
+
+    @abstractmethod
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        """Get a specific sample from the dataset.
+        
+        Parameters
+        ----------
+        idx : int
+            Index of the sample to get
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing the sample data
+        
+        Raises
+        ------
+        IndexError
+            If the index is out of bounds
+        """
+        pass

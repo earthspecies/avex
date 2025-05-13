@@ -2,12 +2,12 @@ from typing import Any
 
 from pydantic import BaseModel, field_validator
 
-from .transformations import RegisteredTransforms
+from .transformations import RegisteredTransformConfigs
 
 
 class DatasetConfig(BaseModel):
     dataset_name: str
-    transformations: list[RegisteredTransforms] | None = None  # <- changed
+    transformations: list[RegisteredTransformConfigs] | None = None
 
     # TODO (milad) Commented out until find a reason to enable
     #              dc_field -> from dataclasses import field as dc_field

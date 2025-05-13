@@ -62,12 +62,14 @@ python_files = [
 [tool.ruff]
 line-length = 88
 indent-width = 4
+extend-exclude = ["tests"]
 
 [tool.ruff.lint]
 # List of plugins and Rules
 # Pycodestyle all errors and warning, Pydoclint, Pyflakes, bugbear, annotations
 select = ["E4", "E7", "E9", "F"] # Default rules
 extend-select = ["DOC", "B9", "B", "E", "W", "ANN"]
+
 fixable = ["ALL"]
 unfixable = []
 preview = true
