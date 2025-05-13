@@ -24,10 +24,12 @@ class TransformModel(BaseModel):
     Base class for all transform configurations.
 
     All transform configurations should inherit from this class and define a unique
-    `type` attribute. This class does the registration of subclasses in the
-    `_TRANSFORM_REGISTRY` dictionary. The `RegisteredTransformConfigs` class variable is
-    a union of all registered transform types, allowing for easy validation and type
-    checking. The `type` attribute is used as a discriminator for the union type.
+    `type` attribute. The `type` attribute can be anything (although it makes sense to
+    choose a descriptive name) as long as it's unique. This base class does the
+    registration of subclasses in the `_TRANSFORM_REGISTRY` dictionary and checks that
+    it is unique. It also generates `RegisteredTransformConfigs` type alias which is a
+    union of all registered transform types, allowing for easy validation and type
+    checking.
     """
 
     # TODO (milad) I wonder if this can be done with a simple decorator. Decorators are
