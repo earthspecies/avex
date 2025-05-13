@@ -51,6 +51,12 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     """
     Training entry point.
+
+    Raises
+    ------
+    AttributeError
+        If the number of classes cannot be inferred from the dataset (neither
+        ``metadata['num_classes']`` nor ``label2idx`` are available).
     """
     args = _parse_args()
     config_path = args.config
@@ -97,9 +103,24 @@ def main() -> None:
                     )  # Prefetch a subset
                     print_cache_stats()  # Print cache stats after prefetching
 
-    # Retrieve the number of labels from the training dataset
-    # (Even if not needed for model type.)
-    num_labels = len(train_dl.dataset.label2idx)
+    # Retrieve the number of labels from the training dataset. Prefer a value
+    # declared in `metadata` (set by declarative transformations) but fall back
+    # to the size of `label2idx` when that key is missing. This keeps the
+    # pipeline compatible with older `esp_data_temp` datasets that don't always
+    # populate `num_classes`.
+
+    if (
+        hasattr(train_dl.dataset, "metadata")
+        and isinstance(train_dl.dataset.metadata, dict)
+        and "num_classes" in train_dl.dataset.metadata
+    ):
+        num_labels = train_dl.dataset.metadata["num_classes"]
+    elif hasattr(train_dl.dataset, "label2idx"):
+        num_labels = len(train_dl.dataset.label2idx)
+    else:
+        raise AttributeError(
+            "Unable to determine number of classes from the training dataset."
+        )
     logger.info("Number of labels: %d", num_labels)
 
     # Build the model

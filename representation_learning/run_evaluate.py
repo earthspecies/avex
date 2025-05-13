@@ -80,6 +80,10 @@ def run_experiment(
     FileNotFoundError
         If a required checkpoint cannot be found when `pretrained` is False and
         no valid `checkpoint_path` is supplied in the experiment configuration.
+
+    ModuleNotFoundError
+        If a GCS checkpoint path is provided but `cloudpathlib` is not
+        installed on the system.
     """
     dataset_name = dataset_config.dataset_name
     experiment_name = experiment_config.run_name
@@ -142,13 +146,30 @@ def run_experiment(
 
     # If pretrained=True, we don't need to load a checkpoint
     if not experiment_config.pretrained:
-        # Determine the checkpoint path: prefer the one specified in the experiment
-        # config, otherwise fall back to the default location.
+        # Determine the checkpoint path (local or gs://). Prefer the one
+        # specified in the experiment config, otherwise fall back to a default
+        # location under ./checkpoints.
         if getattr(experiment_config, "checkpoint_path", None):
-            ckpt_path = Path(experiment_config.checkpoint_path).expanduser()
+            path_str: str = experiment_config.checkpoint_path  # type: ignore[attr-defined]
+            if path_str.startswith("gs://"):
+                try:
+                    from cloudpathlib import (
+                        GSPath,  # Runtime import to avoid hard dep
+                    )
+
+                    ckpt_path: Path | GSPath = GSPath(path_str)
+                except ModuleNotFoundError as e:
+                    raise ModuleNotFoundError(
+                        "cloudpathlib is required to load checkpoints from "
+                        "Google Cloud Storage URIs. Install via 'pip install "
+                        "cloudpathlib' before running evaluation."
+                    ) from e
+            else:
+                ckpt_path = Path(path_str).expanduser()
         else:
             ckpt_path = Path("checkpoints") / "best.pt"
 
+        # Verify existence
         if not ckpt_path.exists():
             raise FileNotFoundError(
                 f"No checkpoint found at {ckpt_path}. "
@@ -156,10 +177,11 @@ def run_experiment(
                 "checkpoint lives elsewhere ."
             )
 
-        # Load checkpoint
-        base_model.load_state_dict(
-            torch.load(ckpt_path, map_location=device)["model_state_dict"]
-        )
+        # Load checkpoint (works for local & GSPath since both expose .open())
+        with ckpt_path.open("rb") as f:
+            state = torch.load(f, map_location=device)
+
+        base_model.load_state_dict(state["model_state_dict"], strict=False)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
     base_model.eval()  # TODO: is this right?
