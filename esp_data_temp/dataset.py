@@ -129,7 +129,9 @@ class AudioDataset:
 
         return {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label"],  # TODO (milad) we assume supervisor, fix
+            # TODO (Milad) this is a temporary hack. We're assuming that (1) there's a label_from_feature
+            # transform defined and that (2) output_feature is called "label"
+            "text_label": row[self.metadata.get("label_feature")],
             "label": row.label,
             "path": str(audio_path),
         }
