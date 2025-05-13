@@ -1,10 +1,10 @@
 import os
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Self, Literal
-from abc import ABC, abstractmethod
+from typing import Any, Dict, Iterator, Literal, Optional, Self
 
 import cloudpathlib
 import librosa
@@ -194,7 +194,7 @@ def get_dataset_dummy(
 
     Parameters
     ----------
-    data_config : DataConfigIt's like you need to create hidden file names while working on your features and then merge them. 
+    data_config : DataConfigIt's like you need to create hidden file names while working on your features and then merge them.
         Whether to split the dataset
 
     Returns
@@ -275,11 +275,11 @@ class Dataset(ABC):
     @abstractmethod
     def data(self) -> pd.DataFrame:
         """Dataframe containing the dataset.
-        
+
         Returns
         -------
         panda.DataFrame
-            Dataframe containing the dataset. Transformations are applied if passed to the class. 
+            Dataframe containing the dataset. Transformations are applied if passed to the class.
         """
         pass
 
@@ -287,7 +287,7 @@ class Dataset(ABC):
     @abstractmethod
     def info(self) -> DatasetInfo:
         """Dataset metadata and configuration.
-        
+
         Returns
         -------
         DatasetInfo
@@ -301,7 +301,7 @@ class Dataset(ABC):
         split: List[str]
     ) -> Dict[str, pd.DataFrame]:
         """Load one or more splits of the dataset.
-        
+
         Parameters
         ----------
         split : List[str]
@@ -317,7 +317,7 @@ class Dataset(ABC):
     @abstractmethod
     def __len__(self) -> int:
         """Return the total number of samples in the dataset.
-        
+
         Returns
         -------
         int
@@ -328,7 +328,7 @@ class Dataset(ABC):
     @abstractmethod
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Get the iterator over the dataset.
-        
+
         Returns
         -------
         Iterator[Dict[str, Any]]
@@ -339,7 +339,7 @@ class Dataset(ABC):
     @abstractmethod
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """Get a specific sample from the dataset.
-        
+
         Parameters
         ----------
         idx : int
@@ -349,7 +349,7 @@ class Dataset(ABC):
         -------
         Dict[str, Any]
             Dictionary containing the sample data
-        
+
         Raises
         ------
         IndexError

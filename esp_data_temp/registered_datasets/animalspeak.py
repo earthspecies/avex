@@ -1,14 +1,18 @@
 """AnimalSpeak dataset"""
 
 from io import StringIO
-from typing import Any, Dict, Iterator, Literal, Optional
+from typing import Any, Dict, Iterator
 
+import numpy as np
 import pandas as pd
 import soundfile as sf
-import librosa
-import numpy as np
-from esp_data_temp.registered_datasets import DatasetInfo, register_dataset, registry
+
 from esp_data_temp.dataset import Dataset, GSPath
+from esp_data_temp.registered_datasets import (
+    DatasetInfo,
+    register_dataset,
+    registry,
+)
 
 
 @register_dataset
@@ -44,7 +48,7 @@ class AnimalSpeak(Dataset):
     @property
     def info(self) -> DatasetInfo:
         """Get the dataset information.
-        
+
         Returns
         -------
         DatasetInfo
@@ -55,12 +59,12 @@ class AnimalSpeak(Dataset):
     @property
     def data(self) -> pd.DataFrame:
         """Get the current dataframe.
-        
+
         Returns
         -------
         pd.DataFrame
             The current loaded split as a dataframe.
-        
+
         Raises
         ------
         RuntimeError
@@ -70,12 +74,9 @@ class AnimalSpeak(Dataset):
             raise RuntimeError("No split has been loaded yet. Call load() first.")
         return self._data
 
-    def load(
-        self, 
-        split: List[str] = ["train", "validation"]
-    ) -> pd.DataFrame:
+    def load(self, split: List[str] = ["train", "validation"]) -> pd.DataFrame:
         """Load the given split(s) of the dataset and return them.
-        
+
         Parameters
         ----------
         split : List[str]
@@ -103,17 +104,19 @@ class AnimalSpeak(Dataset):
             # Read CSV content
             csv_text = GSPath(location).read_text(encoding="utf-8")
             self._data[split] = pd.read_csv(StringIO(csv_text))
-            self._data[split]["gs_path"] = self._data[split]["local_path"].apply(lambda x: "gs://" + x)
+            self._data[split]["gs_path"] = self._data[split]["local_path"].apply(
+                lambda x: "gs://" + x
+            )
         return self._data
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset.
-        
+
         Returns
         -------
         int
             Number of samples in the current split.
-            
+
         Raises
         ------
         RuntimeError
@@ -125,7 +128,7 @@ class AnimalSpeak(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """Get a specific sample from the dataset.
-        
+
         Parameters
         ----------
         idx : int
@@ -139,7 +142,7 @@ class AnimalSpeak(Dataset):
             - 'text_label': The text label for the sample
             - 'label': The numeric label for the sample
             - 'path': The path to the audio file
-            
+
         Raises
         ------
         RuntimeError
@@ -149,7 +152,7 @@ class AnimalSpeak(Dataset):
         """
         if self._data is None:
             raise RuntimeError("No split has been loaded yet. Call load() first.")
-        
+
         row = self._data.iloc[idx]
         path_str = row["gs_path"]
 
@@ -171,12 +174,12 @@ class AnimalSpeak(Dataset):
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Iterate over samples in the dataset.
-        
+
         Returns
         -------
         Iterator[Dict[str, Any]]
             Iterator over samples in the dataset.
-            
+
         Raises
         ------
         RuntimeError
@@ -184,7 +187,7 @@ class AnimalSpeak(Dataset):
         """
         if self._data is None:
             raise RuntimeError("No split has been loaded yet. Call load() first.")
-        
+
         for idx in range(len(self)):
             yield self[idx]
 
