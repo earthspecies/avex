@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import torch
+from cloudpathlib import GSPath
 
 from representation_learning.configs import (  # type: ignore
     EvaluateConfig,
@@ -80,10 +81,6 @@ def run_experiment(
     FileNotFoundError
         If a required checkpoint cannot be found when `pretrained` is False and
         no valid `checkpoint_path` is supplied in the experiment configuration.
-
-    ModuleNotFoundError
-        If a GCS checkpoint path is provided but `cloudpathlib` is not
-        installed on the system.
     """
     dataset_name = dataset_config.dataset_name
     experiment_name = experiment_config.run_name
@@ -107,6 +104,7 @@ def run_experiment(
 
     # add sample rate to dataset config
     dataset_config.sample_rate = original_run_cfg.model_spec.audio_config.sample_rate
+    print(dataset_config)
 
     # Build the dataloaders
     logger.info("Building dataloaders...")
@@ -137,7 +135,7 @@ def run_experiment(
         )
 
     # Get number of classes
-    num_labels = len(train_dl.dataset.label2idx)
+    num_labels = len(train_dl.dataset.metadata["label_map"])
     logger.info("Number of labels: %d", num_labels)
 
     base_model = get_model(original_run_cfg.model_spec, num_classes=num_labels).to(
@@ -152,18 +150,7 @@ def run_experiment(
         if getattr(experiment_config, "checkpoint_path", None):
             path_str: str = experiment_config.checkpoint_path  # type: ignore[attr-defined]
             if path_str.startswith("gs://"):
-                try:
-                    from cloudpathlib import (
-                        GSPath,  # Runtime import to avoid hard dep
-                    )
-
-                    ckpt_path: Path | GSPath = GSPath(path_str)
-                except ModuleNotFoundError as e:
-                    raise ModuleNotFoundError(
-                        "cloudpathlib is required to load checkpoints from "
-                        "Google Cloud Storage URIs. Install via 'pip install "
-                        "cloudpathlib' before running evaluation."
-                    ) from e
+                ckpt_path: Path | GSPath = GSPath(path_str)
             else:
                 ckpt_path = Path(path_str).expanduser()
         else:

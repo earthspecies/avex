@@ -123,18 +123,22 @@ class AudioDataset:
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
-        if "sample_rate" in self.data_config and sr != self.data_config.sample_rate:
-            resampler = librosa.resampler.Resampler(
+        target_sr = self.data_config.sample_rate
+        if target_sr is not None and sr != target_sr:
+
+            audio = librosa.resample(
+                y=audio,
                 orig_sr=sr,
-                target_sr=self.data_config.sample_rate,
-                res_type="kaiser_fast",
+                target_sr=target_sr,
+                scale=True,
+                res_type="kaiser_best",
             )
-            audio = resampler(audio)
-            sr = self.data_config.sample_rate
+            sr = target_sr
+
 
         item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label"],  # TODO (milad) we assume supervisor, fix
+            "text_label": row["label_feature"],
             "label": row.label,
             "path": str(audio_path),
         }
@@ -166,7 +170,8 @@ def _get_dataset_from_name(
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
         df["gs_path"] = df["local_path"].apply(
-            lambda x: "gs://" + x
+            # lambda x: "gs://" + x
+            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
         )  # AnimalSpeak missing gs path
         return df
     elif name == "bats":

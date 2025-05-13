@@ -10,6 +10,8 @@ A compact training loop that supports:
 * Parameter & metric logging via `ExperimentLogger`
 * Distributed training with proper synchronization
 * Learning rate scheduling with warmup
+
+TODO: as things become more stable, remove or simplify benchmarking code.
 """
 
 from __future__ import annotations

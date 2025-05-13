@@ -8,10 +8,15 @@ datasets:
     multi_label: false
     label_type: supervised
     audio_max_length_seconds: 5
+    transformations:
+      - type: label_from_feature
+        feature: label
+        override: true
     # transformations:
     #   - type: uniform_sample
     #     property: label
     #     ratio: 0.01
+    sample_rate: 16000
     metrics:
       - accuracy
       - balanced_accuracy
