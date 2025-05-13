@@ -79,6 +79,7 @@ def create_labels(
     # We should think about how transforms can add/modify dataset-wide properties
     metadata = {
         "label_map": label_mapping,
+        "label_feature": cfg.feature,
         "num_classes": len(uniques) if cfg.num_classes == "auto" else cfg.num_classes,
     }
 

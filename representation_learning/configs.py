@@ -25,7 +25,7 @@ import yaml
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from esp_data_temp.dataset import DatasetConfig
+from esp_data_temp.config import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters

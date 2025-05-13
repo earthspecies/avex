@@ -33,7 +33,6 @@ BATS_PATH_TEST = (
     "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
 )
 
-
 # --------------------------------------------------------------------------- #
 # Google-Cloud helpers
 # --------------------------------------------------------------------------- #
@@ -81,6 +80,7 @@ class AudioDataset:
     ) -> None:
         super().__init__()
 
+        # Store dataframe & configs early (needed before validation below)
         self.df = df.reset_index(drop=True)
         self.data_config = data_config
         self.preprocessor = preprocessor
@@ -92,10 +92,14 @@ class AudioDataset:
         # ------------------------------------------------------------------ #
         self.label_col: str = getattr(data_config, "label_column", "label")
         if self.label_col not in self.df.columns:
-            raise ValueError(f"Label column '{self.label_col}' not found in metadata.")
+            raise ValueError(
+                f"Label column '{self.label_col}' not found in metadata."
+            )
 
         unique_labels = sorted(self.df[self.label_col].unique())
-        self.label2idx: dict[str, int] = {lbl: i for i, lbl in enumerate(unique_labels)}
+        self.label2idx: dict[str, int] = {
+            lbl: i for i, lbl in enumerate(unique_labels)
+        }
 
         # Column holding the actual audio path
         self.audio_path_col = "gs_path"
@@ -152,7 +156,6 @@ class AudioDataset:
             stop_fr = start_fr + window_frames
 
             try:
-
                 f.seek(0)  # rewind after sf.info
                 audio, _ = sf.read(
                     f,
@@ -284,10 +287,9 @@ def get_dataset_dummy(
 
     This helper:
 
-    1. Loads the requested *split* via :func:`_get_dataset_from_name`.
-    2. Applies any declarative transformations specified in
-       ``data_config.transformations``.
-    3. Wraps the resulting dataframe in an :class:`AudioDataset` instance.
+    1. Loads datasets
+    2. Applies any filtering / subsampling specified in `data_config.transformations`.
+    3. Returns an `AudioDataset` instance.
 
     Returns
     -------

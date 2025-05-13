@@ -99,7 +99,7 @@ def main() -> None:
 
     # Retrieve the number of labels from the training dataset
     # (Even if not needed for model type.)
-    num_labels = len(train_dl.dataset.label2idx)
+    num_labels = train_dl.dataset.metadata["num_classes"]
     logger.info("Number of labels: %d", num_labels)
 
     # Build the model

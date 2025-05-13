@@ -236,10 +236,9 @@ def build_dataloaders(
     except Exception:
         ds_test = None
 
-    # ------------------------------------------------------------------ #
-    # Distributed training samplers
-    # ------------------------------------------------------------------ #
-    train_sampler = val_sampler = None
+    # Create samplers for distributed training
+    train_sampler = None
+    val_sampler = None
     if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
         train_sampler = DistributedSampler(ds_train)
         val_sampler = DistributedSampler(ds_val, shuffle=False)
