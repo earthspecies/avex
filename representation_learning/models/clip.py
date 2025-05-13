@@ -1,0 +1,114 @@
+from typing import Any, Dict, Optional, Tuple
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer
+
+from representation_learning.models.base_model import ModelBase
+from representation_learning.models.efficientnetb0 import (
+    Model as EfficientNetB0,
+)
+
+
+class CLIPModel(ModelBase):
+    """CLIP-like model combining EfficientNetB0 for audio and RoBERTa for text."""
+
+    def __init__(
+        self,
+        device: str,
+        audio_config: Optional[Dict[str, Any]] = None,
+        text_model_name: str = "roberta-base",
+        projection_dim: int = 512,
+        temperature: float = 0.07,
+    ) -> None:
+        super().__init__(device, audio_config)
+
+        # Initialize audio encoder (EfficientNetB0)
+        self.audio_encoder = EfficientNetB0(
+            device=device,
+            audio_config=audio_config,
+            return_features_only=True,  # Get features before classifier
+        )
+
+        # Initialize text encoder (RoBERTa)
+        self.text_encoder = AutoModel.from_pretrained(text_model_name)
+        self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
+
+        # Projection layers
+        # EfficientNetB0 feature dimension before classifier is 1280
+        audio_feature_dim = 1280
+        self.audio_projection = nn.Linear(audio_feature_dim, projection_dim)
+        self.text_projection = nn.Linear(
+            self.text_encoder.config.hidden_size, projection_dim
+        )
+
+        # Temperature parameter for contrastive loss
+        self.temperature = temperature
+
+        # Move models to device
+        self.audio_encoder.to(device)
+        self.text_encoder.to(device)
+        self.audio_projection.to(device)
+        self.text_projection.to(device)
+
+    def encode_audio(
+        self, audio: torch.Tensor, padding_mask: torch.Tensor
+    ) -> torch.Tensor:
+        """Encode audio input using EfficientNetB0.
+
+        Parameters
+        ----------
+        audio : torch.Tensor
+            Audio input tensor
+
+        Returns
+        -------
+        torch.Tensor
+            Normalized audio embeddings
+        """
+        features = self.audio_encoder(audio, padding_mask)
+        return F.normalize(self.audio_projection(features), dim=-1)
+
+    def encode_text(self, text: list[str]) -> torch.Tensor:
+        """Encode text input using RoBERTa.
+
+        Parameters
+        ----------
+        text : list[str]
+            List of text strings to encode
+
+        Returns
+        -------
+        torch.Tensor
+            Normalized text embeddings
+        """
+        # Tokenize text with max length of 50 tokens
+        tokens = self.text_tokenizer(
+            text, padding=True, truncation=True, max_length=50, return_tensors="pt"
+        ).to(self.device)
+
+        # Get text embeddings
+        outputs = self.text_encoder(**tokens)
+        features = outputs.last_hidden_state[:, 0, :]  # Use [CLS] token
+        return F.normalize(self.text_projection(features), dim=-1)
+
+    def forward(
+        self, audio: torch.Tensor, text: list[str], padding_mask: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass computing audio and text embeddings.
+
+        Args:
+            audio: Audio tensor of shape (batch_size, time_steps)
+            text: List of text strings of length batch_size
+
+        Returns:
+            Tuple of (audio_embeddings, text_embeddings)
+        """
+        # Get normalized embeddings
+        audio_embeddings = self.encode_audio(audio, padding_mask)
+        text_embeddings = self.encode_text(text)
+
+        # Return embeddings only - logits are computed in the loss function
+        return audio_embeddings, text_embeddings

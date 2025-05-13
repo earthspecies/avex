@@ -4,10 +4,15 @@ import multiprocessing
 from typing import Any, Optional, Tuple
 
 import torch
-from torch.utils.data import DataLoader
+import torch.distributed as dist
+from torch.utils.data import DataLoader, DistributedSampler
 
 from esp_data_temp.dataset import get_dataset_dummy
-from representation_learning.configs import RunConfig, load_config
+from representation_learning.configs import (
+    DatasetConfig,
+    RunConfig,
+    load_config,
+)
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
 )
@@ -66,7 +71,9 @@ class Collater:
 
 
 def build_dataloaders(
-    cfg: RunConfig, device: str = "cpu"
+    cfg: RunConfig,
+    data_config: DatasetConfig | None = None,
+    device: str = "cpu",
 ) -> Tuple[DataLoader, DataLoader]:
     """Build training and validation dataloaders from configuration.
 
@@ -74,6 +81,8 @@ def build_dataloaders(
     ----------
     cfg : RunConfig
         Run configuration containing dataset and training parameters
+    data_config : DatasetConfig
+        Data configuration containing dataset details
     device : str
         Device to use for data loading
 
@@ -86,26 +95,47 @@ def build_dataloaders(
     if device != "cpu":
         multiprocessing.set_start_method("spawn", force=True)
 
-    # Load dataset configuration
-    data_config = load_config(cfg.dataset_config, config_type="data")
+    if data_config is None:
+        dataset_config = cfg.dataset_config
+        # Load dataset configuration
+        data_config = load_config(dataset_config, config_type="data")
 
     # Create dataset using the updated get_dataset_dummy
     ds_train = get_dataset_dummy(
         data_config=data_config,
+        split="train",
         preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=False,  # TEMP: for testing speed
     )
-    ds_eval = get_dataset_dummy(
+    ds_val = get_dataset_dummy(
         data_config=data_config,
+        split="valid",
         preprocessor=None,  # Add any audio preprocessing here if needed
-        validation=True,
     )
+
+    # TODO (milad) This is temporary fix. The code expected get_dataset_dummy() to
+    # return None which is not a good pattern.
+    try:
+        ds_test = get_dataset_dummy(
+            data_config=data_config,
+            split="test",
+            preprocessor=None,  # Add any audio preprocessing here if needed
+        )
+    except:
+        ds_test = None
+
+    # Create samplers for distributed training
+    train_sampler = None
+    val_sampler = None
+    if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
+        train_sampler = DistributedSampler(ds_train)
+        val_sampler = DistributedSampler(ds_val, shuffle=False)
 
     # Create collater
     collate_fn = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
+        keep_text=(cfg.label_type == "text"),  # Keep text labels for CLIP training
         device=device,
     )
 
@@ -113,19 +143,33 @@ def build_dataloaders(
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
-        shuffle=True,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
         num_workers=cfg.num_workers,
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),
     )
 
     val_dl = DataLoader(
-        ds_eval,
+        ds_val,
         batch_size=cfg.training_params.batch_size,
         shuffle=False,
+        sampler=val_sampler,
         num_workers=cfg.num_workers,
         collate_fn=collate_fn,
         pin_memory=(device != "cpu"),
     )
 
-    return train_dl, val_dl
+    if ds_test is not None:
+        test_dl = DataLoader(
+            ds_test,
+            batch_size=cfg.training_params.batch_size,
+            shuffle=False,
+            num_workers=cfg.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=(device != "cpu"),
+        )
+    else:
+        test_dl = None
+
+    return train_dl, val_dl, test_dl

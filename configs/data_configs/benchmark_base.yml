@@ -1,0 +1,17 @@
+data_path: benchmark
+
+datasets:
+  - dataset_name: bats
+    type: classification
+    label_column: label
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 2
+    transformations:
+      - property: label
+        operation: uniform_sample
+        ratio: 0.01
+    metrics:
+      - accuracy
+      - balanced_accuracy

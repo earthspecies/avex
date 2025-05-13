@@ -1,3 +1,4 @@
+import os
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
@@ -5,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, Optional, Self
 
 import cloudpathlib
+import librosa
 import numpy as np
 import pandas as pd
 import soundfile as sf
@@ -15,6 +17,13 @@ from .transformations import build_transforms
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
+BATS_PATH = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.train.csv"
+BATS_PATH_VALID = (
+    "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.valid.csv"
+)
+BATS_PATH_TEST = (
+    "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
+)
 
 
 @lru_cache(maxsize=1)
@@ -30,7 +39,7 @@ class GSPath(cloudpathlib.GSPath):
 
     def __init__(
         self,
-        client_path: str | Self | cloudpathlib.CloudPath,
+        client_path: str | Self | cloudpathlib.AnyPath,
         client: cloudpathlib.GSClient = _get_client(),
     ) -> None:
         super().__init__(client_path, client=client)
@@ -101,9 +110,16 @@ class AudioDataset:
         with audio_path.open("rb") as f:
             audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
-            # TODO it might be better to determine the channel axis rather than assume it is axis=1
-            # a lot of datasets aren't like this:
             audio = audio.mean(axis=1)
+
+        if "sample_rate" in self.data_config and sr != self.data_config.sample_rate:
+            resampler = librosa.resampler.Resampler(
+                orig_sr=sr,
+                target_sr=self.data_config.sample_rate,
+                res_type="kaiser_fast",
+            )
+            audio = resampler(audio)
+            sr = self.data_config.sample_rate
 
         return {
             "raw_wav": audio.astype(np.float32),
@@ -115,12 +131,16 @@ class AudioDataset:
 
 def _get_dataset_from_name(
     name: str,
-    validation: bool = False,
+    split: str = "train",
 ) -> pd.DataFrame:
     name = name.lower().strip()
 
     if name == "animalspeak":
-        anaimspeak_path = ANIMALSPEAK_PATH_EVAL if validation else ANIMALSPEAK_PATH
+        if split == "test":
+            return None
+        anaimspeak_path = (
+            ANIMALSPEAK_PATH_EVAL if split == "valid" else ANIMALSPEAK_PATH
+        )
         if ANIMALSPEAK_PATH.startswith("gs://"):
             csv_path = GSPath(anaimspeak_path)
         else:
@@ -133,14 +153,37 @@ def _get_dataset_from_name(
             lambda x: "gs://" + x
         )  # AnimalSpeak missing gs path
         return df
+    elif name == "bats":
+        csv_file = (
+            BATS_PATH_TEST
+            if split == "test"
+            else BATS_PATH_VALID
+            if split == "valid"
+            else BATS_PATH
+        )
+        # TODO: don't use os.path!
+        base_path = os.path.dirname(csv_file).split("egyptian_fruit_bats")[0]
+        if csv_file.startswith("gs://"):
+            csv_path = GSPath(csv_file)
+        else:
+            csv_path = Path(csv_file)
+
+        # Read CSV content
+        csv_text = csv_path.read_text(encoding="utf-8")
+        df = pd.read_csv(StringIO(csv_text))
+        df["gs_path"] = df["path"].apply(
+            lambda x: base_path
+            + "egyptian_fruit_bats"
+            + x.split("egyptian_fruit_bats")[1]
+        )  # bats missing gs path
+        return df
     else:
-        raise NotImplementedError("Only AnimalSpeak dataset supported")
+        raise NotImplementedError("Dataset not supported")
 
 
 def get_dataset_dummy(
     data_config: DatasetConfig,
     preprocessor: Optional[Callable] = None,
-    validation: bool = False,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -149,6 +192,15 @@ def get_dataset_dummy(
     2. Applies any filtering / subsampling specified in `data_config.transformations`.
     3. Returns an `AudioDataset` instance.
 
+    Parameters
+    ----------
+    data_config : DataConfig
+        Configuration for the dataset
+    preprocessor : Optional[Callable]
+        Optional preprocessor function
+    split : bool
+        Whether to split the dataset
+
     Returns
     -------
     AudioDataset
@@ -156,7 +208,7 @@ def get_dataset_dummy(
     """
 
     # Check if the dataset CSV path is a gs:// path
-    df = _get_dataset_from_name(data_config.dataset_name, validation)
+    df = _get_dataset_from_name(data_config.dataset_name, split)
 
     metadata = {}
 

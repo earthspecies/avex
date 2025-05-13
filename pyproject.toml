@@ -10,9 +10,11 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 
 dependencies = [
+  "bitsandbytes>=0.45.5",
   "cloudpathlib>=0.21.0",
   "google-cloud-storage>=3.1.0",
   "joblib>=1.4.2",
+  "librosa>=0.11.0",
   "mlflow>=2.22.0",
   "numpy==1.26.4",
   "pandas>=2.2.3",
@@ -24,6 +26,7 @@ dependencies = [
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
+  "transformers>=4.51.3",
 ]
 
 [dependency-groups]

@@ -53,7 +53,6 @@ augmentations:
   # Add background noise at random SNRs
   - noise:
       noise_dirs:
-        # this should be a gs path
         - "gs://foundation-model-data/audio_16k/noise/demand_10s"
         - "gs://foundation-model-data/audio_16k/noise/idmt"
         - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"

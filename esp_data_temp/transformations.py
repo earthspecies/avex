@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import field as dc_field
 from functools import partial
-from typing import Annotated, Any, Dict, List, Type, Union
+from typing import Annotated, Any, Dict, List, Union
 
 import numpy as np
 import pandas as pd
@@ -32,6 +32,12 @@ class SubsampleConfig(BaseModel):
     # raise ValueError("All ratios must be in [0, 1]")
 
 
+class UniformSampleConfig(BaseModel):
+    type: Literal["uniform_sample"]
+    property: str
+    ratio: float
+
+
 class LabelFromFeature(BaseModel):
     type: Literal["label_from_feature"]
     feature: str
@@ -43,7 +49,7 @@ class LabelFromFeature(BaseModel):
 # TODO (this list in union should come from registry)
 # TODO do we want a base model for transforms that forces "type"?
 RegisteredTransforms = Annotated[
-    Union[FilterConfig, SubsampleConfig, LabelFromFeature],
+    Union[FilterConfig, SubsampleConfig, LabelFromFeature, UniformSampleConfig],
     Field(discriminator="type"),
 ]
 
@@ -72,6 +78,7 @@ def create_labels(
     # We should think about how transforms can add/modify dataset-wide properties
     metadata = {
         "label_map": label_mapping,
+        "label_feature": cfg.feature,
         "num_classes": len(uniques) if cfg.num_classes == "auto" else cfg.num_classes,
     }
 
@@ -81,12 +88,15 @@ def create_labels(
 class Filter:
     """Filter data based on property values."""
 
-    def __init__(self, config: FilterConfig):
+    def __init__(self, config: FilterConfig) -> None:
         """
         Initialize the filter.
 
         Args:
             config: Filter configuration
+
+        Raises:
+            ValueError: If the operation is not 'include' or 'exclude'.
         """
         self.config = config
         self.values = set(config.values)
@@ -94,7 +104,17 @@ class Filter:
     def __call__(
         self, data: Union[pd.DataFrame, Dict[str, Any]]
     ) -> Union[pd.DataFrame, Dict[str, Any]]:
-        """Filter the data based on property values."""
+        """Filter the data based on property values.
+
+        Args:
+            data: The data to filter (DataFrame or dict).
+
+        Returns:
+            The filtered data (same type as input).
+
+        Raises:
+            TypeError: If the data type is not supported.
+        """
         if isinstance(data, pd.DataFrame):
             return self._filter_dataframe(data), None
         elif isinstance(data, dict):
@@ -103,14 +123,28 @@ class Filter:
             raise TypeError(f"Unsupported data type: {type(data)}")
 
     def _filter_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Filter a pandas DataFrame."""
+        """Filter a pandas DataFrame.
+
+        Args:
+            df: The DataFrame to filter.
+
+        Returns:
+            pd.DataFrame: The filtered DataFrame.
+        """
         if self.config.mode == "include":
             return df[df[self.config.property].isin(self.values)]
         else:
             return df[~df[self.config.property].isin(self.values)]
 
     def _filter_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter a dictionary of data."""
+        """Filter a dictionary of data.
+
+        Args:
+            data: The dictionary to filter.
+
+        Returns:
+            Dict[str, Any]: The filtered dictionary.
+        """
         if self.config.mode == "include":
             return {
                 k: v for k, v in data.items() if v[self.config.property] in self.values
@@ -131,7 +165,21 @@ class Subsample:
             raise ValueError("All ratios must be in [0, 1]")
         self.cfg = config
 
-    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):
+    def __call__(
+        self, data: Union[pd.DataFrame, Dict[str, Any]]
+    ) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """
+        Apply the subsample transformation.
+
+        Args:
+            data: The data to subsample (DataFrame or dict).
+
+        Returns:
+            The subsampled data (same type as input).
+
+        Raises:
+            TypeError: If the data type is not supported.
+        """
         if isinstance(data, pd.DataFrame):
             return self._subsample_dataframe(data), None
         if isinstance(data, dict):
@@ -139,7 +187,15 @@ class Subsample:
         raise TypeError(f"Unsupported data type: {type(data)}")
 
     def _choose_keys(self, keys: List[Any], ratio: float) -> List[Any]:
-        """Return a subsample of *keys* of size `ceil(len(keys)*ratio)`."""
+        """Return a subsample of *keys* of size `ceil(len(keys)*ratio)`.
+
+        Args:
+            keys: List of keys to subsample from.
+            ratio: Ratio of keys to select.
+
+        Returns:
+            List[Any]: The selected keys.
+        """
         if ratio >= 1.0 or len(keys) == 0:
             return keys
         n = int(len(keys) * ratio)
@@ -147,6 +203,14 @@ class Subsample:
         return rng.choice(keys, size=n, replace=False).tolist()
 
     def _subsample_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Subsample a pandas DataFrame.
+
+        Args:
+            df: The DataFrame to subsample.
+
+        Returns:
+            pd.DataFrame: The subsampled DataFrame.
+        """
         prop = self.cfg.property
         ratios = self.cfg.ratios
         groups = []
@@ -167,6 +231,14 @@ class Subsample:
         return pd.concat(groups, ignore_index=True)
 
     def _subsample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Subsample a dictionary of data.
+
+        Args:
+            data: The dictionary to subsample.
+
+        Returns:
+            Dict[str, Any]: The subsampled dictionary.
+        """
         prop = self.cfg.property
         ratios = self.cfg.ratios
         selected: Dict[str, Any] = {}
@@ -219,6 +291,8 @@ def build_transforms(transform_configs: list[RegisteredTransforms]) -> list[Call
             transforms.append(Subsample(cfg))
         elif isinstance(cfg, LabelFromFeature):
             transforms.append(partial(create_labels, cfg=cfg))  # TODO (milad)
+        elif isinstance(cfg, UniformSampleConfig):
+            transforms.append(UniformSample(cfg))
         else:  # this should never happen if DataConfig was validated
             raise TypeError(
                 "build_transforms() received an unexpected config type: "
@@ -226,3 +300,60 @@ def build_transforms(transform_configs: list[RegisteredTransforms]) -> list[Call
             )
 
     return transforms
+
+
+class UniformSample:
+    """Uniformly sample data based on a property."""
+
+    def __init__(self, config: UniformSampleConfig):
+        if config.operation != "uniform_sample":
+            raise ValueError("UniformSampleConfig.operation must be 'uniform_sample'")
+        if not 0 <= config.ratio <= 1:
+            raise ValueError("Ratio must be in [0, 1]")
+        self.cfg = config
+
+    def __call__(self, data: Union[pd.DataFrame, Dict[str, Any]]):
+        if isinstance(data, pd.DataFrame):
+            return self._uniform_sample_dataframe(data)
+        if isinstance(data, dict):
+            return self._uniform_sample_dict(data)
+        raise TypeError(f"Unsupported data type: {type(data)}")
+
+    def _uniform_sample_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Uniformly sample a pandas DataFrame."""
+        prop = self.cfg.property
+        ratio = self.cfg.ratio
+
+        # Group by the property and sample uniformly
+        groups = []
+        for _, group in df.groupby(prop):
+            n_samples = max(1, int(len(group) * ratio))
+            rng = np.random.default_rng(seed=42)
+            sampled_indices = rng.choice(len(group), size=n_samples, replace=False)
+            groups.append(group.iloc[sampled_indices])
+
+        return pd.concat(groups, ignore_index=True)
+
+    def _uniform_sample_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Uniformly sample a dictionary of data."""
+        prop = self.cfg.property
+        ratio = self.cfg.ratio
+        selected: Dict[str, Any] = {}
+
+        # Group by the property
+        groups: Dict[str, List[str]] = {}
+        for k, v in data.items():
+            val = v[prop]
+            if val not in groups:
+                groups[val] = []
+            groups[val].append(k)
+
+        # Sample uniformly from each group
+        for keys in groups.values():
+            n_samples = max(1, int(len(keys) * ratio))
+            rng = np.random.default_rng(seed=42)
+            sampled_keys = rng.choice(keys, size=n_samples, replace=False)
+            for k in sampled_keys:
+                selected[k] = data[k]
+
+        return selected
