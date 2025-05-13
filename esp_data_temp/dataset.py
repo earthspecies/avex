@@ -3,7 +3,8 @@ from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Self
+from typing import Any, Dict, Iterator, Optional, Self, Literal
+from abc import ABC, abstractmethod
 
 import cloudpathlib
 import librosa
@@ -24,7 +25,6 @@ BATS_PATH_VALID = (
 BATS_PATH_TEST = (
     "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
 )
-
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
@@ -194,11 +194,7 @@ def get_dataset_dummy(
 
     Parameters
     ----------
-    data_config : DataConfig
-        Configuration for the dataset
-    preprocessor : Optional[Callable]
-        Optional preprocessor function
-    split : bool
+    data_config : DataConfigIt's like you need to create hidden file names while working on your features and then merge them. 
         Whether to split the dataset
 
     Returns
@@ -207,6 +203,25 @@ def get_dataset_dummy(
         An instance of the dataset with the specified transformations applied.
     """
 
+        path_str: str = row[self.audio_path_col]
+
+        # Use GSPath for gs:// paths if available, otherwise use the local Path.
+        if path_str.startswith("gs://"):
+            if GSPath is None:
+                raise ImportError("cloudpathlib is required to handle gs:// paths.")
+            audio_path = GSPath(path_str)
+        else:
+            audio_path = Path(path_str)
+
+        # Open the audio file. Using the .open('rb') method works for both local and
+        # GSPath objects.
+        with audio_path.open("rb") as f:
+            audio, sr = sf.read(f)
+        if audio.ndim == 2:  # stereo → mono
+            audio = audio.mean(axis=1)
+
+        if "sample_rate" in self.data_config and sr != self.data_config.sample_rate:
+            resampler = libros
     # Check if the dataset CSV path is a gs:// path
     df = _get_dataset_from_name(data_config.dataset_name, split)
 
@@ -228,3 +243,269 @@ def get_dataset_dummy(
         preprocessor=preprocessor,
         metadata=metadata,
     )
+
+#######################################################################################
+# ANYTHING BELLOW IS A WIP FOR DATASET ABSTRACTION
+#######################################################################################
+
+class Dataset(ABC):
+    """Abstract base class defining the interface for ESP datasets.
+    Any new dataset should inherit from this class to be added to the registry
+    of available ESP datasets.
+
+    Attributes
+    ----------
+    info : DatasetInfo
+        Required attribute containing metadata about the dataset.
+        Must be defined by all implementing classes.
+
+    Methods
+    -------
+    load(split: Literal["train", "validation"]) -> pd.DataFrame
+        Required method to load a specific split of the dataset.
+    __len__() -> int
+        Required method to return the number of samples in the dataset.
+    __iter__() -> Iterator[Dict[str, Any]]
+        Required method to iterate over the samples in the dataset.
+    __getitem__(idx: int) -> Dict[str, Any]
+        Required method to get a specific sample from the dataset.
+    """
+
+    @property
+    @abstractmethod
+    def data(self) -> pd.DataFrame:
+        """Dataframe containing the dataset.
+        
+        Returns
+        -------
+        panda.DataFrame
+            Dataframe containing the dataset. Transformations are applied if passed to the class. 
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def info(self) -> DatasetInfo:
+        """Dataset metadata and configuration.
+        
+        Returns
+        -------
+        DatasetInfo
+            Object containing dataset metadata like name, version, paths, etc.
+        """
+        pass
+
+    @abstractmethod
+    def load(
+        self,
+        split: List[str]
+    ) -> Dict[str, pd.DataFrame]:
+        """Load one or more splits of the dataset.
+        
+        Parameters
+        ----------
+        split : List[str]
+            Which split(s) of the dataset to load.
+
+        Returns
+        -------
+        Dict[str, pd.DataFrame]
+            Dictionary mapping split names to their corresponding pandas DataFrames.
+        """
+        pass
+
+    @abstractmethod
+    def __len__(self) -> int:
+        """Return the total number of samples in the dataset.
+        
+        Returns
+        -------
+        int
+            Number of samples in the dataset
+        """
+        pass
+
+    @abstractmethod
+    def __iter__(self) -> Iterator[Dict[str, Any]]:
+        """Get the iterator over the dataset.
+        
+        Returns
+        -------
+        Iterator[Dict[str, Any]]
+            Iterator over samples in the dataset
+        """
+        pass
+
+    @abstractmethod
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        """Get a specific sample from the dataset.
+        
+        Parameters
+        ----------
+        idx : int
+            Index of the sample to get
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing the sample data
+        
+        Raises
+        ------
+        IndexError
+            If the index is out of bounds
+        """
+        pass
+
+class DatasetInfo(BaseModel):
+    """A Pydantic base model for a registered ESP dataset. All datasets
+    should subclass this.
+
+    Arguments
+    ---------
+    name : str
+        Name of the dataset
+    owner : str | list[str]
+        ESP team owner(s) of the dataset
+    split_paths : dict[str, str]
+        Paths to the dataset splits. The keys are the split names
+        and the values are the paths to the splits. The paths can be
+    version : str
+        Version of the dataset, root dataset is 0.0
+    description : str
+        Description of the dataset, could act as a README, preferably in markdown format
+    sources : list[str] | str
+        Source(s) of the dataset e.g. 'Xeno-canto' or a url to website(s),
+        or multiple sources in a comma-separated list
+    license : Optional[str]
+        License for the dataset, if applicable
+    changelog : Optional[str]
+        Changelog from previous version
+    **kwargs : Any (optional)
+        Not validated, but can be used to pass additional information
+
+    Examples
+    --------
+    >>> data = DatasetInfo(
+    ...     name="animalspeak",
+    ...     owner="marius; masato",
+    ...     split_paths={
+    ...         "train": "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv",
+    ...         "validation": "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv",
+    ...     },
+    ...     version="0.1.0",
+    ...     description="AnimalSpeak dataset",
+    ...     sources=["Xeno-canto", "iNaturalist", "Watkins"],
+    ...     license="unknown",
+    ...     changelog="Initial version",
+    ... )
+    """
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        str_strip_whitespace=True,
+        extra="allow",
+    )
+
+    # required params
+    name: str = Field(min_length=1, description="Name of the dataset")
+
+    owner: str = Field(min_length=1, description="ESP team owner(s) of the dataset")
+
+    split_paths: dict = Field(
+        description="""Paths to the dataset splits. The keys are the split names
+        and the values are the paths to the splits""",
+    )
+
+    version: str = Field(min_length=5, description="Version of the dataset")
+
+    description: str = Field(
+        min_length=1,
+        description="""Description of the dataset, could act as a README,
+        preferably in markdown format, and include changelog to previous version""",
+    )
+
+    sources: list[str] | str = Field(
+        min_length=1,
+        description="""Source(s) of the dataset e.g. 'Xeno-canto' or a url to
+        website(s) or multiple sources in a comma-separated list""",
+    )
+
+    license: Optional[str] = Field(
+        default_factory=lambda: "unknown",
+        description="License for the dataset, if applicable",
+    )
+
+    changelog: Optional[str] = Field(
+        default_factory=lambda: "", description="Changelog from previous version"
+    )
+
+    @field_validator("split_paths", mode="after")
+    @classmethod
+    def validate_split_exists(cls, v: dict) -> str:
+        """Validate that the split path exists in cloud storage or locally
+
+        Arguments
+        ---------
+        v : dict[str, str]
+            The locations to validate
+
+        Returns
+        -------
+        dict[str, str]
+            The validated locations
+
+        Raises
+        ------
+        ValueError
+            If the location does not exist in cloud storage or locally
+        ValueError
+            If the location is a directory and is empty
+        """
+        for _, value in v.items():
+            # Check if the location is a cloud path
+            if value.startswith("gs://"):
+                path = GSPath(value)
+                if not path.exists():
+                    raise ValueError(f"Cloud path {value} does not exist.")
+            else:
+                # Check if the local path exists
+                path = pathlib.Path(value)
+                if not path.exists():
+                    raise ValueError(f"Local path {value} does not exist.")
+
+            # if location is directory, check that it is not empty
+            if path.is_dir() and not any(path.iterdir()):
+                raise ValueError(f"Directory {value} is empty.")
+
+        return v
+
+    @field_validator("version")
+    @classmethod
+    def validate_semver(cls, v: str) -> str:
+        """Validates that the version follows semantic versioning (MAJOR.MINOR.PATCH)
+        using the semver package.
+
+        Arguments
+        ---------
+        v : str
+            The version string to validate
+
+        Returns
+        -------
+        str
+            The validated version string
+
+        Raises
+        ------
+        ValueError
+            If the version does not follow semantic versioning
+        """
+        try:
+            semver.VersionInfo.parse(v)
+        except ValueError as e:
+            raise ValueError(f"""Version '{v}' does not follow semantic versioning
+                            (MAJOR.MINOR.PATCH).
+                    Error: {str(e)}. See https://semver.org/ for details.""") from e
+        return v

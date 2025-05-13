@@ -1,4 +1,4 @@
-dataset_name: animalspesak
+dataset_name: animalspeak
 dataset_version: 0.0
 balance: false
 balance_attribute: canonical_name   # balance data across via this attribute

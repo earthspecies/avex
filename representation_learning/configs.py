@@ -313,12 +313,9 @@ def load_config(
         return RunConfig.model_validate(raw)
     elif config_type == "data":
         return DatasetConfig.model_validate(raw)
-<<<<<<< HEAD
-=======
     elif config_type == "evaluate":
         return EvaluateConfig.model_validate(raw)
     elif config_type == "benchmark":
         return BenchmarkConfig.model_validate(raw)
->>>>>>> main
     else:
         raise NotImplementedError("Can only load from run config or data config.")
