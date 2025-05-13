@@ -124,7 +124,7 @@ def create_labels(
     df: pd.DataFrame, cfg: LabelFromFeature
 ) -> tuple[pd.DataFrame, dict | None]:
     if cfg.output_feature in df and not cfg.override:
-        assert False, "TODO (milad)"
+        raise AssertionError("TODO (milad)")
 
     # TODO (milad) the .copy() is probably making this slow but without it I get this
     # warning: https://pandas.pydata.org/pandas-docs/stable/user_guide/copy_on_write.html#copy-on-write-chained-assignment
@@ -156,9 +156,6 @@ class Filter:
 
         Args:
             config: Filter configuration
-
-        Raises:
-            ValueError: If the operation is not 'include' or 'exclude'.
         """
         self.config = config
         self.values = set(config.values)
@@ -222,7 +219,7 @@ class Filter:
 class Subsample:
     """Subsample data based on property ratios."""
 
-    def __init__(self, config: SubsampleConfig):
+    def __init__(self, config: SubsampleConfig) -> None:
         if not all(0 <= r <= 1 for r in config.ratios.values()):
             raise ValueError("All ratios must be in [0, 1]")
         self.cfg = config
@@ -325,7 +322,7 @@ class Subsample:
 class UniformSample:
     """Uniformly sample data based on a property."""
 
-    def __init__(self, config: UniformSampleConfig):
+    def __init__(self, config: UniformSampleConfig) -> None:
         if config.operation != "uniform_sample":
             raise ValueError("UniformSampleConfig.operation must be 'uniform_sample'")
         if not 0 <= config.ratio <= 1:
@@ -355,7 +352,10 @@ class UniformSample:
         return pd.concat(groups, ignore_index=True)
 
     def _uniform_sample_dict(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Uniformly sample a dictionary of data."""
+        """
+        Uniformly sample a dictionary of data.
+
+        """
         prop = self.cfg.property
         ratio = self.cfg.ratio
         selected: Dict[str, Any] = {}
