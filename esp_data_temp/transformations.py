@@ -383,7 +383,7 @@ def build_transforms(
     transform_configs: list[RegisteredTransformConfigs],
 ) -> list[Callable[[pd.DataFrame], pd.DataFrame]]:
     """
-    Build the transformation pipeline from **validated** configs.
+    Build the transformation pipeline from a list of Pydantic-validated configs.
 
     Parameters
     ----------
