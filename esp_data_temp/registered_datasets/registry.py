@@ -78,8 +78,8 @@ class DatasetInfo(BaseModel):
 
     sources: list[str] | str = Field(
         min_length=1,
-        description="""Source(s) of the dataset e.g. 'Xeno-canto' or a url to website(s)
-        or multiple sources in a comma-separated list""",
+        description="""Source(s) of the dataset e.g. 'Xeno-canto' or a url to
+        website(s) or multiple sources in a comma-separated list""",
     )
 
     license: Optional[str] = Field(
@@ -89,6 +89,21 @@ class DatasetInfo(BaseModel):
 
     changelog: Optional[str] = Field(
         default_factory=lambda: "", description="Changelog from previous version"
+    )
+
+    output_columns_mapping: Optional[dict[str, str]] = Field(
+        default_factory=lambda: {},
+        description="""Optional mapping to specify which columns should be taken
+        from each row. This is used to reduce the number of elements returned
+        when iterating, or changing their name on the fly. For instance, if a
+        dataset has three columns: ID, wav_path, and label, but we only want to
+        return the ID and wav_path:
+        {
+            "ID": "sample_id", # Change the name of the column.
+            "wav_path": "wav_path", # Does not change the name of the column.
+        }
+        By default all columns with their original names are returned.
+        """,
     )
 
     @field_validator("split_paths", mode="after")
