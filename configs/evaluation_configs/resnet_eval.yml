@@ -1,0 +1,26 @@
+# Evaluation config for ResNet-18 linear probe on the benchmark dataset
+
+# Benchmark dataset definition (reuse existing benchmark file)
+dataset_config: configs/data_configs/benchmark_base.yml
+
+training_params:
+  train_epochs: 10  # adjust as needed
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+experiments:
+  - run_name: resnet18_probe
+    run_config: configs/run_configs/resnet18.yml
+    layers: last_layer
+    pretrained: true
+
+save_dir: evaluation_results_resnet
+
+device: cpu
+seed: 42
+num_workers: 0
+frozen: false

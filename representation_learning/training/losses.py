@@ -175,7 +175,11 @@ class ClipLoss(nn.Module):
 def _build_criterion(loss_name: str) -> nn.Module:
     if loss_name == "cross_entropy":
         return nn.CrossEntropyLoss()
-    elif loss_name in {"bce", "binary_cross_entropy_with_logits"}:
+    elif loss_name in {
+        "bce",
+        "binary_cross_entropy",
+        "binary_cross_entropy_with_logits",
+    }:
         return nn.BCEWithLogitsLoss()
     elif loss_name in {"clip", "contrastive"}:
         return ClipLoss()

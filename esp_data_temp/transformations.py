@@ -136,6 +136,7 @@ def create_labels(
     uniques = sorted(df_clean[cfg.feature].unique())
     label_mapping = {lbl: idx for idx, lbl in enumerate(uniques)}
     df_clean[cfg.output_feature] = df_clean[cfg.feature].map(label_mapping)
+    df_clean["label_feature"] = df_clean[cfg.feature]
 
     # TODO (milad): hacky. Just here to make things run
     # We should think about how transforms can add/modify dataset-wide properties
