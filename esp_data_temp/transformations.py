@@ -24,10 +24,12 @@ class TransformModel(BaseModel):
     Base class for all transform configurations.
 
     All transform configurations should inherit from this class and define a unique
-    `type` attribute. This class does the registration of subclasses in the
-    `_TRANSFORM_REGISTRY` dictionary. The `RegisteredTransformConfigs` class variable is
-    a union of all registered transform types, allowing for easy validation and type
-    checking. The `type` attribute is used as a discriminator for the union type.
+    `type` attribute. The `type` attribute can be anything (although it makes sense to
+    choose a descriptive name) as long as it's unique. This base class does the
+    registration of subclasses in the `_TRANSFORM_REGISTRY` dictionary and checks that
+    it is unique. It also generates `RegisteredTransformConfigs` type alias which is a
+    union of all registered transform types, allowing for easy validation and type
+    checking.
     """
 
     # TODO (milad) I wonder if this can be done with a simple decorator. Decorators are
@@ -122,7 +124,7 @@ def create_labels(
     df: pd.DataFrame, cfg: LabelFromFeature
 ) -> tuple[pd.DataFrame, dict | None]:
     if cfg.output_feature in df and not cfg.override:
-        assert False, "TODO (milad)"
+        raise AssertionError("TODO (milad)")
 
     # TODO (milad) the .copy() is probably making this slow but without it I get this
     # warning: https://pandas.pydata.org/pandas-docs/stable/user_guide/copy_on_write.html#copy-on-write-chained-assignment
@@ -155,9 +157,6 @@ class Filter:
 
         Args:
             config: Filter configuration
-
-        Raises:
-            ValueError: If the operation is not 'include' or 'exclude'.
         """
         self.config = config
         self.values = set(config.values)
@@ -221,7 +220,7 @@ class Filter:
 class Subsample:
     """Subsample data based on property ratios."""
 
-    def __init__(self, config: SubsampleConfig):
+    def __init__(self, config: SubsampleConfig) -> None:
         if not all(0 <= r <= 1 for r in config.ratios.values()):
             raise ValueError("All ratios must be in [0, 1]")
         self.cfg = config
@@ -324,7 +323,7 @@ class Subsample:
 class UniformSample:
     """Uniformly sample data based on a property."""
 
-    def __init__(self, config: UniformSampleConfig):
+    def __init__(self, config: UniformSampleConfig) -> None:
         if config.operation != "uniform_sample":
             raise ValueError("UniformSampleConfig.operation must be 'uniform_sample'")
         if not 0 <= config.ratio <= 1:
@@ -354,7 +353,10 @@ class UniformSample:
         return pd.concat(groups, ignore_index=True)
 
     def _uniform_sample_dict(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Uniformly sample a dictionary of data."""
+        """
+        Uniformly sample a dictionary of data.
+
+        """
         prop = self.cfg.property
         ratio = self.cfg.ratio
         selected: Dict[str, Any] = {}
@@ -382,7 +384,7 @@ def build_transforms(
     transform_configs: list[RegisteredTransformConfigs],
 ) -> list[Callable[[pd.DataFrame], pd.DataFrame]]:
     """
-    Build the transformation pipeline from **validated** configs.
+    Build the transformation pipeline from a list of Pydantic-validated configs.
 
     Parameters
     ----------
