@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Literal, Union
+from typing import Literal
 
 import pandas as pd
 
@@ -37,13 +37,11 @@ class Filter:
     def from_config(cls, cfg: FilterConfig) -> "Filter":
         return cls(**cfg.model_dump(exclude=("type")))
 
-    def __call__(
-        self, data: pd.DataFrame | dict[str, Any]
-    ) -> tuple[pd.DataFrame | dict[str, Any], dict]:
+    def __call__(self, data: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         """Filter the data based on property values.
 
         Args:
-            data: The data to filter (DataFrame or dict).
+            data: The data dataframe to filter
 
         Returns:
             The filtered data (same type as input).
@@ -53,8 +51,8 @@ class Filter:
         """
         if isinstance(data, pd.DataFrame):
             return self._filter_dataframe(data), {}
-        elif isinstance(data, dict):
-            return self._filter_dict(data), {}
+        # elif isinstance(data, dict):
+        #     return self._filter_dict(data), {}
         else:
             raise TypeError(f"Unsupported data type: {type(data)}")
 
@@ -72,18 +70,20 @@ class Filter:
         else:
             return df[~df[self.property].isin(self.values)]
 
-    def _filter_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter a dictionary of data.
+    # Right now we assume dataframe (though that will change soon)
 
-        Args:
-            data: The dictionary to filter.
+    # def _filter_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    #     """Filter a dictionary of data.
 
-        Returns:
-            Dict[str, Any]: The filtered dictionary.
-        """
-        if self.mode == "include":
-            return {k: v for k, v in data.items() if v[self.property] in self.values}
-        else:
-            return {
-                k: v for k, v in data.items() if v[self.property] not in self.values
-            }
+    #     Args:
+    #         data: The dictionary to filter.
+
+    #     Returns:
+    #         Dict[str, Any]: The filtered dictionary.
+    #     """
+    #     if self.mode == "include":
+    #         return {k: v for k, v in data.items() if v[self.property] in self.values}
+    #     else:
+    #         return {
+    #             k: v for k, v in data.items() if v[self.property] not in self.values
+    #         }
