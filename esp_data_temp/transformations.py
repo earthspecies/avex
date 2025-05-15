@@ -4,7 +4,6 @@ Data transformation utilities for filtering and subsampling datasets.
 
 import logging
 from collections.abc import Callable
-from functools import partial
 
 import pandas as pd
 
@@ -12,12 +11,12 @@ from esp_data_temp.transforms import (
     Filter,
     FilterConfig,
     LabelFromFeature,
+    LabelFromFeatureConfig,
     RegisteredTransformConfigs,
     Subsample,
     SubsampleConfig,
     UniformSample,
     UniformSampleConfig,
-    create_labels,
 )
 
 logger = logging.Logger("esp_data")
@@ -27,9 +26,9 @@ logger = logging.Logger("esp_data")
 # maybe ban positional arguments once you've edited them all
 
 
-def build_transforms(
-    transform_configs: list[RegisteredTransformConfigs],
-) -> list[Callable[[pd.DataFrame], pd.DataFrame]]:
+def transform_from_config(
+    cfg: RegisteredTransformConfigs,
+) -> Callable[[pd.DataFrame], tuple[pd.DataFrame, dict]]:
     """
     Build the transformation pipeline from a list of Pydantic-validated configs.
 
@@ -49,22 +48,18 @@ def build_transforms(
     list[Callable]
         Callable objects that can be applied in sequence.
     """
-    transforms: list[Callable[[pd.DataFrame], pd.DataFrame]] = []
-
     # TODO (milad) replace with a Registry pattern?
 
-    for cfg in transform_configs:
-        if isinstance(cfg, FilterConfig):
-            transforms.append(Filter(cfg))
-        elif isinstance(cfg, SubsampleConfig):
-            transforms.append(Subsample(cfg))
-        elif isinstance(cfg, LabelFromFeature):
-            transforms.append(partial(create_labels, cfg=cfg))  # TODO (milad)
-        elif isinstance(cfg, UniformSampleConfig):
-            transforms.append(UniformSample(cfg))
-        else:  # this should never happen if DataConfig was validated
-            raise TypeError(
-                "build_transforms() received an unexpected config type: "
-                f"{type(cfg).__name__}"
-            )
-    return transforms
+    if isinstance(cfg, FilterConfig):
+        return Filter(cfg)
+    elif isinstance(cfg, SubsampleConfig):
+        return Subsample(cfg)
+    elif isinstance(cfg, LabelFromFeatureConfig):
+        return LabelFromFeature.from_config(cfg)
+    elif isinstance(cfg, UniformSampleConfig):
+        return UniformSample(cfg)
+    else:  # this should never happen if DataConfig was validated
+        raise TypeError(
+            "build_transforms() received an unexpected config type: "
+            f"{type(cfg).__name__}"
+        )

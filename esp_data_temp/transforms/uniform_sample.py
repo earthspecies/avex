@@ -1,8 +1,8 @@
 import logging
 from typing import Any, Literal
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from ._base import TransformModel
 

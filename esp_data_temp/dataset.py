@@ -14,7 +14,7 @@ import soundfile as sf
 from google.cloud.storage.client import Client
 
 from .config import DatasetConfig
-from .transformations import build_transforms
+from .transformations import transform_from_config
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
@@ -222,14 +222,16 @@ def get_dataset_dummy(
     metadata = {}
 
     if data_config.transformations:
-        transforms = build_transforms(data_config.transformations)
-        for transform in transforms:
+        for cfg in data_config.transformations:
+            transform = transform_from_config(cfg)
             df, md = transform(df)
 
             # TODO (milad): hacky but let's think about it
             # TODO (test if keys already exist and shout?)
             if md:
                 metadata.update(md)
+
+    # TODO (milad) transform API should be AudioDataset -> AudioDataset not df->df
 
     return AudioDataset(
         df=df,

@@ -7,7 +7,7 @@ from ._base import TransformModel as TransformModel  # isort:skip
 from .filter import Filter as Filter
 from .filter import FilterConfig as FilterConfig
 from .label_from_feature import LabelFromFeature as LabelFromFeature
-from .label_from_feature import create_labels as create_labels
+from .label_from_feature import LabelFromFeatureConfig as LabelFromFeatureConfig
 from .subsample import Subsample as Subsample
 from .subsample import SubsampleConfig as SubsampleConfig
 from .uniform_sample import UniformSample as UniformSample

@@ -8,7 +8,7 @@ from ._base import TransformModel
 logger = logging.Logger("esp_data")
 
 
-class LabelFromFeature(TransformModel):
+class LabelFromFeatureConfig(TransformModel):
     type: Literal["label_from_feature"]
     feature: str
     num_classes: int | Literal["auto"] = "auto"
@@ -16,30 +16,51 @@ class LabelFromFeature(TransformModel):
     override: bool = False
 
 
-# TODO (milad) name too similar too config class
-# @register_transform(LabelFromFeature)
-def create_labels(
-    df: pd.DataFrame, cfg: LabelFromFeature
-) -> tuple[pd.DataFrame, dict | None]:
-    if cfg.output_feature in df and not cfg.override:
-        raise AssertionError("TODO (milad)")
+class LabelFromFeature:
+    def __init__(
+        self,
+        *,
+        feature: str,
+        num_classes: int | Literal["auto"] = "auto",
+        output_feature: str = "label",
+        override: bool = False,
+    ) -> None:
+        self.feature = feature
+        self.num_classes = num_classes
+        self.override = override
+        self.output_feature = output_feature
 
-    # TODO (milad) the .copy() is probably making this slow but without it I get this
-    # warning: https://pandas.pydata.org/pandas-docs/stable/user_guide/copy_on_write.html#copy-on-write-chained-assignment
-    # Find a better way
-    df_clean = df.dropna(subset=[cfg.feature]).copy()
-    if len(df_clean) != len(df):
-        logger.warn(f"Dropped {len(df) - len(df_clean)} rows with {cfg.feature}=NaN")
+    # @register_transform_factory_from_config(LabelFromFeatureConfig)
+    @classmethod
+    def from_config(cls, cfg: LabelFromFeatureConfig) -> "LabelFromFeature":
+        return cls(**cfg.model_dump(exclude=("type")))
 
-    uniques = sorted(df_clean[cfg.feature].unique())
-    label_mapping = {lbl: idx for idx, lbl in enumerate(uniques)}
-    df_clean[cfg.output_feature] = df_clean[cfg.feature].map(label_mapping)
+    def __call__(self, df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+        if self.output_feature in df and not self.override:
+            raise AssertionError("TODO (milad)")
 
-    # TODO (milad): hacky. Just here to make things run
-    # We should think about how transforms can add/modify dataset-wide properties
-    metadata = {
-        "label_map": label_mapping,
-        "num_classes": len(uniques) if cfg.num_classes == "auto" else cfg.num_classes,
-    }
+        # TODO (milad) the .copy() is probably making this slow but without it I get
+        # this warning:
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/copy_on_write.html#copy-on-write-chained-assignment
+        # Maybe find a better way?
+        df_clean = df.dropna(subset=[self.feature]).copy()
+        if len(df_clean) != len(df):
+            logger.warning(
+                f"Dropped {len(df) - len(df_clean)} rows with {self.feature}=NaN"
+            )
 
-    return df_clean, metadata
+        uniques = sorted(df_clean[self.feature].unique())
+        label_mapping = {lbl: idx for idx, lbl in enumerate(uniques)}
+        df_clean[self.output_feature] = df_clean[self.feature].map(label_mapping)
+
+        # TODO (milad): hacky. Just here to make things run
+        # We should think about how transforms can add/modify dataset-wide properties
+        metadata = {
+            "label_feature": self.feature,
+            "label_map": label_mapping,
+            "num_classes": len(uniques)
+            if self.num_classes == "auto"
+            else self.num_classes,
+        }
+
+        return df_clean, metadata
