@@ -114,11 +114,10 @@ class CLIPModel(ModelBase):
         audio_embeddings = self.encode_audio(audio, padding_mask)
         text_embeddings = self.encode_text(text)
 
-        # used in the original CLIP paper (<= log(100) ≈ 4.605).
+        # Clamp temperature as in the original CLIP paper (<= log(100) ≈ 4.605).
         LOGIT_SCALE_MAX = math.log(1.0 / 0.01)  # log(100)
         with torch.no_grad():
             self.logit_scale.clamp_(max=LOGIT_SCALE_MAX)
 
         # Return embeddings and *scalar* positive logit scale so the loss can
-        # use the up-to-date value.
         return audio_embeddings, text_embeddings, self.logit_scale.exp()

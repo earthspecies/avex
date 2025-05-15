@@ -27,7 +27,6 @@ experiments:
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     # checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
-    # checkpoint_path: runs/clip_baseline_full/checkpoints/checkpoint_epoch_014.pt
     checkpoint_path: runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_005.pt
 
 # Where to save the evaluation results

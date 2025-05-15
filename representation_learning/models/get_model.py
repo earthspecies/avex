@@ -67,14 +67,12 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             Model as EATModel,  # Local import to avoid heavy deps when unused
         )
 
-        # Optional kwargs specific to EAT – fallback to sensible defaults if not
-        # provided
+        # Optional EAT-specific kwargs
         embed_dim = getattr(model_config, "embed_dim", 768)
         patch_size = getattr(model_config, "patch_size", 16)
         target_length = getattr(model_config, "target_length", 256)
         enable_ema = getattr(model_config, "enable_ema", False)
         pretraining_mode = getattr(model_config, "pretraining_mode", False)
-
         eat_cfg_overrides = getattr(model_config, "eat_cfg", None)
 
         return EATModel(
@@ -103,6 +101,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             large=large,
         )
     else:
+        # Fallback
         supported = (
             "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', "
             "'resnet152', 'aves'."

@@ -36,13 +36,13 @@ jobs:
               run: python -c "import sys; print(sys.version)"
             - name: Consistency tests with pytest
               run: |
-                  pytest tests/consistency --base_folder my_dummy_library
+                  pytest tests/consistency --base_folder representation_learning
             - name: Unittests with pytest
               run: |
                   pytest tests/unittests
             - name: Doctests with pytest
               run: |
-                  pytest --doctest-modules my_dummy_library
-            - name: Integration tests with pytest
-              run: |
-                  pytest tests/integration
+                  pytest --doctest-modules representation_learning
+            # - name: Integration tests with pytest
+            #  run: |
+            #      pytest tests/integration

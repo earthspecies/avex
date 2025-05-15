@@ -171,7 +171,7 @@ def run_experiment(
         base_model.load_state_dict(state["model_state_dict"], strict=False)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
-    # base_model.eval()  # TODO: is this right?
+    base_model.eval()  # TODO: is this right?
     logger.info(
         "Model → %s parameters", sum(p.numel() for p in base_model.parameters())
     )

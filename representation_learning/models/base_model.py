@@ -133,18 +133,14 @@ class ModelBase(nn.Module):
             if not embeddings:
                 raise ValueError(f"No layers found matching: {layers}")
 
-            # Process embeddings
             result = []
             for emb in embeddings:
-                # Flatten while keeping on GPU
                 flattened = emb.flatten(start_dim=1)
                 result.append(flattened)
 
             return torch.cat(result, dim=1)
 
         finally:
-            # Ensure hooks are always removed
             for hook in hooks:
                 hook.remove()
-            # Clear any remaining references
             del embeddings

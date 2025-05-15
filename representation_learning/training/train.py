@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, RunConfig
+from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
     is_main_process,
@@ -457,6 +458,10 @@ class Trainer:
         else:
             avg_acc = total_correct / total_samples if total_samples else 0.0
 
+        # Print profiling summary at the end of each epoch if we're training
+        if train and is_main_process():
+            print_profiling_summary()
+
         return avg_loss, avg_acc
 
     def _forward(
@@ -854,19 +859,19 @@ class FineTuneTrainer:
 
         self.best_val_acc = 0.0
 
-        # Keep copies of the best epoch information so we can restore the
-        # corresponding model at the end of training and report its metrics.
+        # Keep an in-memory copy of best epoch metrics/state for quick restore
         self._best_state_dict: dict[str, torch.Tensor] | None = None
         self._best_train_metrics: dict[str, float] | None = None
         self._best_val_metrics: dict[str, float] | None = None
 
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
-        """Run the full training loop.
+        """
+        Run the full fine-tuning loop and return best train/val metrics.
 
         Returns
         -------
         tuple[dict[str, float], dict[str, float]]
-            ``(best_train_metrics, best_val_metrics)`` collected across epochs.
+            A tuple of (best_train_metrics, best_val_metrics) collected across epochs.
         """
         for epoch in range(1, num_epochs + 1):
             train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
@@ -928,19 +933,13 @@ class FineTuneTrainer:
         tuple[float, float]
             A tuple ``(loss, accuracy)`` computed over the entire epoch.
         """
-        # Ensure the model is in the correct mode
-        if train:
-            self.model.train()
-        else:
-            self.model.eval()
-
         loader = self.train_loader if train else self.val_loader
 
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
 
-        # Disable gradient calculation for evaluation to save memory / speed-up
+        # Disable gradients during evaluation for speed / memory
         grad_ctx = torch.enable_grad() if train else torch.no_grad()
 
         with grad_ctx:
@@ -955,7 +954,6 @@ class FineTuneTrainer:
                     mask = mask.to(self.device)
                 y = batch["label"].to(self.device)
 
-                # Forward pass
                 logits = (
                     self.model(x, padding_mask=mask)
                     if mask is not None
@@ -963,13 +961,11 @@ class FineTuneTrainer:
                 )
                 loss = self.criterion(logits, y)
 
-                # Backward pass if training
                 if train:
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
 
-                # Calculate accuracy
                 if self.multi_label:
                     pred = (torch.sigmoid(logits) > 0.5).float()
                     correct = (pred == y).all(dim=1).sum().item()
@@ -977,7 +973,6 @@ class FineTuneTrainer:
                     pred = logits.argmax(dim=1)
                     correct = (pred == y).sum().item()
 
-                # Update metrics
                 total_loss += loss.item() * y.size(0)
                 total_correct += correct
                 total_samples += y.size(0)
