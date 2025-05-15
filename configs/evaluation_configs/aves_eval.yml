@@ -1,0 +1,28 @@
+---
+# Evaluation config for Bird-AVES backbone on the benchmark dataset.
+# Largely copied from `test.yml` but swaps the experiment to AVES.
+
+dataset_config: configs/data_configs/benchmark_base.yml
+
+training_params:
+  train_epochs: 10
+  lr: 0.0001
+  batch_size: 8
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+experiments:
+  - run_name: aves_probe
+    run_config: configs/run_configs/aves_base.yml
+    layers: last_layer      # Use classifier layer for embeddings
+    pretrained: true        # Use pretrained AVES backbone
+
+# Where to save the evaluation results
+save_dir: evaluation_results_aves
+
+device: cuda
+seed: 42
+num_workers: 8
+frozen: false  # Set true for pure linear-probe 
