@@ -1,3 +1,4 @@
+import math
 from typing import Any, Dict, Optional, Tuple
 
 import torch
@@ -85,10 +86,11 @@ class CLIPModel(ModelBase):
         torch.Tensor
             Normalized text embeddings
         """
-        # Tokenize text with max length of 50 tokens
+        # Move token tensors to *current* device of the module (safe for DDP)
+        current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
             text, padding=True, truncation=True, max_length=50, return_tensors="pt"
-        ).to(self.device)
+        ).to(current_device)
 
         # Get text embeddings
         outputs = self.text_encoder(**tokens)
@@ -112,6 +114,11 @@ class CLIPModel(ModelBase):
         audio_embeddings = self.encode_audio(audio, padding_mask)
         text_embeddings = self.encode_text(text)
 
-        # Return embeddings and *scalar* logit scale (positive) so the loss can
+        # used in the original CLIP paper (<= log(100) ≈ 4.605).
+        LOGIT_SCALE_MAX = math.log(1.0 / 0.01)  # log(100)
+        with torch.no_grad():
+            self.logit_scale.clamp_(max=LOGIT_SCALE_MAX)
+
+        # Return embeddings and *scalar* positive logit scale so the loss can
         # use the up-to-date value.
         return audio_embeddings, text_embeddings, self.logit_scale.exp()

@@ -101,6 +101,13 @@ def main() -> None:
 
     logger.info("Number of labels: %d", num_labels)
 
+    # Enable EAT self-supervised mode when requested
+    if config.label_type == "self_supervised":
+        # Pydantic models are immutable by default – use copy(update=...)
+        config.model_spec = config.model_spec.model_copy(
+            update={"pretraining_mode": True}
+        )
+
     # Build the model
     model = get_model(config.model_spec, num_classes=num_labels).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
@@ -137,12 +144,14 @@ def main() -> None:
         amp_dtype=config.training_params.amp_dtype,
         scheduler_config=config.scheduler.model_dump(mode="json"),
         is_clip_mode=(config.label_type == "text"),
+        is_eat_ssl=(config.label_type == "self_supervised"),
         checkpoint_freq=getattr(config, "checkpoint_freq", 1),
         exp_logger=exp_logger,
         batch_size=config.training_params.batch_size,
         device=device,
         resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
         run_config=config,
+        log_steps=config.training_params.log_steps,
     )
 
     # Train

@@ -29,7 +29,7 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./efficientnet_base_no_mixup"
+output_dir: "./runs/efficientnet_single_14_05"
 
 training_params:
   train_epochs: 30
@@ -78,20 +78,20 @@ augmentations:
       snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
       augmentation_prob: 0.5
     # Mixup augmentation for audio samples
-  - mixup:
-      alpha: 0.4  # Controls the Beta distribution shape
-      n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
-      augmentation_prob: 0.5  # Probability of applying mixup to a batch
+  # - mixup:
+  #     alpha: 0.4  # Controls the Beta distribution shape
+  #     n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+  #     augmentation_prob: 0.5  # Probability of applying mixup to a batch
 
 
 # Cross entropy loss for classification
-loss_function: binary_cross_entropy
+loss_function: cross_entropy
 
 device: cuda
 
 seed: 42
 
-num_workers: 12
+num_workers: 8
 
 run_name: efficientnet_base
 

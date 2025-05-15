@@ -61,7 +61,9 @@ class LinearProbe(torch.nn.Module):
             Classification logits of shape (batch_size, num_classes)
         """
         # Extract embeddings from the base model
-        embeddings = self.base_model.extract_embeddings(x, self.layers)
+        embeddings = self.base_model.extract_embeddings(
+            x, self.layers, padding_mask=padding_mask
+        )
         # embeddings = self.base_model(x, padding_mask=padding_mask)
 
         # Pass through the linear classifier

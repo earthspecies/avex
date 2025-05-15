@@ -41,7 +41,9 @@ class ModelBase(nn.Module):
         """
         if self.audio_processor is not None:
             x = self.audio_processor(x)
-        return x.to(self.device)
+
+        target_device = next(self.parameters()).device
+        return x.to(target_device)
 
     def batch_inference(self, batched_samples: torch.Tensor) -> torch.Tensor:
         """
@@ -66,13 +68,20 @@ class ModelBase(nn.Module):
             embeds.append(embedding)
         return torch.cat(embeds, axis=0)
 
-    def extract_embeddings(self, x: torch.Tensor, layers: List[str]) -> torch.Tensor:
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
+        layers: List[str],
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Extract embeddings from specified layers of the model.
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
             layers: List of layer names to extract embeddings from
+            padding_mask: Optional padding mask tensor
 
         Returns
         -------
@@ -102,13 +111,18 @@ class ModelBase(nn.Module):
 
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)
             if isinstance(x, dict):
-                # If input is a dictionary, extract raw_wav and padding_mask
+                # Input provided as dictionary with explicit padding mask
                 raw_wav = x["raw_wav"]
-                padding_mask = x["padding_mask"]
-                self(raw_wav, padding_mask)
+                p_mask = x["padding_mask"]
+                self(raw_wav, p_mask)
             else:
-                # For backward compatibility, create a padding mask of ones
-                padding_mask = torch.ones(x.size(0), x.size(1), device=x.device)
+                # Tensor input – use provided mask if available, otherwise assume
+                # fully-valid signal (all ones).
+                if padding_mask is None:
+                    padding_mask = torch.ones(
+                        x.size(0), x.size(1), device=x.device, dtype=torch.bool
+                    )
+
                 if self.__class__.__name__ == "CLIPModel":
                     dummy_text = ["" for _ in range(x.size(0))]
                     self(x, dummy_text, padding_mask)

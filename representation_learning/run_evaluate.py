@@ -171,7 +171,7 @@ def run_experiment(
         base_model.load_state_dict(state["model_state_dict"], strict=False)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
-    base_model.eval()  # TODO: is this right?
+    # base_model.eval()  # TODO: is this right?
     logger.info(
         "Model → %s parameters", sum(p.numel() for p in base_model.parameters())
     )
@@ -203,6 +203,7 @@ def run_experiment(
         logger.info("Freezing backbone parameters (eval_cfg.frozen=True)")
         for p in base_model.parameters():
             p.requires_grad = False
+        base_model.eval()
 
     trainable_params = filter(lambda p: p.requires_grad, linear_probe.parameters())
     optim = get_optimizer(trainable_params, eval_cfg.training_params)
@@ -300,11 +301,11 @@ def main() -> None:
     torch.manual_seed(42)  # Fixed seed for reproducibility
 
     # 5. Run experiments for each dataset and experiment combination
+    all_results = []
     for dataset in dataset_cfg.datasets:
-        results = []
         for experiment in eval_cfg.experiments:
             result = run_experiment(eval_cfg, dataset, experiment, device, save_dir)
-            results.append(result)
+            all_results.append(result)
 
             # Log results
             logger.info(
@@ -326,7 +327,7 @@ def main() -> None:
     with open(summary_path, "w") as f:
         f.write("Experiment Summary\n")
         f.write("================\n\n")
-        for result in results:
+        for result in all_results:
             f.write(f"Dataset: {result.dataset_name}\n")
             f.write(f"Experiment: {result.experiment_name}\n")
             f.write(f"Train metrics: {result.train_metrics}\n")

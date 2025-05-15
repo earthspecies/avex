@@ -33,10 +33,10 @@ debug_mode: false
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./clip_baseline_full"
+output_dir: "./runs/clip_baseline_13_05"
 
 # Path to checkpoint to resume from (set to null or a path)
-resume_from_checkpoint: null
+resume_from_checkpoint: runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_034.pt
 
 training_params:
   train_epochs: 60
@@ -46,6 +46,7 @@ training_params:
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
+  log_steps: 100
 
 # Learning rate scheduler configuration
 scheduler:
@@ -94,9 +95,9 @@ loss_function: contrastive
 
 device: cuda
 
-seed: 42
+seed: 43
 
-num_workers: 10
+num_workers: 8
 
 run_name: clip_base
 

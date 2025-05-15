@@ -56,12 +56,15 @@ def add_noise(
     * Works with local paths and ``gs://`` buckets (via :class:`GSPath`).
     * Keeps the original tensor/ndarray interface.
 
-    Returns:
-        torch.Tensor: The audio with added noise.
+    Returns
+    -------
+    torch.Tensor
+        The audio tensor with added noise (same shape as input).
 
-    Raises:
-        FileNotFoundError: If the noise directory is not found.
-        RuntimeError: If noise file inspection or loading fails.
+    Raises
+    ------
+    FileNotFoundError
+        If *noise_dir* does not exist or contains no audio files.
     """
 
     # ------------------------------------------------------------------
@@ -104,7 +107,8 @@ def add_noise(
     try:
         info = torchaudio.info(noise_path)
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Failed to inspect noise file {noise_path}: {exc}") from exc
+        print(f"Failed to inspect noise file {noise_path}: {exc}")
+        return audio
 
     noise_sr = info.sample_rate
     total_frames = info.num_frames
@@ -123,7 +127,8 @@ def add_noise(
             noise_path, frame_offset=frame_offset, num_frames=num_frames
         )
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Failed to load noise file {noise_path}: {exc}") from exc
+        print(f"Failed to load noise file {noise_path}: {exc}")
+        return audio
 
     # ------------------------------------------------------------------
     # Normalise channels, resample, length‑match, and mix

@@ -118,8 +118,22 @@ class AudioDataset:
 
         # Open the audio file. Using the .open('rb') method works for both local and
         # GSPath objects.
-        with audio_path.open("rb") as f:
-            audio, sr = sf.read(f)
+        try:
+            MAX_SECONDS = 60
+            with audio_path.open("rb") as f, sf.SoundFile(f) as snd:
+                sr = snd.samplerate
+                total_frames = len(snd)              # total samples in file
+                cap_frames   = sr * MAX_SECONDS
+
+                # Decide how many frames to read
+                frames_to_read = min(total_frames, cap_frames)
+                audio = snd.read(frames=frames_to_read, dtype="float32")
+
+        except Exception as e:
+            print(f"Error reading audio file: {e}")
+            print(f"Audio path: {audio_path}")
+            sr = 16_000
+            audio = np.zeros(sr * MAX_SECONDS, dtype="float32")  # 60 s of silence
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
