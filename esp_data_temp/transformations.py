@@ -51,7 +51,7 @@ def transform_from_config(
     # TODO (milad) replace with a Registry pattern?
 
     if isinstance(cfg, FilterConfig):
-        return Filter(cfg)
+        return Filter.from_config(cfg)
     elif isinstance(cfg, SubsampleConfig):
         return Subsample(cfg)
     elif isinstance(cfg, LabelFromFeatureConfig):

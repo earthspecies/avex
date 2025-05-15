@@ -39,10 +39,9 @@ class LabelFromFeature:
         if self.output_feature in df and not self.override:
             raise AssertionError("TODO (milad)")
 
-        # TODO (milad) the .copy() is probably making this slow but without it I get
-        # this warning:
+        # TODO (milad) the .copy() is probably making this slow but without it I get the
+        # warning below. Maybe find a better way?
         # https://pandas.pydata.org/pandas-docs/stable/user_guide/copy_on_write.html#copy-on-write-chained-assignment
-        # Maybe find a better way?
         df_clean = df.dropna(subset=[self.feature]).copy()
         if len(df_clean) != len(df):
             logger.warning(

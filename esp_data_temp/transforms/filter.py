@@ -18,19 +18,28 @@ class FilterConfig(TransformModel):
 class Filter:
     """Filter data based on property values."""
 
-    def __init__(self, config: FilterConfig) -> None:
+    def __init__(
+        self,
+        *,
+        property: str,
+        values: list[str],
+        mode: Literal["include", "exclude"] = "include",
+    ) -> None:
         """
         Initialize the filter.
-
-        Args:
-            config: Filter configuration
         """
-        self.config = config
-        self.values = set(config.values)
+
+        self.mode = mode
+        self.property = property
+        self.values = values
+
+    @classmethod
+    def from_config(cls, cfg: FilterConfig) -> "Filter":
+        return cls(**cfg.model_dump(exclude=("type")))
 
     def __call__(
-        self, data: Union[pd.DataFrame, Dict[str, Any]]
-    ) -> Union[pd.DataFrame, Dict[str, Any]]:
+        self, data: pd.DataFrame | dict[str, Any]
+    ) -> tuple[pd.DataFrame | dict[str, Any], dict]:
         """Filter the data based on property values.
 
         Args:
@@ -43,9 +52,9 @@ class Filter:
             TypeError: If the data type is not supported.
         """
         if isinstance(data, pd.DataFrame):
-            return self._filter_dataframe(data), None
+            return self._filter_dataframe(data), {}
         elif isinstance(data, dict):
-            return self._filter_dict(data), None
+            return self._filter_dict(data), {}
         else:
             raise TypeError(f"Unsupported data type: {type(data)}")
 
@@ -58,10 +67,10 @@ class Filter:
         Returns:
             pd.DataFrame: The filtered DataFrame.
         """
-        if self.config.mode == "include":
-            return df[df[self.config.property].isin(self.values)]
+        if self.mode == "include":
+            return df[df[self.property].isin(self.values)]
         else:
-            return df[~df[self.config.property].isin(self.values)]
+            return df[~df[self.property].isin(self.values)]
 
     def _filter_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter a dictionary of data.
@@ -72,13 +81,9 @@ class Filter:
         Returns:
             Dict[str, Any]: The filtered dictionary.
         """
-        if self.config.mode == "include":
-            return {
-                k: v for k, v in data.items() if v[self.config.property] in self.values
-            }
+        if self.mode == "include":
+            return {k: v for k, v in data.items() if v[self.property] in self.values}
         else:
             return {
-                k: v
-                for k, v in data.items()
-                if v[self.config.property] not in self.values
+                k: v for k, v in data.items() if v[self.property] not in self.values
             }
