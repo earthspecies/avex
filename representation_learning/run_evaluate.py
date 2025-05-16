@@ -141,6 +141,7 @@ def run_experiment(
     base_model = get_model(original_run_cfg.model_spec, num_classes=num_labels).to(
         device
     )
+    base_model.device = device
 
     # If pretrained=True, we don't need to load a checkpoint
     if not experiment_config.pretrained:
