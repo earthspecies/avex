@@ -135,7 +135,6 @@ class AudioDataset:
             )
             sr = target_sr
 
-
         item = {
             "raw_wav": audio.astype(np.float32),
             "text_label": row["label_feature"],

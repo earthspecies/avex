@@ -22,10 +22,6 @@ from esp_data_temp.transforms import (
 logger = logging.Logger("esp_data")
 
 
-# TODO (milad) I kind what all these transform functions to have a simple interface so
-# maybe ban positional arguments once you've edited them all
-
-
 def transform_from_config(
     cfg: RegisteredTransformConfigs,
 ) -> Callable[[pd.DataFrame], tuple[pd.DataFrame, dict]]:

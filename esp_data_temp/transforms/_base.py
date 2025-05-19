@@ -64,7 +64,7 @@ class TransformModel(BaseModel):
             TransformModel._rebuild_union_type()
 
     @classmethod
-    def _rebuild_union_type(cls):
+    def _rebuild_union_type(cls) -> None:
         global RegisteredTransformConfigs
         RegisteredTransformConfigs = Annotated[
             Union[tuple(_TRANSFORM_REGISTRY.values())], Field(discriminator="type")
