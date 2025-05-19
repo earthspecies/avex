@@ -1,0 +1,40 @@
+Below is a “gap-check” between the current wrapper/port we just finished and the reference upstream code (links you provided). I focus on areas that could influence training quality or reproducibility; cosmetic and Fairseq-only items are ignored.
+1. File-structure & class availability
+| Upstream file | Purpose | Our port | Notes / Potential issues |
+|---|---|---|---|
+| models/base.py | • dataclasses & helpers<br>• ModalitySpecificEncoder | Ported almost verbatim, but: <br>– OmegaConf replaced by stubs.<br>– index_put, masking utils intact. | ✔️ Safe; stubs only affect optional CLI YAML parsing. |
+| models/modules.py | • AltBlock, AltAttention, BlockEncoder, decoders, etc. | • All core modules ported.<br>• Simplified BlockEncoder (no exact layer-drop schedule, no per-layer residual flags) | ⚠️ If original used complex layer-drop dynamics this may change regularisation slightly. |
+| models/images.py | Image / spectrogram encoder | Ported; kept all decoding options.<br>Added self.modality_cfg attribute.<br>Re-implemented reset_parameters() & masking helper. | ⚠️ reset_parameters() differs (uses simple Xavier uniform everywhere). Upstream initialises conv proj then calls init_bert_params on projections – difference is minor. |
+| models/mae.py | MAE helper (for image pre-training) | Ported; added PatchEmbed_new alias + new flexible 2-D sin-cos function. | ✔️ Functionally identical; flexible PE just generalises shape. |
+| models/EAT_pretraining.py | Full pre-training task (d2v + MAE + DINO losses) | Not included; we only keep the backbone (Data2VecMultiModel) and expose it for downstream supervised fine-tuning. | ⚠️ If you intend to pre-train from scratch using the original self-supervised losses, the loss graph is currently stubbed out with NotImplementedError. |
+2. Simplifications in our port
+EMA Teacher
+Upstream uses an EMA copy for student-teacher loss and for exponential averaging of weights during fine-tuning.
+• We set skip_ema=True (line 48 in audio_model.py) and do not update the EMA.
+• For supervised fine-tuning on top of a pre-trained checkpoint that may be OK; for self-supervised training you would need the teacher.
+Supported modalities
+• Current wrapper supports only Modality.IMAGE (spectrograms treated as 1-channel images).
+• Upstream supports AUDIO, IMAGE, TEXT; inter-modal masking logic not present.
+Positional embeddings
+• Upstream images use get_2d_sincos_pos_embed (square).
+• We introduced get_2d_sincos_pos_embed_flexible producing half-dim-per-axis embeddings to match original concat rule (each axis gets D/2). The math matches upstream; verified by inspecting the original function.
+Weight initialisation
+• Upstream: init_bert_params on every module + specific conv init.
+• We replicate for most modules but had to guard against None biases; otherwise identical.
+BlockEncoder
+• Original class (in upstream modules.py) supports layerdrop probability per block and returns both “x” and “targets”.
+• Our minimalist version still supports layerdrop but always returns the first tuple element. Only concern: no per-block drop-path schedule (we kept global prob). Effect on convergence should be small, but may matter for reproducing pre-training metrics.
+Masking for spectrograms
+• Original image mask logic (for block masks) is preserved, but we rely on an external helper (utils.data_utils.compute_block_mask_2d). If that helper does not exist in our codebase, block masking will fail. (Current fine-tune path sets mask=False, so it’s unused.)
+Audio pathway
+• Upstream has a dedicated 1-D CNN + transformer path for raw waveforms (AUDIO modality). We bypass it via spectrogram-as-image. Accuracy may differ from raw-audio training.
+
+
+3. Things missing for full parity
+| Component | Needed for | Status |
+|-----------|------------|--------|
+| EMA teacher update in training loop | Pre-training & moving-avg eval | Not implemented (skip_ema=True) |
+| Pre-training losses (d2v, recon, DINO) | Self-supervised training | Stubbed out with NotImplementedError |
+| Raw-audio encoder (AudioEncoder sub-class) | Audio-only data2vec-multi pre-training | Omitted |
+| Multi-modality routing (TEXT, etc.) | Multimodal pre-training | Omitted |
+| Layer-wise drop-path schedule inside BlockEncoder | Exact reproduction of upstream regularisation | Simplified |

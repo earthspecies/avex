@@ -1,0 +1,44 @@
+---
+# ResNet-18 backbone for audio classification (linear probe)
+model_spec:
+  name: resnet18
+  pretrained: true
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+# Required by RunConfig but not used during evaluation; kept for validity
+dataset_config: configs/data_configs/data_base.yml
+output_dir: "./resnet18_baseline"
+
+label_type: supervised
+loss_function: cross_entropy
+training_params:
+  train_epochs: 60
+  lr: 0.0001
+  batch_size: 256
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+scheduler:
+  name: cosine
+  warmup_steps: 500
+  min_lr: 1e-6
+
+augmentations: []
+
+device: cuda
+seed: 42
+num_workers: 10
+run_name: resnet18_base
