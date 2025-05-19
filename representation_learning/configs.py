@@ -25,7 +25,7 @@ import yaml
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from esp_data_temp.dataset import DatasetConfig
+from esp_data_temp.config import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -68,6 +68,7 @@ class NoiseAugment(BaseModel):
 class MixupAugment(BaseModel):
     kind: Literal["mixup"] = "mixup"
     alpha: float = Field(..., gt=0)
+    n_mixup: int = Field(1, ge=1, description="Number of mixup pairs per batch")
     augmentation_prob: float = Field(..., ge=0, le=1)
 
     model_config = ConfigDict(extra="forbid")
@@ -172,7 +173,19 @@ class RunConfig(BaseModel):
     )
 
     augmentations: List[Augment] = Field(default_factory=list)
-    loss_function: Literal["cross_entropy", "bce", "contrastive", "clip"]
+    # Allow common aliases for BCE to avoid validation errors in older configs
+    loss_function: Literal[
+        "cross_entropy",
+        "bce",
+        "binary_cross_entropy",
+        "contrastive",
+        "clip",
+    ]
+
+    # Enable multi-label classification
+    multilabel: bool = Field(
+        False, description="Whether to use multi-label classification"
+    )
 
     device: str = "cuda"
     seed: int = 42
@@ -194,7 +207,14 @@ class RunConfig(BaseModel):
 
         YAML allows:
             - noise: {noise_dirs: [...], snr_db_range: [-5, 20], augmentation_prob: 0.5}
-        This turns into {kind:"noise", noise_dirs: [...], ...} so the discriminated
+
+        But we need:
+            - kind: noise
+              noise_dirs: [...]
+              snr_db_range: [-5, 20]
+              augmentation_prob: 0.5
+
+        This transformer ensures both styles work, which means the Pydantic
         union resolves correctly.
 
         Returns
@@ -216,6 +236,46 @@ class RunConfig(BaseModel):
                 processed.append(item)
         return processed
 
+    # ------------------------------
+    # validator for multilabel and loss_function
+    # ------------------------------
+    @field_validator("loss_function")
+    @classmethod
+    def validate_loss_function(cls, v: str, info: Any) -> str:  # noqa: ANN401
+        """Ensure the chosen loss is compatible with other config fields.
+
+        Returns
+        -------
+        str
+            The validated loss-function name.
+
+        Raises
+        ------
+        ValueError
+            If `multilabel` is ``True`` but the loss is not *BCE*, or when a
+            contrastive/CLIP loss is requested for a non-text label type.
+        """
+        data = info.data
+
+        # Map alias to canonical form first
+        if v == "binary_cross_entropy":
+            v = "bce"
+
+        # Check if multilabel is True but loss function isn't BCE
+        if data.get("multilabel", False) and v != "bce":
+            raise ValueError(
+                f"When multilabel=True, loss_function must be 'bce' (got '{v}' instead)"
+            )
+
+        # Check if loss is clip/contrastive but label_type isn't text
+        if v in ("clip", "contrastive") and data.get("label_type") != "text":
+            raise ValueError(
+                f"Loss function '{v}' requires label_type='text' "
+                f"(got '{data.get('label_type')}' instead)"
+            )
+
+        return v
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -228,6 +288,16 @@ class ExperimentConfig(BaseModel):
     layers: str = Field(
         ...,
         description="List of layer names to extract embeddings from, comma separated",
+    )
+
+    # Optional path to a trained model checkpoint (ignored when `pretrained=True`)
+    checkpoint_path: Optional[str] = Field(
+        None,
+        description=(
+            "Path to the model checkpoint to load when `pretrained` is false. "
+            "If not provided, defaults to 'checkpoints/best.pt' relative to the "
+            "current working directory."
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -260,6 +330,12 @@ class EvaluateConfig(BaseModel):
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
 
+    # Whether to freeze the backbone and train only the linear probe
+    frozen: bool = Field(
+        True,
+        description="If True, do not update base model weights during linear probing.",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -267,7 +343,7 @@ class BenchmarkConfig(BaseModel):
     """Configuration for the entire benchmark suite containing multiple datasets."""
 
     data_path: str = Field(..., description="Base path for all benchmark datasets")
-    datasets: List[DataConfig] = Field(
+    datasets: List[DatasetConfig] = Field(
         ..., description="List of benchmark datasets to evaluate"
     )
 
@@ -278,20 +354,21 @@ class BenchmarkConfig(BaseModel):
 #  Convenience loader
 # --------------------------------------------------------------------------- #
 def load_config(
-    path: str | Path, config_type: Literal["run", "data"] = "run"
-) -> RunConfig | DatasetConfig:
+    path: str | Path,
+    config_type: Literal["run", "data", "evaluate", "benchmark"] = "run",
+) -> RunConfig | DatasetConfig | EvaluateConfig | BenchmarkConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance.
 
     Parameters
     ----------
     path : str | Path
         Path to the YAML configuration file
-    config_type : Literal["run", "data"]
+    config_type : Literal["run", "data", "evaluate", "benchmark"]
         Type of configuration to load
 
     Returns
     -------
-    RunConfig | DataConfig
+    RunConfig | DatasetConfig | EvaluateConfig | BenchmarkConfig
         Validated configuration object
 
     Raises
@@ -299,7 +376,7 @@ def load_config(
     FileNotFoundError
         If the configuration file does not exist
     NotImplementedError
-        If config_type is not "run" or "data"
+        If *config_type* is unrecognised
     """
 
     path = Path(path).expanduser()
