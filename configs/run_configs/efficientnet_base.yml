@@ -29,7 +29,7 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./runs/efficientnet_single_14_05"
+output_dir: "./runs/efficientnet_single_15_05"
 
 training_params:
   train_epochs: 30
@@ -85,13 +85,13 @@ augmentations:
 
 
 # Cross entropy loss for classification
-loss_function: binary_cross_entropy
+loss_function: cross_entropy
 
 device: cuda
 
 seed: 42
 
-num_workers: 8
+num_workers: 10
 
 run_name: efficientnet_base
 

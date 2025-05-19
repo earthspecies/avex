@@ -64,7 +64,26 @@ def main() -> None:
         port=config.distributed_port,
         backend=config.distributed_backend,
     )
-    device = torch.device(f"cuda:{local_rank}" if is_distributed else config.device)
+
+    # ------------------------------------------------------------------ #
+    #  Device selection
+    # ------------------------------------------------------------------ #
+    # On clusters that launch one task *per GPU* SLURM masks the visible
+    # devices for every task so that each process sees *one* GPU enumerated as
+    # index 0.  Using the raw ``local_rank`` (which can be 1, 2, …) would then
+    # lead to an "invalid device ordinal" error.  Detect this situation and
+    # remap the rank to the first visible device (index 0) while keeping the
+    # global rank for DDP intact.
+
+    visible_gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+    if is_distributed and visible_gpu_count == 1:
+        # Only one GPU is visible in this process → always use cuda:0
+        local_device_index = 0
+    else:
+        local_device_index = local_rank if torch.cuda.is_available() else 0
+
+    device = torch.device("cuda", local_device_index) if torch.cuda.is_available() else torch.device("cpu")
 
     torch.manual_seed(config.seed)
 
@@ -133,7 +152,7 @@ def main() -> None:
         train_dl=train_dl,
         eval_dl=val_dl,
         model_dir=output_dir / "checkpoints",
-        local_rank=local_rank,
+        local_rank=local_device_index,
         world_size=world_size,
         is_distributed=is_distributed,
         criterion=config.loss_function,

@@ -9,6 +9,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
+from collections import OrderedDict
 
 import torch
 from cloudpathlib import GSPath
@@ -54,6 +55,54 @@ def _parse_args() -> argparse.Namespace:
         help="Path to the evaluation config YAML (see configs/evaluation_configs/*)",
     )
     return parser.parse_args()
+
+
+def _load_checkpoint_skip_mismatch(model: torch.nn.Module, checkpoint_state: Dict[str, torch.Tensor], logger: logging.Logger | None = None) -> None:
+    """Load *checkpoint_state* into *model* while skipping parameters whose
+    shapes do not match.
+
+    This is useful when the checkpoint was trained for a different number of
+    classes so the classifier head dimensions differ.  Parameters that are
+    missing in the current model or whose shape differs are silently skipped
+    (with an optional log message).
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Model into which the *checkpoint_state* should be loaded.
+    checkpoint_state : Dict[str, torch.Tensor]
+        ``state_dict`` as loaded from ``torch.load`` (i.e. the `'model_state_dict'`
+        entry of the checkpoint file).
+    logger : logging.Logger | None, optional
+        Logger for debug output.  If ``None`` no messages are emitted.
+    """
+
+    model_state = model.state_dict()
+
+    # Keep only keys that exist in *model* **and** have identical shape
+    filtered_state: "OrderedDict[str, torch.Tensor]" = OrderedDict()
+    skipped_keys: list[str] = []
+    for k, v in checkpoint_state.items():
+        if k in model_state and v.shape == model_state[k].shape:
+            filtered_state[k] = v
+        else:
+            skipped_keys.append(k)
+
+    missing = set(model_state.keys()) - set(filtered_state.keys())
+
+    load_result = model.load_state_dict(filtered_state, strict=False)
+
+    if logger is not None:
+        logger.info(
+            "Loaded %d tensors from checkpoint; skipped %d mismatched; %d missing.",
+            len(filtered_state),
+            len(skipped_keys),
+            len(missing),
+        )
+        if skipped_keys:
+            logger.debug("Skipped keys (shape mismatch or absent in model): %s", skipped_keys)
+        if load_result.missing_keys:
+            logger.debug("Missing keys after load_state_dict: %s", load_result.missing_keys)
 
 
 def run_experiment(
@@ -168,7 +217,7 @@ def run_experiment(
         with ckpt_path.open("rb") as f:
             state = torch.load(f, map_location=device)
 
-        base_model.load_state_dict(state["model_state_dict"], strict=False)
+        _load_checkpoint_skip_mismatch(base_model, state["model_state_dict"], logger)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
     base_model.eval()  # TODO: is this right?

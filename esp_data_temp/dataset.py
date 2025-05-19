@@ -25,6 +25,9 @@ BATS_PATH_VALID = (
 BATS_PATH_TEST = (
     "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
 )
+WATKINS_TEST_PATH = "gs://foundation-model-data/audio/watkins/annotations_test.csv"
+WATKINS_TRAIN_PATH = "gs://foundation-model-data/audio/watkins/annotations_train.csv"
+WATKINS_VALID_PATH = "gs://foundation-model-data/audio/watkins/annotations_valid.csv"
 
 
 @lru_cache(maxsize=1)
@@ -210,6 +213,29 @@ def _get_dataset_from_name(
             lambda x: base_path
             + "egyptian_fruit_bats"
             + x.split("egyptian_fruit_bats")[1]
+        )  # bats missing gs path
+        return df
+    elif name == "watkins":
+        csv_file = (
+            WATKINS_TEST_PATH
+            if split == "test"
+            else WATKINS_VALID_PATH
+            if split == "valid"
+            else WATKINS_TRAIN_PATH
+        )
+        base_path = os.path.dirname(csv_file).split("watkins")[0]
+        if csv_file.startswith("gs://"):
+            csv_path = GSPath(csv_file)
+        else:
+            csv_path = Path(csv_file)
+
+        # Read CSV content
+        csv_text = csv_path.read_text(encoding="utf-8")
+        df = pd.read_csv(StringIO(csv_text))
+        df["gs_path"] = df["path"].apply(
+            lambda x: base_path
+            + "watkins"
+            + x.split("watkins")[1]
         )  # bats missing gs path
         return df
     else:

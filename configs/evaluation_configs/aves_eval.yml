@@ -25,4 +25,4 @@ save_dir: evaluation_results_aves
 device: cuda
 seed: 42
 num_workers: 8
-frozen: false  # Set true for pure linear-probe 
+frozen: false  # Set true for pure linear-probe

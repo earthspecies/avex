@@ -142,8 +142,11 @@ class Trainer:
         self.log_steps = log_steps
 
         # Timers for benchmarking (will be reset in _run_epoch and after each log
-        # interval)
-        self.timers: Dict[str, float] = {}
+        # interval). Initialise with expected keys to avoid KeyError on first use.
+        self.timers: Dict[str, float] = {
+            "to_device": 0.0,
+            "model_compute": 0.0,
+        }
 
         # Determine device
         if device is None:
@@ -159,11 +162,7 @@ class Trainer:
 
         if self.is_distributed:
             logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
-            # Some parameters (e.g. Roberta pooler) are never part of the loss
-            # computation when training CLIP, so DDP must be told to expect
-            # unused parameters to avoid the "Expected to have finished reduction"
-            # error.  `find_unused_parameters=True` adds a negligible overhead
-            # but ensures safe training.
+
             self.model = parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.local_rank],
@@ -267,9 +266,7 @@ class Trainer:
                     if self.is_clip_mode and hasattr(self, "_last_epoch_clip_metrics"):
                         tr_a2t = self._last_epoch_clip_metrics.get("acc_a2t", 0.0)
                         tr_t2a = self._last_epoch_clip_metrics.get("acc_t2a", 0.0)
-                        # We log train then val sequentially; refreshing the
-                        # cached metrics here means the outer loop always sees
-                        # the most recent values.
+
 
                     logger_line = (
                         f"[Epoch {epoch:03d}] "
@@ -351,13 +348,21 @@ class Trainer:
         -------
         Tuple[float, float] : mean loss, mean accuracy
         """
-        # Put model in the appropriate mode
+        # Select dataloader and switch model to the correct mode so that layers
+        # such as BatchNorm/Dropout behave as expected.  This is crucial when
+        # *frozen=False* because the backbone should update its running stats
+        # during fine-tuning.
+
+        loader = self.train_dataloader if train else self.eval_dataloader
+
         if train:
             self.model.train()
         else:
             self.model.eval()
 
-        loader = self.train_dataloader if train else self.eval_dataloader
+        # Reset per-epoch timers
+        self.timers["to_device"] = 0.0
+        self.timers["model_compute"] = 0.0
 
         total_loss: float = 0.0
         total_samples: int = 0
@@ -668,10 +673,7 @@ class Trainer:
                 "EAT model did not return expected loss dict in SSL mode"
             )
 
-        # The raw EAT implementation returns a dict of per-component losses and a
-        # token-level ``sample_size``.  Normalise by the sample size so the loss
-        # is scale-invariant w.r.t input length (mirrors the original author's
-        # training recipe).
+        # TODO David: do we normalize by sample size here?
         total_loss = torch.stack(list(out["losses"].values())).sum()
         sample_size = out.get("sample_size", audio.size(0))
         loss = total_loss / sample_size.clamp(min=1).float()
@@ -858,11 +860,9 @@ class FineTuneTrainer:
         )
 
         self.best_val_acc = 0.0
-
-        # Keep an in-memory copy of best epoch metrics/state for quick restore
-        self._best_state_dict: dict[str, torch.Tensor] | None = None
-        self._best_train_metrics: dict[str, float] | None = None
-        self._best_val_metrics: dict[str, float] | None = None
+        # Track best epoch metrics for return value
+        self.best_train_metrics: dict[str, float] = {"loss": float('inf'), "acc": 0.0}
+        self.best_val_metrics: dict[str, float] = {"loss": float('inf'), "acc": 0.0}
 
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
         """
@@ -895,28 +895,14 @@ class FineTuneTrainer:
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
                 self._save_checkpoint("best.pt")
+                # Update best metrics
+                self.best_train_metrics = {"loss": train_loss, "acc": train_acc}
+                self.best_val_metrics = {"loss": val_loss, "acc": val_acc}
 
-                # Keep in-memory copy so we can restore without hitting disk
-                import copy
+        # Load the best model after training is complete
+        self._load_best_checkpoint()
 
-                self._best_state_dict = copy.deepcopy(self.model.state_dict())
-                self._best_train_metrics = {"loss": train_loss, "acc": train_acc}
-                self._best_val_metrics = {"loss": val_loss, "acc": val_acc}
-
-        # If we found a better checkpoint during training, restore it now so
-        # that any downstream evaluation (e.g. test-set metrics computed by
-        # run_evaluate.py) uses the best weights according to the validation
-        # set, not the potentially over-fitted state from the final epoch.
-        if self._best_state_dict is not None:
-            self.model.load_state_dict(self._best_state_dict)
-            train_metrics = self._best_train_metrics  # type: ignore[assignment]
-            val_metrics = self._best_val_metrics  # type: ignore[assignment]
-        else:
-            # No improvement – fall back to last epoch
-            train_metrics = {"loss": train_loss, "acc": train_acc}
-            val_metrics = {"loss": val_loss, "acc": val_acc}
-
-        return train_metrics, val_metrics
+        return self.best_train_metrics, self.best_val_metrics
 
     def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
         """Run one epoch of training or validation.
@@ -933,7 +919,17 @@ class FineTuneTrainer:
         tuple[float, float]
             A tuple ``(loss, accuracy)`` computed over the entire epoch.
         """
+        # Select dataloader and switch model to the correct mode so that layers
+        # such as BatchNorm/Dropout behave as expected.  This is crucial when
+        # *frozen=False* because the backbone should update its running stats
+        # during fine-tuning.
+
         loader = self.train_loader if train else self.val_loader
+
+        if train:
+            self.model.train()
+        else:
+            self.model.eval()
 
         total_loss = 0.0
         total_correct = 0
@@ -998,3 +994,21 @@ class FineTuneTrainer:
             ckpt_path,
         )
         logger.info("Saved checkpoint → %s", ckpt_path)
+        
+    def _load_best_checkpoint(self) -> None:
+        """Load the best model checkpoint from disk."""
+        # Get the path to the best checkpoint
+        if self.log is not None and hasattr(self.log, "log_dir"):
+            ckpt_dir = Path(self.log.log_dir)
+        else:
+            ckpt_dir = Path(self.cfg.save_dir)
+        ckpt_path = ckpt_dir / "best.pt"
+        
+        if not ckpt_path.exists():
+            logger.warning(f"Best checkpoint not found at {ckpt_path}. Using current model state.")
+            return
+            
+        # Load the checkpoint
+        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        logger.info(f"Restored best model from {ckpt_path} (val_acc: {self.best_val_acc:.4f})")

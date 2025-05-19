@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchaudio.models import wav2vec2_model
+
 from representation_learning.models.base_model import ModelBase
 
 
@@ -17,7 +18,9 @@ class AvesEmbedding(nn.Module):
         if large:
             config = self.load_config("configs/birdaves_bioxlarge.config")
         else:
-            config = self.load_config("representation_learning/models/aves-base-core.torchaudio.model_config.json")
+            config = self.load_config(
+                "representation_learning/models/aves-base-core.torchaudio.model_config.json"
+            )
         self.model = wav2vec2_model(**config, aux_num_out=None)
         state_dict = torch.hub.load_state_dict_from_url(
             "https://storage.googleapis.com/esp-public-files/birdaves/birdaves-biox-base.torchaudio.pt",
@@ -169,7 +172,9 @@ class Model(ModelBase):
             return self.classifier(pooled)
 
     # Alias to satisfy other parts of the codebase that expect encode_audio()
-    def encode_audio(self, audio: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:  # noqa: D401
+    def encode_audio(
+        self, audio: torch.Tensor, padding_mask: torch.Tensor
+    ) -> torch.Tensor:  # noqa: D401
         """Return *pooled* AVES embedding (no classifier)."""
         feats, _m = self.backbone(audio, padding_mask)
         return self._masked_mean(feats, ~_m)
