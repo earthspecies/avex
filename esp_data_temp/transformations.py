@@ -53,11 +53,11 @@ def transform_from_config(
     if isinstance(cfg, FilterConfig):
         return Filter.from_config(cfg)
     elif isinstance(cfg, SubsampleConfig):
-        return Subsample(cfg)
+        return Subsample.from_config(cfg)
     elif isinstance(cfg, LabelFromFeatureConfig):
         return LabelFromFeature.from_config(cfg)
     elif isinstance(cfg, UniformSampleConfig):
-        return UniformSample(cfg)
+        return UniformSample.from_config(cfg)
     else:  # this should never happen if DataConfig was validated
         raise TypeError(
             "build_transforms() received an unexpected config type: "
