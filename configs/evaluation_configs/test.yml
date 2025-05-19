@@ -13,13 +13,21 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: efficientnet_base_loaded
-    run_config: configs/run_configs/efficientnet_base.yml
+  # - run_name: efficientnet_base_loaded
+  #   run_config: configs/run_configs/efficientnet_base.yml
+  #   ### which layers to probe for embeddings
+  #   layers: model.avgpool
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: false
+  #   checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_024.pt
+
+  - run_name: eat_pretrain
+    run_config: configs/run_configs/eat_pretrain.yml
     ### which layers to probe for embeddings
-    layers: model.avgpool
+    layers: last_layer
     ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: false
-    checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_024.pt
+    pretrained: true
+    # checkpoint_path: runs/eat_pretrain/checkpoints/checkpoint_epoch_030.pt
 
   # - run_name: clap
   #   run_config: configs/run_configs/clip_base.yml

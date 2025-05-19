@@ -38,7 +38,7 @@ model_spec:
 
     depth: 12
     average_top_k_layers: 12
-    clone_batch: 1
+    clone_batch: 16
 
     norm_eps: 1e-6
 
@@ -83,7 +83,7 @@ label_type: self_supervised
 preprocessing: null
 sr: 16000
 
-debug_mode: true
+debug_mode: false
 logging: mlflow
 output_dir: "./runs/eat_pretrain"
 resume_from_checkpoint: null
@@ -91,17 +91,17 @@ resume_from_checkpoint: null
 # -----------------------------------------------------------------------------
 training_params:
   train_epochs: 300          # SSL usually needs more epochs – adjust as needed
-  lr: 1.0e-4
-  batch_size: 1
+  lr: 5.0e-4
+  batch_size: 48
   optimizer: adamw
   weight_decay: 0.01
-  amp: false
+  amp: true
   amp_dtype: bf16
   log_steps: 100
 
 scheduler:
   name: cosine
-  warmup_steps: 1000
+  warmup_steps: 55000
   min_lr: 1e-6
 
 # Augmentations – optional; start without heavy augmentation for SSL
@@ -112,6 +112,6 @@ loss_function: cross_entropy   # placeholder – can switch to SSL path later
 
 device: cuda
 seed: 42
-num_workers: 2
+num_workers: 8
 run_name: eat_pretrain
 wandb_project: representation_learning

@@ -69,16 +69,12 @@ class Model(ModelBase):
         logger.info(f"Applying overrides to EAT config object")
         if eat_cfg:
             self._apply_overrides(eat_cfg_obj, eat_cfg)
-        print(f"[DEBUG] EAT config object: {eat_cfg_obj}")
         logger.info(f"[DEBUG] Making Backbone")
         self.backbone = Data2VecMultiModel(eat_cfg_obj, modalities=[Modality.IMAGE])
-        logger.info(f"[DEBUG] Backbone: {self.backbone}")
         self.backbone.to(self.device)
-        print(f"[DEBUG] Backbone: {self.backbone}")
 
         self.classifier = nn.Linear(embed_dim, num_classes)
         self.to(self.device)
-        logger.info(f"[DEBUG] Classifier: {self.classifier}")
 
     # --------------------------------------------------------------
     @staticmethod
@@ -94,35 +90,19 @@ class Model(ModelBase):
 
     # --------------------------------------------------------------
     def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:  # type: ignore[override]
-        # Debug: raw input shape
-        print(f"[DEBUG] Input wav shape: {x.shape}")
-        logger.warning(f"[DEBUG] Input wav shape: {x.shape}")
-
         spec = super().process_audio(x)
-        print(f"[DEBUG] Mel-spec after process_audio: {spec.shape}")
         if spec.dim() != 3:
             raise RuntimeError("AudioProcessor must return (B,F,T) spectrogram")
         spec = spec.permute(0, 2, 1)
-        print(f"[DEBUG] After permute (B,T,F): {spec.shape}")
         spec = self._pad_or_crop_time(spec, self.backbone.cfg.modalities.image.target_length)
-        print(f"[DEBUG] After pad/crop to target length: {spec.shape}")
         spec = spec.unsqueeze(1)
-        print(f"[DEBUG] After unsqueeze (add channel dim): {spec.shape}")
 
         if self.pretraining_mode:
             # Full pretraining path inside backbone (computes loss dict)
             out = self.backbone(spec, mask=True, features_only=False)
-            print(f"[DEBUG] Backbone output keys: {list(out.keys())}")
-            if 'x' in out:
-                print(f"[DEBUG] Backbone 'x' shape: {out['x'].shape}")
-            if 'losses' in out:
-                print("[DEBUG] Loss component shapes:")
-                for k,v in out['losses'].items():
-                    print(f"    {k}: {v.shape}")
             return out
 
         out = self.backbone(spec, mask=False, features_only=True)
-        print(f"[DEBUG] Backbone features shape: {out['x'].shape}")
         features = out["x"].mean(dim=1)
 
         if self.return_features_only:

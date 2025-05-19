@@ -375,11 +375,11 @@ class Trainer:
         context_mgr = torch.enable_grad() if train else torch.no_grad()
 
         with context_mgr:
-            for batch in tqdm(
+            for i, batch in enumerate(tqdm(
                 loader,
                 desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
                 leave=False,
-            ):
+            )):
                 # ------------------------------------------------------
                 if not hasattr(self, "_global_updates"):
                     self._global_updates = 0  # type: ignore[attr-defined]
@@ -406,11 +406,15 @@ class Trainer:
 
                     # --------------------------------------------------
                     # After the student has been updated, update the teacher
-                    # EMA weights so they lag behind, just like in the original
+                    # EMA weights so they lag behind, as in the original
                     # data2vec-multi implementation.
                     # --------------------------------------------------
-                    if self.is_eat_ssl and hasattr(self.model, "backbone"):
-                        backbone = self.model.backbone
+                    # Ensure we reference the *unwrapped* model when using DDP so
+                    # the attribute lookup succeeds (DistributedDataParallel
+                    # wraps the real module under .module).
+                    target_model = self.model_unwrapped if self.is_distributed else self.model
+                    if self.is_eat_ssl and hasattr(target_model, "backbone"):
+                        backbone = target_model.backbone
                         if hasattr(backbone, "set_num_updates"):
                             backbone.set_num_updates(self._global_updates)
 
@@ -431,6 +435,24 @@ class Trainer:
                     total_correct_t2a += ct2a
                 else:
                     total_correct += correct_out  # type: ignore[misc]
+
+                # Per-log_steps logging
+                if (i + 1) % self.log_steps == 0 or (i + 1) == len(loader):
+                    avg_loss_so_far = total_loss / total_samples if total_samples else 0.0
+                    if self.is_clip_mode:
+                        avg_acc_a2t = total_correct_a2t / total_samples if total_samples else 0.0
+                        avg_acc_t2a = total_correct_t2a / total_samples if total_samples else 0.0
+                        avg_acc_so_far = (avg_acc_a2t + avg_acc_t2a) / 2.0
+                    else:
+                        avg_acc_so_far = total_correct / total_samples if total_samples else 0.0
+                    logger.info(f"[LOG] Step {i+1}/{len(loader)}: avg_loss={avg_loss_so_far:.4f}, avg_acc={avg_acc_so_far:.4f}")
+                    if self.log is not None:
+                        self.log.log_metrics({
+                            "loss": avg_loss_so_far,
+                            "acc": avg_acc_so_far,
+                            "epoch": epoch,
+                            "step": self._global_updates,
+                        }, step=self._global_updates)
 
         # ------------------------------------
         # Aggregate epoch metrics
