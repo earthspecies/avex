@@ -18,10 +18,8 @@ from .transformations import build_transforms
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
-FM_DATASETS_PATH = "gs://foundation-model-data/audio/"
-
-BEANS_ZERO_PATH = "/mnt/home/esp-ml-datasets/beans_zero" ### on slurm should be Gagan's home folder
-BEANS_ZERO_AUDIO_PATH = "gs://foundation-model-data/audio/" 
+DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/"
+FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
 
@@ -174,7 +172,7 @@ def _get_dataset_from_name(
             lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
         )  # AnimalSpeak missing gs path
         return df
-    elif name == "egyptian_fruit_bats" or name == "dogs" or name == "humbugdb" or name == "cbi" or name == "watkins":
+    elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
         if FM_DATASETS_PATH.startswith("gs://"):
             dataset_path = GSPath(FM_DATASETS_PATH)
         else:
