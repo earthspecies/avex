@@ -4,7 +4,7 @@ from representation_learning.models.clip import CLIPModel
 from representation_learning.models.efficientnetb0 import (
     Model as EfficientNetB0,
 )
-#from representation_learning.models.resnet import Model as ResNetModel
+from representation_learning.models.resnet import Model as ResNetModel
 
 
 def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
@@ -54,14 +54,14 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             projection_dim=getattr(model_config, "projection_dim", 512),
             temperature=getattr(model_config, "temperature", 0.07),
         )
-    # elif model_name in {"resnet18", "resnet50", "resnet152"}:
-    #     return ResNetModel(
-    #         variant=model_name,
-    #         num_classes=num_classes,
-    #         pretrained=model_config.pretrained,
-    #         device=model_config.device,
-    #         audio_config=model_config.audio_config,
-    #     )
+    elif model_name in {"resnet18", "resnet50", "resnet152"}:
+        return ResNetModel(
+            variant=model_name,
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
     else:
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: "
