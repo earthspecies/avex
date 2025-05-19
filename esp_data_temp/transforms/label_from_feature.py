@@ -2,13 +2,14 @@ import logging
 from typing import Literal
 
 import pandas as pd
+from pydantic import BaseModel
 
-from ._base import TransformModel
+from ._base import register_transform
 
 logger = logging.Logger("esp_data")
 
 
-class LabelFromFeatureConfig(TransformModel):
+class LabelFromFeatureConfig(BaseModel):
     type: Literal["label_from_feature"]
     feature: str
     num_classes: int | Literal["auto"] = "auto"
@@ -30,7 +31,6 @@ class LabelFromFeature:
         self.override = override
         self.output_feature = output_feature
 
-    # @register_transform_factory_from_config(LabelFromFeatureConfig)
     @classmethod
     def from_config(cls, cfg: LabelFromFeatureConfig) -> "LabelFromFeature":
         return cls(**cfg.model_dump(exclude=("type")))
@@ -63,3 +63,6 @@ class LabelFromFeature:
         }
 
         return df_clean, metadata
+
+
+register_transform(LabelFromFeatureConfig, LabelFromFeature)

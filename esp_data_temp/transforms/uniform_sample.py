@@ -3,14 +3,14 @@ from typing import Literal
 
 import numpy as np
 import pandas as pd
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator
 
-from ._base import TransformModel
+from ._base import register_transform
 
 logger = logging.Logger("esp_data")
 
 
-class UniformSampleConfig(TransformModel):
+class UniformSampleConfig(BaseModel):
     type: Literal["uniform_sample"]
     property: str
     ratio: float
@@ -87,3 +87,6 @@ class UniformSample:
     #             selected[k] = data[k]
 
     #     return selected
+
+
+register_transform(UniformSampleConfig, UniformSample)

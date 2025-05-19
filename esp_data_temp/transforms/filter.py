@@ -2,13 +2,14 @@ import logging
 from typing import Literal
 
 import pandas as pd
+from pydantic import BaseModel
 
-from ._base import TransformModel
+from ._base import register_transform
 
 logger = logging.Logger("esp_data")
 
 
-class FilterConfig(TransformModel):
+class FilterConfig(BaseModel):
     type: Literal["filter"]
     mode: Literal["include", "exclude"] = "include"
     property: str
@@ -87,3 +88,6 @@ class Filter:
     #         return {
     #             k: v for k, v in data.items() if v[self.property] not in self.values
     #         }
+
+
+register_transform(FilterConfig, Filter)

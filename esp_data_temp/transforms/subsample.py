@@ -3,14 +3,14 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator
 
-from ._base import TransformModel
+from ._base import register_transform
 
 logger = logging.Logger("esp_data")
 
 
-class SubsampleConfig(TransformModel):
+class SubsampleConfig(BaseModel):
     type: Literal["subsample"]
     property: str
     ratios: dict[str, float]
@@ -125,3 +125,6 @@ class Subsample:
     #             selected[k] = data[k]
 
     #     return selected
+
+
+register_transform(SubsampleConfig, Subsample)

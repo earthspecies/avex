@@ -14,7 +14,7 @@ import soundfile as sf
 from google.cloud.storage.client import Client
 
 from .config import DatasetConfig
-from .transformations import transform_from_config
+from .transforms import transform_from_config
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
@@ -125,7 +125,6 @@ class AudioDataset:
 
         target_sr = self.data_config.sample_rate
         if target_sr is not None and sr != target_sr:
-
             audio = librosa.resample(
                 y=audio,
                 orig_sr=sr,
@@ -170,7 +169,8 @@ def _get_dataset_from_name(
         df = pd.read_csv(StringIO(csv_text))
         df["gs_path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
+            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
+            + x
         )  # AnimalSpeak missing gs path
         return df
     elif name == "bats":
@@ -205,9 +205,7 @@ def get_dataset_dummy(
     data_config: DatasetConfig,
     split: str,
     preprocessor: Optional[Callable] = None,
-    postprocessors: Optional[
-        List[Callable[[Dict[str, Any]], Dict[str, Any]]]
-    ] = None,
+    postprocessors: Optional[List[Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.

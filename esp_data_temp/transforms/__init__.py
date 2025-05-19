@@ -1,5 +1,5 @@
 # TODO: has to be first?
-from ._base import TransformModel as TransformModel  # isort:skip
+from ._base import register_transform, transform_from_config  # isort:skip
 
 # TODO: We can get fancy and do some dynamic importing here based on the config?
 # unnecessary imports tend to significantly slow down the import time of a module so
