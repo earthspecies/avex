@@ -3,8 +3,15 @@ from typing import Annotated, Any, Callable, Union, get_args
 import pandas as pd
 from pydantic import BaseModel, Field
 
+__all__ = [
+    "register_transform",
+    "transform_from_config",
+    "RegisteredTransformConfigs",
+]
+
 RegisteredTransformConfigs = Any
-_TRANSFORM_REGISTRY: dict[str, type[BaseModel]] = {}
+
+_TRANSFORM_CONFIG_REGISTRY: dict[str, type[BaseModel]] = {}
 _TRANSFORM_FACTORY_REGISTRY: dict[type[BaseModel], type] = {}
 
 
@@ -41,7 +48,8 @@ def register_transform(config_class: type[BaseModel], transform_class: type) -> 
     def _rebuild_union_type() -> None:
         global RegisteredTransformConfigs
         RegisteredTransformConfigs = Annotated[
-            Union[tuple(_TRANSFORM_REGISTRY.values())], Field(discriminator="type")
+            Union[tuple(_TRANSFORM_CONFIG_REGISTRY.values())],
+            Field(discriminator="type"),
         ]
 
     if "type" not in config_class.model_fields:
@@ -54,13 +62,13 @@ def register_transform(config_class: type[BaseModel], transform_class: type) -> 
     if len(type_vals) == 1:
         v = type_vals[0]
 
-        if v in _TRANSFORM_REGISTRY:
+        if v in _TRANSFORM_CONFIG_REGISTRY:
             raise ValueError(
                 f"Transform type '{v}' is already registered. "
                 "Please use a unique type name."
             )
 
-        _TRANSFORM_REGISTRY[v] = config_class
+        _TRANSFORM_CONFIG_REGISTRY[v] = config_class
         _rebuild_union_type()
     else:
         raise ValueError(f"Transform type is not a single value: {type_vals}")
@@ -78,4 +86,18 @@ def register_transform(config_class: type[BaseModel], transform_class: type) -> 
 def transform_from_config(
     cfg: RegisteredTransformConfigs,
 ) -> Callable[[pd.DataFrame], tuple[pd.DataFrame, dict]]:
+    """Create a callable transform object from a configuration object.
+
+    Parameters
+    ----------
+    cfg : RegisteredTransformConfigs
+        The configuration object that specifies the transform type and parameters.
+
+    Returns
+    -------
+    Callable[[pd.DataFrame], tuple[pd.DataFrame, dict]]
+        A callable that takes a DataFrame as input and returns a tuple of the
+        transformed DataFrame and a dictionary of metadata.
+    """
+
     return _TRANSFORM_FACTORY_REGISTRY[type(cfg)].from_config(cfg)

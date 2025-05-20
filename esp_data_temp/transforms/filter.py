@@ -4,7 +4,7 @@ from typing import Literal
 import pandas as pd
 from pydantic import BaseModel
 
-from ._base import register_transform
+from . import register_transform
 
 logger = logging.Logger("esp_data")
 

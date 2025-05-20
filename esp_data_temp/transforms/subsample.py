@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, field_validator
 
-from ._base import register_transform
+from . import register_transform
 
 logger = logging.Logger("esp_data")
 
