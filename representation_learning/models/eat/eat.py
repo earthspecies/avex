@@ -26,7 +26,7 @@ from .base import (
     ModalitySpecificEncoder,
     get_annealed_rate,
 )
-from .images import D2vImageConfig, ImageEncoder
+from .image import D2vImageConfig, ImageEncoder
 from .losses import d2v_loss as _d2v_loss_fn
 from .losses import dino_loss as _dino_loss_fn
 from .modules import AltBlock, D2vDecoderConfig, Decoder1d
