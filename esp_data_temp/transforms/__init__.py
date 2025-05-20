@@ -1,18 +1,25 @@
-# TODO: has to be first?
-from ._base import register_transform, transform_from_config  # isort:skip
+# Has to be first because individual transform modules import register_transform
+from ._registry import register_transform, transform_from_config  # isort:skip
 
-# TODO: We can get fancy and do some dynamic importing here based on the config?
-# unnecessary imports tend to significantly slow down the import time of a module so
-# might be worth it?
-from .filter import Filter as Filter
-from .filter import FilterConfig as FilterConfig
-from .label_from_feature import LabelFromFeature as LabelFromFeature
-from .label_from_feature import LabelFromFeatureConfig as LabelFromFeatureConfig
-from .subsample import Subsample as Subsample
-from .subsample import SubsampleConfig as SubsampleConfig
-from .uniform_sample import UniformSample as UniformSample
-from .uniform_sample import UniformSampleConfig as UniformSampleConfig
+from .filter import Filter, FilterConfig
+from .label_from_feature import LabelFromFeature, LabelFromFeatureConfig
+from .subsample import Subsample, SubsampleConfig
+from .uniform_sample import UniformSample, UniformSampleConfig
 
 # It's important to export RegisteredTransformConfigs last because it's a dynamic type
 # that's updated as we import transforms.
-from ._base import RegisteredTransformConfigs as RegisteredTransformConfigs  # isort:skip
+from ._registry import RegisteredTransformConfigs  # isort:skip
+
+__all__ = [
+    "Filter",
+    "FilterConfig",
+    "LabelFromFeature",
+    "LabelFromFeatureConfig",
+    "Subsample",
+    "SubsampleConfig",
+    "UniformSample",
+    "UniformSampleConfig",
+    "register_transform",
+    "transform_from_config",
+    "RegisteredTransformConfigs",
+]
