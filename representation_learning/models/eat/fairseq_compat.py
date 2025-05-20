@@ -1,8 +1,5 @@
 """Compatibility shims copied from the original Fairseq helpers that EAT
 relied on, refactored to remove the Fairseq runtime dependency.
-
-The file purposely stays **minimal** – only the pieces that the refactored
-code-path touches are included.
 """
 
 from __future__ import annotations
@@ -17,12 +14,6 @@ from typing import Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-
-# Local helper imports ---------------------------------------------------- #
-from representation_learning.models.eat.eat_utils import (  # noqa: F401
-    compute_block_mask_1d,
-    compute_block_mask_2d,
-)
 
 # Optional AMP helper – unavailable on CPU-only CI runners.
 try:  # pragma: no cover
@@ -208,14 +199,6 @@ def compute_mask_indices(
             mask[i, to_drop] = False
 
     return mask
-
-
-# -- 2-D and 1-D block helpers (unchanged) ----------------------------------- #
-
-# NOTE: Due to length constraints we omit the full block-mask code here, but in
-# production you should copy `compute_block_mask_2d` and `compute_block_mask_1d`
-# from the reference file verbatim, *or* import them from eat_utils.py if they
-# already exist and are reference-accurate.
 
 
 # --------------------------------------------------------------------------- #

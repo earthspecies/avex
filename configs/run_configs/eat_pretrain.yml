@@ -85,7 +85,7 @@ sr: 16000
 
 debug_mode: false
 logging: mlflow
-output_dir: "./runs/eat_pretrain"
+output_dir: "./runs/eat_pretrain_bf16"
 resume_from_checkpoint: null
 
 # -----------------------------------------------------------------------------
