@@ -23,6 +23,13 @@ class UniformSampleConfig(BaseModel):
         return ratio
 
 
+# TODO (Gagan) I'm a bit confused by what UniformSample is ... it sounds like a subset
+# of Subsample just that the ratios "fixed" internally to make the dataset uniformly
+# distributed across a certain property. But here a scalar "ratio" is being provided
+# which would apply to all the unique groups in a property, and hence will not
+# distribute uniformly.
+
+
 class UniformSample:
     """Uniformly sample data based on a property."""
 
@@ -55,6 +62,8 @@ class UniformSample:
         groups = []
         for _, group in df.groupby(self.property):
             n_samples = max(1, int(len(group) * self.ratio))
+            # TODO is this the right way to set up the random seed? Do we want to fix it
+            # here?
             rng = np.random.default_rng(seed=42)
             sampled_indices = rng.choice(len(group), size=n_samples, replace=False)
             groups.append(group.iloc[sampled_indices])
