@@ -62,6 +62,15 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
+    elif model_name == "beats":
+        from representation_learning.models.beats_model import Model as BeatsModel
+
+        return BeatsModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
     else:
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: "
