@@ -150,6 +150,7 @@ def run_experiment(
     original_run_cfg: RunConfig = load_config(experiment_config.run_config)
     original_run_cfg.model_spec.audio_config.window_selection = "center"
     original_run_cfg.training_params = eval_cfg.training_params
+    original_run_cfg.model_spec.device = device
 
     # ------------------------------------------------------------------ #
     #  Disable training-time augmentations (e.g. mixup, noise) for evaluation
