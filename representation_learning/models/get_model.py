@@ -87,21 +87,10 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             pretraining_mode=pretraining_mode,
             eat_cfg=eat_cfg_overrides,
         )
-    elif model_name == "aves":
-        from representation_learning.models.aves import Model as AvesModel
-
-        return AvesModel(
-            num_classes=num_classes,
-            pretrained=model_config.pretrained,
-            device=model_config.device,
-            audio_config=model_config.audio_config,
-            return_features_only=False,
-        )
     else:
         # Fallback
         supported = (
-            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', "
-            "'resnet152', 'aves'."
+            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', 'resnet152'"
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"

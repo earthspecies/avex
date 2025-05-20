@@ -385,9 +385,8 @@ class Trainer:
                 if not hasattr(self, "_global_updates"):
                     self._global_updates = 0  # type: ignore[attr-defined]
 
-                # Increment global update counter *before* processing batch so
-                # that the current batch is included when updating the teacher.
-                self._global_updates += 1
+                if train:
+                    self._global_updates += 1
 
                 # ------------------------------------
                 # Forward (and optional backward)
