@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import torch
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.eat.audio_model import Model as EATModel
 
 
-def test_eat_wrapper_forward():
+def test_eat_wrapper_forward() -> None:
     """Minimal smoke test for the EAT audio wrapper.
 
     Ensures that the model can run a forward pass on CPU and returns logits of

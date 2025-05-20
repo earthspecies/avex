@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
-from typing import Any, Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -13,19 +13,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import to_2tuple
 
-from .mae import PatchEmbed, PatchEmbed_new, get_2d_sincos_pos_embed_flexible
 from .base import (
     D2vModalityConfig,
+    MaskInfo,
+    MaskSeed,
     ModalitySpecificEncoder,
     get_alibi_bias,
-    MaskSeed,
 )
+from .mae import PatchEmbed, PatchEmbed_new, get_2d_sincos_pos_embed_flexible
 from .modules import (
     BlockEncoder,
     Decoder2d,
+    EncDecTransformerDecoder,
     FixedPositionalEncoder,
     TransformerDecoder,
-    EncDecTransformerDecoder,
 )
 
 # ---------------------------------------------------------------------------- #
@@ -59,13 +60,14 @@ class D2vImageConfig(D2vModalityConfig):
     # decoder choices ----------------------------------------------------
     transformer_decoder: bool = False
     enc_dec_transformer: bool = False  # if True use Enc-Dec transformer
-    target_length: int = 1024          # audio-like variable length
-    max_length: int = 768              # longest sequence allowed
+    target_length: int = 1024  # audio-like variable length
+    max_length: int = 768  # longest sequence allowed
 
 
 # ---------------------------------------------------------------------------- #
 #  ImageEncoder
 # ---------------------------------------------------------------------------- #
+
 
 class ImageEncoder(ModalitySpecificEncoder):
     """Image (and single-channel spectrogram) modality encoder used by EAT."""
@@ -80,12 +82,12 @@ class ImageEncoder(ModalitySpecificEncoder):
         norm_layer: Callable[[int], nn.LayerNorm],
         layer_norm_first: bool,
         alibi_biases: Dict,
-        task: Optional[Any] = None,   # kept for API parity – not used here
-    ):
+        task: Optional[object] = None,  # kept for API parity – not used here
+    ) -> None:
         # ---------------------------------------------------------------- #
         #  1. Patch embedding / local encoder                               #
         # ---------------------------------------------------------------- #
-        if modality_cfg.in_chans == 1:          # spectrogram
+        if modality_cfg.in_chans == 1:  # spectrogram
             img_size = (modality_cfg.target_length, 128)
         else:
             img_size = to_2tuple(modality_cfg.input_size)
@@ -127,12 +129,16 @@ class ImageEncoder(ModalitySpecificEncoder):
         #  2. Absolute positional embeddings                               #
         # ---------------------------------------------------------------- #
         max_len = modality_cfg.max_length  # in 'time' dimension
-        pos_embed = nn.Parameter(torch.zeros(1, max_len * self.W, embed_dim), requires_grad=False)
+        pos_embed = nn.Parameter(
+            torch.zeros(1, max_len * self.W, embed_dim), requires_grad=False
+        )
         emb = get_2d_sincos_pos_embed_flexible(
             embed_dim, (max_len, self.W), cls_token=False
         )
         pos_embed.data.copy_(torch.from_numpy(emb).float().unsqueeze(0))
-        fixed_pos_enc = FixedPositionalEncoder(pos_embed) if modality_cfg.fixed_positions else None
+        fixed_pos_enc = (
+            FixedPositionalEncoder(pos_embed) if modality_cfg.fixed_positions else None
+        )
 
         # ---------------------------------------------------------------- #
         #  3. Transformer prenet (context encoder)                          #
@@ -142,9 +148,7 @@ class ImageEncoder(ModalitySpecificEncoder):
             modality_cfg.end_drop_path_rate,
             modality_cfg.prenet_depth,
         )
-        blocks = [
-            make_block(dpr[i]) for i in range(modality_cfg.prenet_depth)
-        ]
+        blocks = [make_block(dpr[i]) for i in range(modality_cfg.prenet_depth)]
         context_encoder = BlockEncoder(
             nn.ModuleList(blocks),
             norm_layer(embed_dim) if not layer_norm_first else None,
@@ -216,10 +220,19 @@ class ImageEncoder(ModalitySpecificEncoder):
 
     @torch.no_grad()
     def patchify(self, imgs: torch.Tensor) -> torch.Tensor:
-        """
-        Convert images/spectrograms to patches.
-        imgs: (B, C, H, W) with C==1 or 3
-        returns (B, L, P²·C)
+        """Convert images or spectrograms into non-overlapping patches.
+
+        Parameters
+        ----------
+        imgs : torch.Tensor
+            Input tensor of shape ``(B, C, H, W)`` with one (mono) or three
+            channels. For spectrograms ``C`` is usually ``1``.
+
+        Returns
+        -------
+        torch.Tensor
+            The flattened patches with shape ``(B, L, P²·C)`` where ``L`` is
+            the number of patches and ``P`` is the patch size.
         """
         p = self.modality_cfg.patch_size
         if self.modality_cfg.in_chans == 1:
@@ -229,7 +242,9 @@ class ImageEncoder(ModalitySpecificEncoder):
         else:
             h = w = imgs.shape[2] // p
             x = imgs.reshape(imgs.size(0), 3, h, p, w, p)
-            x = torch.einsum("nchpwq -> nhwpqc", x).reshape(imgs.size(0), h * w, p * p * 3)
+            x = torch.einsum("nchpwq -> nhwpqc", x).reshape(
+                imgs.size(0), h * w, p * p * 3
+            )
         return x
 
     @torch.no_grad()
@@ -253,9 +268,9 @@ class ImageEncoder(ModalitySpecificEncoder):
         padding_mask: Optional[torch.Tensor],
         mask_seed: Optional[MaskSeed],
         apply: bool,
-        shape=None,
-        precomputed_mask=None,
-    ):
+        shape: Optional[Tuple[int, int, int]] = None,
+        precomputed_mask: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, MaskInfo]:
         if self.modality_cfg.mask_length <= 1:
             return super().compute_mask(
                 x, padding_mask, mask_seed, apply, precomputed_mask
@@ -289,7 +304,9 @@ class ImageEncoder(ModalitySpecificEncoder):
 
     # Enc-Dec transformer needs (query, key-value) rather than patched seq -----
 
-    def decoder_input(self, x, mask_info):
+    def decoder_input(
+        self, x: torch.Tensor, mask_info: MaskInfo
+    ) -> Tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
         # When using a Transformer decoder with separate query/key-value inputs
         # (enc-dec style), return the specialised tuple. Otherwise simply pass
         # through *x* – no need to call the parent as the base class does not
@@ -315,7 +332,7 @@ class ImageEncoder(ModalitySpecificEncoder):
 
     # reset -------------------------------------------------------------------
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         # Local encoder conv already initialised above; decoder may define its
         # own reset_parameters().  No super call because the parent class does
         # not implement this method.

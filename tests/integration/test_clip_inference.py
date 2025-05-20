@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 from pathlib import Path
 
@@ -10,7 +12,7 @@ from representation_learning.models.get_model import get_model
 
 
 @torch.no_grad()
-def test_clip_mini_inference():
+def test_clip_mini_inference() -> None:
     """Mini smoke-test that runs CLIP on 5 random AnimalSpeak validation clips.
 
     The test loads the *pre-trained* CLIP checkpoint specified in
@@ -46,7 +48,9 @@ def test_clip_mini_inference():
                 model.load_state_dict(state["model_state_dict"])
                 print(f"Loaded checkpoint weights from {ckpt_file}")
         else:
-            print(f"Warning: checkpoint path {ckpt_file} not found – using base weights")
+            print(
+                f"Warning: checkpoint path {ckpt_file} not found – using base weights"
+            )
 
     # ------------------------------------------------------------------
     # Load AnimalSpeak validation split

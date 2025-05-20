@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
@@ -11,8 +11,17 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 
+# EMA tracker from Fairseq compatibility shim
+from representation_learning.models.eat.fairseq_compat import (
+    EMAModule as _RefEMAModule,
+)
+from representation_learning.models.eat.fairseq_compat import (
+    EMAModuleConfig as _RefEMACfg,
+)
+
 from .base import (
     D2vModalityConfig,
+    MaskInfo,
     MaskSeed,
     ModalitySpecificEncoder,
     get_annealed_rate,
@@ -110,13 +119,6 @@ class Data2VecMultiConfig:
 # 2.  EMA adapter – wraps reference Fairseq implementation
 # -----------------------------------------------------------------------------
 
-from representation_learning.models.eat.fairseq_compat import (
-    EMAModule as _RefEMAModule,
-)
-from representation_learning.models.eat.fairseq_compat import (
-    EMAModuleConfig as _RefEMACfg,
-)
-
 
 class EMAModel(_RefEMAModule):
     """Thin adapter exposing the interface expected by the refactored code.
@@ -139,13 +141,18 @@ class EMAModel(_RefEMAModule):
     # ------------------------------------------------------------------
     #  Backwards-compat helpers                                          #
     # ------------------------------------------------------------------
-    @torch.no_grad()
-    def update(self, student: nn.Module):  # noqa: D401 – keep legacy name
+    def update(self, student: nn.Module) -> None:  # noqa: D401 – keep legacy name
         """Alias for :py:meth:`step` so existing calls keep working."""
         self.step(student)
 
-    def to(self, *args, **kwargs):  # type: ignore[override]
-        """Move both the EMA model and (if used) fp32 shadow params."""
+    def to(self, *args: object, **kwargs: object) -> "EMAModel":  # type: ignore[override]
+        """Move both the EMA model and (if used) fp32 shadow params.
+
+        Returns
+        -------
+        EMAModel
+            The instance itself (for chaining).
+        """
         self.model.to(*args, **kwargs)
         # move fp32 shadow params manually
         if hasattr(self, "fp32_params"):
@@ -163,7 +170,12 @@ class EMAModel(_RefEMAModule):
 class Data2VecMultiModel(nn.Module):
     """Fairseq‑free EAT (data2vec‑multi) implementation."""
 
-    def __init__(self, cfg: Data2VecMultiConfig, modalities: List[Modality], task=None):
+    def __init__(
+        self,
+        cfg: Data2VecMultiConfig,
+        modalities: List[Modality],
+        task: Optional[object] = None,
+    ) -> None:
         super().__init__()
         self.cfg = cfg
         self.modalities = modalities
@@ -175,7 +187,11 @@ class Data2VecMultiModel(nn.Module):
             nn.LayerNorm, eps=cfg.norm_eps, elementwise_affine=cfg.norm_affine
         )
 
-        def make_block(drop_path, dim=None, heads=None):
+        def make_block(
+            drop_path: float,
+            dim: Optional[int] = None,
+            heads: Optional[int] = None,
+        ) -> nn.Module:
             return AltBlock(
                 cfg.embed_dim if dim is None else dim,
                 cfg.num_heads if heads is None else heads,
@@ -272,7 +288,7 @@ class Data2VecMultiModel(nn.Module):
     # ------------------------------------------------------------------
     # Init helpers ---------------------------------------------------------
     # ------------------------------------------------------------------
-    def _init_weights_bert(self, m):
+    def _init_weights_bert(self, m: nn.Module) -> None:
         if isinstance(m, nn.Linear):
             nn.init.xavier_uniform_(m.weight)
             try:
@@ -286,13 +302,15 @@ class Data2VecMultiModel(nn.Module):
             if m.weight is not None:
                 nn.init.constant_(m.weight, 1.0)
 
-    def _init_weights_mae(self, m):
+    def _init_weights_mae(self, m: nn.Module) -> None:
         self._init_weights_bert(m)  # identical for now
 
     # ------------------------------------------------------------------
     # Teacher helpers ------------------------------------------------------
     # ------------------------------------------------------------------
-    def _make_teacher(self, cfg: Data2VecMultiConfig, modalities):
+    def _make_teacher(
+        self, cfg: Data2VecMultiConfig, modalities: List[Modality]
+    ) -> nn.Module:
         # TODO: Changed – avoid recursive EMA creation by passing a copy of the
         # config with skip_ema=True so the teacher itself has no EMA teacher.
         cfg_teacher = copy.deepcopy(cfg)
@@ -312,7 +330,7 @@ class Data2VecMultiModel(nn.Module):
         return teacher
 
     @torch.no_grad()
-    def set_num_updates(self, num_updates: int):
+    def set_num_updates(self, num_updates: int) -> None:
         self.num_updates = num_updates
         if self.training and self.ema is not None:
             # anneal decay
@@ -453,7 +471,7 @@ class Data2VecMultiModel(nn.Module):
             self.ema.model = self.ema.model.to(device=device, dtype=dtype)
 
             # move fp32 shadow params dictionary recursively
-            def _move_fp32(d):
+            def _move_fp32(d: Dict[str, Any]) -> None:
                 for k, v in d.items():
                     if isinstance(v, dict):
                         _move_fp32(v)
@@ -625,7 +643,13 @@ class Data2VecMultiModel(nn.Module):
     # ------------------------------------------------------------------
     # Aux helpers ----------------------------------------------------------
     # ------------------------------------------------------------------
-    def _forward_decoder(self, x, feat_enc, decoder, mask_info):
+    def _forward_decoder(
+        self,
+        x: torch.Tensor,
+        feat_enc: ModalitySpecificEncoder,
+        decoder: nn.Module,
+        mask_info: MaskInfo,
+    ) -> torch.Tensor:
         x_dec_in = feat_enc.decoder_input(x, mask_info)
         # decoder_input may return either a **tensor** or a tuple (q, kv)
         if isinstance(x_dec_in, tuple):
@@ -633,7 +657,7 @@ class Data2VecMultiModel(nn.Module):
         else:
             return decoder(x_dec_in)
 
-    def _make_targets(self, y_layers: List[torch.Tensor], k: int):
+    def _make_targets(self, y_layers: List[torch.Tensor], k: int) -> torch.Tensor:
         target_layer_results = y_layers[-k:]
         # optional norm variants ---------------------------------
         permuted = False
@@ -664,7 +688,7 @@ class Data2VecMultiModel(nn.Module):
         return y
 
     @staticmethod
-    def compute_var(y: torch.Tensor):
+    def compute_var(y: torch.Tensor) -> torch.Tensor:
         y = y.view(-1, y.size(-1))
         if dist.is_available() and dist.is_initialized():
             zc = torch.tensor(y.size(0), device=y.device)
@@ -681,13 +705,18 @@ class Data2VecMultiModel(nn.Module):
     #  Device helper – ensure EMA teacher moves with the student          #
     # ------------------------------------------------------------------ #
 
-    def to(self, *args, **kwargs):  # type: ignore[override]
+    def to(self, *args: object, **kwargs: object) -> "Data2VecMultiModel":  # type: ignore[override]
         """Override ``nn.Module.to`` so the EMA teacher follows the student.
 
         The built-in recursive device transfer skips attributes that are not
         ``nn.Module`` instances (our :class:`EMAModel` wrapper falls into that
         category).  We therefore move it manually to keep weights on the same
         accelerator and avoid dtype/device mismatches at runtime.
+
+        Returns
+        -------
+        Data2VecMultiModel
+            The instance itself (allows chained calls).
         """
         super().to(*args, **kwargs)
         if self.ema is not None:

@@ -1,5 +1,21 @@
+"""
+Bird-AVES wrapper: BirdAVES backbone + optional classifier head.
+
+This file provides two classes:
+
+* **AvesEmbedding** – a lightweight wrapper around the BirdAVES W2V-2.0 encoder
+  that returns per-frame embeddings (and an updated padding mask).
+
+* **Model** – the high-level class that plugs this backbone into the ESP
+  training pipeline (`ModelBase`).  It can operate either in
+  *feature-extraction* mode (returning frame-level features) or with a linear
+  classification head.
+"""
+
+from __future__ import annotations
+
 import json
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -9,75 +25,120 @@ from torchaudio.models import wav2vec2_model
 from representation_learning.models.base_model import ModelBase
 
 
+# --------------------------------------------------------------------------- #
+#  Low-level backbone
+# --------------------------------------------------------------------------- #
 class AvesEmbedding(nn.Module):
-    def __init__(self, sr, large=False):
+    """Light wrapper around a BirdAVES Wav2Vec 2.0 encoder.
+
+    Parameters
+    ----------
+    sr : int
+        Input sample-rate expected by downstream preprocessing.
+    large : bool, default ``False``
+        Reserved for potential larger backbones (currently unused).
+    """
+
+    def __init__(self, sr: int, large: bool = False) -> None:  # noqa: D401
         super().__init__()
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # reference: https://pytorch.org/audio/stable/_modules/torchaudio/models/wav2vec2/utils/import_fairseq.html
-        if large:
-            config = self.load_config("configs/birdaves_bioxlarge.config")
-        else:
-            config = self.load_config(
-                "representation_learning/models/aves-base-core.torchaudio.model_config.json"
-            )
+        cfg_path = (
+            "representation_learning/models/aves-base-core.torchaudio.model_config.json"
+        )
+        config = self._load_config(cfg_path)
         self.model = wav2vec2_model(**config, aux_num_out=None)
+
         state_dict = torch.hub.load_state_dict_from_url(
-            "https://storage.googleapis.com/esp-public-files/birdaves/birdaves-biox-base.torchaudio.pt",
+            "https://storage.googleapis.com/esp-public-files/"
+            "birdaves/birdaves-biox-base.torchaudio.pt",
             map_location=device,
         )
         self.model.load_state_dict(state_dict)
+
+        # Allow fine-tuning of feature extractor by default.
         self.model.feature_extractor.requires_grad_(True)
 
-        # bundle = torchaudio.pipelines.WAV2VEC2_BASE
-        # self.model = bundle.get_model()
+        self.sr: int = sr
+        self.large: bool = large
 
-        self.sr = sr
+    # ------------------------------------------------------------------ #
+    #  Helpers
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _load_config(config_path: str) -> Dict[str, Any]:
+        """Load the JSON config used to instantiate the W2V-2.0 backbone.
 
-    def load_config(self, config_path):
-        with open(config_path, "r") as ff:
-            obj = json.load(ff)
+        Parameters
+        ----------
+        config_path : str
+            Path to the *torchaudio* JSON configuration file.
 
-        return obj
+        Returns
+        -------
+        Dict[str, Any]
+            Parsed configuration dictionary suitable for
+            ``torchaudio.models.wav2vec2_model``.
+        """
+        with open(config_path, "r", encoding="utf-8") as fp:
+            return json.load(fp)
 
-    def forward(self, sig, padding_mask):
-        # extract_feature in the torchaudio version will output all 12 layers' output, -1 to select the final one
-        # print("sig", sig)
+    # ------------------------------------------------------------------ #
+    #  Public API
+    # ------------------------------------------------------------------ #
+    def forward(
+        self, sig: torch.Tensor, padding_mask: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Extract per-frame embeddings.
 
-        out = self.model.extract_features(sig.float())[0][-1]
-        padding_mask = padding_mask.bool()
-        atts = ~padding_mask
-        atts = atts.unsqueeze(1).float()
-        atts = F.max_pool1d(atts, kernel_size=320, stride=320)
-        atts = atts > 0
-        padding_mask = ~atts
+        Parameters
+        ----------
+        sig : torch.Tensor
+            Raw waveform tensor of shape ``(B, T)``.
+        padding_mask : torch.Tensor
+            Boolean tensor of shape ``(B, T)`` where **True** denotes padded
+            (invalid) samples.
 
-        return out, padding_mask
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            **features**
+                Tensor of shape ``(B, T', C)`` – output of the final W2V layer.
+            **new_mask**
+                Boolean mask of shape ``(B, T')`` where **True** denotes padded
+                frames after striding / pooling inside the encoder.
+        """
+        # Torchaudio returns a list of layer outputs – pick the last one.
+        features = self.model.extract_features(sig.float())[0][-1]
 
-    def freeze(self):
+        # Down-sample the original sample-level padding mask to frame level.
+        frame_mask = ~padding_mask.bool().unsqueeze(1).float()
+        frame_mask = F.max_pool1d(frame_mask, kernel_size=320, stride=320) > 0
+        new_mask = ~frame_mask.squeeze(1)
+
+        return features, new_mask
+
+    # ------------------------------------------------------------------ #
+    #  (Un)freezing convenience
+    # ------------------------------------------------------------------ #
+    def freeze(self) -> None:
+        """Freeze encoder parameters (useful for linear-probe training)."""
         for param in self.model.encoder.parameters():
             param.requires_grad = False
         self.model.feature_extractor.requires_grad_(False)
 
-    def unfreeze(self):
+    def unfreeze(self) -> None:
+        """Unfreeze encoder parameters to allow fine-tuning."""
         for param in self.model.encoder.parameters():
             param.requires_grad = True
         self.model.feature_extractor.requires_grad_(True)
 
 
 # --------------------------------------------------------------------------- #
-#  High-level wrapper compatible with training pipeline
+#  High-level wrapper compatible with the ESP training pipeline
 # --------------------------------------------------------------------------- #
-
-
-# pylint: disable=abstract-method
-# We inherit ModelBase directly; it already extends nn.Module.
-class Model(ModelBase):
-    """Wrapper that adapts :class:`AvesEmbedding` to ``ModelBase`` interface.
-
-    The class mirrors the contracts of other model wrappers (EfficientNetB0,
-    ResNetModel, …) so it can be selected through ``get_model`` and used by
-    the generic training loop.
+class Model(ModelBase):  # pylint: disable=abstract-method
+    """BirdAVES backbone wrapped in the generic ESP ``ModelBase`` interface.
 
     Parameters
     ----------
@@ -85,105 +146,145 @@ class Model(ModelBase):
         Number of target classes.  Ignored when *return_features_only* is
         ``True``.
     pretrained : bool, default ``True``
-        Currently always *True* – BirdAVES weights are downloaded on demand.
-    device : str
+        Present for API parity – BirdAVES weights are always downloaded.
+    device : str, default ``"cuda"``
         Device on which to run the model.
     audio_config : Optional[Dict[str, Any]]
-        Audio-processing parameters.  Must specify the input *sample_rate*; if
-        ``None`` we default to the standard 16 kHz used by BirdAVES.
+        Audio-preprocessing parameters.  Must include *sample_rate*; if omitted
+        defaults to 16 kHz (standard for BirdAVES).
     return_features_only : bool, default ``False``
-        When ``True`` the forward pass returns a pooled embedding vector
-        (dimension = encoder hidden size).  When ``False`` a learnable linear
-        classifier is appended and logits are returned instead.
-    large : bool, default ``False``
-        Select the *X-Large* BirdAVES backbone.  The default *Base* variant is
-        substantially lighter and quicker to fine-tune.
+        When ``True`` the forward pass returns frame-level embeddings without
+        applying the classifier head.
     """
 
     def __init__(
         self,
         num_classes: int,
-        pretrained: bool = True,  # kept for API parity (always True atm.)
+        pretrained: bool = True,  # kept for API parity
         device: str = "cuda",
-        audio_config: Optional[dict] = None,
+        audio_config: Optional[Dict[str, Any]] = None,
         return_features_only: bool = False,
-        large: bool = False,
     ) -> None:
-        # Initialise parent to set up audio pre-processor, device, etc.
         super().__init__(device=device, audio_config=audio_config)
 
         # ------------------------------------------------------------------ #
-        # Backbone
+        #  Backbone
         # ------------------------------------------------------------------ #
-        if audio_config is None:
-            sr = 16000
-        else:
-            # Support both Pydantic AudioConfig objects and plain dicts
-            sr = getattr(audio_config, "sample_rate", None)
-            if sr is None and isinstance(audio_config, dict):
-                sr = audio_config.get("sample_rate", 16000)
-            sr = sr or 16000
-        self.backbone = AvesEmbedding(sr=sr, large=large)
-        self.backbone.to(device)
+        sr: int = (
+            (audio_config or {}).get("sample_rate", 16000)
+            if isinstance(audio_config, dict)
+            else getattr(audio_config, "sample_rate", 16000)
+        )
+        self.backbone = AvesEmbedding(sr=sr).to(device)
 
-        # Hidden size is determined by the Wav2Vec2 config – pull from encoder.
-        try:
-            hidden_dim = self.backbone.model.encoder.embed_dim  # type: ignore[attr-defined]
-        except AttributeError:
-            # Fallback: assume 768 which is true for *Base* config
-            hidden_dim = 768
+        # Hidden size is defined in the backbone’s encoder config
+        hidden_dim: int = getattr(self.backbone.model.encoder, "embed_dim", 768)
 
-        self.return_features_only = return_features_only
-
+        self.return_features_only: bool = return_features_only
         if not self.return_features_only:
-            self.classifier = nn.Linear(hidden_dim, num_classes)
-            self.classifier.to(device)
+            self.classifier = nn.Linear(hidden_dim, num_classes).to(device)
 
     # ------------------------------------------------------------------ #
-    # Helper functions
+    #  Utility functions
     # ------------------------------------------------------------------ #
     @staticmethod
     def _masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """Mean-pool sequence hiding padded positions (mask=True → keep)."""
+        """Mean-pool a sequence while ignoring padded frames.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Tensor of shape ``(B, T, C)``.
+        mask : torch.Tensor
+            Boolean tensor of shape ``(B, T)`` where **True** denotes frames to
+            *keep* (i.e. non-padded).
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor of shape ``(B, C)`` – mean of the unmasked frames.
+        """
         mask = mask.unsqueeze(-1).type_as(x)  # (B, T, 1)
-        x = x * mask
-        summed = x.sum(dim=1)
+        summed = (x * mask).sum(dim=1)
         denom = mask.sum(dim=1).clamp(min=1e-6)
         return summed / denom
 
+    # ------------------------------------------------------------------ #
+    #  Forward
+    # ------------------------------------------------------------------ #
     def forward(
-        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        # Ensure audio tensor is on the right device and (potentially) run any
-        # audio-level preprocessing (here overridden to a no-op).
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:  # noqa: D401
+        """Forward pass through backbone (and optional classifier).
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Raw waveform tensor of shape ``(B, T)``.
+        padding_mask : Optional[torch.Tensor], default ``None``
+            Boolean tensor of shape ``(B, T)`` where **True** denotes padding.
+            If ``None``, a zero mask is created internally.
+
+        Returns
+        -------
+        torch.Tensor
+            * If ``return_features_only=True`` – per-frame features of shape
+              ``(B, T', C)``.
+            * Otherwise – per-frame logits of shape ``(B, T', num_classes)``.
+        """
         x = self.process_audio(x)
 
         if padding_mask is None:
-            padding_mask = torch.zeros_like(x, dtype=torch.bool)
+            padding_mask = torch.zeros(
+                x.shape[0], x.shape[1], dtype=torch.bool, device=x.device
+            )
 
-        features, new_mask = self.backbone(x, padding_mask)
+        feats, frame_mask = self.backbone(x, padding_mask)
 
-        # features: (B, T, C)
-        # pooled = self._masked_mean(features, ~new_mask)  # new_mask True=pad → invert
-        pooled = features
         if self.return_features_only:
-            return pooled
-        else:
-            return self.classifier(pooled)
+            return feats  # (B, T', C)
 
-    # Alias to satisfy other parts of the codebase that expect encode_audio()
+        return self.classifier(feats)  # (B, T', num_classes)
+
+    # ------------------------------------------------------------------ #
+    #  encode_audio alias (required by parts of the codebase)
+    # ------------------------------------------------------------------ #
     def encode_audio(
         self, audio: torch.Tensor, padding_mask: torch.Tensor
-    ) -> torch.Tensor:  # noqa: D401
-        """Return *pooled* AVES embedding (no classifier)."""
-        feats, _m = self.backbone(audio, padding_mask)
-        return self._masked_mean(feats, ~_m)
+    ) -> torch.Tensor:
+        """Return a *pooled* AVES embedding (no classifier head).
+
+        Parameters
+        ----------
+        audio : torch.Tensor
+            Raw waveform tensor of shape ``(B, T)``.
+        padding_mask : torch.Tensor
+            Boolean tensor of shape ``(B, T)`` where **True** denotes padding.
+
+        Returns
+        -------
+        torch.Tensor
+            Clip-level embedding of shape ``(B, C)``.
+        """
+        feats, frame_mask = self.backbone(audio, padding_mask)
+        return self._masked_mean(feats, ~frame_mask)
 
     # ------------------------------------------------------------------ #
-    # Override ModelBase's audio preprocessing (raw waveform expected)
+    #  Override ModelBase’s audio preprocessing
     # ------------------------------------------------------------------ #
-
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        """Return waveform unchanged (AVES consumes raw audio)."""
-        target_device = next(self.parameters()).device
-        return x.to(target_device)
+        """Return waveform unchanged (AVES consumes raw audio).
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Raw waveform tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The same tensor placed on the model’s device.
+        """
+        return x.to(next(self.parameters()).device)

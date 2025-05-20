@@ -83,7 +83,11 @@ def main() -> None:
     else:
         local_device_index = local_rank if torch.cuda.is_available() else 0
 
-    device = torch.device("cuda", local_device_index) if torch.cuda.is_available() else torch.device("cpu")
+    device = (
+        torch.device("cuda", local_device_index)
+        if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
 
     torch.manual_seed(config.seed)
 

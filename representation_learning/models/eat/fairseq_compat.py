@@ -1,33 +1,35 @@
-from __future__ import annotations
-
 """Compatibility shims copied from the original Fairseq helpers that EAT
-relied on.  These implementations allow us to keep the refactored codebase
-self-contained while remaining *functionally identical* to the upstream
-version.
+relied on, refactored to remove the Fairseq runtime dependency.
 
-Only the pieces that are used by the refactored implementation are included:
-
-• compute_mask_indices / compute_block_mask_{1d,2d} – masking helpers
-• EMAModule (+ its small dataclass) – exponential moving-average tracking
-
-All Fairseq-specific base classes (e.g. FairseqDataclass) were replaced by
-standard :pyclass:`dataclasses.dataclass` to remove the dependency.
+The file purposely stays **minimal** – only the pieces that the refactored
+code-path touches are included.
 """
 
+from __future__ import annotations
+
+# stdlib ------------------------------------------------------------------ #
 import copy
 import logging
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+# third-party -------------------------------------------------------------- #
 import numpy as np
 import torch
 import torch.nn as nn
 
-try:
-    from amp_C import multi_tensor_l2norm  # type: ignore
+# Local helper imports ---------------------------------------------------- #
+from representation_learning.models.eat.eat_utils import (  # noqa: F401
+    compute_block_mask_1d,
+    compute_block_mask_2d,
+)
+
+# Optional AMP helper – unavailable on CPU-only CI runners.
+try:  # pragma: no cover
+    from amp_C import multi_tensor_l2norm  # type: ignore  # noqa: F401
 
     multi_tensor_l2norm_available = True
-except ImportError:  # pragma: no cover – amp_C not available on CPU-only CI
+except ImportError:  # pragma: no cover – fallback when not compiled
     multi_tensor_l2norm_available = False
 
 logger = logging.getLogger(__name__)
@@ -56,7 +58,20 @@ def compute_mask_indices(
     idc_select_ver: int = 1,
     num_mask_ver: int = 2,
 ) -> np.ndarray:
-    """Port of Fairseq's mask-span sampler (1-D).  See upstream docstring."""
+    """Port of Fairseq's 1-D span-mask sampler.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean mask array of shape ``(B, T)``.
+
+    Raises
+    ------
+    Exception
+        If ``mask_type`` is unknown.
+    ValueError
+        If ``num_mask_ver`` is not 1 or 2.
+    """
 
     bsz, all_sz = shape
     mask = np.full((bsz, all_sz), False)
@@ -111,7 +126,15 @@ def compute_mask_indices(
         if no_overlap:
             mask_idc = []
 
-            def arrange(s, e, length, keep_length):
+            def arrange(
+                s: int,
+                e: int,
+                length: int,
+                keep_length: int,
+                *,
+                rng: np.random.Generator = rng,
+                mask_idc: list[int] = mask_idc,
+            ) -> list[tuple[int, int]]:
                 span_start = rng.randint(s, e - length)
                 mask_idc.extend(span_start + k for k in range(length))
 
@@ -194,10 +217,6 @@ def compute_mask_indices(
 # from the reference file verbatim, *or* import them from eat_utils.py if they
 # already exist and are reference-accurate.
 
-from representation_learning.models.eat.eat_utils import (  # noqa: F401,E501
-    compute_block_mask_1d,
-    compute_block_mask_2d,
-)
 
 # --------------------------------------------------------------------------- #
 # 2. EMA tracker (slightly simplified, no Fairseq dependency)                  #
@@ -243,7 +262,9 @@ class EMAModule:
     #  FP32 helper                                                       #
     # ------------------------------------------------------------------ #
 
-    def build_fp32_params(self, state_dict: Optional[dict[str, torch.Tensor]] = None):
+    def build_fp32_params(
+        self, state_dict: Optional[dict[str, torch.Tensor]] = None
+    ) -> None:
         if not self.config.ema_fp32:
             raise RuntimeError("ema_fp32 is False – shouldn't build fp32 params")
         state_dict = state_dict or self.model.state_dict()
@@ -280,5 +301,5 @@ class EMAModule:
     def get_decay(self) -> float:  # noqa: D401 – original API wrapper
         return self.decay
 
-    def set_decay(self, decay: float, weight_decay: Optional[float] = None):
+    def set_decay(self, decay: float, weight_decay: Optional[float] = None) -> None:
         self.decay = decay

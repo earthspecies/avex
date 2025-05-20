@@ -5,11 +5,10 @@
 
 import logging
 import math
-import numpy as np
-import torch
-
 from typing import Optional, Tuple
 
+import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -33,26 +32,46 @@ def compute_mask_indices(
     idc_select_ver: int = 1,  # 2 to reproduce mask_tokens_dataset
     num_mask_ver: int = 2,  # 2 to reproduce mask_tokens_dataset
 ) -> np.ndarray:
-    """
-    Computes random mask spans for a given shape
+    """Return a boolean mask where *True* marks masked positions (1-D variant).
 
-    Args:
-        shape: the the shape for which to compute masks.
-            should be of size 2 where first element is batch size and 2nd is timesteps
-        padding_mask: optional padding mask of the same size as shape, which will prevent masking padded elements
-        mask_prob: probability for each token to be chosen as start of the span to be masked. this will be multiplied by
-            number of timesteps divided by length of mask span to mask approximately this percentage of all elements.
-            however due to overlaps, the actual number will be smaller (unless no_overlap is True)
-        mask_type: how to compute mask lengths
-            static = fixed size
-            uniform = sample from uniform distribution [mask_other, mask_length*2]
-            normal = sample from normal distribution with mean mask_length and stdev mask_other. mask is min 1 element
-            poisson = sample from possion distribution with lambda = mask length
-        min_masks: minimum number of masked spans
-        no_overlap: if false, will switch to an alternative recursive algorithm that prevents spans from overlapping
-        min_space: only used if no_overlap is True, this is how many elements to keep unmasked between spans
-        require_same_masks: if true, will randomly drop out masks until same amount of masks remains in each sample
-        mask_dropout: randomly dropout this percentage of masks in each example
+    The algorithm is a faithful port of Fairseq's span-mask sampler.
+
+    Parameters
+    ----------
+    shape : tuple[int, int]
+        ``(B, T)`` batch-size and sequence length.
+    padding_mask : torch.Tensor | None
+        Boolean mask indicating *padded* (invalid) positions to **skip** in the
+        span selection.
+    mask_prob : float
+        Fraction of tokens to mask overall (before overlaps / clipping).
+    mask_length : int
+        Length of each contiguous span.
+    mask_type : str, default "static"
+        Strategy for drawing ``lengths`` – one of ``static``, ``uniform``,
+        ``normal``, ``poisson``.
+    min_masks : int, default 0
+        Lower bound on the *number* of spans per sample.
+    no_overlap : bool, default False
+        If *True* spans are prevented from overlapping.
+    require_same_masks : bool, default True
+        Enforce that all samples end up with *exactly* the same number of
+        masked positions.
+    mask_dropout : float, default 0.0
+        Probability of *dropping* an already selected mask position.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean array of shape ``(B, T)`` where ``True`` indicates a masked
+        position.
+
+    Raises
+    ------
+    Exception
+        If an unknown ``mask_type`` is supplied.
+    ValueError
+        If ``num_mask_ver`` is invalid.
     """
 
     bsz, all_sz = shape
@@ -61,8 +80,7 @@ def compute_mask_indices(
     if num_mask_ver == 1:
         all_num_mask = int(
             # add a random number for probabilistic rounding
-            mask_prob * all_sz / float(mask_length)
-            + np.random.rand()
+            mask_prob * all_sz / float(mask_length) + np.random.rand()
         )
         all_num_mask = max(min_masks, all_num_mask)
 
@@ -85,8 +103,7 @@ def compute_mask_indices(
             if padding_mask is not None:
                 num_mask = int(
                     # add a random number for probabilistic rounding
-                    mask_prob * sz / float(mask_length)
-                    + np.random.rand()
+                    mask_prob * sz / float(mask_length) + np.random.rand()
                 )
                 num_mask = max(min_masks, num_mask)
             else:
@@ -94,8 +111,7 @@ def compute_mask_indices(
         elif num_mask_ver == 2:
             num_mask = int(
                 # add a random number for probabilistic rounding
-                mask_prob * sz / float(mask_length)
-                + rng.random()
+                mask_prob * sz / float(mask_length) + rng.random()
             )
             num_mask = max(min_masks, num_mask)
         else:
@@ -123,7 +139,15 @@ def compute_mask_indices(
         if no_overlap:
             mask_idc = []
 
-            def arrange(s, e, length, keep_length):
+            def arrange(
+                s: int,
+                e: int,
+                length: int,
+                keep_length: int,
+                *,
+                rng: np.random.Generator = rng,
+                mask_idc: list[int] = mask_idc,
+            ) -> list[tuple[int, int]]:
                 span_start = rng.randint(s, e - length)
                 mask_idc.extend(span_start + i for i in range(length))
 
@@ -216,10 +240,11 @@ def compute_block_mask_2d(
     expand_adjcent: bool = False,
     mask_dropout: float = 0,
     non_overlapping: bool = False,
-    img_shape: tuple = None,   # For the situation when d[0] != d[1], especially in audio spce ways
+    # When the spectrogram is non-square (d[0] != d[1]) pass the explicit
+    # shape via *img_shape* so the block mask computes distances correctly.
+    img_shape: tuple | None = None,
     flexible_mask: bool = False,
 ) -> torch.Tensor:
-
     assert mask_length > 1
 
     B, L = shape
@@ -324,10 +349,17 @@ def compute_block_mask_2d(
 
         mask[(i0, i1, i2)] = 1
 
-    def get_nbs(b, m, w):
+    def get_nbs(b: int, m: torch.Tensor, w: torch.Tensor) -> torch.Tensor:  # noqa: ANN001 – local helper inside compute_block_mask_2d
+        """Return 2-D neighbourhood mask (used during *expand_adjacent*).
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean tensor of shape ``(B, H·W)``.
+        """
+
         all_nbs = torch.nn.functional.conv2d(m.unsqueeze(1), w, padding="same")
-        all_nbs = all_nbs.clamp_max_(1).view(b, -1)
-        return all_nbs
+        return all_nbs.clamp_max_(1).view(b, -1)
 
     if require_same_masks and expand_adjcent:
         w = torch.zeros((1, 1, 3, 3))
@@ -396,7 +428,6 @@ def compute_block_mask_1d(
     mask_dropout: float = 0,
     non_overlapping: bool = False,
 ) -> torch.Tensor:
-
     B, L = shape
 
     if inverse_mask:
@@ -452,10 +483,17 @@ def compute_block_mask_1d(
 
         mask[(i0, i1)] = 1
 
-    def get_nbs(b, m, w):
+    def get_nbs(b: int, m: torch.Tensor, w: torch.Tensor) -> torch.Tensor:  # noqa: ANN001 – private helper
+        """Return 1-D neighbourhood mask (used during *expand_adjacent*).
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean tensor of shape ``(B, L)``.
+        """
+
         all_nbs = torch.nn.functional.conv1d(m.unsqueeze(1), w, padding="same")
-        all_nbs = all_nbs.clamp_max_(1).view(b, -1)
-        return all_nbs
+        return all_nbs.clamp_max_(1).view(b, -1)
 
     if require_same_masks and expand_adjcent:
         w = torch.ones((1, 1, 3))
@@ -509,18 +547,42 @@ def compute_block_mask_1d(
     return mask
 
 
-def get_buckets(sizes, num_buckets):
-    buckets = np.unique(
+def get_buckets(sizes: np.ndarray | list[int], num_buckets: int) -> np.ndarray:
+    """Return *num_buckets* equally spaced percentile boundaries.
+
+    Parameters
+    ----------
+    sizes : np.ndarray | list[int]
+        1-D collection of lengths.
+    num_buckets : int
+        Desired number of buckets.
+
+    Returns
+    -------
+    np.ndarray
+        Sorted array of bucket edges.
+    """
+
+    buckets: np.ndarray = np.unique(
         np.percentile(
             sizes,
-            np.linspace(0, 100, num_buckets + 1),
-            interpolation="lower",
-        )[1:]
+            np.linspace(0, 100, num_buckets + 1)[1:-1],
+            interpolation="nearest",
+        )
     )
     return buckets
 
 
-def get_bucketed_sizes(orig_sizes, buckets):
+def get_bucketed_sizes(orig_sizes: np.ndarray, buckets: np.ndarray) -> np.ndarray:
+    """Map each *orig_sizes* entry to its nearest bucket upper-bound.
+
+    Returns
+    -------
+    np.ndarray
+        Array of the same shape as *orig_sizes* with values snapped to bucket
+        edges.
+    """
+
     sizes = np.copy(orig_sizes)
     assert np.min(sizes) >= 0
     start_val = -1

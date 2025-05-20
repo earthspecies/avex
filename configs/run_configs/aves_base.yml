@@ -7,7 +7,6 @@ model_spec:
   name: aves
   pretrained: true
   # Use the *Base* AVES checkpoint by default (set `large: true` to get XL)
-  large: false
   audio_config:
     sample_rate: 16000
     representation: raw        # AVES consumes raw waveform
@@ -51,4 +50,4 @@ device: cuda
 seed: 42
 num_workers: 8
 run_name: aves_base
-wandb_project: representation_learning 
+wandb_project: representation_learning

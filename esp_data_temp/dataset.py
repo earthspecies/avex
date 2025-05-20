@@ -18,17 +18,11 @@ from .transformations import build_transforms
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
-BATS_PATH = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.train.csv"
-BATS_PATH_VALID = (
-    "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.valid.csv"
-)
-BATS_PATH_TEST = (
-    "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
-)
-WATKINS_TEST_PATH = "gs://foundation-model-data/audio/watkins/annotations_test.csv"
-WATKINS_TRAIN_PATH = "gs://foundation-model-data/audio/watkins/annotations_train.csv"
-WATKINS_VALID_PATH = "gs://foundation-model-data/audio/watkins/annotations_valid.csv"
 
+DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument?
+FM_DATASETS_PATH = DATA_ROOT + "audio/"
+
+ESC50_PATH = "gs://esc50_dataset"
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
@@ -112,7 +106,9 @@ class AudioDataset:
         path_str: str = row[self.audio_path_col]
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        if path_str.startswith("gs://"):
+        if isinstance(path_str, GSPath) or isinstance(path_str, Path):
+            audio_path = path_str
+        elif path_str.startswith("gs://"):
             if GSPath is None:
                 raise ImportError("cloudpathlib is required to handle gs:// paths.")
             audio_path = GSPath(path_str)
@@ -121,22 +117,8 @@ class AudioDataset:
 
         # Open the audio file. Using the .open('rb') method works for both local and
         # GSPath objects.
-        try:
-            MAX_SECONDS = 60
-            with audio_path.open("rb") as f, sf.SoundFile(f) as snd:
-                sr = snd.samplerate
-                total_frames = len(snd)              # total samples in file
-                cap_frames   = sr * MAX_SECONDS
-
-                # Decide how many frames to read
-                frames_to_read = min(total_frames, cap_frames)
-                audio = snd.read(frames=frames_to_read, dtype="float32")
-
-        except Exception as e:
-            print(f"Error reading audio file: {e}")
-            print(f"Audio path: {audio_path}")
-            sr = 16_000
-            audio = np.zeros(sr * MAX_SECONDS, dtype="float32")  # 60 s of silence
+        with audio_path.open("rb") as f:
+            audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
@@ -191,52 +173,60 @@ def _get_dataset_from_name(
             lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
         )  # AnimalSpeak missing gs path
         return df
-    elif name == "bats":
-        csv_file = (
-            BATS_PATH_TEST
-            if split == "test"
-            else BATS_PATH_VALID
-            if split == "valid"
-            else BATS_PATH
-        )
-        # TODO: don't use os.path!
-        base_path = os.path.dirname(csv_file).split("egyptian_fruit_bats")[0]
-        if csv_file.startswith("gs://"):
-            csv_path = GSPath(csv_file)
+    elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
+        if FM_DATASETS_PATH.startswith("gs://"):
+            dataset_path = GSPath(FM_DATASETS_PATH)
         else:
-            csv_path = Path(csv_file)
+            dataset_path = Path(FM_DATASETS_PATH)
+
+        if name == "humbugdb":
+            csv_file = dataset_path / 'HumBugDB' / 'data' / 'metadata' / "{}.csv".format(split)
+            audio_path = dataset_path / 'HumBugDB' / "data" / "audio"
+        elif name == "cbi" or name == "dogs":
+            csv_file = dataset_path / name / "annotations.{}.csv".format(split)
+            audio_path = dataset_path / name / "wav"
+        else:
+            csv_file = dataset_path / name / "annotations.{}.csv".format(split)
+            audio_path = dataset_path / name / "audio"
 
         # Read CSV content
-        csv_text = csv_path.read_text(encoding="utf-8")
+        csv_text = csv_file.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
-        df["gs_path"] = df["path"].apply(
-            lambda x: base_path
-            + "egyptian_fruit_bats"
-            + x.split("egyptian_fruit_bats")[1]
-        )  # bats missing gs path
+        if name == "watkins":
+            df["path"] = df["path"].apply(
+                lambda x: dataset_path / name / x.split(name)[1].lstrip("/")
+            )  # Maintain base path and append wav directory
+        else:
+            df["path"] = df["path"].apply(
+                lambda x: audio_path / x.split("/")[-1]
+            )  # Extract just the filename and append to audio_path
         return df
-    elif name == "watkins":
-        csv_file = (
-            WATKINS_TEST_PATH
-            if split == "test"
-            else WATKINS_VALID_PATH
-            if split == "valid"
-            else WATKINS_TRAIN_PATH
-        )
-        base_path = os.path.dirname(csv_file).split("watkins")[0]
-        if csv_file.startswith("gs://"):
-            csv_path = GSPath(csv_file)
+    elif name == "esc-50":
+        if ESC50_PATH.startswith("gs://"):
+            dataset_path = GSPath(ESC50_PATH)
         else:
-            csv_path = Path(csv_file)
+            dataset_path = Path(ESC50_PATH)
 
-        # Read CSV content
-        csv_text = csv_path.read_text(encoding="utf-8")
-        df = pd.read_csv(StringIO(csv_text))
-        df["gs_path"] = df["path"].apply(
-            lambda x: base_path
-            + "watkins"
-            + x.split("watkins")[1]
-        )  # bats missing gs path
+        df = pd.read_csv(dataset_path / 'meta' / 'esc50.csv')
+
+        def convert(row):
+            new_row = pd.Series({
+                'path': dataset_path / row['filename'],
+                'category': row['category'],
+                'target': row['target'],
+                'fold': row['fold']
+            })
+            return new_row
+
+        df = df.apply(convert, axis=1)
+
+        ### add gs_path column
+        if split == "test":
+            df = df[df['fold'] == 5]
+        elif split == "valid":
+            df = df[df['fold'] == 4]
+        else:
+            df = df[df['fold'] <= 3]
         return df
     else:
         raise NotImplementedError("Dataset not supported")

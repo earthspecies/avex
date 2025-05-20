@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import torch
+
 from representation_learning.models.eat.losses import PretrainingLoss
 
 
-def test_pretraining_loss_shapes():
+def test_pretraining_loss_shapes() -> None:
     B, T, D = 2, 4, 8
     student = torch.randn(B, T, D)
     teacher = torch.randn(B, T, D)

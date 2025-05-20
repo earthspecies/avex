@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -23,11 +23,11 @@ class SamePad(nn.Module):
     give the SAME output length for odd kernels.  For even kernels, you could
     trim/extend here, but EAT only uses odd sizes (5), so this is a no-op."""
 
-    def __init__(self, kernel_size: int):
+    def __init__(self, kernel_size: int) -> None:
         super().__init__()
         self.k = kernel_size
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x
 
 
@@ -38,11 +38,11 @@ class SamePad2d(SamePad):
 class TransposeLast(nn.Module):
     """Transpose a given dimension with the last dimension (default swaps −2 & −1)."""
 
-    def __init__(self, tranpose_dim: int = -2):
+    def __init__(self, tranpose_dim: int = -2) -> None:
         super().__init__()
         self.d = tranpose_dim
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.transpose(self.d, -1)
 
 
@@ -51,13 +51,13 @@ class TransposeLast(nn.Module):
 # -----------------------------------------------------------------------------
 
 
-def init_bert_params(module):
+def init_bert_params(module: nn.Module) -> None:
     """
     Initialize the weights specific to the BERT Model.
     This overrides the default initializations depending on the specified arguments.
         1. If normal_init_linear_weights is set then weights of linear
            layer will be initialized using the normal distribution and
-           bais will be set to the specified value.
+           bias will be set to the specified value.
         2. If normal_init_embed_weights is set then weights of embedding
            layer will be initialized using the normal distribution.
         3. If normal_init_proj_weights is set then weights of
@@ -65,7 +65,7 @@ def init_bert_params(module):
            the normal distribution (to be validated).
     """
 
-    def normal_(data):
+    def normal_(data: torch.Tensor) -> None:
         # with FSDP, module params will be on CUDA, so we cast them back to CPU
         # so that the RNG is consistent with and without FSDP
         data.copy_(data.cpu().normal_(mean=0.0, std=0.02).to(data.device))
@@ -113,16 +113,22 @@ class D2vDecoderConfig:
 class DecoderBase(nn.Module):
     decoder_cfg: D2vDecoderConfig
 
-    def __init__(self, cfg: D2vDecoderConfig):
+    def __init__(self, cfg: D2vDecoderConfig) -> None:
         super().__init__()
         self.decoder_cfg = cfg
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         for mod in self.proj.modules():
             if isinstance(mod, nn.Linear):
                 init_bert_params(mod)
 
-    def add_residual(self, x, residual, i, mask_info):
+    def add_residual(
+        self,
+        x: torch.Tensor,
+        residual: Optional[torch.Tensor],
+        i: Optional[int],
+        mask_info: Optional[dict],
+    ) -> torch.Tensor:
         if (
             residual is None
             or not self.decoder_cfg.decoder_residual
@@ -138,10 +144,10 @@ class DecoderBase(nn.Module):
 
 
 class Decoder1d(DecoderBase):
-    def __init__(self, cfg: D2vDecoderConfig, input_dim: int):
+    def __init__(self, cfg: D2vDecoderConfig, input_dim: int) -> None:
         super().__init__(cfg)
 
-        def make_block(in_dim):
+        def make_block(in_dim: int) -> nn.Sequential:
             return nn.Sequential(
                 nn.Conv1d(
                     in_dim,
@@ -174,7 +180,11 @@ class Decoder1d(DecoderBase):
         projs.append(nn.Linear(curr_dim, input_dim))
         self.proj = projs[0] if len(projs) == 1 else nn.Sequential(*projs)
 
-    def forward(self, x, mask_info=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask_info: Optional[dict] = None,
+    ) -> torch.Tensor:
         # x: (B, T, C) -> (B, C, T)
         x = x.transpose(1, 2)
         residual = x
@@ -192,11 +202,17 @@ class Decoder1d(DecoderBase):
 
 
 class Decoder2d(DecoderBase):
-    def __init__(self, cfg: D2vDecoderConfig, input_dim: int, h_size: int, w_size: int):
+    def __init__(
+        self,
+        cfg: D2vDecoderConfig,
+        input_dim: int,
+        h_size: int,
+        w_size: int,
+    ) -> None:
         super().__init__(cfg)
         self.h_size, self.w_size = h_size, w_size
 
-        def make_block(in_dim):
+        def make_block(in_dim: int) -> nn.Sequential:
             return nn.Sequential(
                 nn.Conv2d(
                     in_dim,
@@ -220,7 +236,11 @@ class Decoder2d(DecoderBase):
         )
         self.proj = nn.Linear(cfg.decoder_dim, input_dim)
 
-    def forward(self, x, mask_info=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask_info: Optional[dict] = None,
+    ) -> torch.Tensor:
         # TODO: Changed – pad sequence when masked tokens removed so reshape is possible
         B, T, C = x.shape  # expected T == H*W for grid reshape
         expected_tokens = self.h_size * self.w_size
@@ -252,7 +272,9 @@ class Decoder2d(DecoderBase):
 class TransformerDecoder(nn.Module):
     decoder_cfg: D2vDecoderConfig
 
-    def __init__(self, cfg: D2vDecoderConfig, input_dim: int, encoder: nn.Module):
+    def __init__(
+        self, cfg: D2vDecoderConfig, input_dim: int, encoder: nn.Module
+    ) -> None:
         super().__init__()
         self.decoder_cfg = cfg
         self.input_proj = nn.Linear(input_dim, cfg.decoder_dim)
@@ -260,10 +282,14 @@ class TransformerDecoder(nn.Module):
         self.proj = nn.Linear(cfg.decoder_dim, input_dim)
         self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         self.apply(init_bert_params)
 
-    def forward(self, x, mask_info=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask_info: Optional[dict] = None,
+    ) -> torch.Tensor:
         x = self.input_proj(x)
         x = self.encoder(x, None, None, 1)  # reuse shared encoder
         return self.proj(x)
@@ -284,7 +310,7 @@ class AltAttention(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         cosine_attention: bool = False,
-    ):
+    ) -> None:
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -299,7 +325,12 @@ class AltAttention(nn.Module):
                 torch.log(torch.ones((num_heads, 1, 1)) * 10)
             )
 
-    def forward(self, x, padding_mask=None, alibi_bias=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        alibi_bias: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -340,12 +371,12 @@ class AltBlock(nn.Module):
         mlp_drop: float = 0.0,
         post_mlp_drop: float = 0.0,
         drop_path: float = 0.0,
-        act_layer=nn.GELU,
-        norm_layer=nn.LayerNorm,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
         layer_norm_first: bool = True,
         ffn_targets: bool = False,
         cosine_attention: bool = False,
-    ):
+    ) -> None:
         super().__init__()
         from timm.models.vision_transformer import DropPath, Mlp
 
@@ -372,7 +403,12 @@ class AltBlock(nn.Module):
         )
         self.post_mlp_dropout = nn.Dropout(post_mlp_drop)
 
-    def forward(self, x, padding_mask=None, alibi_bias=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        alibi_bias: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.layer_norm_first:
             x = x + self.drop_path(self.attn(self.norm1(x), padding_mask, alibi_bias))
             residual = x
@@ -406,7 +442,7 @@ class EncDecAttention(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         cosine_attention: bool = False,
-    ):
+    ) -> None:
         super().__init__()
         self.num_heads = num_heads
         head_dim = q_dim // num_heads
@@ -422,7 +458,13 @@ class EncDecAttention(nn.Module):
                 torch.log(torch.ones((num_heads, 1, 1)) * 10)
             )
 
-    def forward(self, q, kv, padding_mask=None, alibi_bias=None):
+    def forward(
+        self,
+        q: torch.Tensor,
+        kv: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        alibi_bias: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         B, N, C = q.shape
         q = (
             self.q_proj(q)
@@ -468,12 +510,12 @@ class EncDecBlock(nn.Module):
         mlp_drop: float = 0.0,
         post_mlp_drop: float = 0.0,
         drop_path: float = 0.0,
-        act_layer=nn.GELU,
-        norm_layer=nn.LayerNorm,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
         layer_norm_first: bool = True,
         cosine_attention: bool = False,
         first_residual: bool = True,
-    ):
+    ) -> None:
         super().__init__()
         from timm.models.vision_transformer import DropPath, Mlp
 
@@ -501,7 +543,13 @@ class EncDecBlock(nn.Module):
         )
         self.post_mlp_dropout = nn.Dropout(post_mlp_drop)
 
-    def forward(self, q, kv, padding_mask=None, alibi_bias=None):
+    def forward(
+        self,
+        q: torch.Tensor,
+        kv: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        alibi_bias: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         res = q if self.first_residual else 0
         if self.layer_norm_first:
             q = res + self.drop_path(
@@ -518,7 +566,7 @@ class EncDecBlock(nn.Module):
 
 
 class EncDecTransformerDecoder(nn.Module):
-    def __init__(self, cfg: D2vDecoderConfig, input_dim: int):
+    def __init__(self, cfg: D2vDecoderConfig, input_dim: int) -> None:
         super().__init__()
         self.input_proj = nn.Linear(input_dim, cfg.decoder_dim)
         self.blocks = nn.Sequential(
@@ -538,10 +586,10 @@ class EncDecTransformerDecoder(nn.Module):
         self.proj = nn.Linear(cfg.decoder_dim, input_dim)
         self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         self.apply(init_bert_params)
 
-    def forward(self, x, kv):
+    def forward(self, x: torch.Tensor, kv: torch.Tensor) -> torch.Tensor:
         x = self.input_proj(x)
         for blk in self.blocks:
             x = blk(x, kv)

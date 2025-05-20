@@ -7,14 +7,20 @@ import math
 from collections import namedtuple
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Callable, Optional, Tuple
+from functools import partial
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from omegaconf import II, MISSING
+from torch.autograd.function import FunctionCtx
 from torch.cuda.amp import autocast
+
+from representation_learning.models.eat.fairseq_compat import (
+    compute_mask_indices as _fairseq_compute_mask_indices,
+)
 
 from .modules import D2vDecoderConfig  # our stripped-down decoders
 
@@ -29,21 +35,47 @@ class GradMultiply(torch.autograd.Function):
     """Forward identity – back-prop multiplies gradients by *scale*."""
 
     @staticmethod
-    def forward(ctx, x: torch.Tensor, scale: float):
+    def forward(  # type: ignore[override]
+        ctx: FunctionCtx, x: torch.Tensor, scale: float
+    ) -> torch.Tensor:
+        """Forward pass storing ``scale`` for gradient multiplication.
+
+        Returns
+        -------
+        torch.Tensor
+            The input ``x`` unchanged.
+        """
+
         ctx.scale = scale
         return x
 
     @staticmethod
-    def backward(ctx, grad_out):
+    def backward(ctx: FunctionCtx, grad_out: torch.Tensor) -> Tuple[torch.Tensor, None]:
+        """Multiply upstream gradients by the stored *scale* factor.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, None]
+            Scaled gradient and ``None`` for the unused ``scale`` input.
+        """
+
         return grad_out * ctx.scale, None
 
 
-def index_put(t: torch.Tensor, mask: torch.Tensor, values: torch.Tensor):
-    """Like `t[mask] = values` but keeps shape-broadcasting behaviour used
-    in the original Fairseq code."""
-    t = t.clone()
-    t[mask] = values.view(-1, t.size(-1)) if values.dim() == t.dim() else values
-    return t
+def index_put(
+    t: torch.Tensor, mask: torch.Tensor, values: torch.Tensor
+) -> torch.Tensor:
+    """Broadcast-aware scatter that mimics Fairseq's semantics.
+
+    Returns
+    -------
+    torch.Tensor
+        Copy of ``t`` with ``values`` written at positions selected by ``mask``.
+    """
+
+    out = t.clone()
+    out[mask] = values.view(-1, t.size(-1)) if values.dim() == t.dim() else values
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -117,8 +149,15 @@ MaskInfo = namedtuple("MaskInfo", ["x_unmasked", "mask", "ids_restore", "ids_kee
 # --------------------------------------------------------------------------- #
 
 
-def get_annealed_rate(start: float, end: float, step: int, total: int):
-    """Linear decay from *start* → *end* over *total* steps."""
+def get_annealed_rate(start: float, end: float, step: int, total: int) -> float:
+    """Linear decay from *start* to *end*.
+
+    Returns
+    -------
+    float
+        The interpolated value for ``step``.
+    """
+
     if step >= total:
         return end
     return end - (end - start) * (1 - step / total)
@@ -127,8 +166,12 @@ def get_annealed_rate(start: float, end: float, step: int, total: int):
 def random_masking(
     x: torch.Tensor, mask_ratio: float, seed: Optional[MaskSeed]
 ) -> MaskInfo:
-    """
-    MAE-style random masking when `mask_length == 1` in the original code.
+    """MAE-style random masking used when ``mask_length == 1``.
+
+    Returns
+    -------
+    MaskInfo
+        Tuple holding unmasked tokens, mask, restoration and keep indices.
     """
     B, L, D = x.shape
     keep = int(L * (1 - mask_ratio))
@@ -167,7 +210,7 @@ def gather_unmasked_mask(x: torch.Tensor, info: MaskInfo) -> torch.Tensor:
 # Alibi helpers ---------------------------------------------------------------
 
 
-def _slopes(n):
+def _slopes(n: int) -> List[float]:
     if math.log2(n).is_integer():
         start = 2 ** (-(2 ** -(math.log2(n) - 3)))
         return [start * (start**i) for i in range(n)]
@@ -185,13 +228,13 @@ def get_alibi(max_pos: int, heads: int) -> torch.Tensor:
 
 
 def get_alibi_bias(
-    cache: dict,
+    cache: Dict[Any, torch.Tensor],
     B: int,
     T: int,
     H: int,
-    dtype,
-    device,
-):
+    dtype: torch.dtype,
+    device: torch.device,
+) -> torch.Tensor:
     key = (H,)
     buf = cache.get(key)
     need = H * B
@@ -216,9 +259,9 @@ def _learned_alibi_bias(
     T: int,
     H: int,
     scale: torch.Tensor,
-    dtype,
-    device,
-):
+    dtype: torch.dtype,
+    device: torch.device,
+) -> torch.Tensor:
     if alibi_bias.size(-1) < T:
         pad = math.ceil((T - alibi_bias.size(-1)) / 2)
         alibi_bias = F.pad(alibi_bias, (pad, pad, pad, pad), mode="replicate")
@@ -241,17 +284,14 @@ def masked_alibi(ab: torch.Tensor, info: MaskInfo) -> torch.Tensor:
 # call-sites) continue to work unchanged while benefiting from the full
 # feature-set (inverse_mask, mask_prob_adjust, etc.).
 
-from representation_learning.models.eat.fairseq_compat import (
-    compute_mask_indices as _fairseq_compute_mask_indices,
-)
 
+def compute_mask_indices(*args: object, **kwargs: object) -> np.ndarray:  # type: ignore[override]
+    """Delegates to reference helper.
 
-def compute_mask_indices(*args, **kwargs):  # type: ignore[override]
-    """Fully-featured masking helper matching the original Fairseq logic.
-
-    This function is now a thin wrapper around the reference implementation to
-    guarantee identical behaviour.  All arguments and return types stay the
-    same – only the internal call path changed.
+    Returns
+    -------
+    np.ndarray
+        Binary mask indices as in the Fairseq implementation.
     """
 
     return _fairseq_compute_mask_indices(*args, **kwargs)
@@ -279,7 +319,7 @@ class ModalitySpecificEncoder(nn.Module):
         context_encoder: nn.Module,
         decoder: Optional[nn.Module],
         get_alibi_bias: Optional[Callable[..., torch.Tensor]],
-    ):
+    ) -> None:
         super().__init__()
         self.cfg = cfg
         self.local_encoder = local_encoder
@@ -353,7 +393,9 @@ class ModalitySpecificEncoder(nn.Module):
                     x = self.local_encoder(feats_cast)
         return self.project_features(x)
 
-    def convert_padding_mask(self, x, pm):
+    def convert_padding_mask(
+        self, x: torch.Tensor, pm: Optional[torch.Tensor]
+    ) -> Optional[torch.Tensor]:
         return pm
 
     # ------------------------------------------------------------------ #
@@ -419,8 +461,8 @@ class ModalitySpecificEncoder(nn.Module):
         pm: Optional[torch.Tensor],
         seed: Optional[MaskSeed],
         apply: bool,
-        precomputed_mask,
-    ):
+        precomputed_mask: Optional[torch.Tensor],
+    ) -> Tuple[torch.Tensor, Optional[MaskInfo]]:
         if precomputed_mask is not None:
             mask = precomputed_mask
             info = self.make_maskinfo(x, mask)
@@ -474,8 +516,8 @@ class ModalitySpecificEncoder(nn.Module):
         remove_masked: bool,
         clone: int = 1,
         seed: Optional[MaskSeed] = None,
-        precomputed_mask=None,
-    ):
+        precomputed_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, object]:
         if padding_mask is not None:
             padding_mask = self.convert_padding_mask(x, padding_mask)
 
@@ -571,8 +613,8 @@ class ModalitySpecificEncoder(nn.Module):
         remove_masked: bool,
         clone_batch: int = 1,
         mask_seeds: Optional[MaskSeed] = None,
-        precomputed_mask=None,
-    ):
+        precomputed_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, object]:
         x = self.local_features(features)
         return self.contextualised_features(
             x,
@@ -584,7 +626,7 @@ class ModalitySpecificEncoder(nn.Module):
             precomputed_mask,
         )
 
-    def remove_pretraining_modules(self, keep_decoder: bool = False):
+    def remove_pretraining_modules(self, keep_decoder: bool = False) -> None:
         if not keep_decoder:
             self.decoder = None
 
@@ -592,11 +634,20 @@ class ModalitySpecificEncoder(nn.Module):
     #  API alias – US vs UK spelling                                     #
     # ------------------------------------------------------------------ #
 
-    def contextualized_features(self, *args, **kwargs):  # noqa: N802 – API alias
-        """Alias for :meth:`contextualised_features` (US spelling).
+    def contextualized_features(
+        self,
+        *args: object,
+        **kwargs: object,
+    ) -> Dict[str, object]:  # noqa: N802 – API alias
+        """Alias with US spelling.
 
-        Converts the keyword ``mask`` → ``do_mask`` expected by the original
-        implementation so legacy call-sites continue to work.
+        Converts ``mask`` → ``do_mask`` keyword so legacy call-sites keep
+        working.
+
+        Returns
+        -------
+        dict
+            Forward output of :meth:`contextualised_features`.
         """
         if "mask" in kwargs and "do_mask" not in kwargs:
             kwargs["do_mask"] = kwargs.pop("mask")

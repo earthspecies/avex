@@ -90,15 +90,12 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     elif model_name == "aves":
         from representation_learning.models.aves import Model as AvesModel
 
-        large = getattr(model_config, "large", False)
-
         return AvesModel(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
             return_features_only=False,
-            large=large,
         )
     else:
         # Fallback

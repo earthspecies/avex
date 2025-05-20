@@ -24,11 +24,12 @@ class TransformModel(BaseModel):
     Base class for all transform configurations.
 
     All transform configurations should inherit from this class and define a unique
-    `type` attribute. This class registers every subclass in the global
-    ``_TRANSFORM_REGISTRY`` so they can later be instantiated from YAML.  The
-    aggregated ``RegisteredTransformConfigs`` union enables Pydantic to
-    validate a *list* of heterogeneous transforms by using the ``type`` field
-    as discriminator.
+    `type` attribute. The `type` attribute can be anything (although it makes sense to
+    choose a descriptive name) as long as it's unique. This base class does the
+    registration of subclasses in the `_TRANSFORM_REGISTRY` dictionary and checks that
+    it is unique. It also generates `RegisteredTransformConfigs` type alias which is a
+    union of all registered transform types, allowing for easy validation and type
+    checking.
     """
 
     # TODO (milad) I wonder if this can be done with a simple decorator. Decorators are

@@ -479,7 +479,12 @@ class Trainer:
                             comp_log_metrics[k] = comp_avg
 
                     logger.info(
-                        f"[LOG] Step {i + 1}/{len(loader)}: avg_loss={avg_loss_so_far:.4f}, avg_acc={avg_acc_so_far:.4f}{comp_log_str}"
+                        (
+                            f"[LOG] Step {i + 1}/{len(loader)}: "
+                            f"avg_loss={avg_loss_so_far:.4f}, "
+                            f"avg_acc={avg_acc_so_far:.4f}"  # noqa: E501  (assembled)
+                            f"{comp_log_str}"
+                        )
                     )
 
                     if self.log is not None:

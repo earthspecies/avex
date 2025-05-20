@@ -39,7 +39,11 @@ class BlockEncoder(nn.Module):
         _idx: Optional[int] = None,
     ) -> torch.Tensor:  # noqa: D401
         for blk in self.blocks:
-            if self.training and self.layerdrop > 0 and torch.rand(1).item() < self.layerdrop:
+            if (
+                self.training
+                and self.layerdrop > 0
+                and torch.rand(1).item() < self.layerdrop
+            ):
                 continue
             # Blocks in eat_modules.AltBlock return tuple (x, trg). We take x.
             if hasattr(blk, "forward"):
@@ -52,7 +56,7 @@ class BlockEncoder(nn.Module):
             x = self.norm(x)
         return x
 
-    def reset_parameters(self):  # noqa: D401
+    def reset_parameters(self) -> None:  # noqa: D401
         for blk in self.blocks:
             if hasattr(blk, "reset_parameters"):
                 blk.reset_parameters()
@@ -66,7 +70,7 @@ class BlockEncoder(nn.Module):
 class FixedPositionalEncoder(nn.Module):
     """Adds a **pre-computed** (non-learnable) positional embedding tensor."""
 
-    def __init__(self, pos_embed: torch.Tensor):
+    def __init__(self, pos_embed: torch.Tensor) -> None:
         super().__init__()
         self.register_buffer("pos_embed", pos_embed, persistent=False)
 

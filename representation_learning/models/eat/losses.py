@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Self-supervised losses used in the original EAT pre-training.
 
 The goal is *functional parity* without strict Fairseq dependencies.  We
@@ -15,6 +13,8 @@ Notation (matching upstream):
 • *c* – utterance-level classifier prediction (B, D)
 • *y* – utterance labels (B, D) – typically one-hot speaker ids (optional)
 """
+
+from __future__ import annotations
 
 import torch
 import torch.nn as nn
@@ -74,7 +74,7 @@ class Data2VecLoss(nn.Module):
 class ReconstructionLoss(nn.Module):
     """L2 loss between decoder output and local features."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def forward(self, recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:  # noqa: D401
@@ -84,7 +84,7 @@ class ReconstructionLoss(nn.Module):
 class CLSLoss(nn.Module):
     """Simple cross-entropy for utterance-level classification."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:  # noqa: D401
@@ -169,6 +169,11 @@ def d2v_loss(
     scale : float | None, optional
         Pre-computed "1/sqrt(D)" scaling factor.  If ``None`` the loss will
         compute it internally.
+
+    Returns
+    -------
+    torch.Tensor
+        The per-element data2vec regression loss.
     """
 
     return Data2VecLoss(beta=beta, scale=scale)(pred, target)
@@ -184,6 +189,11 @@ def dino_loss(
 
     This simplified variant is sufficient for the spectrogram-only use-case in
     EAT and avoids pulling in the full facebookresearch/dino code.
+
+    Returns
+    -------
+    torch.Tensor
+        The averaged cross-entropy loss value.
     """
 
     # Teacher probabilities are detached to stop gradients

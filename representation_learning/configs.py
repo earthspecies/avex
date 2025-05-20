@@ -113,19 +113,10 @@ class ModelSpec(BaseModel):
     projection_dim: Optional[int] = None
     temperature: Optional[float] = None
 
-    # Flag used by the Bird-AVES wrapper to pick the XL backbone variant.
-    large: Optional[bool] = None
-
-    # Free-form overrides for the EAT backbone (Data2VecMultiConfig).  The
-    # structure mirrors the upstream Fairseq YAML: any key found here will be
-    # applied recursively to the `Data2VecMultiConfig` instance when the model
-    # is constructed.  Ignored for models other than ``eat``.
+    # Free-form overrides for the EAT backbone (Data2VecMultiConfig).
     eat_cfg: Optional[dict[str, Any]] = None  # noqa: ANN401
 
-    # Internal helper flag – when true the EAT model is instantiated in
-    # self-supervised pre-training mode (classification head disabled; forward
-    # returns loss dict).  Automatically set by run_train when
-    # label_type=='self_supervised'.
+    # When true the EAT model is instantiated for self-supervised pre-training.
     pretraining_mode: Optional[bool] = None
 
     model_config = ConfigDict(extra="forbid")
@@ -356,15 +347,6 @@ class EvaluateConfig(BaseModel):
     frozen: bool = Field(
         True,
         description="If True, do not update base model weights during linear probing.",
-    )
-
-    probe: bool = Field(
-        True,
-        description=(
-            "Whether to wrap the backbone in a linear-probe head.  "
-            "When False the *base_model* itself is fine-tuned/used for "
-            "classification, respecting the `frozen` flag."
-        ),
     )
 
     model_config = ConfigDict(extra="forbid")

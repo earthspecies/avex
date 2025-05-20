@@ -41,6 +41,21 @@ from representation_learning.data.data_utils import combine_text_labels
 ################################################################################
 
 
+# --------------------------------------------------------------------------- #
+#  Helper utilities for faster *cached* noise mixing (used by AugmentationProcessor)
+# --------------------------------------------------------------------------- #
+
+# Global flag to enable/disable profiling
+ENABLE_PROFILING = os.environ.get("PROFILE_NOISE_AUG", "1") == "1"
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Ensure INFO logs are visible
+
+# Global storage for profiling stats
+_profiling_stats = defaultdict(list)
+
+
 def add_noise(
     audio: torch.Tensor | np.ndarray,
     noise_dir: str | Sequence[str],
@@ -107,7 +122,7 @@ def add_noise(
     try:
         info = torchaudio.info(noise_path)
     except Exception as exc:  # pragma: no cover
-        print(f"Failed to inspect noise file {noise_path}: {exc}")
+        logger.warning(f"Failed to inspect noise file {noise_path}: {exc}")
         return audio
 
     noise_sr = info.sample_rate
@@ -700,21 +715,6 @@ def make_item_postprocessor(
         the processed dict.
     """
     return ItemPostprocessor(aug_processor)
-
-
-# --------------------------------------------------------------------------- #
-#  Helper utilities for faster *cached* noise mixing (used by AugmentationProcessor)
-# --------------------------------------------------------------------------- #
-
-# Global flag to enable/disable profiling
-ENABLE_PROFILING = os.environ.get("PROFILE_NOISE_AUG", "1") == "1"
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Ensure INFO logs are visible
-
-# Global storage for profiling stats
-_profiling_stats = defaultdict(list)
 
 
 def get_profiling_summary() -> Dict[str, Dict[str, float]]:
