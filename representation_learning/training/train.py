@@ -867,16 +867,23 @@ class FineTuneTrainer:
         for batch in tqdm(
             loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
         ):
-            x = batch["raw_wav"].to(self.device)
-            mask = batch.get("padding_mask")
-            if mask is not None:
-                mask = mask.to(self.device)
-            y = batch["label"].to(self.device)
+            if "embed" in batch:
+                z = batch["embed"].to(self.device)
+                logits = self.model(z)
+                y = batch["label"].to(self.device)
+            else:
+                x = batch["raw_wav"].to(self.device)
+                mask = batch.get("padding_mask")
+                if mask is not None:
+                    mask = mask.to(self.device)
+                y = batch["label"].to(self.device)
 
-            # Forward pass
-            logits = (
-                self.model(x, padding_mask=mask) if mask is not None else self.model(x)
-            )
+                logits = (
+                    self.model(x, padding_mask=mask)
+                    if mask is not None
+                    else self.model(x)
+                )
+
             loss = self.criterion(logits, y)
 
             # Backward pass if training

@@ -16,7 +16,6 @@ experiments:
   - run_name: resnet18_probe
     run_config: configs/run_configs/resnet18.yml
     layers: last_layer
-    pretrained: true
 
 save_dir: evaluation_results_resnet
 
@@ -24,3 +23,8 @@ device: cpu
 seed: 42
 num_workers: 0
 frozen: false
+
+# Evaluation phases
+eval_modes:
+  - linear_probe
+  - retrieval

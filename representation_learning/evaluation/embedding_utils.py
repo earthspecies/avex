@@ -1,13 +1,66 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Tuple
 
 import h5py
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from representation_learning.models.base_model import ModelBase
+
 logger = logging.getLogger(__name__)
+
+
+def extract_embeddings_for_split(
+    model: ModelBase,
+    dataloader: DataLoader,
+    layer_names: List[str],
+    device: torch.device,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Return stacked embeddings and labels for an entire dataloader.
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor]
+        (embeddings, labels) stacked on CPU.
+    """
+    embeds: list[torch.Tensor] = []
+    labels: list[torch.Tensor] = []
+    model.eval()
+
+    with torch.no_grad():
+        for batch in dataloader:
+            wav = batch["raw_wav"].to(device)
+            mask = batch.get("padding_mask")
+            if mask is not None:
+                mask = mask.to(device)
+            if mask is None:
+                emb = model.extract_embeddings(wav, layer_names)
+            else:
+                inp = {"raw_wav": wav, "padding_mask": mask}
+                emb = model.extract_embeddings(inp, layer_names)
+            embeds.append(emb.cpu())
+            labels.append(batch["label"].cpu())
+
+    return torch.cat(embeds), torch.cat(labels)
+
+
+class EmbeddingDataset(torch.utils.data.Dataset):
+    """Simple dataset that serves pre-computed embeddings and labels."""
+
+    def __init__(self, embeddings: torch.Tensor, labels: torch.Tensor) -> None:
+        self.embeddings = embeddings
+        self.labels = labels
+
+    def __len__(self) -> int:  # noqa: D401
+        return self.embeddings.size(0)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:  # noqa: D401
+        return {"embed": self.embeddings[idx], "label": self.labels[idx]}
 
 
 def save_embeddings_to_disk(

@@ -336,6 +336,12 @@ class EvaluateConfig(BaseModel):
         description="If True, do not update base model weights during linear probing.",
     )
 
+    # Which evaluation phases to run
+    eval_modes: List[Literal["linear_probe", "retrieval"]] = Field(
+        default_factory=lambda: ["linear_probe"],
+        description="Which evaluation types to execute during run_evaluate.py",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
