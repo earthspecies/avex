@@ -154,24 +154,11 @@ class AudioProcessor:
             return torch.hamming_window(self.win_length)
         raise ValueError(f"Unknown window type: {self.window_type}")
 
-    # @staticmethod
-    # def _normalize(x: Tensor) -> Tensor:
-    #     x = x = torch.log(x + 1e-6)
-    #     return (x - x.amin(dim=(-2, -1), keepdim=True)) / (
-    #         x.amax(dim=(-2, -1), keepdim=True)
-    #         - x.amin(dim=(-2, -1), keepdim=True)
-    #         + 1e-8
-    #     )
-
     @staticmethod
-    def _normalize_db(x: Tensor) -> Tensor:
-        # 1. power -> dB (log10)
-        x_db = 10.0 * torch.log10(x + 1e-10)
-
-        # 2. clip to a fixed dynamic range (e.g. [-80, 0] dB)
-        x_db = torch.clamp(x_db, min=-80.0, max=0.0)
-
-        # 3. scale to [-1, 1] *per-frequency* (safer than global min/max)
-        x_db = (x_db + 80.0) / 40.0 - 1.0  # maps [-80,0] → [-1,1]
-
-        return x_db
+    def _normalize(x: Tensor) -> Tensor:
+        x = x = torch.log(x + 1e-6)
+        return (x - x.amin(dim=(-2, -1), keepdim=True)) / (
+            x.amax(dim=(-2, -1), keepdim=True)
+            - x.amin(dim=(-2, -1), keepdim=True)
+            + 1e-8
+        )

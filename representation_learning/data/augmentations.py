@@ -142,7 +142,7 @@ def add_noise(
             noise_path, frame_offset=frame_offset, num_frames=num_frames
         )
     except Exception as exc:  # pragma: no cover
-        print(f"Failed to load noise file {noise_path}: {exc}")
+        logger.warning(f"Failed to load noise file {noise_path}: {exc}")
         return audio
 
     # ------------------------------------------------------------------

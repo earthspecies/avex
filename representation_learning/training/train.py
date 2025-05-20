@@ -965,11 +965,6 @@ class FineTuneTrainer:
         tuple[float, float]
             A tuple ``(loss, accuracy)`` computed over the entire epoch.
         """
-        # Select dataloader and switch model to the correct mode so that layers
-        # such as BatchNorm/Dropout behave as expected.  This is crucial when
-        # *frozen=False* because the backbone should update its running stats
-        # during fine-tuning.
-
         loader = self.train_loader if train else self.val_loader
 
         if train:
