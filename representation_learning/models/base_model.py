@@ -107,6 +107,7 @@ class ModelBase(nn.Module):
         try:
             for name, module in self.named_modules():
                 if name in layers:
+                    logger.info(f"Registering forward hook for {name}")
                     hooks.append(module.register_forward_hook(hook_fn))
 
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)

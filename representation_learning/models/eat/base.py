@@ -13,7 +13,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf import MISSING, II
+from omegaconf import II, MISSING
 from torch.cuda.amp import autocast
 
 from .modules import D2vDecoderConfig  # our stripped-down decoders
@@ -42,58 +42,14 @@ def index_put(t: torch.Tensor, mask: torch.Tensor, values: torch.Tensor):
     """Like `t[mask] = values` but keeps shape-broadcasting behaviour used
     in the original Fairseq code."""
     t = t.clone()
-    t[mask] = (
-        values.view(-1, t.size(-1)) if values.dim() == t.dim() else values
-    )
+    t[mask] = values.view(-1, t.size(-1)) if values.dim() == t.dim() else values
     return t
-
-
-def compute_mask_indices(
-    shape: Tuple[int, int],
-    padding_mask: Optional[torch.Tensor],
-    mask_prob: float,
-    mask_length: int,
-    min_masks: int = 1,
-    require_same_masks: bool = True,  # ignored (only needed for MT)
-    mask_dropout: float = 0.0,
-    add_masks: bool = False,
-    seed: Optional[int] = None,
-    epoch: int = 0,
-    indices: Optional[torch.Tensor] = None,
-):
-    """
-    Return a (B, T) numpy bool array where *True* marks masked positions.
-    This simplified version covers the usage patterns in EAT: non-overlapping
-    spans of length *mask_length* until ~mask_prob of tokens are masked.
-    """
-    B, T = shape
-    rng = np.random.RandomState(seed + epoch if seed is not None else None)
-    out = np.zeros((B, T), dtype=np.bool_)
-
-    for b in range(B):
-        valid = (
-            (~padding_mask[b]).sum().item() if padding_mask is not None else T
-        )
-        n_span = max(min_masks, int(round(mask_prob * valid / mask_length)))
-        n_span = min(n_span, valid // mask_length)
-
-        starts = rng.permutation(valid - mask_length + 1)[:n_span]
-        for s in starts:
-            out[b, s : s + mask_length] = True
-
-        if padding_mask is not None:
-            out[b] &= ~padding_mask[b].cpu().numpy()
-
-        if mask_dropout > 0:
-            drop = rng.rand(T) < mask_dropout
-            out[b] &= ~drop
-
-    return out
 
 
 # --------------------------------------------------------------------------- #
 #  Public enums & dataclasses                                                 #
 # --------------------------------------------------------------------------- #
+
 
 class Modality(Enum):
     AUDIO = auto()
@@ -154,9 +110,7 @@ class D2vModalityConfig:
 #  Mask bookkeeping structs ---------------------------------------------------
 
 MaskSeed = namedtuple("MaskSeed", ["seed", "update", "ids"])
-MaskInfo = namedtuple(
-    "MaskInfo", ["x_unmasked", "mask", "ids_restore", "ids_keep"]
-)
+MaskInfo = namedtuple("MaskInfo", ["x_unmasked", "mask", "ids_restore", "ids_keep"])
 
 # --------------------------------------------------------------------------- #
 #  Utility helpers                                                            #
@@ -212,10 +166,11 @@ def gather_unmasked_mask(x: torch.Tensor, info: MaskInfo) -> torch.Tensor:
 
 # Alibi helpers ---------------------------------------------------------------
 
+
 def _slopes(n):
     if math.log2(n).is_integer():
         start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-        return [start * (start ** i) for i in range(n)]
+        return [start * (start**i) for i in range(n)]
     half = 2 ** math.floor(math.log2(n))
     return _slopes(half) + _slopes(2 * half)[0::2][: n - half]
 
@@ -223,10 +178,7 @@ def _slopes(n):
 def get_alibi(max_pos: int, heads: int) -> torch.Tensor:
     slopes = torch.tensor(_slopes(heads))
     pos = (
-        torch.arange(max_pos)
-        .unsqueeze(0)
-        .sub(torch.arange(max_pos).unsqueeze(1))
-        .abs()
+        torch.arange(max_pos).unsqueeze(0).sub(torch.arange(max_pos).unsqueeze(1)).abs()
         * -1
     )
     return slopes[:, None, None] * pos  # (H, T, T)
@@ -240,17 +192,19 @@ def get_alibi_bias(
     dtype,
     device,
 ):
-    key = (H, )
+    key = (H,)
     buf = cache.get(key)
     need = H * B
-    if buf is None or buf.size(0) < need or buf.size(1) < T \
-       or buf.dtype != dtype or buf.device != device:
+    if (
+        buf is None
+        or buf.size(0) < need
+        or buf.size(1) < T
+        or buf.dtype != dtype
+        or buf.device != device
+    ):
         big_T = max(T, buf.size(1) if buf is not None else 0)
         big_BH = max(need, buf.size(0) if buf is not None else 0) // H
-        buf = (
-            get_alibi(big_T, H).to(dtype=dtype, device=device)
-            .repeat(big_BH, 1, 1)
-        )
+        buf = get_alibi(big_T, H).to(dtype=dtype, device=device).repeat(big_BH, 1, 1)
         cache[key] = buf
     out = buf[:need, :T, :T].view(B, H, T, T)
     return out
@@ -274,17 +228,39 @@ def _learned_alibi_bias(
 def masked_alibi(ab: torch.Tensor, info: MaskInfo) -> torch.Tensor:
     H = ab.size(1)
     idx = info.ids_keep[..., 0].unsqueeze(-1)
-    tmp = torch.gather(
-        ab, -2, idx.expand(-1, H, -1, ab.size(-1))
-    )
-    return torch.gather(
-        tmp, -1, idx.transpose(-1, -2).expand(-1, H, tmp.size(-2), -1)
-    )
+    tmp = torch.gather(ab, -2, idx.expand(-1, H, -1, ab.size(-1)))
+    return torch.gather(tmp, -1, idx.transpose(-1, -2).expand(-1, H, tmp.size(-2), -1))
+
+
+# --------------------------------------------------------------------------- #
+#  Mask helpers – delegate to reference implementation                         #
+# --------------------------------------------------------------------------- #
+
+# We import the original Fairseq helper added under `eat_reference` and expose
+# it under the same public name so the rest of the codebase (and external
+# call-sites) continue to work unchanged while benefiting from the full
+# feature-set (inverse_mask, mask_prob_adjust, etc.).
+
+from representation_learning.models.eat.fairseq_compat import (
+    compute_mask_indices as _fairseq_compute_mask_indices,
+)
+
+
+def compute_mask_indices(*args, **kwargs):  # type: ignore[override]
+    """Fully-featured masking helper matching the original Fairseq logic.
+
+    This function is now a thin wrapper around the reference implementation to
+    guarantee identical behaviour.  All arguments and return types stay the
+    same – only the internal call path changed.
+    """
+
+    return _fairseq_compute_mask_indices(*args, **kwargs)
 
 
 # --------------------------------------------------------------------------- #
 #  Core class: ModalitySpecificEncoder                                        #
 # --------------------------------------------------------------------------- #
+
 
 class ModalitySpecificEncoder(nn.Module):
     """
@@ -312,9 +288,7 @@ class ModalitySpecificEncoder(nn.Module):
         self.relative_positional_encoder = relative_positional_encoder
         self.context_encoder = context_encoder
         self.decoder = decoder
-        self.get_alibi_bias = (
-            get_alibi_bias if cfg.use_alibi_encoder else None
-        )
+        self.get_alibi_bias = get_alibi_bias if cfg.use_alibi_encoder else None
         self.local_grad_mult = cfg.local_grad_mult
 
         # extra tokens ----------------------------------------------------
@@ -340,7 +314,8 @@ class ModalitySpecificEncoder(nn.Module):
             heads = cfg.num_alibi_heads if cfg.learned_alibi_scale_per_head else 1
             shape = (layers, 1, heads, 1, 1)
             self.alibi_scale = nn.Parameter(
-                torch.full(shape, cfg.alibi_scale), requires_grad=cfg.learned_alibi_scale
+                torch.full(shape, cfg.alibi_scale),
+                requires_grad=cfg.learned_alibi_scale,
             )
 
         # learned alibi bias ---------------------------------------------
@@ -370,7 +345,9 @@ class ModalitySpecificEncoder(nn.Module):
             if self.local_grad_mult == 1.0:
                 x = self.local_encoder(feats_cast)
             elif self.local_grad_mult > 0:
-                x = GradMultiply.apply(self.local_encoder(feats_cast), self.local_grad_mult)
+                x = GradMultiply.apply(
+                    self.local_encoder(feats_cast), self.local_grad_mult
+                )
             else:
                 with torch.no_grad():
                     x = self.local_encoder(feats_cast)
@@ -431,10 +408,7 @@ class ModalitySpecificEncoder(nn.Module):
                 (B, C), None, cfg.mask_channel_prob, cfg.mask_channel_length
             )
             c_mask = (
-                torch.from_numpy(c_mask_np)
-                .to(x.device)
-                .unsqueeze(1)
-                .expand(-1, T, -1)
+                torch.from_numpy(c_mask_np).to(x.device).unsqueeze(1).expand(-1, T, -1)
             )
             x = index_put(x, c_mask, 0)
         return x

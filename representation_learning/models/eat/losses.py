@@ -20,10 +20,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 # --------------------------------------------------------------------------- #
 #  Individual losses                                                          #
 # --------------------------------------------------------------------------- #
+
 
 def _safe_var(t: torch.Tensor) -> torch.Tensor:
     t = t.view(-1, t.size(-1))
@@ -31,33 +31,44 @@ def _safe_var(t: torch.Tensor) -> torch.Tensor:
 
 
 class Data2VecLoss(nn.Module):
-    """Student-teacher regression loss (same as in wav2vec-2.0 / data2vec).
+    """Student-teacher regression loss identical to the original Fairseq /
+    EAT implementation.
 
-    We minimise the cosine distance between *s* and *t* plus variance
-    regularisers as in DINO.
+    Given *student* predictions *s* and teacher targets *t*, we compute the
+    per-element L2 (or Smooth-L1) distance and scale it by ``1/sqrt(D)`` (or a
+    caller-provided constant).  **No cosine similarity or variance penalties**
+    are applied – this mirrors the behaviour in
+    ``eat_reference/eat_pretraining.py``.
     """
 
     def __init__(self, beta: float = 0.0, scale: float | None = None) -> None:
         super().__init__()
-        self.beta = beta  # teacher-centering term – kept for future use
+        self.beta = beta  # beta==0 → plain MSE, otherwise Smooth-L1
         self.scale = scale
 
     def forward(self, student: torch.Tensor, teacher: torch.Tensor) -> torch.Tensor:  # noqa: D401
-        # Normalise
-        s = F.normalize(student, dim=-1)
-        t = F.normalize(teacher.detach(), dim=-1)
+        # Flatten time / token dimension so behaviour matches the reference.
+        # keep channel/feature dim (-1) intact.
+        x = student.view(-1, student.size(-1)).float()
+        y = teacher.view(-1, student.size(-1))
 
+        # --- distance --------------------------------------------------- #
+        if self.beta == 0:
+            loss_elem = F.mse_loss(x, y, reduction="none")
+        else:
+            loss_elem = F.smooth_l1_loss(x, y, reduction="none", beta=self.beta)
+
+        # --- optional scaling ------------------------------------------ #
         if self.scale is None:
-            scale = 1.0 / (s.size(-1) ** 0.5)
+            scale = 1.0 / (x.size(-1) ** 0.5)
         else:
             scale = self.scale
 
-        cos_sim = (s * t).sum(-1) * scale  # (B, T)
-        loss = 2 - 2 * cos_sim.mean()  # minimise (1 − cosine)
-
-        # variance regularisation (avoid collapse)
-        loss += (_safe_var(student) + _safe_var(teacher)) * 0.01
-        return loss
+        # Return *per-element* scaled loss (no reduction).  Down-stream code
+        # is responsible for summing / averaging so the behaviour matches
+        # the original Fairseq implementation where reduction happens later
+        # after masking and sample-size normalisation.
+        return loss_elem * scale
 
 
 class ReconstructionLoss(nn.Module):
@@ -83,6 +94,7 @@ class CLSLoss(nn.Module):
 # --------------------------------------------------------------------------- #
 #  Aggregation wrapper                                                        #
 # --------------------------------------------------------------------------- #
+
 
 class PretrainingLoss(nn.Module):
     """Aggregate EAT pre-training losses with configurable weights."""
@@ -134,6 +146,7 @@ class PretrainingLoss(nn.Module):
 # --------------------------------------------------------------------------- #
 #  Functional wrappers expected by eat.py                                     #
 # --------------------------------------------------------------------------- #
+
 
 def d2v_loss(
     pred: torch.Tensor,

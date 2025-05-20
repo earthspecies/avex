@@ -148,6 +148,11 @@ class Trainer:
             "model_compute": 0.0,
         }
 
+        # --- EAT-SSL per-component loss tracking ------------------------- #
+        # Will be populated by `_forward_eat_ssl` at runtime whenever we are
+        # in self-supervised EAT mode.  Structure: {name: scalar (float)}
+        self._last_batch_ssl_metrics: Dict[str, float] | None = None
+
         # Determine device
         if device is None:
             self.device = next(self.model.parameters()).device
@@ -267,7 +272,6 @@ class Trainer:
                         tr_a2t = self._last_epoch_clip_metrics.get("acc_a2t", 0.0)
                         tr_t2a = self._last_epoch_clip_metrics.get("acc_t2a", 0.0)
 
-
                     logger_line = (
                         f"[Epoch {epoch:03d}] "
                         f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
@@ -375,11 +379,13 @@ class Trainer:
         context_mgr = torch.enable_grad() if train else torch.no_grad()
 
         with context_mgr:
-            for i, batch in enumerate(tqdm(
-                loader,
-                desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
-                leave=False,
-            )):
+            for i, batch in enumerate(
+                tqdm(
+                    loader,
+                    desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+                    leave=False,
+                )
+            ):
                 # ------------------------------------------------------
                 if not hasattr(self, "_global_updates"):
                     self._global_updates = 0  # type: ignore[attr-defined]
@@ -412,7 +418,9 @@ class Trainer:
                     # Ensure we reference the *unwrapped* model when using DDP so
                     # the attribute lookup succeeds (DistributedDataParallel
                     # wraps the real module under .module).
-                    target_model = self.model_unwrapped if self.is_distributed else self.model
+                    target_model = (
+                        self.model_unwrapped if self.is_distributed else self.model
+                    )
                     if self.is_eat_ssl and hasattr(target_model, "backbone"):
                         backbone = target_model.backbone
                         if hasattr(backbone, "set_num_updates"):
@@ -436,23 +444,51 @@ class Trainer:
                 else:
                     total_correct += correct_out  # type: ignore[misc]
 
+                # Per-component EAT SSL losses --------------------------------
+                if self.is_eat_ssl and self._last_batch_ssl_metrics is not None:
+                    if "comp_totals" not in locals():  # lazily created once
+                        comp_totals: Dict[str, float] = {}
+                    for k, v in self._last_batch_ssl_metrics.items():
+                        comp_totals[k] = comp_totals.get(k, 0.0) + v * batch_size
+
                 # Per-log_steps logging
                 if (i + 1) % self.log_steps == 0 or (i + 1) == len(loader):
-                    avg_loss_so_far = total_loss / total_samples if total_samples else 0.0
+                    avg_loss_so_far = (
+                        total_loss / total_samples if total_samples else 0.0
+                    )
                     if self.is_clip_mode:
-                        avg_acc_a2t = total_correct_a2t / total_samples if total_samples else 0.0
-                        avg_acc_t2a = total_correct_t2a / total_samples if total_samples else 0.0
+                        avg_acc_a2t = (
+                            total_correct_a2t / total_samples if total_samples else 0.0
+                        )
+                        avg_acc_t2a = (
+                            total_correct_t2a / total_samples if total_samples else 0.0
+                        )
                         avg_acc_so_far = (avg_acc_a2t + avg_acc_t2a) / 2.0
                     else:
-                        avg_acc_so_far = total_correct / total_samples if total_samples else 0.0
-                    logger.info(f"[LOG] Step {i+1}/{len(loader)}: avg_loss={avg_loss_so_far:.4f}, avg_acc={avg_acc_so_far:.4f}")
+                        avg_acc_so_far = (
+                            total_correct / total_samples if total_samples else 0.0
+                        )
+
+                    # Build log line extensions for EAT SSL component losses
+                    comp_log_str = ""
+                    comp_log_metrics: Dict[str, float] = {}
+                    if self.is_eat_ssl and "comp_totals" in locals():
+                        for k, v in comp_totals.items():
+                            comp_avg = v / total_samples
+                            comp_log_str += f"  {k}={comp_avg:.2f}"
+                            comp_log_metrics[k] = comp_avg
+
+                    logger.info(
+                        f"[LOG] Step {i + 1}/{len(loader)}: avg_loss={avg_loss_so_far:.4f}, avg_acc={avg_acc_so_far:.4f}{comp_log_str}"
+                    )
+
                     if self.log is not None:
-                        self.log.log_metrics({
+                        metrics_to_log = {
                             "loss": avg_loss_so_far,
                             "acc": avg_acc_so_far,
-                            "epoch": epoch,
-                            "step": self._global_updates,
-                        }, step=self._global_updates)
+                            **comp_log_metrics,
+                        }
+                        self.log.log_metrics(metrics_to_log, step=self._global_updates)
 
         # ------------------------------------
         # Aggregate epoch metrics
@@ -695,10 +731,16 @@ class Trainer:
                 "EAT model did not return expected loss dict in SSL mode"
             )
 
-        # TODO David: do we normalize by sample size here?
-        total_loss = torch.stack(list(out["losses"].values())).sum()
-        sample_size = out.get("sample_size", audio.size(0))
-        loss = total_loss / sample_size.clamp(min=1).float()
+        # Per-component averages (before weighting by batch size).  Store
+        # them so the calling loop can accumulate and log them.
+        self._last_batch_ssl_metrics = {
+            k: v.sum().item() / out["sample_size"].clamp(min=1).item()
+            for k, v in out["losses"].items()
+        }
+
+        total_loss = sum(v.sum() for v in out["losses"].values())
+        sample_size = out.get("sample_size", audio.size(0)).clamp(min=1).float()
+        loss = total_loss / sample_size
 
         # accuracy is undefined in SSL; return zero so logging remains intact
         return loss, 0, audio.size(0)
@@ -883,8 +925,8 @@ class FineTuneTrainer:
 
         self.best_val_acc = 0.0
         # Track best epoch metrics for return value
-        self.best_train_metrics: dict[str, float] = {"loss": float('inf'), "acc": 0.0}
-        self.best_val_metrics: dict[str, float] = {"loss": float('inf'), "acc": 0.0}
+        self.best_train_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
+        self.best_val_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
 
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
         """
@@ -1016,7 +1058,7 @@ class FineTuneTrainer:
             ckpt_path,
         )
         logger.info("Saved checkpoint → %s", ckpt_path)
-        
+
     def _load_best_checkpoint(self) -> None:
         """Load the best model checkpoint from disk."""
         # Get the path to the best checkpoint
@@ -1025,12 +1067,16 @@ class FineTuneTrainer:
         else:
             ckpt_dir = Path(self.cfg.save_dir)
         ckpt_path = ckpt_dir / "best.pt"
-        
+
         if not ckpt_path.exists():
-            logger.warning(f"Best checkpoint not found at {ckpt_path}. Using current model state.")
+            logger.warning(
+                f"Best checkpoint not found at {ckpt_path}. Using current model state."
+            )
             return
-            
+
         # Load the checkpoint
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
-        logger.info(f"Restored best model from {ckpt_path} (val_acc: {self.best_val_acc:.4f})")
+        logger.info(
+            f"Restored best model from {ckpt_path} (val_acc: {self.best_val_acc:.4f})"
+        )

@@ -358,6 +358,15 @@ class EvaluateConfig(BaseModel):
         description="If True, do not update base model weights during linear probing.",
     )
 
+    probe: bool = Field(
+        True,
+        description=(
+            "Whether to wrap the backbone in a linear-probe head.  "
+            "When False the *base_model* itself is fine-tuned/used for "
+            "classification, respecting the `frozen` flag."
+        ),
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 

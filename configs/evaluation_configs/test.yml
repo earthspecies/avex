@@ -13,21 +13,21 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  # - run_name: efficientnet_base_loaded
-  #   run_config: configs/run_configs/efficientnet_base.yml
-  #   ### which layers to probe for embeddings
-  #   layers: model.avgpool
-  #   ### whether to use pretrained model or the one we train on bioacoustic data
-  #   pretrained: false
-  #   checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_024.pt
-
-  - run_name: eat_pretrain
-    run_config: configs/run_configs/eat_pretrain.yml
+  - run_name: efficientnet_base_loaded
+    run_config: configs/run_configs/efficientnet_base.yml
     ### which layers to probe for embeddings
-    layers: last_layer
+    layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: true
-    # checkpoint_path: runs/eat_pretrain/checkpoints/checkpoint_epoch_030.pt
+    pretrained: false
+    checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_024.pt
+
+  # - run_name: eat_pretrain
+  #   run_config: configs/run_configs/eat_pretrain.yml
+  #   ### which layers to probe for embeddings
+  #   layers: last_layer
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: true
+  #   # checkpoint_path: runs/eat_pretrain/checkpoints/checkpoint_epoch_030.pt
 
   # - run_name: clap
   #   run_config: configs/run_configs/clip_base.yml
@@ -36,7 +36,7 @@ experiments:
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   pretrained: false
   #   checkpoint_path: runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
-  
+
   # - run_name: resnet152
   #   run_config: configs/run_configs/resnet152_base.yml
   #   ### which layers to probe for embeddings
@@ -56,3 +56,4 @@ num_workers: 8  # Enable workers for better memory management
 
 # Whether to freeze the backbone (train only the linear probe)
 frozen: false
+probe: false

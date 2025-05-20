@@ -1,9 +1,13 @@
 import math
+from dataclasses import dataclass
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass
-from typing import Optional
+from torch.nn import (
+    MultiheadAttention,  # Needed for init_bert_params matching ref
+)
 
 # -----------------------------------------------------------------------------
 # Lightweight replacements for a few fairseq utility layers
@@ -43,22 +47,47 @@ class TransposeLast(nn.Module):
 
 
 # -----------------------------------------------------------------------------
-# Minimal BERT-style weight init (xavier_uniform + LN const)
+# original fairseq init_bert_params
 # -----------------------------------------------------------------------------
 
-def init_bert_params(m: nn.Module):
-    if isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight)
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.0)
-    elif isinstance(m, nn.LayerNorm):
-        nn.init.constant_(m.weight, 1.0)
-        nn.init.constant_(m.bias, 0.0)
+
+def init_bert_params(module):
+    """
+    Initialize the weights specific to the BERT Model.
+    This overrides the default initializations depending on the specified arguments.
+        1. If normal_init_linear_weights is set then weights of linear
+           layer will be initialized using the normal distribution and
+           bais will be set to the specified value.
+        2. If normal_init_embed_weights is set then weights of embedding
+           layer will be initialized using the normal distribution.
+        3. If normal_init_proj_weights is set then weights of
+           in_project_weight for MultiHeadAttention initialized using
+           the normal distribution (to be validated).
+    """
+
+    def normal_(data):
+        # with FSDP, module params will be on CUDA, so we cast them back to CPU
+        # so that the RNG is consistent with and without FSDP
+        data.copy_(data.cpu().normal_(mean=0.0, std=0.02).to(data.device))
+
+    if isinstance(module, nn.Linear):
+        normal_(module.weight.data)
+        if module.bias is not None:
+            module.bias.data.zero_()
+    if isinstance(module, nn.Embedding):
+        normal_(module.weight.data)
+        if module.padding_idx is not None:
+            module.weight.data[module.padding_idx].zero_()
+    if isinstance(module, MultiheadAttention):
+        normal_(module.q_proj.weight.data)
+        normal_(module.k_proj.weight.data)
+        normal_(module.v_proj.weight.data)
 
 
 # -----------------------------------------------------------------------------
 # Original EAT decoder & attention blocks – only fairseq deps removed
 # -----------------------------------------------------------------------------
+
 
 @dataclass
 class D2vDecoderConfig:
@@ -79,6 +108,7 @@ class D2vDecoderConfig:
 # -----------------------------------------------------------------------------
 # Helper base class -----------------------------------------------------------
 # -----------------------------------------------------------------------------
+
 
 class DecoderBase(nn.Module):
     decoder_cfg: D2vDecoderConfig
@@ -105,6 +135,7 @@ class DecoderBase(nn.Module):
 # -----------------------------------------------------------------------------
 # 1-D CNN decoder -------------------------------------------------------------
 # -----------------------------------------------------------------------------
+
 
 class Decoder1d(DecoderBase):
     def __init__(self, cfg: D2vDecoderConfig, input_dim: int):
@@ -158,6 +189,7 @@ class Decoder1d(DecoderBase):
 # -----------------------------------------------------------------------------
 # 2-D CNN decoder -------------------------------------------------------------
 # -----------------------------------------------------------------------------
+
 
 class Decoder2d(DecoderBase):
     def __init__(self, cfg: D2vDecoderConfig, input_dim: int, h_size: int, w_size: int):
@@ -216,6 +248,7 @@ class Decoder2d(DecoderBase):
 # Transformer-based decoders --------------------------------------------------
 # -----------------------------------------------------------------------------
 
+
 class TransformerDecoder(nn.Module):
     decoder_cfg: D2vDecoderConfig
 
@@ -240,6 +273,7 @@ class TransformerDecoder(nn.Module):
 #   Alternate attention / block utilities (identical to original code) --------
 # -----------------------------------------------------------------------------
 
+
 class AltAttention(nn.Module):
     def __init__(
         self,
@@ -254,14 +288,16 @@ class AltAttention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = qk_scale or head_dim**-0.5
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
         self.cosine_attention = cosine_attention
         if cosine_attention:
-            self.logit_scale = nn.Parameter(torch.log(torch.ones((num_heads, 1, 1)) * 10))
+            self.logit_scale = nn.Parameter(
+                torch.log(torch.ones((num_heads, 1, 1)) * 10)
+            )
 
     def forward(self, x, padding_mask=None, alibi_bias=None):
         B, N, C = x.shape
@@ -312,6 +348,7 @@ class AltBlock(nn.Module):
     ):
         super().__init__()
         from timm.models.vision_transformer import DropPath, Mlp
+
         self.layer_norm_first = layer_norm_first
         self.ffn_targets = ffn_targets
         self.norm1 = norm_layer(dim)
@@ -327,7 +364,12 @@ class AltBlock(nn.Module):
         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
         self.norm2 = norm_layer(dim)
         hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=hidden_dim, act_layer=act_layer, drop=mlp_drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=hidden_dim,
+            act_layer=act_layer,
+            drop=mlp_drop,
+        )
         self.post_mlp_dropout = nn.Dropout(post_mlp_drop)
 
     def forward(self, x, padding_mask=None, alibi_bias=None):
@@ -352,6 +394,7 @@ class AltBlock(nn.Module):
 # Enc-Dec attention blocks (unchanged except fairseq removal) ------------------
 # -----------------------------------------------------------------------------
 
+
 class EncDecAttention(nn.Module):
     def __init__(
         self,
@@ -367,7 +410,7 @@ class EncDecAttention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         head_dim = q_dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = qk_scale or head_dim**-0.5
         self.q_proj = nn.Linear(q_dim, q_dim, bias=qkv_bias)
         self.kv_proj = nn.Linear(kv_dim, 2 * q_dim, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -375,12 +418,22 @@ class EncDecAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         self.cosine_attention = cosine_attention
         if cosine_attention:
-            self.logit_scale = nn.Parameter(torch.log(torch.ones((num_heads, 1, 1)) * 10))
+            self.logit_scale = nn.Parameter(
+                torch.log(torch.ones((num_heads, 1, 1)) * 10)
+            )
 
     def forward(self, q, kv, padding_mask=None, alibi_bias=None):
         B, N, C = q.shape
-        q = self.q_proj(q).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-        kv = self.kv_proj(kv).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q = (
+            self.q_proj(q)
+            .reshape(B, N, self.num_heads, C // self.num_heads)
+            .permute(0, 2, 1, 3)
+        )
+        kv = (
+            self.kv_proj(kv)
+            .reshape(B, -1, 2, self.num_heads, C // self.num_heads)
+            .permute(2, 0, 3, 1, 4)
+        )
         k, v = kv[0], kv[1]
         if self.cosine_attention:
             attn = F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1)
@@ -392,7 +445,9 @@ class EncDecAttention(nn.Module):
             attn = attn.type_as(alibi_bias)
             attn[:, : alibi_bias.size(1)] += alibi_bias
         if padding_mask is not None and padding_mask.any():
-            attn = attn.masked_fill(padding_mask.unsqueeze(1).unsqueeze(2).bool(), float("-inf"))
+            attn = attn.masked_fill(
+                padding_mask.unsqueeze(1).unsqueeze(2).bool(), float("-inf")
+            )
         attn = attn.softmax(dim=-1, dtype=torch.float32).to(dtype=q.dtype)
         attn = self.attn_drop(attn)
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
@@ -421,22 +476,37 @@ class EncDecBlock(nn.Module):
     ):
         super().__init__()
         from timm.models.vision_transformer import DropPath, Mlp
+
         self.layer_norm_first = layer_norm_first
         self.first_residual = first_residual
         self.norm1 = norm_layer(q_dim)
         self.attn = EncDecAttention(
-            q_dim, kv_dim, num_heads, qkv_bias, qk_scale, attn_drop, drop, cosine_attention
+            q_dim,
+            kv_dim,
+            num_heads,
+            qkv_bias,
+            qk_scale,
+            attn_drop,
+            drop,
+            cosine_attention,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
         self.norm2 = norm_layer(q_dim)
         hidden_dim = int(q_dim * mlp_ratio)
-        self.mlp = Mlp(in_features=q_dim, hidden_features=hidden_dim, act_layer=act_layer, drop=mlp_drop)
+        self.mlp = Mlp(
+            in_features=q_dim,
+            hidden_features=hidden_dim,
+            act_layer=act_layer,
+            drop=mlp_drop,
+        )
         self.post_mlp_dropout = nn.Dropout(post_mlp_drop)
 
     def forward(self, q, kv, padding_mask=None, alibi_bias=None):
         res = q if self.first_residual else 0
         if self.layer_norm_first:
-            q = res + self.drop_path(self.attn(self.norm1(q), kv, padding_mask, alibi_bias))
+            q = res + self.drop_path(
+                self.attn(self.norm1(q), kv, padding_mask, alibi_bias)
+            )
             res = q = self.mlp(self.norm2(q))
             q = res + self.drop_path(self.post_mlp_dropout(q))
         else:
