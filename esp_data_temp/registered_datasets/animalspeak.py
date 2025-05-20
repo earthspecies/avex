@@ -1,14 +1,11 @@
 """AnimalSpeak dataset"""
 
 from io import StringIO
-from typing import Any, Dict, Iterator, Literal, Optional, List
+from typing import Any, Dict, Iterator, Literal, Sequence
 
 import pandas as pd
-import soundfile as sf
-import librosa
-import numpy as np
-from esp_data_temp.registered_datasets import DatasetInfo, register_dataset, registry
-from esp_data_temp.dataset import Dataset, GSPath
+
+from esp_data_temp.dataset import Dataset, DatasetInfo, GSPath, register_dataset
 
 
 @register_dataset
@@ -52,24 +49,17 @@ class AnimalSpeak(Dataset):
         return self._info
 
     @property
-    def data(self) -> pd.DataFrame:
-        """Get the current dataframe.
+    def data(self) -> Sequence[Any]:
+        """Get the dataset data.
 
         Returns
         -------
-        pd.DataFrame
-            The current loaded split as a dataframe.
-
-        Raises
-        ------
-        RuntimeError
-            If no split has been loaded yet.
+        Sequence[Any]
+            The dataset data.
         """
-        if self._data is None:
-            raise RuntimeError("No split has been loaded yet. Call load() first.")
         return self._data
 
-    def load(self, split: Literal["train", "validation"]) -> pd.DataFrame:
+    def _load(self, split: Literal["train", "validation"]) -> Sequence[Any]:
         """Load the given split of the dataset and return them.
 
         Parameters
@@ -80,8 +70,8 @@ class AnimalSpeak(Dataset):
 
         Returns
         -------
-        pd.DataFrame
-            The corresponding panda dataframe.
+        Sequence[Any]
+            The corresponding split (as a pandas dataframe for now).
 
         Raises
         -------
@@ -98,9 +88,7 @@ class AnimalSpeak(Dataset):
         # Read CSV content
         csv_text = GSPath(location).read_text(encoding="utf-8")
         self._data = pd.read_csv(StringIO(csv_text))
-        self._data["gs_path"] = self._data["local_path"].apply(
-            lambda x: "gs://" + x
-        )
+        self._data["gs_path"] = self._data["local_path"].apply(lambda x: "gs://" + x)
         return self._data
 
     def __len__(self) -> int:
@@ -146,7 +134,6 @@ class AnimalSpeak(Dataset):
 
         # TODO: To adapt better to the dataset (reading audio, etc.)
         return row
-        
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Iterate over samples in the dataset.
@@ -167,3 +154,24 @@ class AnimalSpeak(Dataset):
         for idx in range(len(self)):
             yield self[idx]
 
+    def __str__(self) -> str:
+        """Return a string representation of the dataset.
+
+        Returns
+        -------
+        str
+            A string representation of the dataset including its name, version,
+            and basic statistics if data is loaded.
+        """
+        base_info = f"{self.info.name} (v{self.info.version})"
+        if self._data is None:
+            return f"{base_info} - No data loaded"
+
+        return (
+            f"{base_info}\n"
+            f"Description: {self.info.description}\n"
+            f"Sources: {', '.join(self.info.sources)}\n"
+            f"License: {self.info.license}\n"
+            f"Number of samples: {len(self)}\n"
+            f"Available splits: {', '.join(self.info.split_paths.keys())}"
+        )

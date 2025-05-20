@@ -1,22 +1,68 @@
 import os
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Self, Literal
-from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-import semver
+from typing import Any, Dict, Iterator, Optional, Self, Sequence, Type, TypeVar
 
 import cloudpathlib
-import librosa  
+import librosa
 import numpy as np
 import pandas as pd
+import semver
 import soundfile as sf
 from google.cloud.storage.client import Client
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import DatasetConfig
 from .transformations import build_transforms
+
+# Type variable for registered dataset classes
+RegisteredDataset = TypeVar("RegisteredDataset", bound="Dataset")
+
+# Global registry instance
+_dataset_registry: dict[str, Type[RegisteredDataset]] = {}
+
+
+def register_dataset(cls: Type[RegisteredDataset]) -> Type[RegisteredDataset]:
+    """A decorator to register a dataset class.
+
+    Parameters
+    ----------
+    cls : Type[RegisteredDataset]
+        The dataset class to register
+
+    Returns
+    -------
+    Type[RegisteredDataset]
+        The registered dataset class
+    """
+    # Create a temporary instance to get the info
+    temp_instance = cls()
+    name = temp_instance.info.name
+    _dataset_registry[name] = cls
+    return cls
+
+
+def list_registered_datasets() -> list[str]:
+    """List all registered datasets.
+
+    Returns
+    -------
+    list[str]
+        List of dataset names
+    """
+    return list(_dataset_registry.keys())
+
+
+def print_registered_datasets() -> None:
+    """Print all registered datasets."""
+    for dataset_class in _dataset_registry.values():
+        # Create temporary instance to access info
+        temp_instance = dataset_class()
+        print(temp_instance.info.model_dump_json(indent=2))
+
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3.csv"
@@ -24,9 +70,7 @@ BATS_PATH = "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.tr
 BATS_PATH_VALID = (
     "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.valid.csv"
 )
-BATS_PATH_TEST = (
-    "gs://foundation-model-data/audio/egyptian_fruit_bats/annotations.test.csv"
-)
+
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
@@ -232,9 +276,11 @@ def get_dataset_dummy(
         metadata=metadata,
     )
 
+
 #######################################################################################
-# ANYTHING BELLOW IS A WIP FOR DATASET ABSTRACTION
+# ANYTHING BELOW IS A WIP FOR DATASET ABSTRACTION
 #######################################################################################
+
 
 class DatasetInfo(BaseModel):
     """A Pydantic base model for a registered ESP dataset. All datasets
@@ -389,6 +435,7 @@ class DatasetInfo(BaseModel):
                     Error: {str(e)}. See https://semver.org/ for details.""") from e
         return v
 
+
 class Dataset(ABC):
     """Abstract base class defining the interface for ESP datasets.
     Any new dataset should inherit from this class to be added to the registry
@@ -414,35 +461,32 @@ class Dataset(ABC):
 
     @property
     @abstractmethod
-    def data(self) -> pd.DataFrame:
-        """Dataframe containing the dataset.
-        
-        Returns
-        -------
-        panda.DataFrame
-            Dataframe containing the dataset. Transformations are applied if passed to the class. 
-        """
-        pass
-
-    @property
-    @abstractmethod
     def info(self) -> DatasetInfo:
         """Dataset metadata and configuration.
-        
+
         Returns
         -------
         DatasetInfo
             Object containing dataset metadata like name, version, paths, etc.
         """
-        pass
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def data(self) -> Sequence[Any]:
+        """The dataset as a sequence of objects.
+
+        Returns
+        -------
+        Sequence[Any]
+            The dataset as a sequence of objects.
+        """
+        raise NotImplementedError
 
     @abstractmethod
-    def load(
-        self,
-        split: str
-    ) -> pd.DataFrame:
-        """Load one or more splits of the dataset.
-        
+    def _load(self, split: str) -> Sequence[Any]:
+        """Load one split of the dataset.
+
         Parameters
         ----------
         split : str
@@ -450,37 +494,37 @@ class Dataset(ABC):
 
         Returns
         -------
-        pd.DataFrame
-            Dictionary mapping split names to their corresponding pandas DataFrames.
+        Sequence[Any]
+            The requested split of the dataset.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def __len__(self) -> int:
         """Return the total number of samples in the dataset.
-        
+
         Returns
         -------
         int
             Number of samples in the dataset
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Get the iterator over the dataset.
-        
+
         Returns
         -------
         Iterator[Dict[str, Any]]
             Iterator over samples in the dataset
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """Get a specific sample from the dataset.
-        
+
         Parameters
         ----------
         idx : int
@@ -490,10 +534,24 @@ class Dataset(ABC):
         -------
         Dict[str, Any]
             Dictionary containing the sample data
-        
+
         Raises
         ------
         IndexError
             If the index is out of bounds
         """
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return a string representation of the dataset.
+
+        This method should provide a human-readable description of the dataset,
+        typically including its name, version, and basic statistics.
+
+        Returns
+        -------
+        str
+            A string representation of the dataset
+        """
+        raise NotImplementedError
