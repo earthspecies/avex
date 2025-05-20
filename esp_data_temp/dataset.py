@@ -270,8 +270,8 @@ def get_dataset_dummy(
         Configuration for the dataset
     preprocessor : Optional[Callable]
         Optional preprocessor function
-    split : bool
-        Whether to split the dataset
+    split : str
+        Which split of the dataset to load.
 
     Returns
     -------
@@ -279,30 +279,35 @@ def get_dataset_dummy(
         An instance of the dataset with the specified transformations applied.
     """
 
+    ds = AnimalSpeak(data_config)
+    ds._load(split)
+
     # Check if the dataset CSV path is a gs:// path
-    df = _get_dataset_from_name(data_config.dataset_name, split)
+    # df = _get_dataset_from_name(data_config.dataset_name, split)
 
-    metadata = {}
+    # metadata = {}
 
-    if data_config.transformations:
-        for cfg in data_config.transformations:
-            transform = transform_from_config(cfg)
-            df, md = transform(df)
+    # if data_config.transformations:
+    #     for cfg in data_config.transformations:
+    #         transform = transform_from_config(cfg)
+    #         df, md = transform(df)
 
             # TODO (milad): hacky but let's think about it
             # TODO (test if keys already exist and shout?)
-            if md:
-                metadata.update(md)
+    #        if md:
+    #            metadata.update(md)
 
     # TODO (milad) transform API should be AudioDataset -> AudioDataset not df->df
 
-    return AudioDataset(
-        df=df,
-        data_config=data_config,
-        preprocessor=preprocessor,
-        metadata=metadata,
-        postprocessors=postprocessors,
-    )
+    return ds
+    
+    # AudioDataset(
+    #     df=df,
+    #     data_config=data_config,
+    #     preprocessor=preprocessor,
+    #     metadata=metadata,
+    #     postprocessors=postprocessors,
+    # )
 
 
 #######################################################################################

@@ -86,7 +86,7 @@ class AnimalSpeak(Dataset):
             self._data, metadata = transform(self._data)
 
             # TODO (milad): what about metadata?
-            
+
 
     def _load(self, split: Literal["train", "validation"]) -> Sequence[Any]:
         """Load the given split of the dataset and return them.
@@ -199,14 +199,11 @@ class AnimalSpeak(Dataset):
             and basic statistics if data is loaded.
         """
         base_info = f"{self.info.name} (v{self.info.version})"
-        if self._data is None:
-            return f"{base_info} - No data loaded"
 
         return (
             f"{base_info}\n"
             f"Description: {self.info.description}\n"
             f"Sources: {', '.join(self.info.sources)}\n"
             f"License: {self.info.license}\n"
-            f"Number of samples: {len(self)}\n"
             f"Available splits: {', '.join(self.info.split_paths.keys())}"
         )
