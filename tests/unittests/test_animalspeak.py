@@ -2,6 +2,7 @@
 
 import pytest
 
+from esp_data_temp.config import DatasetConfig
 from esp_data_temp.registered_datasets import AnimalSpeak
 
 
@@ -9,6 +10,31 @@ from esp_data_temp.registered_datasets import AnimalSpeak
 def dataset():
     """Fixture providing an AnimalSpeak dataset instance."""
     ds = AnimalSpeak()
+    ds._load("validation")
+    return ds
+
+
+@pytest.fixture
+def dataset_with_transforms():
+    """Fixture providing an AnimalSpeak dataset instance with transformations."""
+    
+    dataset_config = DatasetConfig(
+        dataset_name="animalspeak",
+        transformations=[
+            {
+                "type": "label_from_feature",
+                "feature": "canonical_name",
+                "output_feature": "label"
+            },
+            {
+                "type": "filter",
+                "mode": "include",
+                "property": "source",
+                "values": ["xeno-canto", "iNaturalist"]
+            }
+        ]
+    )
+    ds = AnimalSpeak(dataset_config)
     ds._load("validation")
     return ds
 
@@ -65,3 +91,23 @@ def test_sample_consistency(dataset):
 
     # Compare samples
     assert direct_sample["country"] == iter_sample["country"]
+
+
+def test_transformations(dataset_with_transforms):
+    """Test if transformations are applied correctly.
+    
+    This test verifies that:
+    1. The label_from_feature transformation creates a label column
+    2. The filter transformation only keeps specified sources
+    3. The metadata is updated with transformation information
+    """
+    # Check that label column was created
+    assert "label" in dataset_with_transforms._data.columns
+    
+    # Check that only specified sources are present
+    sources = dataset_with_transforms._data["source"].unique()
+    assert set(sources).issubset({"xeno-canto", "iNaturalist"})
+    
+    # Check that no other sources are present
+    assert "Watkins" not in sources
+

@@ -4,8 +4,17 @@ from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from types import TracebackType
-from typing import Any, Dict, Iterator, List, Optional, Self, Type, Sequence, TypeVar
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Self,
+    Sequence,
+    Type,
+    TypeVar,
+)
 
 import cloudpathlib
 import librosa
@@ -17,7 +26,7 @@ from google.cloud.storage.client import Client
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import DatasetConfig
-from .transforms import transform_from_config
+from .transforms import transform_from_config, RegisteredTransformConfigs
 
 # Type variable for registered dataset classes
 RegisteredDataset = TypeVar("RegisteredDataset", bound="Dataset")
@@ -478,6 +487,18 @@ class Dataset(ABC):
         Required method to get a specific sample from the dataset.
     """
 
+    def __init__(self, dataset_config: DatasetConfig = None) -> None:
+        """A DatasetConfig can be passed to the constructor to, for instance,
+        apply transformations to the dataset during instanciation.
+
+        Parameters
+        ----------
+        dataset_config : DatasetConfig
+            The configuration for the dataset.
+        """
+        self.dataset_config = dataset_config
+
+
     @property
     @abstractmethod
     def info(self) -> DatasetInfo:
@@ -504,7 +525,24 @@ class Dataset(ABC):
 
     @abstractmethod
     def _load(self, split: str) -> Sequence[Any]:
-        """Load one split of the dataset.
+        """Load one split of the dataset. It should apply transformations if any in self.dataset_config.
+
+        Parameters
+        ----------
+        split : str
+            Which split of the dataset to load.
+
+        Returns
+        -------
+        Sequence[Any]
+            The requested split of the dataset.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _apply_transformations(self, transformations: list[RegisteredTransformConfigs]) -> None:
+        """Apply the given list of transformations to the dataset. This should be an in place operation.
+        Ideally, this should be called either by the constructor or by the load method.
 
         Parameters
         ----------
