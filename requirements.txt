@@ -41,6 +41,7 @@ graphql-relay==3.2.0
 greenlet==3.2.1 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
 gunicorn==23.0.0 ; sys_platform != 'win32'
 h11==0.16.0
+h5py==3.13.0
 huggingface-hub==0.30.2
 idna==3.10
 importlib-metadata==8.6.1
@@ -84,6 +85,7 @@ platformdirs==4.3.7
 pooch==1.8.2
 proto-plus==1.26.1
 protobuf==6.30.2
+psutil==7.0.0
 pyarrow==19.0.1
 pyasn1==0.6.1
 pyasn1-modules==0.4.2
