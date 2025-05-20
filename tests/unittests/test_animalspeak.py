@@ -102,7 +102,18 @@ def test_transformations(dataset_with_transforms):
     3. The metadata is updated with transformation information
     """
     # Check that label column was created
+    assert "label" in dataset_with_transforms._data.colummetadata is updated with transformation information
+    """
+    # Check that label column was created
     assert "label" in dataset_with_transforms._data.columns
+    
+    # Check that only specified sources are present
+    sources = dataset_with_transforms._data["source"].unique()
+    assert set(sources).issubset({"xeno-canto", "iNaturalist"})
+    
+    # Check that no other sources are present
+    assert "Watkins" not in sources
+
     
     # Check that only specified sources are present
     sources = dataset_with_transforms._data["source"].unique()
