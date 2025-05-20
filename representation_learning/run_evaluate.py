@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
@@ -54,6 +55,62 @@ def _parse_args() -> argparse.Namespace:
         help="Path to the evaluation config YAML (see configs/evaluation_configs/*)",
     )
     return parser.parse_args()
+
+
+def _load_checkpoint_skip_mismatch(
+    model: torch.nn.Module,
+    checkpoint_state: Dict[str, torch.Tensor],
+    logger: logging.Logger | None = None,
+) -> None:
+    """Load *checkpoint_state* into *model* while skipping parameters whose
+    shapes do not match.
+
+    This is useful when the checkpoint was trained for a different number of
+    classes so the classifier head dimensions differ.  Parameters that are
+    missing in the current model or whose shape differs are silently skipped
+    (with an optional log message).
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Model into which the *checkpoint_state* should be loaded.
+    checkpoint_state : Dict[str, torch.Tensor]
+        ``state_dict`` as loaded from ``torch.load`` (i.e. the `'model_state_dict'`
+        entry of the checkpoint file).
+    logger : logging.Logger | None, optional
+        Logger for debug output.  If ``None`` no messages are emitted.
+    """
+
+    model_state = model.state_dict()
+
+    # Keep only keys that exist in *model* **and** have identical shape
+    filtered_state: "OrderedDict[str, torch.Tensor]" = OrderedDict()
+    skipped_keys: list[str] = []
+    for k, v in checkpoint_state.items():
+        if k in model_state and v.shape == model_state[k].shape:
+            filtered_state[k] = v
+        else:
+            skipped_keys.append(k)
+
+    missing = set(model_state.keys()) - set(filtered_state.keys())
+
+    load_result = model.load_state_dict(filtered_state, strict=False)
+
+    if logger is not None:
+        logger.info(
+            "Loaded %d tensors from checkpoint; skipped %d mismatched; %d missing.",
+            len(filtered_state),
+            len(skipped_keys),
+            len(missing),
+        )
+        if skipped_keys:
+            logger.debug(
+                "Skipped keys (shape mismatch or absent in model): %s", skipped_keys
+            )
+        if load_result.missing_keys:
+            logger.debug(
+                "Missing keys after load_state_dict: %s", load_result.missing_keys
+            )
 
 
 def run_experiment(
@@ -143,7 +200,6 @@ def run_experiment(
         device
     )
 
-
     # If pretrained=True, we don't need to load a checkpoint
     if not experiment_config.pretrained:
         # Determine the checkpoint path (local or gs://). Prefer the one
@@ -170,43 +226,56 @@ def run_experiment(
         with ckpt_path.open("rb") as f:
             state = torch.load(f, map_location=device)
 
-        base_model.load_state_dict(state["model_state_dict"], strict=False)
+        _load_checkpoint_skip_mismatch(base_model, state["model_state_dict"], logger)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
     base_model.eval()  # TODO: is this right?
     logger.info(
         "Model → %s parameters", sum(p.numel() for p in base_model.parameters())
     )
-
-    # 5. Get layer names for embedding extraction
-    if experiment_config.layers == "last_layer":
-        layer_names = [
-            name
-            for name, module in base_model.named_modules()
-            if isinstance(module, torch.nn.Linear)
-        ]
-        layer_names = [layer_names[-1]]
-    else:
-        layer_names = experiment_config.layers.split(",")
-    logger.info("Layers: %s", layer_names)
-
-    # Create linear probe
-    linear_probe = LinearProbe(base_model, layer_names, num_labels, device=device)
-    logger.info(
-        "Linear probe → %s parameters",
-        sum(p.numel() for p in linear_probe.parameters()),
-    )
+    logger.info(experiment_config)
 
     # ------------------------------------------------------------------ #
-    #  Freeze backbone if requested and build optimizer on trainable params
+    #  Build model for fine-tuning – either LinearProbe or the backbone itself
+    # ------------------------------------------------------------------ #
+
+    if eval_cfg.probe:
+        # ---------------- Linear-probe path ---------------- #
+        if experiment_config.layers == "last_layer":
+            layer_names = [
+                name
+                for name, module in base_model.named_modules()
+                if isinstance(module, torch.nn.Linear)
+            ]
+            layer_names = [layer_names[-1]]
+        else:
+            layer_names = experiment_config.layers.split(",")
+        logger.info("Layers: %s", layer_names)
+
+        model_ft = LinearProbe(base_model, layer_names, num_labels, device=device)
+        logger.info(
+            "Linear probe → %s parameters",
+            sum(p.numel() for p in model_ft.parameters()),
+        )
+    else:
+        logger.info("Probe disabled – fine-tuning base model directly.")
+        model_ft = base_model
+
+    # ------------------------------------------------------------------ #
+    #  Freeze backbone if requested (only affects *base_model* params)
     # ------------------------------------------------------------------ #
 
     if eval_cfg.frozen:
         logger.info("Freezing backbone parameters (eval_cfg.frozen=True)")
         for p in base_model.parameters():
             p.requires_grad = False
+        base_model.eval()
 
-    trainable_params = filter(lambda p: p.requires_grad, linear_probe.parameters())
+    # ------------------------------------------------------------------ #
+    #  Optimiser & Trainer
+    # ------------------------------------------------------------------ #
+
+    trainable_params = filter(lambda p: p.requires_grad, model_ft.parameters())
     optim = get_optimizer(trainable_params, eval_cfg.training_params)
 
     # Create experiment-specific logger
@@ -215,7 +284,7 @@ def run_experiment(
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
 
     trainer = FineTuneTrainer(
-        model=linear_probe,
+        model=model_ft,
         optimizer=optim,
         train_loader=train_dl,
         val_loader=val_dl,
@@ -225,13 +294,16 @@ def run_experiment(
         multi_label=dataset_config.multi_label,
     )
 
-    # Train the linear probe
+    # Train / fine-tune
     train_metrics, val_metrics = trainer.train(
         num_epochs=eval_cfg.training_params.train_epochs
     )
 
-    # Compute test metrics
-    linear_probe.eval()
+    # ------------------------------------------------------------------ #
+    #  Evaluation on held-out test set
+    # ------------------------------------------------------------------ #
+
+    model_ft.eval()
 
     # Get metrics from dataset config
     metric_names = dataset_config.metrics
@@ -246,11 +318,7 @@ def run_experiment(
             y = batch["label"].to(device)
 
             # Forward pass
-            logits = (
-                linear_probe(x, padding_mask=mask)
-                if mask is not None
-                else linear_probe(x)
-            )
+            logits = model_ft(x, padding_mask=mask) if mask is not None else model_ft(x)
 
             # Update all metrics
             for metric in metrics:
@@ -302,11 +370,11 @@ def main() -> None:
     torch.manual_seed(42)  # Fixed seed for reproducibility
 
     # 5. Run experiments for each dataset and experiment combination
+    all_results = []
     for dataset in dataset_cfg.datasets:
-        results = []
         for experiment in eval_cfg.experiments:
             result = run_experiment(eval_cfg, dataset, experiment, device, save_dir)
-            results.append(result)
+            all_results.append(result)
 
             # Log results
             logger.info(
@@ -328,7 +396,7 @@ def main() -> None:
     with open(summary_path, "w") as f:
         f.write("Experiment Summary\n")
         f.write("================\n\n")
-        for result in results:
+        for result in all_results:
             f.write(f"Dataset: {result.dataset_name}\n")
             f.write(f"Experiment: {result.experiment_name}\n")
             f.write(f"Train metrics: {result.train_metrics}\n")

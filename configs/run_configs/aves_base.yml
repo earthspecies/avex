@@ -1,0 +1,53 @@
+---
+# Run-config for Bird-AVES backbone fine-tuning / probing.
+# Mirrors the structure of efficientnet_base.yml but sets representation=raw
+# and swaps the model name.
+
+model_spec:
+  name: aves
+  pretrained: true
+  # Use the *Base* AVES checkpoint by default (set `large: true` to get XL)
+  audio_config:
+    sample_rate: 16000
+    representation: raw        # AVES consumes raw waveform
+    target_length_seconds: 10  # keep consistent with other configs
+    window_selection: random
+
+# Where to find the dataset definition (can be overridden by EvaluateConfig)
+dataset_config: configs/data_configs/data_base.yml
+
+# Supervised classification setup
+label_type: supervised
+
+# Misc
+debug_mode: false
+preprocessing: null
+sr: 16000
+
+logging: mlflow
+output_dir: "./runs/aves_baseline"
+
+training_params:
+  train_epochs: 30
+  lr: 0.0001
+  batch_size: 256
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+scheduler:
+  name: cosine
+  warmup_steps: 1000
+  min_lr: 1e-6
+
+# No waveform-domain augmentations for now (noise / mixup need spectrograms)
+augmentations: []
+
+loss_function: cross_entropy
+
+device: cuda
+seed: 42
+num_workers: 8
+run_name: aves_base
+wandb_project: representation_learning

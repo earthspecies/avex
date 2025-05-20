@@ -1,0 +1,117 @@
+---
+# Self-supervised EAT pre-training (spectrograms)
+# -----------------------------------------------------------------------------
+# This mirrors clip_base.yml but swaps in the EAT backbone with the exact
+# hyper-parameters used in the original paper/pre-training run.  All parameters
+# live under ``model_spec.eat_cfg`` and are passed through to the dataclass
+# hierarchy at runtime.
+
+# -----------------------------------------------------------------------------
+model_spec:
+  name: eat
+  pretrained: false              # start from scratch
+  # Device and audio processing settings
+  device: cuda                   # override on CPU if needed
+  audio_config:
+    sample_rate: 16000
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+  # ---------------------------------------------------------------------------
+  # EAT-specific overrides
+  # ---------------------------------------------------------------------------
+  eat_cfg:
+    ema_decay: 0.9998
+    ema_end_decay: 0.99999
+    ema_anneal_end_step: 100000
+    instance_norm_target_layer: true
+    layer_norm_target_layer: false
+    layer_norm_targets: true
+    end_of_block_targets: false
+
+    depth: 12
+    average_top_k_layers: 12
+    clone_batch: 16
+
+    norm_eps: 1e-6
+
+    min_target_var: 0
+    min_pred_var: 0
+
+    encoder_dropout: 0
+    post_mlp_drop: 0
+    attention_dropout: 0
+    activation_dropout: 0
+
+    supported_modality: IMAGE
+    cls_loss: 1
+
+    ema_encoder_only: false
+
+    modalities:
+      image:
+        in_chans: 1
+        inverse_mask: true
+        mask_prob: 0.8
+        mask_prob_adjust: 0.07
+        mask_length: 5
+        mask_noise_std: 0.01
+        prenet_depth: 0
+        ema_local_encoder: true
+        num_extra_tokens: 1
+        init_extra_token_zero: false
+        use_alibi_encoder: false
+        decoder:
+          decoder_dim: 768
+          decoder_groups: 16
+          decoder_kernel: 3
+          decoder_layers: 6
+          input_dropout: 0
+
+# -----------------------------------------------------------------------------
+# Dataset + preprocessing
+# -----------------------------------------------------------------------------
+dataset_config: configs/data_configs/data_base.yml
+label_type: self_supervised
+preprocessing: null
+sr: 16000
+
+debug_mode: false
+logging: mlflow
+output_dir: "./runs/eat_pretrain"
+resume_from_checkpoint: null
+
+# -----------------------------------------------------------------------------
+training_params:
+  train_epochs: 30          # SSL usually needs more epochs – adjust as needed
+  lr: 5.0e-4
+  batch_size: 48
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  log_steps: 100
+
+scheduler:
+  name: cosine
+  warmup_steps: 55000
+  min_lr: 1e-6
+
+# Augmentations – optional; start without heavy augmentation for SSL
+augmentations: []
+
+# Loss
+loss_function: cross_entropy   # placeholder – can switch to SSL path later
+
+device: cuda
+seed: 42
+num_workers: 8
+run_name: eat_pretrain
+wandb_project: representation_learning

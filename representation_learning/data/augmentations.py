@@ -41,6 +41,21 @@ from representation_learning.data.data_utils import combine_text_labels
 ################################################################################
 
 
+# --------------------------------------------------------------------------- #
+#  Helper utilities for faster *cached* noise mixing (used by AugmentationProcessor)
+# --------------------------------------------------------------------------- #
+
+# Global flag to enable/disable profiling
+ENABLE_PROFILING = os.environ.get("PROFILE_NOISE_AUG", "1") == "1"
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Ensure INFO logs are visible
+
+# Global storage for profiling stats
+_profiling_stats = defaultdict(list)
+
+
 def add_noise(
     audio: torch.Tensor | np.ndarray,
     noise_dir: str | Sequence[str],
@@ -56,12 +71,15 @@ def add_noise(
     * Works with local paths and ``gs://`` buckets (via :class:`GSPath`).
     * Keeps the original tensor/ndarray interface.
 
-    Returns:
-        torch.Tensor: The audio with added noise.
+    Returns
+    -------
+    torch.Tensor
+        The audio tensor with added noise (same shape as input).
 
-    Raises:
-        FileNotFoundError: If the noise directory is not found.
-        RuntimeError: If noise file inspection or loading fails.
+    Raises
+    ------
+    FileNotFoundError
+        If *noise_dir* does not exist or contains no audio files.
     """
 
     # ------------------------------------------------------------------
@@ -104,7 +122,8 @@ def add_noise(
     try:
         info = torchaudio.info(noise_path)
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Failed to inspect noise file {noise_path}: {exc}") from exc
+        logger.warning(f"Failed to inspect noise file {noise_path}: {exc}")
+        return audio
 
     noise_sr = info.sample_rate
     total_frames = info.num_frames
@@ -123,7 +142,8 @@ def add_noise(
             noise_path, frame_offset=frame_offset, num_frames=num_frames
         )
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Failed to load noise file {noise_path}: {exc}") from exc
+        print(f"Failed to load noise file {noise_path}: {exc}")
+        return audio
 
     # ------------------------------------------------------------------
     # Normalise channels, resample, length‑match, and mix
@@ -695,21 +715,6 @@ def make_item_postprocessor(
         the processed dict.
     """
     return ItemPostprocessor(aug_processor)
-
-
-# --------------------------------------------------------------------------- #
-#  Helper utilities for faster *cached* noise mixing (used by AugmentationProcessor)
-# --------------------------------------------------------------------------- #
-
-# Global flag to enable/disable profiling
-ENABLE_PROFILING = os.environ.get("PROFILE_NOISE_AUG", "1") == "1"
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Ensure INFO logs are visible
-
-# Global storage for profiling stats
-_profiling_stats = defaultdict(list)
 
 
 def get_profiling_summary() -> Dict[str, Dict[str, float]]:

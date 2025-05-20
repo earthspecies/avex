@@ -48,6 +48,9 @@ class TrainingParams(BaseModel):
     amp: bool = False
     amp_dtype: Literal["bf16", "fp16"] = "bf16"
 
+    # Frequency (in *iterations*) of logging benchmarking stats & progress
+    log_steps: int = Field(100, ge=1, description="Log interval in training steps")
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -110,6 +113,12 @@ class ModelSpec(BaseModel):
     projection_dim: Optional[int] = None
     temperature: Optional[float] = None
 
+    # Free-form overrides for the EAT backbone (Data2VecMultiConfig).
+    eat_cfg: Optional[dict[str, Any]] = None  # noqa: ANN401
+
+    # When true the EAT model is instantiated for self-supervised pre-training.
+    pretraining_mode: Optional[bool] = None
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -147,11 +156,11 @@ class RunConfig(BaseModel):
     preprocessing: Optional[str] = None
     sr: int = 16000
     logging: Literal["mlflow", "wandb"] = "mlflow"
-    label_type: Literal["supervised", "text"] = Field(
+    label_type: Literal["supervised", "text", "self_supervised"] = Field(
         "supervised",
         description=(
             "How to use labels: 'supervised' for classification, "
-            "'text' for CLIP training"
+            "'text' for CLIP training, 'self_supervised' for self-supervised learning"
         ),
     )
 
@@ -266,6 +275,10 @@ class RunConfig(BaseModel):
             raise ValueError(
                 f"When multilabel=True, loss_function must be 'bce' (got '{v}' instead)"
             )
+
+        # For self-supervised runs we don't impose any loss-type restrictions
+        if data.get("label_type") == "self_supervised":
+            return v
 
         # Check if loss is clip/contrastive but label_type isn't text
         if v in ("clip", "contrastive") and data.get("label_type") != "text":

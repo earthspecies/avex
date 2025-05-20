@@ -3,7 +3,6 @@
 import builtins
 import logging
 import os
-import socket
 from typing import Tuple
 
 import torch.distributed as dist
@@ -39,9 +38,7 @@ def get_slurm_env() -> Tuple[int, int, int, int, str]:
     local_rank = int(os.environ.get("SLURM_LOCALID", 0))
     global_rank = int(os.environ.get("SLURM_PROCID", 0))
     world_size = int(os.environ.get("SLURM_NTASKS", 1))
-    master_addr = os.environ.get(
-        "SLURM_LAUNCH_NODE_IPADDR", socket.gethostbyname(socket.gethostname())
-    )
+    master_addr = os.environ.get("SLURM_NODELIST").split(",")[0]
     return node_id, local_rank, global_rank, world_size, master_addr
 
 

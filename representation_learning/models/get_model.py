@@ -62,8 +62,47 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
+    elif model_name == "eat":
+        from representation_learning.models.eat.audio_model import (
+            Model as EATModel,  # Local import to avoid heavy deps when unused
+        )
+
+        # Optional EAT-specific kwargs
+        embed_dim = getattr(model_config, "embed_dim", 768)
+        patch_size = getattr(model_config, "patch_size", 16)
+        target_length = getattr(model_config, "target_length", 256)
+        enable_ema = getattr(model_config, "enable_ema", False)
+        pretraining_mode = getattr(model_config, "pretraining_mode", False)
+        eat_cfg_overrides = getattr(model_config, "eat_cfg", None)
+
+        return EATModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            embed_dim=embed_dim,
+            patch_size=patch_size,
+            target_length=target_length,
+            enable_ema=enable_ema,
+            pretraining_mode=pretraining_mode,
+            eat_cfg=eat_cfg_overrides,
+        )
+    elif model_name == "aves":
+        from representation_learning.models.aves import Model as AvesModel
+
+        return AvesModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            return_features_only=False,
+        )
     else:
+        # Fallback
+        supported = (
+            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', "
+            "'resnet152', 'aves'."
+        )
         raise NotImplementedError(
-            f"Model '{model_name}' is not implemented. Supported models: "
-            "'efficientnetb0', 'clip', 'resnet18', 'resnet50', 'resnet152'."
+            f"Model '{model_name}' is not implemented. Supported models: {supported}"
         )
