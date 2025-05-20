@@ -63,7 +63,6 @@ python_files = [
 line-length = 88
 indent-width = 4
 exclude = [
-    "esp_data_temp/*",
     "fix_paths.py",
     "representation_learning/models/eat.py",
 ]
