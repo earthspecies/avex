@@ -285,6 +285,7 @@ class ExperimentConfig(BaseModel):
     run_name: str = Field(..., description="Name of the experiment run")
     run_config: str = Field(..., description="Path to the run config YAML file")
     pretrained: bool = Field(True, description="Whether to use pretrained weights")
+    freeze: bool = Field(True, description="Whether to freeze the backbone")
     layers: str = Field(
         ...,
         description="List of layer names to extract embeddings from, comma separated",
@@ -297,6 +298,13 @@ class ExperimentConfig(BaseModel):
             "Path to the model checkpoint to load when `pretrained` is false. "
             "If not provided, defaults to 'checkpoints/best.pt' relative to the "
             "current working directory."
+        ),
+    )
+    checkpoint_config_path: Optional[str] = Field(
+        None,
+        description=(
+            "Path to the model checkpoint configuration to load. "
+            "This is only used for Aves pretrained model. "
         ),
     )
 

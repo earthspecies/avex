@@ -17,6 +17,7 @@ experiments:
     run_config: configs/run_configs/resnet18.yml
     layers: last_layer
     pretrained: true
+    freeze: true
 
 save_dir: evaluation_results_resnet
 

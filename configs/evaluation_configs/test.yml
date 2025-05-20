@@ -20,6 +20,8 @@ experiments:
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   pretrained: true
   #   checkpoint_path: runs/efficientnet_base_no_mixup/checkpoints/checkpoint_epoch_024.pt
+  #   ### whether to freeze the backbone
+  #   freeze: true
   - run_name: clap
     run_config: configs/run_configs/clip_base.yml
     ### which layers to probe for embeddings
@@ -28,6 +30,8 @@ experiments:
     pretrained: false
     # checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
     checkpoint_path: runs/clip_baseline_full/checkpoints/checkpoint_epoch_014.pt
+    ### whether to freeze the backbone
+    freeze: true
 # Where to save the evaluation results
 save_dir: evaluation_results
 

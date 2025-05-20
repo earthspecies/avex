@@ -143,7 +143,6 @@ def run_experiment(
         device
     )
 
-
     # If pretrained=True, we don't need to load a checkpoint
     if not experiment_config.pretrained:
         # Determine the checkpoint path (local or gs://). Prefer the one
@@ -173,10 +172,17 @@ def run_experiment(
         base_model.load_state_dict(state["model_state_dict"], strict=False)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
-    base_model.eval()  # TODO: is this right?
     logger.info(
         "Model → %s parameters", sum(p.numel() for p in base_model.parameters())
     )
+    
+    if experiment_config.freeze:
+        for p in base_model.parameters():
+            p.requires_grad = False
+        base_model.train()
+        experiment_config.layers = "last_layer"
+    else:
+        base_model.eval()  # TODO: is this right?
 
     # 5. Get layer names for embedding extraction
     if experiment_config.layers == "last_layer":
