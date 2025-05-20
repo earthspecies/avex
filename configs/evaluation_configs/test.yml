@@ -12,6 +12,7 @@ training_params:
 
 
 # Which experiments to evaluate
+#TODO: all checkpoints to be gs paths and uploaded during train
 experiments:
   - run_name: efficientnet_base_loaded
     run_config: configs/run_configs/efficientnet_base.yml
