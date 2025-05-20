@@ -5,7 +5,7 @@ from representation_learning.models.efficientnetb0 import (
     Model as EfficientNetB0,
 )
 from representation_learning.models.resnet import Model as ResNetModel
-
+from representation_learning.models.aves_model import Model as AVESModel
 
 def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     """
@@ -45,7 +45,13 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
-
+    elif model_name == "aves_bio":
+        return AVESModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )   
     elif model_name == "clip":
         return CLIPModel(
             device=model_config.device,
