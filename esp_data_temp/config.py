@@ -8,6 +8,7 @@ from .transforms import RegisteredTransformConfigs
 class DatasetConfig(BaseModel):
     dataset_name: str
     transformations: list[RegisteredTransformConfigs] | None = None
+    output_take_and_give: dict[str, str] | None = None
 
     # TODO (milad) Commented out until find a reason to enable
     #              dc_field -> from dataclasses import field as dc_field

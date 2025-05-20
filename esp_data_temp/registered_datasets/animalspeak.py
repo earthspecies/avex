@@ -21,16 +21,15 @@ class AnimalSpeak(Dataset):
     >>> print(df.head())
     """
 
-    def __init__(self, dataset_config: DatasetConfig = None):
-        """A DatasetConfig can be passed to the constructor to, for instance,
-        apply transformations to the dataset during instanciation.
+    def __init__(self, output_take_and_give: dict[str, str] = None):
+        """ Initialize the AnimalSpeak dataset.
 
         Parameters
         ----------
-        dataset_config : DatasetConfig
-            The configuration for the dataset.
+        output_take_and_give : dict[str, str]
+            A dictionary mapping the original column names to the new column names. It acts as a filter as well.
         """
-        super().__init__(dataset_config)  # Initialize the parent Dataset class
+        super().__init__(output_take_and_give)  # Initialize the parent Dataset class
         self._data = None
         self._info = DatasetInfo(
             name="animalspeak",
@@ -67,26 +66,6 @@ class AnimalSpeak(Dataset):
         """
         return self._data
 
-    def _apply_transformations(self, transformations: list[RegisteredTransformConfigs]) -> None:
-        """Apply the given list of transformations to the dataset.
-
-        This method applies each transformation in sequence to the dataset's data.
-        The transformations are applied in-place, modifying the dataset's data.
-
-        Parameters
-        ----------
-        transformations : list[RegisteredTransformConfigs]
-            List of transformation configurations to apply to the dataset.
-        """
-        if self._data is None:
-            raise RuntimeError("No data loaded. Call load() first.")
-        
-        for cfg in transformations:
-            transform = transform_from_config(cfg)
-            self._data, metadata = transform(self._data)
-
-            # TODO (milad): what about metadata?
-
 
     def _load(self, split: Literal["train", "validation"]) -> Sequence[Any]:
         """Load the given split of the dataset and return them.
@@ -119,10 +98,6 @@ class AnimalSpeak(Dataset):
         csv_text = GSPath(location).read_text(encoding="utf-8")
         self._data = pd.read_csv(StringIO(csv_text))
         self._data["gs_path"] = self._data["local_path"].apply(lambda x: "gs://" + x)
-        
-        # Apply transformations if any are configured
-        if self.dataset_config and self.dataset_config.transformations:
-            self._apply_transformations(self.dataset_config.transformations)
             
         return self._data
 
@@ -166,9 +141,13 @@ class AnimalSpeak(Dataset):
             raise RuntimeError("No split has been loaded yet. Call load() first.")
 
         row = self._data.iloc[idx]
-
-        # TODO: To adapt better to the dataset (reading audio, etc.)
-        return row
+        if self.output_take_and_give:
+            mapped_row = {}
+            for key, value in self.output_take_and_give.items():
+                mapped_row[value] = row[key]
+            return mapped_row
+        else:
+            return row
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         """Iterate over samples in the dataset.

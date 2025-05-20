@@ -34,7 +34,23 @@ def dataset_with_transforms():
             }
         ]
     )
-    ds = AnimalSpeak(dataset_config)
+    ds = AnimalSpeak()
+    ds._load("validation")
+    ds.apply_transformations(dataset_config.transformations)
+    return ds
+
+
+@pytest.fixture
+def dataset_with_output_mapping():
+    """Fixture providing an AnimalSpeak dataset instance with output mapping."""
+    dataset_config = DatasetConfig(
+        dataset_name="animalspeak",
+        output_take_and_give={
+            "canonical_name": "species",
+            "country": "location"
+        }
+    )
+    ds = AnimalSpeak(output_take_and_give=dataset_config.output_take_and_give)
     ds._load("validation")
     return ds
 
@@ -110,4 +126,26 @@ def test_transformations(dataset_with_transforms):
     
     # Check that no other sources are present
     assert "Watkins" not in sources
+
+
+def test_output_take_and_give(dataset_with_output_mapping):
+    """Test if output_take_and_give correctly maps column names.
+    
+    This test verifies that:
+    1. The output dictionary contains only the mapped columns
+    2. The original column names are mapped to the new names
+    3. The values are preserved correctly
+    """
+    # Get a sample
+    sample = dataset_with_output_mapping[0]
+    
+    # Check that only mapped columns are present
+    assert set(sample.keys()) == {"species", "location"}
+    
+    # Get the original row to compare values
+    original_row = dataset_with_output_mapping._data.iloc[0]
+    
+    # Verify the mapping and values
+    assert sample["species"] == original_row["canonical_name"]
+    assert sample["location"] == original_row["country"]
 

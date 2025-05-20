@@ -492,16 +492,17 @@ class Dataset(ABC):
         Required method to get a specific sample from the dataset.
     """
 
-    def __init__(self, dataset_config: DatasetConfig = None) -> None:
+    def __init__(self, output_take_and_give: dict[str, str] = None) -> None:
         """A DatasetConfig can be passed to the constructor to, for instance,
-        apply transformations to the dataset during instanciation.
+        apply transformations to the dataset during instanciation or modify its
+        fields of output.
 
         Parameters
         ----------
         dataset_config : DatasetConfig
             The configuration for the dataset.
         """
-        self.dataset_config = dataset_config
+        self.output_take_and_give = output_take_and_give
 
 
     @property
@@ -531,23 +532,6 @@ class Dataset(ABC):
     @abstractmethod
     def _load(self, split: str) -> Sequence[Any]:
         """Load one split of the dataset. It should apply transformations if any in self.dataset_config.
-
-        Parameters
-        ----------
-        split : str
-            Which split of the dataset to load.
-
-        Returns
-        -------
-        Sequence[Any]
-            The requested split of the dataset.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _apply_transformations(self, transformations: list[RegisteredTransformConfigs]) -> None:
-        """Apply the given list of transformations to the dataset. This should be an in place operation.
-        Ideally, this should be called either by the constructor or by the load method.
 
         Parameters
         ----------
@@ -617,3 +601,31 @@ class Dataset(ABC):
             A string representation of the dataset
         """
         raise NotImplementedError
+    
+    def apply_transformations(self, transformations: list[RegisteredTransformConfigs]) -> list[Any]:
+        """Apply the given list of transformations to the dataset.
+
+        This method applies each transformation in sequence to the dataset's data.
+        The transformations are applied in-place, modifying the dataset's data.
+
+        Parameters
+        ----------
+        transformations : list[RegisteredTransformConfigs]
+            List of transformation configurations to apply to the dataset.
+
+        Returns
+        -------
+        list[Any]
+            The metadata as a list of objects.
+        """
+        if self._data is None:
+            raise RuntimeError("No data loaded. Call load() first.")
+        
+        metadata_list = []
+        for cfg in transformations:
+            transform = transform_from_config(cfg)
+            self._data, metadata = transform(self._data)
+            metadata_list.append(metadata)
+
+            # TODO (milad): what about metadata?
+        return metadata_list
