@@ -8,73 +8,34 @@ _TRANSFORM_REGISTRY: dict[str, type[BaseModel]] = {}
 _TRANSFORM_FACTORY_REGISTRY: dict[type[BaseModel], type] = {}
 
 
-# class TransformModel(BaseModel):
-#     """
-#     Base class for all transform configurations.
+def register_transform(config_class: type[BaseModel], transform_class: type) -> None:
+    """Register a transform configuration class and its corresponding transform class.
 
-#     All transform configurations should inherit from this class and define a unique
-#     `type` attribute. The `type` attribute can be anything (although it makes sense to
-#     choose a descriptive name) as long as it's unique. This base class does the
-#     registration of subclasses in the `_TRANSFORM_REGISTRY` dictionary and checks that
-#     it is unique. It also generates `RegisteredTransformConfigs` type alias which is a
-#     union of all registered transform types, allowing for easy validation and type
-#     checking.
-#     """
+    This is used to (1) create a union type of all available transform configurations
+    which is used by pydantic for validation and type checking (2) pick up the correct
+    factory method when instantiating a transform object from the configuration and (3)
+    ensure that the transform type is unique.
 
-#     # TODO (milad) I wonder if this can be done with a simple decorator. Decorators are
-#     # also called when a class is defined (and not when they're instantiated). Having
-#     # a base class allows us to define the common "type" field but my type checker is
-#     # complaining that you can't have the base hint as "str" while child classes are
-#     # using Literal["..."].
+    Parameters
+    ----------
+    config_class : type[BaseModel]
+        The pydantic configuration class that inherits from `BaseModel`. This class
+        should have a unique `type` attribute which is used to identify the transform
+        type.
+    transform_class : type
+        The transform class that implements the actual transformation logic. This class
+        should have a `from_config` method which takes the configuration class as an
+        argument and returns an instance of the transform class.
 
-#     type: str
+    Raises
+    ------
+    ValueError
+        If the transform type is already registered, a ValueError is raised.
+        If the transform type is not a single value, a ValueError is raised.
 
-#     @classmethod
-#     def __pydantic_init_subclass__(cls, **kwargs) -> None:
-#         """
-#         This method is called when a subclass of TransformModel is created. It registers
-#         the subclass in the `_TRANSFORM_REGISTRY` dictionary using the `type` attribute
-#         as the key. It also rebuilds the `RegisteredTransformConfigs` union type to
-#         include the new subclass, which is used for instantiating a _list_ of transforms
-
-#         Raises
-#         ------
-#         ValueError
-#             If the type is already registered, a ValueError is raised.
-#         """
-
-#         # See this issue below to understand we need `__pydantic_init_subclass__`
-#         # instead of `__init_subclass__`:
-#         # https://github.com/pydantic/pydantic/issues/6854
-
-#         # TODO (milad) type checkers do not like dynamic types and complain about
-#         # RegisteredTransformConfigs. This type is obviously useful for Pydantic checks
-#         # but investigate if there's a static option.
-
-#         type_vals = get_args(cls.model_fields["type"].annotation)
-#         if len(type_vals) == 1:
-#             v = type_vals[0]
-
-#             if v in _TRANSFORM_REGISTRY:
-#                 raise ValueError(
-#                     f"Transform type '{v}' is already registered. "
-#                     "Please use a unique type name."
-#                 )
-
-#             _TRANSFORM_REGISTRY[v] = cls
-#             TransformModel._rebuild_union_type()
-
-#     @classmethod
-#     def _rebuild_union_type(cls) -> None:
-#         global RegisteredTransformConfigs
-#         RegisteredTransformConfigs = Annotated[
-#             Union[tuple(_TRANSFORM_REGISTRY.values())], Field(discriminator="type")
-#         ]
-
-
-def register_transform(config_class: type[BaseModel], transform_class: type):
-    """
-    Register a transform configuration class and its corresponding transform class.
+    AttributeError
+        If the transform class does not have a `from_config` method, an AttributeError
+        is raised.
     """
 
     def _rebuild_union_type() -> None:
@@ -83,7 +44,11 @@ def register_transform(config_class: type[BaseModel], transform_class: type):
             Union[tuple(_TRANSFORM_REGISTRY.values())], Field(discriminator="type")
         ]
 
-    # TODO (milad) check that type exists and complain if it doesn't?
+    if "type" not in config_class.model_fields:
+        raise ValueError(
+            f"Transform configuration class '{config_class.__name__}' "
+            "does not have a 'type' field."
+        )
 
     type_vals = get_args(config_class.model_fields["type"].annotation)
     if len(type_vals) == 1:
@@ -98,9 +63,14 @@ def register_transform(config_class: type[BaseModel], transform_class: type):
         _TRANSFORM_REGISTRY[v] = config_class
         _rebuild_union_type()
     else:
-        raise ValueError(f"Transform type '{type_vals}' is not a single value.")
+        raise ValueError(f"Transform type is not a single value: {type_vals}")
 
-    # TODO (milad) assert that class has from_config factory method?
+    if not hasattr(transform_class, "from_config"):
+        raise AttributeError(
+            f"Class '{transform_class.__name__}' does not have a 'from_config' method."
+            "This method should take the configuration class as an argument and return"
+            " an instance of the transform class."
+        )
 
     _TRANSFORM_FACTORY_REGISTRY[config_class] = transform_class
 

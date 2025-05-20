@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, field_validator
 
-from .transformations import RegisteredTransformConfigs
+from .transforms import RegisteredTransformConfigs
 
 
 class DatasetConfig(BaseModel):
