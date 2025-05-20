@@ -32,6 +32,7 @@ dependencies = [
   "tqdm>=4.67.1",
   "transformers>=4.51.3",
   "psutil>=7.0.0",
+  "h5py>=3.13.0",
 ]
 
 [dependency-groups]

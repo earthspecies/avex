@@ -87,10 +87,29 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             pretraining_mode=pretraining_mode,
             eat_cfg=eat_cfg_overrides,
         )
+
+    elif model_name == "beats":
+        from representation_learning.models.beats_model import (
+            Model as BeatsModel,
+        )
+
+        return BeatsModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            embed_dim=embed_dim,
+            patch_size=patch_size,
+            target_length=target_length,
+            enable_ema=enable_ema,
+            pretraining_mode=pretraining_mode,
+            eat_cfg=eat_cfg_overrides,
+        )
     else:
         # Fallback
         supported = (
-            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', 'resnet152'"
+            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', 'resnet152',\
+                'beats'"
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"
