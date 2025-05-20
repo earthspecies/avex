@@ -19,7 +19,7 @@ from torch.autograd.function import FunctionCtx
 from torch.cuda.amp import autocast
 
 from representation_learning.models.eat.fairseq_compat import (
-    compute_mask_indices as _fairseq_compute_mask_indices,
+    compute_mask_indices,
 )
 
 from .modules import D2vDecoderConfig  # our stripped-down decoders
@@ -273,28 +273,6 @@ def masked_alibi(ab: torch.Tensor, info: MaskInfo) -> torch.Tensor:
     idx = info.ids_keep[..., 0].unsqueeze(-1)
     tmp = torch.gather(ab, -2, idx.expand(-1, H, -1, ab.size(-1)))
     return torch.gather(tmp, -1, idx.transpose(-1, -2).expand(-1, H, tmp.size(-2), -1))
-
-
-# --------------------------------------------------------------------------- #
-#  Mask helpers – delegate to reference implementation                         #
-# --------------------------------------------------------------------------- #
-
-# We import the original Fairseq helper added under `eat_reference` and expose
-# it under the same public name so the rest of the codebase (and external
-# call-sites) continue to work unchanged while benefiting from the full
-# feature-set (inverse_mask, mask_prob_adjust, etc.).
-
-
-def compute_mask_indices(*args: object, **kwargs: object) -> np.ndarray:  # type: ignore[override]
-    """Delegates to reference helper.
-
-    Returns
-    -------
-    np.ndarray
-        Binary mask indices as in the Fairseq implementation.
-    """
-
-    return _fairseq_compute_mask_indices(*args, **kwargs)
 
 
 # --------------------------------------------------------------------------- #
