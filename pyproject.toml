@@ -21,6 +21,7 @@ dependencies = [
   "pydantic>=2.11.3",
   "pysoundfile>=0.9.0.post1",
   "pyyaml>=6.0.2",
+  "resampy>=0.4.3",
   "soundfile>=0.13.1",
   "torch==2.2.1",
   "torchaudio>=2.2.0",
@@ -63,6 +64,10 @@ python_files = [
 line-length = 88
 indent-width = 4
 extend-exclude = ["tests"]
+exclude = [
+    "fix_paths.py",
+    "representation_learning/models/eat.py",
+]
 
 [tool.ruff.lint]
 # List of plugins and Rules

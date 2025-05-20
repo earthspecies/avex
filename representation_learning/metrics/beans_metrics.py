@@ -1,33 +1,66 @@
 """
-Classification and detection metrics from BEANS. 
+Classification and detection metrics from BEANS.
 https://github.com/earthspecies/beans/blob/main/beans/metrics.py
 """
+
 import math
+
+import numpy as np
 import torch
 
+
 class Accuracy:
-    def __init__(self):
+    """Simple running accuracy meter."""
+
+    def __init__(self) -> None:
         self.num_total = 0
         self.num_correct = 0
-    
-    def update(self, logits, y):
+
+    def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
+        """Accumulate predictions.
+
+        Args
+        ----
+        logits:
+            Raw model outputs of shape ``(N, C)``.
+        y:
+            Ground-truth labels of shape ``(N,)``.
+        """
         self.num_total += logits.shape[0]
         self.num_correct += torch.sum(logits.argmax(axis=1) == y).cpu().item()
 
-    def get_metric(self):
-        return {'acc': 0. if self.num_total == 0 else self.num_correct / self.num_total}
+    def get_metric(self) -> dict[str, float]:
+        """Return current accuracy value.
 
-    def get_primary_metric(self):
-        return self.get_metric()['acc']
+        Returns
+        -------
+        dict[str, float]
+            Dictionary with key ``"acc"`` holding the running accuracy.
+        """
+        return {
+            "acc": 0.0 if self.num_total == 0 else self.num_correct / self.num_total
+        }
+
+    def get_primary_metric(self) -> float:  # noqa: ANN001 (keep interface)
+        """Primary scalar value (accuracy).
+
+        Returns
+        -------
+        float
+            The current accuracy.
+        """
+        return self.get_metric()["acc"]
 
 
 class BinaryF1Score:
-    def __init__(self):
+    """Binary classification precision/recall/F1 tracker."""
+
+    def __init__(self) -> None:
         self.num_positives = 0
         self.num_trues = 0
         self.num_tps = 0
 
-    def update(self, logits, y):
+    def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
         positives = logits.argmax(axis=1) == 1
         trues = y == 1
         tps = trues & positives
@@ -35,64 +68,78 @@ class BinaryF1Score:
         self.num_trues += torch.sum(trues).cpu().item()
         self.num_tps += torch.sum(tps).cpu().item()
 
-    def get_metric(self):
-        prec = 0. if self.num_positives == 0 else self.num_tps / self.num_positives
-        rec = 0. if self.num_trues == 0 else self.num_tps / self.num_trues
-        if prec + rec > 0.:
-            f1 = 2. * prec * rec / (prec + rec)
+    def get_metric(self) -> dict[str, float]:
+        prec = 0.0 if self.num_positives == 0 else self.num_tps / self.num_positives
+        rec = 0.0 if self.num_trues == 0 else self.num_tps / self.num_trues
+        if prec + rec > 0.0:
+            f1 = 2.0 * prec * rec / (prec + rec)
         else:
-            f1 = 0.
+            f1 = 0.0
 
-        return {'prec': prec, 'rec': rec, 'f1': f1}
+        return {"prec": prec, "rec": rec, "f1": f1}
 
-    def get_primary_metric(self):
-        return self.get_metric()['f1']
+    def get_primary_metric(self) -> float:
+        return self.get_metric()["f1"]
 
 
 class MulticlassBinaryF1Score:
-    def __init__(self, num_classes):
+    """Macro-averaged binary F1 score for multi-label problems."""
+
+    def __init__(self, num_classes: int) -> None:
         self.metrics = [BinaryF1Score() for _ in range(num_classes)]
         self.num_classes = num_classes
 
-    def update(self, logits, y):
+    def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
         probs = torch.sigmoid(logits)
         for i in range(self.num_classes):
-            binary_logits = torch.stack((1-probs[:, i], probs[:, i]), dim=1)
+            binary_logits = torch.stack((1 - probs[:, i], probs[:, i]), dim=1)
             self.metrics[i].update(binary_logits, y[:, i])
 
-    def get_metric(self):
-        macro_prec = 0.
-        macro_rec = 0.
-        macro_f1 = 0.
+    def get_metric(self) -> dict[str, float]:
+        macro_prec = 0.0
+        macro_rec = 0.0
+        macro_f1 = 0.0
         for i in range(self.num_classes):
             metrics = self.metrics[i].get_metric()
-            macro_prec += metrics['prec']
-            macro_rec += metrics['rec']
-            macro_f1 += metrics['f1']
+            macro_prec += metrics["prec"]
+            macro_rec += metrics["rec"]
+            macro_f1 += metrics["f1"]
         return {
-            'macro_prec': macro_prec / self.num_classes,
-            'macro_rec': macro_rec / self.num_classes,
-            'macro_f1': macro_f1 / self.num_classes
+            "macro_prec": macro_prec / self.num_classes,
+            "macro_rec": macro_rec / self.num_classes,
+            "macro_f1": macro_f1 / self.num_classes,
         }
 
-    def get_primary_metric(self):
-        return self.get_metric()['macro_f1']
+    def get_primary_metric(self) -> float:
+        return self.get_metric()["macro_f1"]
 
 
 class AveragePrecision:
     """
     Taken from https://github.com/amdegroot/tnt
     """
-    def __init__(self):
+
+    def __init__(self) -> None:
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         """Resets the meter with empty member variables"""
-        self.scores = torch.tensor(torch.FloatStorage(), dtype=torch.float32, requires_grad=False)
-        self.targets = torch.tensor(torch.LongStorage(), dtype=torch.int64, requires_grad=False)
-        self.weights = torch.tensor(torch.FloatStorage(), dtype=torch.float32, requires_grad=False)
+        self.scores = torch.tensor(
+            torch.FloatStorage(), dtype=torch.float32, requires_grad=False
+        )
+        self.targets = torch.tensor(
+            torch.LongStorage(), dtype=torch.int64, requires_grad=False
+        )
+        self.weights = torch.tensor(
+            torch.FloatStorage(), dtype=torch.float32, requires_grad=False
+        )
 
-    def update(self, output, target, weight=None):
+    def update(
+        self,
+        output: torch.Tensor | np.ndarray,
+        target: torch.Tensor | np.ndarray,
+        weight: torch.Tensor | np.ndarray | None = None,
+    ) -> None:
         """
         Args:
             output (Tensor): NxK tensor that for each of the N examples
@@ -118,25 +165,28 @@ class AveragePrecision:
         if output.dim() == 1:
             output = output.view(-1, 1)
         else:
-            assert output.dim() == 2, \
-                'wrong output size (should be 1D or 2D with one column \
-                per class)'
+            assert output.dim() == 2, (
+                "wrong output size (should be 1D or 2D with one column \
+                per class)"
+            )
         if target.dim() == 1:
             target = target.view(-1, 1)
         else:
-            assert target.dim() == 2, \
-                'wrong target size (should be 1D or 2D with one column \
-                per class)'
+            assert target.dim() == 2, (
+                "wrong target size (should be 1D or 2D with one column \
+                per class)"
+            )
         if weight is not None:
-            assert weight.dim() == 1, 'Weight dimension should be 1'
-            assert weight.numel() == target.size(0), \
-                'Weight dimension 1 should be the same as that of target'
-            assert torch.min(weight) >= 0, 'Weight should be non-negative only'
-        assert torch.equal(target**2, target), \
-            'targets should be binary (0 or 1)'
+            assert weight.dim() == 1, "Weight dimension should be 1"
+            assert weight.numel() == target.size(0), (
+                "Weight dimension 1 should be the same as that of target"
+            )
+            assert torch.min(weight) >= 0, "Weight should be non-negative only"
+        assert torch.equal(target**2, target), "targets should be binary (0 or 1)"
         if self.scores.numel() > 0:
-            assert target.size(1) == self.targets.size(1), \
-                'dimensions for output should match previously added examples.'
+            assert target.size(1) == self.targets.size(1), (
+                "dimensions for output should match previously added examples."
+            )
 
         # make sure storage is of sufficient size
         if self.scores.storage().size() < self.scores.numel() + output.numel():
@@ -145,8 +195,7 @@ class AveragePrecision:
             self.scores.storage().resize_(int(new_size + output.numel()))
             self.targets.storage().resize_(int(new_size + output.numel()))
             if weight is not None:
-                self.weights.storage().resize_(int(new_weight_size
-                                               + output.size(0)))
+                self.weights.storage().resize_(int(new_weight_size + output.size(0)))
 
         # store scores and targets
         offset = self.scores.size(0) if self.scores.dim() > 0 else 0
@@ -159,10 +208,14 @@ class AveragePrecision:
             self.weights.resize_(offset + weight.size(0))
             self.weights.narrow(0, offset, weight.size(0)).copy_(weight)
 
-    def get_metric(self):
-        """Returns the model's average precision for each class
-        Return:
-            ap (FloatTensor): 1xK tensor, with avg precision for each class k
+    def get_metric(self) -> torch.Tensor | int:
+        """Return per-class average precision scores.
+
+        Returns
+        -------
+        torch.Tensor | int
+            1-D tensor of length *K* containing AP for each class, or ``0`` if
+            no data has been accumulated yet.
         """
 
         if self.scores.numel() == 0:
@@ -200,51 +253,61 @@ class AveragePrecision:
 
 
 class MeanAveragePrecision:
-    def __init__(self):
+    def __init__(self) -> None:
         self.ap = AveragePrecision()
 
-    def reset(self):
+    def reset(self) -> None:
         self.ap.reset()
 
-    def update(self, output, target, weight=None):
+    def update(
+        self,
+        output: torch.Tensor,
+        target: torch.Tensor,
+        weight: torch.Tensor | None = None,
+    ) -> None:
         self.ap.update(output, target, weight)
 
-    def get_metric(self):
-        return {'map': self.ap.get_metric().mean().item()}
+    def get_metric(self) -> dict[str, float]:
+        return {"map": self.ap.get_metric().mean().item()}
 
-    def get_primary_metric(self):
-        return self.get_metric()['map']
+    def get_primary_metric(self) -> float:
+        return self.get_metric()["map"]
 
 
 class BalancedAccuracy:
-    def __init__(self):
+    """Balanced accuracy across classes (handles class imbalance)."""
+
+    def __init__(self) -> None:
         self.class_correct = {}
         self.class_total = {}
-    
-    def update(self, logits, y):
+
+    def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
         predictions = logits.argmax(axis=1)
-        for pred, true in zip(predictions, y):
+        for pred, true in zip(predictions, y, strict=False):
             true_label = true.item()
             if true_label not in self.class_total:
                 self.class_total[true_label] = 0
                 self.class_correct[true_label] = 0
-            
+
             self.class_total[true_label] += 1
             if pred.item() == true_label:
                 self.class_correct[true_label] += 1
 
-    def get_metric(self):
+    def get_metric(self) -> dict[str, float]:
         if not self.class_total:  # If no updates have been made
-            return {'balanced_acc': 0.}
-        
+            return {"balanced_acc": 0.0}
+
         class_recalls = []
         for class_label in self.class_total:
-            recall = (self.class_correct[class_label] / self.class_total[class_label] 
-                     if self.class_total[class_label] > 0 else 0.)
+            recall = (
+                self.class_correct[class_label] / self.class_total[class_label]
+                if self.class_total[class_label] > 0
+                else 0.0
+            )
             class_recalls.append(recall)
-        
-        balanced_acc = sum(class_recalls) / len(class_recalls)
-        return {'balanced_acc': balanced_acc}
 
-    def get_primary_metric(self):
-        return self.get_metric()['balanced_acc']
+        balanced_acc = sum(class_recalls) / len(class_recalls)
+        return {"balanced_acc": balanced_acc}
+
+    def get_primary_metric(self) -> float:
+        return self.get_metric()["balanced_acc"]

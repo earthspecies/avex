@@ -43,8 +43,10 @@ class CLIPModel(ModelBase):
             self.text_encoder.config.hidden_size, projection_dim
         )
 
-        # Temperature parameter for contrastive loss
-        self.temperature = temperature
+        # Learnable log-logit scale parameter as in original CLIP implementation
+        # Start from log(1/temperature) so that exp(logit_scale) == 1/temperature.
+        init_value = torch.log(torch.tensor(1.0 / temperature))
+        self.logit_scale = torch.nn.Parameter(init_value)
 
         # Move models to device
         self.audio_encoder.to(device)
@@ -95,7 +97,7 @@ class CLIPModel(ModelBase):
 
     def forward(
         self, audio: torch.Tensor, text: list[str], padding_mask: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Forward pass computing audio and text embeddings.
 
@@ -104,11 +106,12 @@ class CLIPModel(ModelBase):
             text: List of text strings of length batch_size
 
         Returns:
-            Tuple of (audio_embeddings, text_embeddings)
+            Tuple of (audio_embeddings, text_embeddings, logit_scale)
         """
         # Get normalized embeddings
         audio_embeddings = self.encode_audio(audio, padding_mask)
         text_embeddings = self.encode_text(text)
 
-        # Return embeddings only - logits are computed in the loss function
-        return audio_embeddings, text_embeddings
+        # Return embeddings and *scalar* logit scale (positive) so the loss can
+        # use the up-to-date value.
+        return audio_embeddings, text_embeddings, self.logit_scale.exp()

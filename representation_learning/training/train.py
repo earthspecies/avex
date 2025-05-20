@@ -1,15 +1,17 @@
 """
 representation_learning.training.train
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-A compact yet full‑featured training loop that supports:
+A compact training loop that supports:
 
 * Automatic Mixed Precision (fp16 / bf16)
 * Gradient‑scaling when using fp16 AMP
 * Proper no‑grad evaluation
-* Check‑pointing of the best model
+* Check‑pointing
 * Parameter & metric logging via `ExperimentLogger`
 * Distributed training with proper synchronization
 * Learning rate scheduling with warmup
+
+TODO: as things become more stable, remove or simplify benchmarking code.
 """
 
 from __future__ import annotations
@@ -23,13 +25,13 @@ from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.nn.parallel as parallel
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from representation_learning.configs import RunConfig, EvaluateConfig
+from representation_learning.configs import EvaluateConfig, RunConfig
+from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
     is_main_process,
@@ -286,12 +288,14 @@ class Trainer:
             # Save final checkpoint
             if is_main_process():
                 self._save_checkpoint(self.max_epochs, final=True)
-                if self.log:
-                    self.log.finalize()
         finally:
             # Cleanup distributed training
             if self.is_distributed:
                 cleanup_distributed()
+
+            # Finalise experiment logging once training loop & cleanup are done.
+            if is_main_process() and self.log:
+                self.log.finalize()
 
     # --------------------------- internal helpers -------------------------- #
     def _run_epoch(self, *, train: bool, epoch: int) -> Tuple[float, float]:
@@ -476,6 +480,11 @@ class Trainer:
 
         avg_loss = total_loss / total_samples if total_samples > 0 else 0
         avg_acc = total_correct / total_samples if total_samples > 0 else 0
+
+        # Print profiling summary at the end of each epoch if we're training
+        if train and is_main_process():
+            print_profiling_summary()
+
         return avg_loss, avg_acc
 
     def _forward(
@@ -548,36 +557,31 @@ class Trainer:
         target = batch["label"]
         padding_mask = batch.get("padding_mask")  # Handle optional mask
 
-        # Mixed labels from mixup augmentation if available
-        mixed_target = batch.get("mixed_labels")
-
         # Forward pass
         outputs = self.model(audio, padding_mask=padding_mask)
 
-        # Calculate loss - either with mixed labels or regular
-        if mixed_target is not None:
-            # For mixup - use soft labels (e.g., BCE or KLDiv)
-            # Assuming outputs are logits, apply log_softmax for KLDiv
-            # or keep as is for BCE
-            if isinstance(self.criterion, nn.CrossEntropyLoss):
-                log_probs = F.log_softmax(outputs, dim=1)
-                loss = F.kl_div(log_probs, mixed_target, reduction="batchmean")
-            elif isinstance(self.criterion, nn.BCEWithLogitsLoss):
-                loss = self.criterion(outputs, mixed_target)
-            else:
-                raise NotImplementedError(
-                    f"Mixup not implemented for criterion "
-                    f"{type(self.criterion).__name__}"
-                )
-        else:
-            loss = self.criterion(outputs, target)
+        # If we're in multi-label mode but the dataset still returns integer
+        # class indices, convert them to one-hot vectors so the BCE loss has
+        # matching dimensions.
+        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss) and target.dim() == 1:
+            target = torch.nn.functional.one_hot(
+                target, num_classes=outputs.size(1)
+            ).float()
 
-        # Calculate accuracy
+        loss = self.criterion(outputs, target)
+
+        # --------------------------------------------------
+        # Accuracy calculation (single- vs multi-label)
+        # --------------------------------------------------
         with torch.no_grad():
-            if mixed_target is not None:
-                _, predicted = outputs.max(1)
-                _, true_targets = mixed_target.max(1)
-                correct = (predicted == true_targets).sum().item()
+            if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
+                # Multi-label: compute exact match accuracy as all labels must
+                # match after thresholding at 0.5 (sigmoid).
+                prob = torch.sigmoid(outputs)
+                pred = (prob > 0.5).float()
+                if target.dtype != torch.float32:
+                    target = target.float()
+                correct = (pred.eq(target).all(dim=1)).sum().item()
             else:
                 _, predicted = outputs.max(1)
                 correct = (predicted == target).sum().item()
@@ -601,17 +605,10 @@ class Trainer:
         text = batch["text_label"]
         padding_mask = batch.get("padding_mask")
 
-        # Ensure model has temperature attribute if needed by loss
-        logit_scale = 1.0  # Default
-        model_to_check = self.model_unwrapped
-        if isinstance(self.criterion, ClipLoss) and hasattr(
-            model_to_check, "temperature"
-        ):
-            logit_scale = 1.0 / model_to_check.temperature
-
-        audio_emb, text_emb = self.model(
+        # Forward pass through CLIPModel – now returns embeddings *and* logit scale
+        audio_emb, text_emb, logit_scale = self.model(
             audio, text=text, padding_mask=padding_mask
-        )  # Pass text explicitly if model expects it
+        )
 
         # Get loss and logits from criterion
         if isinstance(self.criterion, ClipLoss):
@@ -654,19 +651,9 @@ class Trainer:
     def _save_checkpoint(
         self, epoch: int, is_best: bool = False, final: bool = False
     ) -> None:
-        """Save model checkpoint.
-
-        Parameters
-        ----------
-        epoch : int
-            Current epoch
-        is_best : bool, optional
-            Whether this is the best model so far, by default False
-        final : bool, optional
-            Whether this is the final model checkpoint, by default False
-        """
+        """Save a checkpoint of the model, optimizer, and training state."""
         if not is_main_process():
-            return
+            return  # Only the main process saves checkpoints
 
         save_model = self.model_unwrapped  # Always save unwrapped model
 
@@ -693,9 +680,16 @@ class Trainer:
         else:
             return  # Don't save if not periodic, best, or final
 
-        model_path = self.model_dir / filename
-        torch.save(checkpoint, model_path)
-        logger.info(f"Saved checkpoint to {model_path}")
+        # Save inside the experiment-specific folder to avoid collisions across
+        # datasets / experiments that share the same EvaluateConfig.save_dir
+        if self.log is not None and hasattr(self.log, "log_dir"):
+            ckpt_dir = Path(self.log.log_dir)
+        else:
+            ckpt_dir = Path(self.model_dir)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = ckpt_dir / filename
+        torch.save(checkpoint, ckpt_path)
+        logger.info(f"Saved checkpoint to {ckpt_path}")
 
     def _load_checkpoint(self, checkpoint_path: str) -> None:
         """Load model, optimizer, scheduler, and scaler state from a checkpoint.
@@ -781,121 +775,147 @@ class Trainer:
 
 
 class FineTuneTrainer:
-        def __init__(
-            self,
-            model: torch.nn.Module,
-            optimizer: torch.optim.Optimizer,
-            train_loader: torch.utils.data.DataLoader,
-            val_loader: torch.utils.data.DataLoader,
-            device: torch.device,
-            cfg: EvaluateConfig,
-            exp_logger: ExperimentLogger,
-            multi_label: bool = False
-        ):
-            self.model = model
-            self.optimizer = optimizer
-            self.train_loader = train_loader
-            self.val_loader = val_loader
-            self.device = device
-            self.cfg = cfg
-            self.log = exp_logger
-            self.multi_label = multi_label
-            
-            # Set up loss function
-            if self.multi_label:
-                self.criterion = torch.nn.BCEWithLogitsLoss()
-            else:
-                self.criterion = torch.nn.CrossEntropyLoss()
-            
-            # Log static hyper-parameters
-            self.log.log_params({
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        device: torch.device,
+        cfg: EvaluateConfig,
+        exp_logger: ExperimentLogger,
+        multi_label: bool = False,
+    ) -> None:
+        self.model = model
+        self.optimizer = optimizer
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.device = device
+        self.cfg = cfg
+        self.log = exp_logger
+        self.multi_label = multi_label
+
+        # Set up loss function
+        if self.multi_label:
+            self.criterion = torch.nn.BCEWithLogitsLoss()
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss()
+
+        # Log static hyper-parameters
+        self.log.log_params(
+            {
                 "epochs": cfg.training_params.train_epochs,
                 "lr": cfg.training_params.lr,
                 "batch_size": cfg.training_params.batch_size,
                 "loss_fn": "bce_with_logits" if self.multi_label else "cross_entropy",
-            })
-            
-            self.best_val_acc = 0.0
+            }
+        )
 
-        def train(self, num_epochs: int) -> None:
-            """Run the full training loop for the configured number of epochs."""
-            for epoch in range(1, num_epochs + 1):
-                train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
-                val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
+        self.best_val_acc = 0.0
 
-                logger.info(
-                    f"[Epoch {epoch:03d}] "
-                    f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
-                    f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
-                )
+    def train(self, num_epochs: int) -> None:
+        """Run the full training loop for the configured number of epochs."""
+        for epoch in range(1, num_epochs + 1):
+            train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
+            val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
 
-                # Log epoch-level metrics
-                self.log.log_metrics(
-                    {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
-                )
-                self.log.log_metrics(
-                    {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
-                )
-
-                # Save best model
-                if val_acc > self.best_val_acc:
-                    self.best_val_acc = val_acc
-                    self._save_checkpoint("best.pt")
-
-            self.log.finalize()
-
-        def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
-            """Run one epoch of training or validation."""
-            loader = self.train_loader if train else self.val_loader
-
-            total_loss = 0.0
-            total_correct = 0
-            total_samples = 0
-
-            for batch in tqdm(loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False):
-                x = batch["raw_wav"].to(self.device)
-                mask = batch.get("padding_mask")
-                if mask is not None:
-                    mask = mask.to(self.device)
-                y = batch["label"].to(self.device)
-
-                # Forward pass
-                logits = (self.model(x, padding_mask=mask)
-                    if mask is not None
-                    else self.model(x)
-                )
-                loss = self.criterion(logits, y)
-
-                # Backward pass if training
-                if train:
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
-
-                # Calculate accuracy
-                if self.multi_label:
-                    pred = (torch.sigmoid(logits) > 0.5).float()
-                    correct = (pred == y).all(dim=1).sum().item()
-                else:
-                    pred = logits.argmax(dim=1)
-                    correct = (pred == y).sum().item()
-
-                # Update metrics
-                total_loss += loss.item() * y.size(0)
-                total_correct += correct
-                total_samples += y.size(0)
-
-            return total_loss / total_samples, total_correct / total_samples
-
-        def _save_checkpoint(self, name: str) -> None:
-            """Save model checkpoint."""
-            ckpt_path = Path(self.cfg.save_dir) / name
-            torch.save(
-                {
-                    "model_state_dict": self.model.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
-                    "best_val_acc": self.best_val_acc,
-                },
-                ckpt_path,
+            logger.info(
+                f"[Epoch {epoch:03d}] "
+                f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
+                f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
             )
-            logger.info("Saved checkpoint → %s", ckpt_path)
+
+            # Log epoch-level metrics
+            self.log.log_metrics(
+                {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
+            )
+            self.log.log_metrics(
+                {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
+            )
+
+            # Save best model
+            if val_acc > self.best_val_acc:
+                self.best_val_acc = val_acc
+                self._save_checkpoint("best.pt")
+
+        train_metrics = {"loss": train_loss, "acc": train_acc}
+        val_metrics = {"loss": val_loss, "acc": val_acc}
+
+        return train_metrics, val_metrics
+
+    def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
+        """Run one epoch of training or validation.
+
+        Parameters
+        ----------
+        train : bool
+            If ``True`` performs a training step; otherwise runs evaluation.
+        epoch : int
+            Current epoch number (1-indexed).
+
+        Returns
+        -------
+        tuple[float, float]
+            A tuple ``(loss, accuracy)`` computed over the entire epoch.
+        """
+        loader = self.train_loader if train else self.val_loader
+
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        for batch in tqdm(
+            loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
+        ):
+            x = batch["raw_wav"].to(self.device)
+            mask = batch.get("padding_mask")
+            if mask is not None:
+                mask = mask.to(self.device)
+            y = batch["label"].to(self.device)
+
+            # Forward pass
+            logits = (
+                self.model(x, padding_mask=mask) if mask is not None else self.model(x)
+            )
+            loss = self.criterion(logits, y)
+
+            # Backward pass if training
+            if train:
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+            # Calculate accuracy
+            if self.multi_label:
+                pred = (torch.sigmoid(logits) > 0.5).float()
+                correct = (pred == y).all(dim=1).sum().item()
+            else:
+                pred = logits.argmax(dim=1)
+                correct = (pred == y).sum().item()
+
+            # Update metrics
+            total_loss += loss.item() * y.size(0)
+            total_correct += correct
+            total_samples += y.size(0)
+
+        return total_loss / total_samples, total_correct / total_samples
+
+    def _save_checkpoint(self, name: str) -> None:
+        """Save model checkpoint."""
+        # Save inside the experiment-specific folder to avoid collisions across
+        # datasets / experiments that share the same EvaluateConfig.save_dir
+        if self.log is not None and hasattr(self.log, "log_dir"):
+            ckpt_dir = Path(self.log.log_dir)
+        else:
+            ckpt_dir = Path(self.cfg.save_dir)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = ckpt_dir / name
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "best_val_acc": self.best_val_acc,
+            },
+            ckpt_path,
+        )
+        logger.info("Saved checkpoint → %s", ckpt_path)

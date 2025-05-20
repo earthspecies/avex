@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import List
+
 import pandas as pd
 
 
@@ -89,3 +93,26 @@ def balance_by_attribute(
 def resample() -> None:
     """Placeholder for resample function."""
     pass
+
+
+def combine_text_labels(label1: str, label2: str, *, delimiter: str = ", ") -> str:
+    """Combine two text labels for CLIP mixup.
+
+    Duplicates are collapsed so that "cat, cat" → "cat".
+    The order is preserved as (label1, label2) unless they are identical.
+
+    Returns
+    -------
+    str
+        Combined label string with duplicates removed
+    """
+
+    if label1 == label2:
+        return label1
+
+    # Preserve insertion order but remove duplicates
+    parts: List[str] = []
+    for lbl in (label1, label2):
+        if lbl not in parts:
+            parts.append(lbl)
+    return delimiter.join(parts)

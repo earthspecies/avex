@@ -2,7 +2,7 @@
 # Model configuration
 model_spec:
   name: efficientnetb0
-  pretrained: false
+  pretrained: true
   audio_config:
     sample_rate: 16000
     n_fft: 2048
@@ -31,7 +31,7 @@ sr: 16000
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./distnet"
+output_dir: "./efficientnet_48khz"
 distributed: true
 
 training_params:

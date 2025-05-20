@@ -4,7 +4,8 @@ from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Self, Sequence, Type, TypeVar
+from types import TracebackType
+from typing import Any, Dict, Iterator, List, Optional, Self, Type, Sequence, TypeVar
 
 import cloudpathlib
 import librosa
@@ -16,7 +17,7 @@ from google.cloud.storage.client import Client
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import DatasetConfig
-from .transformations import build_transforms
+from .transforms import transform_from_config
 
 # Type variable for registered dataset classes
 RegisteredDataset = TypeVar("RegisteredDataset", bound="Dataset")
@@ -107,6 +108,9 @@ class AudioDataset:
         transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
         preprocessor: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
         metadata: dict | None = None,
+        postprocessors: Optional[
+            List[Callable[[Dict[str, Any]], Dict[str, Any]]]
+        ] = None,
     ) -> None:
         super().__init__()
 
@@ -120,7 +124,9 @@ class AudioDataset:
 
         self.metadata = metadata
 
-    def __enter__(self):
+        self.postprocessors = postprocessors or []
+
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -158,21 +164,28 @@ class AudioDataset:
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
-        if "sample_rate" in self.data_config and sr != self.data_config.sample_rate:
-            resampler = librosa.resampler.Resampler(
+        target_sr = self.data_config.sample_rate
+        if target_sr is not None and sr != target_sr:
+            audio = librosa.resample(
+                y=audio,
                 orig_sr=sr,
-                target_sr=self.data_config.sample_rate,
-                res_type="kaiser_fast",
+                target_sr=target_sr,
+                scale=True,
+                res_type="kaiser_best",
             )
-            audio = resampler(audio)
-            sr = self.data_config.sample_rate
+            sr = target_sr
 
-        return {
+        item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label"],  # TODO (milad) we assume supervisor, fix
+            "text_label": row["label_feature"],
             "label": row.label,
             "path": str(audio_path),
         }
+
+        for proc in self.postprocessors:
+            item = proc(item)
+
+        return item
 
 
 def _get_dataset_from_name(
@@ -196,7 +209,9 @@ def _get_dataset_from_name(
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
         df["gs_path"] = df["local_path"].apply(
-            lambda x: "gs://" + x
+            # lambda x: "gs://" + x
+            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
+            + x
         )  # AnimalSpeak missing gs path
         return df
     elif name == "bats":
@@ -231,6 +246,7 @@ def get_dataset_dummy(
     data_config: DatasetConfig,
     split: str,
     preprocessor: Optional[Callable] = None,
+    postprocessors: Optional[List[Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -260,8 +276,8 @@ def get_dataset_dummy(
     metadata = {}
 
     if data_config.transformations:
-        transforms = build_transforms(data_config.transformations)
-        for transform in transforms:
+        for cfg in data_config.transformations:
+            transform = transform_from_config(cfg)
             df, md = transform(df)
 
             # TODO (milad): hacky but let's think about it
@@ -269,11 +285,14 @@ def get_dataset_dummy(
             if md:
                 metadata.update(md)
 
+    # TODO (milad) transform API should be AudioDataset -> AudioDataset not df->df
+
     return AudioDataset(
         df=df,
         data_config=data_config,
         preprocessor=preprocessor,
         metadata=metadata,
+        postprocessors=postprocessors,
     )
 
 
