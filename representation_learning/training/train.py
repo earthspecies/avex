@@ -967,11 +967,6 @@ class FineTuneTrainer:
         """
         loader = self.train_loader if train else self.val_loader
 
-        if train:
-            self.model.train()
-        else:
-            self.model.eval()
-
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
@@ -996,23 +991,26 @@ class FineTuneTrainer:
                     else self.model(x)
                 )
 
-                loss = self.criterion(logits, y)
+            loss = self.criterion(logits, y)
 
-                if train:
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
+            # Backward pass if training
+            if train:
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
-                if self.multi_label:
-                    pred = (torch.sigmoid(logits) > 0.5).float()
-                    correct = (pred == y).all(dim=1).sum().item()
-                else:
-                    pred = logits.argmax(dim=1)
-                    correct = (pred == y).sum().item()
+            # Calculate accuracy
+            if self.multi_label:
+                pred = (torch.sigmoid(logits) > 0.5).float()
+                correct = (pred == y).all(dim=1).sum().item()
+            else:
+                pred = logits.argmax(dim=1)
+                correct = (pred == y).sum().item()
 
-                total_loss += loss.item() * y.size(0)
-                total_correct += correct
-                total_samples += y.size(0)
+            # Update metrics
+            total_loss += loss.item() * y.size(0)
+            total_correct += correct
+            total_samples += y.size(0)
 
         return total_loss / total_samples, total_correct / total_samples
 
