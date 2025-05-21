@@ -1,8 +1,6 @@
-import os
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from functools import lru_cache
-from io import StringIO
 from pathlib import Path
 from typing import (
     Any,
@@ -26,7 +24,7 @@ from google.cloud.storage.client import Client
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import DatasetConfig
-from .transforms import transform_from_config, RegisteredTransformConfigs
+from .transforms import RegisteredTransformConfigs, transform_from_config
 
 # Type variable for registered dataset classes
 RegisteredDataset = TypeVar("RegisteredDataset", bound="Dataset")
@@ -96,9 +94,8 @@ class GSPath(cloudpathlib.GSPath):
     def __init__(
         self,
         client_path: str | Self | cloudpathlib.AnyPath,
-        client: cloudpathlib.GSClient = _get_client(),
     ) -> None:
-        super().__init__(client_path, client=client)
+        super().__init__(client_path, client=_get_client())
 
 
 class AudioDataset:
@@ -138,7 +135,7 @@ class AudioDataset:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Exception, exc_val: str, exc_tb: str) -> None:
         # TODO
         pass
 
@@ -197,58 +194,59 @@ class AudioDataset:
         return item
 
 
-def _get_dataset_from_name(
-    name: str,
-    split: str = "train",
-) -> pd.DataFrame:
-    name = name.lower().strip()
+# def _get_dataset_from_name(
+#     name: str,
+#     split: str = "train",
+# ) -> pd.DataFrame:
+#     name = name.lower().strip()
 
-    if name == "animalspeak":
-        if split == "test":
-            return None
-        anaimspeak_path = (
-            ANIMALSPEAK_PATH_EVAL if split == "valid" else ANIMALSPEAK_PATH
-        )
-        if ANIMALSPEAK_PATH.startswith("gs://"):
-            csv_path = GSPath(anaimspeak_path)
-        else:
-            csv_path = Path(anaimspeak_path)
+#     if name == "animalspeak":
+#         if split == "test":
+#             return None
+#         anaimspeak_path = (
+#             ANIMALSPEAK_PATH_EVAL if split == "valid" else ANIMALSPEAK_PATH
+#         )
+#         if ANIMALSPEAK_PATH.startswith("gs://"):
+#             csv_path = GSPath(anaimspeak_path)
+#         else:
+#             csv_path = Path(anaimspeak_path)
 
-        # Read CSV content
-        csv_text = csv_path.read_text(encoding="utf-8")
-        df = pd.read_csv(StringIO(csv_text))
-        df["gs_path"] = df["local_path"].apply(
-            # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
-            + x
-        )  # AnimalSpeak missing gs path
-        return df
-    elif name == "bats":
-        csv_file = (
-            BATS_PATH_TEST
-            if split == "test"
-            else BATS_PATH_VALID
-            if split == "valid"
-            else BATS_PATH
-        )
-        # TODO: don't use os.path!
-        base_path = os.path.dirname(csv_file).split("egyptian_fruit_bats")[0]
-        if csv_file.startswith("gs://"):
-            csv_path = GSPath(csv_file)
-        else:
-            csv_path = Path(csv_file)
+#         # Read CSV content
+#         base_nfs_path = "/home/milad_earthspecies_org/data-migration/marius-highmem"
+#         csv_text = csv_path.read_text(encoding="utf-8")
+#         df = pd.read_csv(StringIO(csv_text))
+#         df["gs_path"] = df["local_path"].apply(
+#             # lambda x: "gs://" + x
+#             lambda x: base_nfs_path + "/mnt/foundation-model-data/audio_16k/"
+#             + x
+#         )  # AnimalSpeak missing gs path
+#         return df
+#     elif name == "bats":
+#         csv_file = (
+#             BATS_PATH_VALID
+#             if split == "test"
+#             else BATS_PATH_VALID
+#             if split == "valid"
+#             else BATS_PATH
+#         )
+#         # TODO: don't use os.path!
+#         base_path = os.path.dirname(csv_file).split("egyptian_fruit_bats")[0]
+#         if csv_file.startswith("gs://"):
+#             csv_path = GSPath(csv_file)
+#         else:
+#             csv_path = Path(csv_file)
 
-        # Read CSV content
-        csv_text = csv_path.read_text(encoding="utf-8")
-        df = pd.read_csv(StringIO(csv_text))
-        df["gs_path"] = df["path"].apply(
-            lambda x: base_path
-            + "egyptian_fruit_bats"
-            + x.split("egyptian_fruit_bats")[1]
-        )  # bats missing gs path
-        return df
-    else:
-        raise NotImplementedError("Dataset not supported")
+#         # Read CSV content
+#         csv_text = csv_path.read_text(encoding="utf-8")
+#         df = pd.read_csv(StringIO(csv_text))
+#         df["gs_path"] = df["path"].apply(
+#             lambda x: base_path
+#             + "egyptian_fruit_bats"
+#             + x.split("egyptian_fruit_bats")[1]
+#         )  # bats missing gs path
+#         return df
+#     else:
+#         raise NotImplementedError("Dataset not supported")
 
 
 def get_dataset_dummy(
@@ -278,8 +276,7 @@ def get_dataset_dummy(
     AudioDataset
         An instance of the dataset with the specified transformations applied.
     """
-
-    ds = AnimalSpeak(data_config)
+    ds = _dataset_registry[data_config.dataset_name](data_config)
     ds._load(split)
 
     # Check if the dataset CSV path is a gs:// path
@@ -292,15 +289,15 @@ def get_dataset_dummy(
     #         transform = transform_from_config(cfg)
     #         df, md = transform(df)
 
-            # TODO (milad): hacky but let's think about it
-            # TODO (test if keys already exist and shout?)
+    # TODO (milad): hacky but let's think about it
+    # TODO (test if keys already exist and shout?)
     #        if md:
     #            metadata.update(md)
 
     # TODO (milad) transform API should be AudioDataset -> AudioDataset not df->df
 
     return ds
-    
+
     # AudioDataset(
     #     df=df,
     #     data_config=data_config,
@@ -429,7 +426,7 @@ class DatasetInfo(BaseModel):
                     raise ValueError(f"Cloud path {value} does not exist.")
             else:
                 # Check if the local path exists
-                path = pathlib.Path(value)
+                path = Path(value)
                 if not path.exists():
                     raise ValueError(f"Local path {value} does not exist.")
 
@@ -494,7 +491,7 @@ class Dataset(ABC):
 
     def __init__(self, output_take_and_give: dict[str, str] = None) -> None:
         """A DatasetConfig can be passed to the constructor to, for instance,
-        apply transformations to the dataset during instanciation or modify its
+        apply transformations to the dataset during instantiation or modify its
         fields of output.
 
         Parameters
@@ -503,7 +500,6 @@ class Dataset(ABC):
             The configuration for the dataset.
         """
         self.output_take_and_give = output_take_and_give
-
 
     @property
     @abstractmethod
@@ -531,7 +527,8 @@ class Dataset(ABC):
 
     @abstractmethod
     def _load(self, split: str) -> Sequence[Any]:
-        """Load one split of the dataset. It should apply transformations if any in self.dataset_config.
+        """Load one split of the dataset.
+        It should apply transformations if any in self.dataset_config.
 
         Parameters
         ----------
@@ -601,8 +598,10 @@ class Dataset(ABC):
             A string representation of the dataset
         """
         raise NotImplementedError
-    
-    def apply_transformations(self, transformations: list[RegisteredTransformConfigs]) -> list[Any]:
+
+    def apply_transformations(
+        self, transformations: list[RegisteredTransformConfigs]
+    ) -> list[Any]:
         """Apply the given list of transformations to the dataset.
 
         This method applies each transformation in sequence to the dataset's data.
@@ -617,10 +616,15 @@ class Dataset(ABC):
         -------
         list[Any]
             The metadata as a list of objects.
+
+        Raises
+        -------
+        RuntimeError
+            If the dataset's data is not loaded yet.
         """
         if self._data is None:
             raise RuntimeError("No data loaded. Call load() first.")
-        
+
         metadata_list = []
         for cfg in transformations:
             transform = transform_from_config(cfg)

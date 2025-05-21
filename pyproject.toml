@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 
 dependencies = [
-  "bitsandbytes>=0.45.5",
   "cloudpathlib>=0.21.0",
   "google-cloud-storage>=3.1.0",
   "joblib>=1.4.2",
@@ -31,6 +30,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+bitsandbytes = [
+  "bitsandbytes>=0.45.5",
+]
 
 dev = [
   "pre-commit<=4.2.0",
@@ -42,6 +44,9 @@ dev = [
   "yamllint<=1.35.1",
   "semver>=3.0.4",
 ]
+
+[tool.uv]
+default-groups = ["dev", "bitsandbytes"]
 
 [project.urls]
 Homepage = "https://github.com/earthspecies/representation-learning"
