@@ -22,7 +22,7 @@ DATA_ROOT = (
     "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
     "foundation-model-data/"
 )
-DATA_ROOT = "gs://foundation-model-data/"
+
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
