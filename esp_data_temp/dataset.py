@@ -18,7 +18,10 @@ from .transforms import transform_from_config
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/"  # maybe consider giving this as a parameter in the config or command line argument?
+DATA_ROOT = (
+    "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+    "foundation-model-data/"
+)
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
@@ -38,8 +41,10 @@ class GSPath(cloudpathlib.GSPath):
     def __init__(
         self,
         client_path: str | Self | cloudpathlib.AnyPath,
-        client: cloudpathlib.GSClient = _get_client(),
+        client: Optional[cloudpathlib.GSClient] = None,
     ) -> None:
+        if client is None:
+            client = _get_client()
         super().__init__(client_path, client=client)
 
 
@@ -71,7 +76,7 @@ class AudioDataset:
         self.data_config = data_config
         self.preprocessor = preprocessor
 
-        self.audio_path_col = "path"  # modify if your CSV uses a different name
+        self.audio_path_col = data_config.audio_path_col
 
         self.metadata = metadata
 
@@ -168,8 +173,10 @@ def _get_dataset_from_name(
         df = pd.read_csv(StringIO(csv_text))
         df["path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
-            + x
+            lambda x: (
+                "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+                "foundation-model-data/audio_16k/" + x
+            )
         )  # AnimalSpeak missing gs path
         return df
     elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
@@ -210,7 +217,7 @@ def _get_dataset_from_name(
 
         df = pd.read_csv(dataset_path / "meta" / "esc50.csv")
 
-        def convert(row):
+        def convert(row: pd.Series) -> pd.Series:
             new_row = pd.Series(
                 {
                     "path": dataset_path / row["filename"],
