@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_base.yml
+dataset_config: configs/data_configs/benchmark_small.yml
 
 training_params:
   train_epochs: 20
