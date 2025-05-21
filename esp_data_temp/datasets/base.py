@@ -276,7 +276,7 @@ class Dataset(ABC):
         Self
             The dataset instance.
         """
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def __len__(self) -> int:

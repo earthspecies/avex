@@ -55,17 +55,6 @@ class AnimalSpeak(Dataset):
         self._data: pd.DataFrame = None
         self._load(split)  # Load the dataset (fills self._data)
 
-    @property
-    def data(self) -> Sequence[Any]:
-        """Get the dataset data.
-
-        Returns
-        -------
-        Sequence[Any]
-            The dataset data.
-        """
-        return self._data
-
     def _load(self, split: Literal["train", "validation"]) -> Sequence[Any]:
         """Load the given split of the dataset and return them.
 
