@@ -111,7 +111,9 @@ class AudioDataset:
         path_str: str = row[self.audio_path_col]
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        if isinstance(path_str, GSPath) or isinstance(path_str, Path):
+        if isinstance(path_str, cloudpathlib.GSPath) or isinstance(
+            path_str, cloudpathlib.Path
+        ):
             audio_path = path_str
         elif str(path_str).startswith("gs://"):
             if GSPath is None:
