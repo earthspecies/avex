@@ -20,9 +20,7 @@ class DatasetConfig(BaseModel):
 
     @field_validator("transformations", mode="before")
     @classmethod
-    def convert_none(
-        cls, v: Optional[Union[str, list[RegisteredTransformConfigs]]]
-    ) -> Optional[list[RegisteredTransformConfigs]]:
+    def convert_none(cls, v: Any) -> Any:  # noqa: ANN401
         if v in ("None", "none"):
             return None
         return v
