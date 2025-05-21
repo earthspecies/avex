@@ -143,7 +143,6 @@ def run_experiment(
         device
     )
 
-
     # If pretrained=True, we don't need to load a checkpoint
     if not experiment_config.pretrained:
         # Determine the checkpoint path (local or gs://). Prefer the one
@@ -205,6 +204,7 @@ def run_experiment(
         logger.info("Freezing backbone parameters (eval_cfg.frozen=True)")
         for p in base_model.parameters():
             p.requires_grad = False
+        base_model.eval()
 
     trainable_params = filter(lambda p: p.requires_grad, linear_probe.parameters())
     optim = get_optimizer(trainable_params, eval_cfg.training_params)
@@ -302,8 +302,8 @@ def main() -> None:
     torch.manual_seed(42)  # Fixed seed for reproducibility
 
     # 5. Run experiments for each dataset and experiment combination
+    results = []
     for dataset in dataset_cfg.datasets:
-        results = []
         for experiment in eval_cfg.experiments:
             result = run_experiment(eval_cfg, dataset, experiment, device, save_dir)
             results.append(result)

@@ -12,22 +12,38 @@ from representation_learning.training.distributed import (
 
 
 def all_gather_features(features: torch.Tensor) -> torch.Tensor:
-    """Gather features from all processes for distributed training.
+    """Gather *features* from all ranks **while preserving gradients**.
 
-    Parameters
-    ----------
-    features : torch.Tensor
-        Features tensor to gather across processes
+    Standard ``torch.distributed.all_gather`` fills the *output* tensors with
+    detached data, so gradients cannot flow back to the original *features*.
+    We fix this by overwriting the entry that corresponds to the *current*
+    rank with the original tensor after the collective.
+
+    This keeps the autograd graph intact for the local portion, which is all
+    that is required for correct gradient computation.
 
     Returns
     -------
     torch.Tensor
-        Gathered features from all processes
+        Concatenation of features across all ranks (first dimension enlarged
+        by ``world_size``). Gradients propagate to the local slice.
     """
-    if get_world_size() == 1:
+
+    world_size = get_world_size()
+    if world_size == 1:
         return features
-    gathered = [torch.zeros_like(features) for _ in range(get_world_size())]
-    dist.all_gather(gathered, features)
+
+    gathered: list[torch.Tensor] = [
+        torch.zeros_like(features, requires_grad=False) for _ in range(world_size)
+    ]
+
+    # Collective: each rank populates *gathered* (detached tensors)
+    dist.all_gather(gathered, features.contiguous())
+
+    # Replace this rank's slot with the original tensor (preserves grad)
+    rank = get_rank()
+    gathered[rank] = features
+
     return torch.cat(gathered, dim=0)
 
 

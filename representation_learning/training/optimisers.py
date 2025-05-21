@@ -5,7 +5,7 @@ of a run configuration.\
 
 from __future__ import annotations
 
-from typing import Iterable, Type
+from typing import Iterable
 
 import bitsandbytes as bnb
 import torch
@@ -56,20 +56,51 @@ def get_optimizer(
     weight_decay: float = float(training_params.weight_decay)
 
     # --------------------------------------------------------------------- #
+    #  Parameter grouping – honour `weight_decay_scale` & `param_group`      #
+    # --------------------------------------------------------------------- #
+
+    grouped: dict[tuple[float, str], list[torch.nn.Parameter]] = {}
+    for p in params:
+        if not p.requires_grad:
+            continue
+
+        # Default values when no overrides are present
+        scale = 1.0
+        group_name = "default"
+
+        if hasattr(p, "optim_overrides"):
+            opt_over = p.optim_overrides or {}
+            scale = opt_over.get("optimizer", {}).get("weight_decay_scale", 1.0)
+
+        if hasattr(p, "param_group"):
+            group_name = p.param_group or group_name
+
+        grouped.setdefault((scale, group_name), []).append(p)
+
+    # Build param-group dicts with effective weight-decay = base * scale
+    param_groups = []
+    for (scale, gname), plist in grouped.items():
+        param_groups.append(
+            {
+                "params": plist,
+                "weight_decay": weight_decay * float(scale),
+                "lr": lr,
+                "group_name": gname,
+            }
+        )
+
+    # --------------------------------------------------------------------- #
     #  Factory
     # --------------------------------------------------------------------- #
     if opt_name == "adamw":
-        optimiser_cls: Type[Optimizer] = torch.optim.AdamW
-        kwargs = {"lr": lr, "weight_decay": weight_decay}
+        optimiser_cls = torch.optim.AdamW  # type: ignore[assignment]
     elif opt_name == "adam":
-        optimiser_cls = torch.optim.Adam
-        kwargs = {"lr": lr, "weight_decay": weight_decay}
+        optimiser_cls = torch.optim.Adam  # type: ignore[assignment]
     elif opt_name == "adamw8bit":
-        optimiser_cls: Type[Optimizer] = bnb.optim.PagedAdamW8bit
-        kwargs = {"lr": lr, "weight_decay": weight_decay}
+        optimiser_cls = bnb.optim.PagedAdamW8bit  # type: ignore[assignment]
     else:
         raise ValueError(
             f"Unsupported optimizer '{opt_name}'. Available: adamw, adam, adamw8bit."
         )
 
-    return optimiser_cls(params, **kwargs)
+    return optimiser_cls(param_groups)

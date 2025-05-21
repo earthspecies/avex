@@ -19,7 +19,7 @@ from .transformations import build_transforms
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument? 
+DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument?
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
@@ -188,7 +188,7 @@ def _get_dataset_from_name(
         else:
             csv_file = dataset_path / name / "annotations.{}.csv".format(split)
             audio_path = dataset_path / name / "audio"
-       
+
         # Read CSV content
         csv_text = csv_file.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
