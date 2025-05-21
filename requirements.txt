@@ -3,6 +3,7 @@
 -e .
 alembic==1.15.2
 annotated-types==0.7.0
+antlr4-python3-runtime==4.9.3
 anyio==4.9.0
 audioread==3.0.1
 bitsandbytes==0.45.5
@@ -75,6 +76,7 @@ nvidia-cusparse-cu12==12.1.0.106 ; platform_machine == 'x86_64' and sys_platform
 nvidia-nccl-cu12==2.19.3 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvjitlink-cu12==12.4.127 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvtx-cu12==12.1.105 ; platform_machine == 'x86_64' and sys_platform == 'linux'
+omegaconf==2.3.0
 opentelemetry-api==1.32.1
 opentelemetry-sdk==1.32.1
 opentelemetry-semantic-conventions==0.53b1
@@ -115,6 +117,7 @@ sqlparse==0.5.3
 starlette==0.46.2
 sympy==1.13.1
 threadpoolctl==3.6.0
+timm==1.0.15
 tokenizers==0.21.1
 torch==2.2.1
 torchaudio==2.2.1

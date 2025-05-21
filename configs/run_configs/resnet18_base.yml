@@ -6,9 +6,9 @@ model_spec:
   device: cuda
   audio_config:
     sample_rate: 16000
-    n_fft: 2048
-    hop_length: 512
-    win_length: 2048
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
     window: hann
     n_mels: 128
     representation: mel_spectrogram

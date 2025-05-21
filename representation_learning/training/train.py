@@ -16,14 +16,12 @@ TODO: as things become more stable, remove or simplify benchmarking code.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.parallel as parallel
 from torch.cuda.amp import GradScaler, autocast
@@ -78,6 +76,8 @@ class Trainer:
         LR scheduler config, by default None
     is_clip_mode : bool, optional
         Whether we're in CLIP training mode, by default False
+    is_eat_ssl : bool, optional
+        Whether we're in EAT SSL training mode, by default False
     checkpoint_freq : int, optional
         Frequency of checkpointing (in epochs), defaults to 1 (once per epoch)
     exp_logger : Optional[ExperimentLogger], optional
@@ -120,6 +120,7 @@ class Trainer:
         amp_dtype: str = "bf16",  # one of: 'fp16', 'bf16'
         scheduler_config: Optional[Dict] = None,
         is_clip_mode: bool = False,
+        is_eat_ssl: bool = False,
         checkpoint_freq: int = 1,
         exp_logger: Optional[ExperimentLogger] = None,
         batch_size: int = 32,
@@ -134,14 +135,22 @@ class Trainer:
         self.model_dir = Path(model_dir)
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.is_clip_mode = is_clip_mode
+        self.is_eat_ssl = is_eat_ssl
         self.checkpoint_freq = checkpoint_freq
         self.max_epochs = max_epochs
         self.log = exp_logger
         self.log_steps = log_steps
 
         # Timers for benchmarking (will be reset in _run_epoch and after each log
-        # interval)
-        self.timers: Dict[str, float] = {}
+        # interval). Initialise with expected keys to avoid KeyError on first use.
+        self.timers: Dict[str, float] = {
+            "to_device": 0.0,
+            "model_compute": 0.0,
+        }
+
+        # EAT-SSL per-component loss tracking
+        # TODO: reminder to refactor the Trainer
+        self._last_batch_ssl_metrics: Dict[str, float] | None = None
 
         # Determine device
         if device is None:
@@ -157,10 +166,12 @@ class Trainer:
 
         if self.is_distributed:
             logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
+
             self.model = parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.local_rank],
                 output_device=self.local_rank,
+                find_unused_parameters=True,
             )
             self.model_unwrapped = self.model.module
         else:
@@ -245,32 +256,66 @@ class Trainer:
                         )  # Needed for consistent eval
 
                 train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
+
+                # Capture detailed CLIP metrics from training epoch (if any)
+                train_clip_metrics: Dict[str, float] | None = None
+                if self.is_clip_mode and hasattr(self, "_last_epoch_clip_metrics"):
+                    train_clip_metrics = self._last_epoch_clip_metrics.copy()
+
                 val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
 
                 # Log only on master process
                 if is_main_process():
                     current_lr = self.optimizer.param_groups[0]["lr"]
-                    logger.info(
+                    if self.is_clip_mode and hasattr(self, "_last_epoch_clip_metrics"):
+                        tr_a2t = self._last_epoch_clip_metrics.get("acc_a2t", 0.0)
+                        tr_t2a = self._last_epoch_clip_metrics.get("acc_t2a", 0.0)
+
+                    logger_line = (
                         f"[Epoch {epoch:03d}] "
                         f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
                         f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f} | "
                         f"lr={current_lr:.2e}"
                     )
 
+                    if (
+                        self.is_clip_mode
+                        and train_clip_metrics is not None
+                        and hasattr(self, "_last_epoch_clip_metrics")
+                    ):
+                        tr_a2t = train_clip_metrics.get("acc_a2t", 0.0)
+                        tr_t2a = train_clip_metrics.get("acc_t2a", 0.0)
+                        val_a2t = self._last_epoch_clip_metrics.get("acc_a2t", 0.0)
+                        val_t2a = self._last_epoch_clip_metrics.get("acc_t2a", 0.0)
+                        logger_line += (
+                            f" | train_a2t={tr_a2t:.4f} train_t2a={tr_t2a:.4f}"
+                            f" val_a2t={val_a2t:.4f} val_t2a={val_t2a:.4f}"
+                        )
+
+                    logger.info(logger_line)
+
                     # Log epoch‑level metrics
                     if self.log:
+                        train_metrics = {
+                            "loss": train_loss,
+                            "acc": train_acc,
+                            "learning_rate": current_lr,
+                        }
+                        if train_clip_metrics:
+                            train_metrics.update(train_clip_metrics)
+
                         self.log.log_metrics(
-                            {
-                                "loss": train_loss,
-                                "acc": train_acc,
-                                "learning_rate": current_lr,
-                            },
+                            train_metrics,
                             step=epoch,
                             split="train",
                         )
-                        self.log.log_metrics(
-                            {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
-                        )
+
+                        val_metrics = {"loss": val_loss, "acc": val_acc}
+                        if self.is_clip_mode and hasattr(
+                            self, "_last_epoch_clip_metrics"
+                        ):
+                            val_metrics.update(self._last_epoch_clip_metrics)
+                        self.log.log_metrics(val_metrics, step=epoch, split="val")
 
                     # Save best model
                     if val_acc > self.best_val_acc:
@@ -306,180 +351,167 @@ class Trainer:
         -------
         Tuple[float, float] : mean loss, mean accuracy
         """
+
         loader = self.train_dataloader if train else self.eval_dataloader
-        self.model.train(train)  # train=True -> .train(); train=False -> .eval()
 
-        # Initialize/Reset timers and counters for the current epoch and log intervals
-        self.timers = {"to_device": 0.0, "model_compute": 0.0}
-        interval_dataloader_time = 0.0
-        interval_backward_time = 0.0
-        steps_since_last_log = 0
+        if train:
+            self.model.train()
+        else:
+            self.model.eval()
 
-        if self.device.type == "cuda":
-            torch.cuda.synchronize(self.device)
-        last_log_time_marker = time.perf_counter()  # For wall time of log interval
+        # Reset per-epoch timers
+        self.timers["to_device"] = 0.0
+        self.timers["model_compute"] = 0.0
 
-        iter_data_wait_start_time = time.perf_counter()  # For individual data load time
+        total_loss: float = 0.0
+        total_samples: int = 0
 
-        total_loss, total_correct, total_samples = 0.0, 0, 0
-        pbar_desc = f"{'Train' if train else 'Eval '} Epoch {epoch}"
-        pbar = tqdm(
-            enumerate(loader),
-            total=len(loader),
-            desc=pbar_desc,
-            leave=False,
-            disable=not is_main_process(),
-        )
+        # Separate correct counters for CLIP retrieval directions (a2t, t2a)
+        total_correct: int = 0
+        total_correct_a2t: int = 0
+        total_correct_t2a: int = 0
 
-        grad_ctx = contextlib.nullcontext() if train else torch.no_grad()
+        context_mgr = torch.enable_grad() if train else torch.no_grad()
 
-        with grad_ctx:
-            for batch_idx, batch in pbar:
-                if self.device.type == "cuda":
-                    torch.cuda.synchronize(self.device)
-                iter_data_ready_time = time.perf_counter()
-                current_iter_dataloader_time = (
-                    iter_data_ready_time - iter_data_wait_start_time
+        with context_mgr:
+            for i, batch in enumerate(
+                tqdm(
+                    loader,
+                    desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+                    leave=False,
                 )
-                interval_dataloader_time += current_iter_dataloader_time
-                steps_since_last_log += 1
+            ):
+                # ------------------------------------------------------
+                if not hasattr(self, "_global_updates"):
+                    self._global_updates = 0  # type: ignore[attr-defined]
 
-                loss_tensor, correct, n = self._forward(batch, train=train)
-
-                current_iter_backward_time = 0.0
                 if train:
-                    if self.device.type == "cuda":
-                        torch.cuda.synchronize(self.device)
-                    bwd_pass_start_time = time.perf_counter()
-                    self._backward(loss_tensor)
-                    if self.device.type == "cuda":
-                        torch.cuda.synchronize(self.device)
-                    current_iter_backward_time = (
-                        time.perf_counter() - bwd_pass_start_time
-                    )
-                    interval_backward_time += current_iter_backward_time
+                    self._global_updates += 1
 
-                batch_loss = loss_tensor.detach().item() * n
-                total_loss += batch_loss
-                total_correct += correct
-                total_samples += n
+                # ------------------------------------
+                # Forward (and optional backward)
+                # ------------------------------------
+                loss, correct_out, batch_size = self._forward(batch, train=train)
 
-                if is_main_process():
-                    current_acc = (
-                        total_correct / total_samples if total_samples > 0 else 0
-                    )
-                    avg_loss_so_far = (
-                        total_loss / total_samples if total_samples > 0 else 0
-                    )
-                    pbar.set_postfix(
-                        loss=f"{avg_loss_so_far:.4f}", acc=f"{current_acc:.4f}"
-                    )
-
-                # Log benchmark times every self.log_steps
-                if is_main_process() and steps_since_last_log == self.log_steps:
-                    if self.device.type == "cuda":
-                        torch.cuda.synchronize(self.device)
-                    current_time_marker = time.perf_counter()
-                    interval_wall_time = current_time_marker - last_log_time_marker
-
-                    logger.info(
-                        f"--- Benchmarking Results for last {steps_since_last_log} "
-                        f"steps ("
-                    )
-                    logger.info(
-                        f"Epoch {epoch}, Batch {batch_idx + 1}, "
-                        f"{'Train' if train else 'Eval'}) ---"
-                    )
-                    logger.info(f"Wall Time for interval: {interval_wall_time:.4f}s")
-
-                    component_times = {
-                        "Dataloading": interval_dataloader_time,
-                        "Data-to-Device": self.timers["to_device"],
-                        "Model Forward Compute": self.timers["model_compute"],
-                        "Model Backward": interval_backward_time if train else 0.0,
-                    }
-
-                    total_accounted_time = sum(component_times.values())
-                    other_time = interval_wall_time - total_accounted_time
-
-                    if (
-                        interval_wall_time > 1e-6
-                    ):  # Avoid division by zero if interval is too short
-                        dataloading_s = component_times["Dataloading"]
-                        dataloading_pct = (dataloading_s / interval_wall_time) * 100
-                        data_to_device_s = component_times["Data-to-Device"]
-                        data_to_device_pct = (
-                            data_to_device_s / interval_wall_time
-                        ) * 100
-                        model_forward_s = component_times["Model Forward Compute"]
-                        model_forward_pct = (model_forward_s / interval_wall_time) * 100
-                        model_backward_s = component_times["Model Backward"]
-                        model_backward_pct = (
-                            model_backward_s / interval_wall_time
-                        ) * 100
-                        logger.info(
-                            f"  {'Dataloading:':<25} "
-                            f"{dataloading_s:.4f}s "
-                            f"({dataloading_pct:.2f}%)"
-                        )
-                        logger.info(
-                            f"  {'Data-to-Device:':<25} "
-                            f"{data_to_device_s:.4f}s "
-                            f"({data_to_device_pct:.2f}%)"
-                        )
-                        logger.info(
-                            f"  {'Model Forward Compute:':<25} "
-                            f"{model_forward_s:.4f}s "
-                            f"({model_forward_pct:.2f}%)"
-                        )
-                        if train:
-                            logger.info(
-                                f"  {'Model Backward:':<25} "
-                                f"{model_backward_s:.4f}s "
-                                f"({model_backward_pct:.2f}%)"
-                            )
-                        other_time_pct = (other_time / interval_wall_time) * 100
-                        logger.info(
-                            f"  {'Other/Overhead:':<25} "
-                            f"{other_time:.4f}s "
-                            f"({other_time_pct:.2f}%)"
-                        )
+                if train:
+                    # Optimiser step (scaler if AMP-fp16)
+                    self.optimizer.zero_grad()
+                    if self.scaler is not None:
+                        self.scaler.scale(loss).backward()
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
                     else:
-                        logger.info(
-                            "Interval wall time too short for percentage breakdown."
+                        loss.backward()
+                        self.optimizer.step()
+
+                    # FOR EAT-SSL: update the teacher
+                    target_model = (
+                        self.model_unwrapped if self.is_distributed else self.model
+                    )
+                    if self.is_eat_ssl and hasattr(target_model, "backbone"):
+                        backbone = target_model.backbone
+                        if hasattr(backbone, "set_num_updates"):
+                            backbone.set_num_updates(self._global_updates)
+
+                    # Scheduler (after optimiser update)
+                    if self.scheduler is not None:
+                        self.scheduler.step()
+
+                # ------------------------------------
+                # Accumulate statistics
+                # ------------------------------------
+                total_loss += loss.item() * batch_size
+                total_samples += batch_size
+
+                if self.is_clip_mode:
+                    # correct_out is Tuple[int,int] when CLIP mode
+                    ca2t, ct2a = correct_out  # type: ignore[misc]
+                    total_correct_a2t += ca2t
+                    total_correct_t2a += ct2a
+                else:
+                    total_correct += correct_out  # type: ignore[misc]
+
+                # Per-component EAT SSL losses --------------------------------
+                if self.is_eat_ssl and self._last_batch_ssl_metrics is not None:
+                    if "comp_totals" not in locals():  # lazily created once
+                        comp_totals: Dict[str, float] = {}
+                    for k, v in self._last_batch_ssl_metrics.items():
+                        comp_totals[k] = comp_totals.get(k, 0.0) + v * batch_size
+
+                # Per-log_steps logging
+                if (i + 1) % self.log_steps == 0 or (i + 1) == len(loader):
+                    avg_loss_so_far = (
+                        total_loss / total_samples if total_samples else 0.0
+                    )
+                    if self.is_clip_mode:
+                        avg_acc_a2t = (
+                            total_correct_a2t / total_samples if total_samples else 0.0
                         )
-                    logger.info("--- End Benchmarking Results ---")
+                        avg_acc_t2a = (
+                            total_correct_t2a / total_samples if total_samples else 0.0
+                        )
+                        avg_acc_so_far = (avg_acc_a2t + avg_acc_t2a) / 2.0
+                    else:
+                        avg_acc_so_far = (
+                            total_correct / total_samples if total_samples else 0.0
+                        )
 
-                    # Reset timers for the next interval
-                    self.timers = {"to_device": 0.0, "model_compute": 0.0}
-                    interval_dataloader_time = 0.0
-                    interval_backward_time = 0.0
-                    steps_since_last_log = 0
-                    if (
-                        self.device.type == "cuda"
-                    ):  # Ensure resets are captured before new timing
-                        torch.cuda.synchronize(self.device)
-                    last_log_time_marker = time.perf_counter()
+                    # Build log line extensions for EAT SSL component losses
+                    comp_log_str = ""
+                    comp_log_metrics: Dict[str, float] = {}
+                    if self.is_eat_ssl and "comp_totals" in locals():
+                        for k, v in comp_totals.items():
+                            comp_avg = v / total_samples
+                            comp_log_str += f"  {k}={comp_avg:.2f}"
+                            comp_log_metrics[k] = comp_avg
 
-                if self.device.type == "cuda":
-                    torch.cuda.synchronize(self.device)
-                iter_data_wait_start_time = time.perf_counter()
+                    logger.info(
+                        (
+                            f"[LOG] Step {i + 1}/{len(loader)}: "
+                            f"avg_loss={avg_loss_so_far:.4f}, "
+                            f"avg_acc={avg_acc_so_far:.4f}"  # noqa: E501  (assembled)
+                            f"{comp_log_str}"
+                        )
+                    )
 
-        if self.device.type == "cuda":
-            torch.cuda.synchronize(self.device)
+                    if self.log is not None:
+                        metrics_to_log = {
+                            "loss": avg_loss_so_far,
+                            "acc": avg_acc_so_far,
+                            **comp_log_metrics,
+                        }
+                        self.log.log_metrics(metrics_to_log, step=self._global_updates)
 
-        # Reduce metrics across processes if distributed
-        if self.is_distributed:
-            metrics = torch.tensor(
-                [total_loss, total_correct, total_samples], device=self.device
+        # ------------------------------------
+        # Aggregate epoch metrics
+        # ------------------------------------
+        avg_loss = total_loss / total_samples if total_samples else 0.0
+
+        if self.is_clip_mode:
+            avg_acc_a2t = total_correct_a2t / total_samples if total_samples else 0.0
+            avg_acc_t2a = total_correct_t2a / total_samples if total_samples else 0.0
+
+            # Also log the current temperature (logit scale) for monitoring.
+            if isinstance(self.model, parallel.DistributedDataParallel):
+                clip_module = self.model.module  # type: ignore[attr-defined]
+            else:
+                clip_module = self.model  # type: ignore[assignment]
+
+            current_scale = (
+                clip_module.logit_scale.exp().item()  # type: ignore[attr-defined]
+                if hasattr(clip_module, "logit_scale")
+                else 1.0
             )
-            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-            total_loss, total_correct, total_samples = metrics.tolist()
-            total_correct = int(total_correct)  # Convert back to int after reduction
-            total_samples = int(total_samples)
 
-        avg_loss = total_loss / total_samples if total_samples > 0 else 0
-        avg_acc = total_correct / total_samples if total_samples > 0 else 0
+            self._last_epoch_clip_metrics = {
+                "acc_a2t": avg_acc_a2t,
+                "acc_t2a": avg_acc_t2a,
+                "logit_scale": current_scale,
+            }
+
+            avg_acc = (avg_acc_a2t + avg_acc_t2a) / 2.0
+        else:
+            avg_acc = total_correct / total_samples if total_samples else 0.0
 
         # Print profiling summary at the end of each epoch if we're training
         if train and is_main_process():
@@ -528,7 +560,10 @@ class Trainer:
         context_manager = autocast(enabled=self.amp_enabled, dtype=self.amp_dtype)
         with context_manager:
             if self.is_clip_mode:
-                loss, correct, batch_size = self._forward_clip(batch)
+                loss, correct_pair, batch_size = self._forward_clip(batch)
+                correct = correct_pair  # can be tuple
+            elif self.is_eat_ssl:
+                loss, correct, batch_size = self._forward_eat_ssl(batch)
             else:
                 loss, correct, batch_size = self._forward_supervised(batch)
         if self.device.type == "cuda":
@@ -622,16 +657,76 @@ class Trainer:
                     audio_emb @ text_emb.T * logit_scale
                 )  # Apply scale here if loss doesn't
 
-        # For CLIP, accuracy is based on matching audio to correct text
-        with torch.no_grad():
-            ground_truth = torch.arange(
-                len(audio), dtype=torch.long, device=self.device
-            )
-            pred_indices = torch.argmax(logits, dim=1)
-            correct = (pred_indices == ground_truth).sum().item()
+        # Accuracy metrics
+        #   • audio→text
+        #   • text →audio
 
-        batch_size = audio.size(0)
-        return loss, correct, batch_size
+        with torch.no_grad():
+            local_bs = audio.size(0)
+
+            rank = 0
+            if torch.distributed.is_initialized():
+                rank = torch.distributed.get_rank()
+
+            start = rank * local_bs
+            end = start + local_bs
+
+            local_logits = logits[start:end, start:end]
+
+            ground_truth = torch.arange(local_bs, device=self.device, dtype=torch.long)
+
+            # audio → text ---------------------------------------------------
+            pred_a2t = torch.argmax(local_logits, dim=1)
+            correct_a2t = (pred_a2t == ground_truth).sum().item()
+
+            # text → audio ---------------------------------------------------
+            pred_t2a = torch.argmax(local_logits, dim=0)
+            correct_t2a = (pred_t2a == ground_truth).sum().item()
+
+        return loss, (correct_a2t, correct_t2a), local_bs
+
+    def _forward_eat_ssl(self, batch: Dict[str, Any]) -> Tuple[torch.Tensor, int, int]:
+        """Forward path for self-supervised EAT pre-training.
+
+        The EAT backbone returns ``{"losses": {...}, "sample_size": int}``. We
+        aggregate the component losses and divide by *sample_size* so the final
+        scalar is invariant to clip length.
+
+        Returns
+        -------
+        tuple[torch.Tensor, int, int]
+            ``(loss, 0, batch_size)`` – accuracy is undefined in SSL so zero is
+            returned for the *correct* count.
+
+        Raises
+        ------
+        RuntimeError
+            If the backbone fails to return the expected dictionary structure.
+        """
+
+        audio = batch["raw_wav"]
+        padding_mask = batch.get("padding_mask")
+
+        out = self.model(audio, padding_mask=padding_mask)
+
+        if not isinstance(out, dict) or "losses" not in out:
+            raise RuntimeError(
+                "EAT model did not return expected loss dict in SSL mode"
+            )
+
+        # Per-component averages (before weighting by batch size).  Store
+        # them so the calling loop can accumulate and log them.
+        self._last_batch_ssl_metrics = {
+            k: v.sum().item() / out["sample_size"].clamp(min=1).item()
+            for k, v in out["losses"].items()
+        }
+
+        total_loss = sum(v.sum() for v in out["losses"].values())
+        sample_size = out.get("sample_size", audio.size(0)).clamp(min=1).float()
+        loss = total_loss / sample_size
+
+        # accuracy is undefined in SSL; return zero so logging remains intact
+        return loss, 0, audio.size(0)
 
     def _backward(self, loss: torch.Tensor) -> None:
         """Backwards step with AMP support."""
@@ -680,8 +775,7 @@ class Trainer:
         else:
             return  # Don't save if not periodic, best, or final
 
-        # Save inside the experiment-specific folder to avoid collisions across
-        # datasets / experiments that share the same EvaluateConfig.save_dir
+        # Save inside the experiment-specific folder to avoid collisions
         if self.log is not None and hasattr(self.log, "log_dir"):
             ckpt_dir = Path(self.log.log_dir)
         else:
@@ -714,7 +808,7 @@ class Trainer:
         try:
             # Handle potential missing keys and unexpected keys
             self.model_unwrapped.load_state_dict(
-                checkpoint["model_state_dict"], strict=False
+                checkpoint["model_state_dict"],
             )
             logger.info(f"Loaded model state from {checkpoint_path}")
         except Exception as e:
@@ -812,9 +906,19 @@ class FineTuneTrainer:
         )
 
         self.best_val_acc = 0.0
+        # Track best epoch metrics for return value
+        self.best_train_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
+        self.best_val_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
 
-    def train(self, num_epochs: int) -> None:
-        """Run the full training loop for the configured number of epochs."""
+    def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
+        """
+        Run the full fine-tuning loop and return best train/val metrics.
+
+        Returns
+        -------
+        tuple[dict[str, float], dict[str, float]]
+            A tuple of (best_train_metrics, best_val_metrics) collected across epochs.
+        """
         for epoch in range(1, num_epochs + 1):
             train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
             val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
@@ -837,11 +941,14 @@ class FineTuneTrainer:
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
                 self._save_checkpoint("best.pt")
+                # Update best metrics
+                self.best_train_metrics = {"loss": train_loss, "acc": train_acc}
+                self.best_val_metrics = {"loss": val_loss, "acc": val_acc}
 
-        train_metrics = {"loss": train_loss, "acc": train_acc}
-        val_metrics = {"loss": val_loss, "acc": val_acc}
+        # Load the best model after training is complete
+        self._load_best_checkpoint()
 
-        return train_metrics, val_metrics
+        return self.best_train_metrics, self.best_val_metrics
 
     def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
         """Run one epoch of training or validation.
@@ -859,6 +966,11 @@ class FineTuneTrainer:
             A tuple ``(loss, accuracy)`` computed over the entire epoch.
         """
         loader = self.train_loader if train else self.val_loader
+
+        if train:
+            self.model.train()
+        else:
+            self.model.eval()
 
         total_loss = 0.0
         total_correct = 0
@@ -884,26 +996,23 @@ class FineTuneTrainer:
                     else self.model(x)
                 )
 
-            loss = self.criterion(logits, y)
+                loss = self.criterion(logits, y)
 
-            # Backward pass if training
-            if train:
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                if train:
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
 
-            # Calculate accuracy
-            if self.multi_label:
-                pred = (torch.sigmoid(logits) > 0.5).float()
-                correct = (pred == y).all(dim=1).sum().item()
-            else:
-                pred = logits.argmax(dim=1)
-                correct = (pred == y).sum().item()
+                if self.multi_label:
+                    pred = (torch.sigmoid(logits) > 0.5).float()
+                    correct = (pred == y).all(dim=1).sum().item()
+                else:
+                    pred = logits.argmax(dim=1)
+                    correct = (pred == y).sum().item()
 
-            # Update metrics
-            total_loss += loss.item() * y.size(0)
-            total_correct += correct
-            total_samples += y.size(0)
+                total_loss += loss.item() * y.size(0)
+                total_correct += correct
+                total_samples += y.size(0)
 
         return total_loss / total_samples, total_correct / total_samples
 
@@ -926,3 +1035,25 @@ class FineTuneTrainer:
             ckpt_path,
         )
         logger.info("Saved checkpoint → %s", ckpt_path)
+
+    def _load_best_checkpoint(self) -> None:
+        """Load the best model checkpoint from disk."""
+        # Get the path to the best checkpoint
+        if self.log is not None and hasattr(self.log, "log_dir"):
+            ckpt_dir = Path(self.log.log_dir)
+        else:
+            ckpt_dir = Path(self.cfg.save_dir)
+        ckpt_path = ckpt_dir / "best.pt"
+
+        if not ckpt_path.exists():
+            logger.warning(
+                f"Best checkpoint not found at {ckpt_path}. Using current model state."
+            )
+            return
+
+        # Load the checkpoint
+        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        logger.info(
+            f"Restored best model from {ckpt_path} (val_acc: {self.best_val_acc:.4f})"
+        )

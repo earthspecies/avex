@@ -41,7 +41,9 @@ class ModelBase(nn.Module):
         """
         if self.audio_processor is not None:
             x = self.audio_processor(x)
-        return x.to(self.device)
+
+        target_device = next(self.parameters()).device
+        return x.to(target_device)
 
     def batch_inference(self, batched_samples: torch.Tensor) -> torch.Tensor:
         """

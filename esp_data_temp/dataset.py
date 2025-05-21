@@ -1,4 +1,3 @@
-import os
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
@@ -14,15 +13,16 @@ import soundfile as sf
 from google.cloud.storage.client import Client
 
 from .config import DatasetConfig
-from .transformations import build_transforms
+from .transforms import transform_from_config
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument?
+DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/"  # maybe consider giving this as a parameter in the config or command line argument?
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
+
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
@@ -124,7 +124,6 @@ class AudioDataset:
 
         target_sr = self.data_config.sample_rate
         if target_sr is not None and sr != target_sr:
-
             audio = librosa.resample(
                 y=audio,
                 orig_sr=sr,
@@ -133,7 +132,6 @@ class AudioDataset:
                 res_type="kaiser_best",
             )
             sr = target_sr
-
 
         item = {
             "raw_wav": audio.astype(np.float32),
@@ -170,7 +168,8 @@ def _get_dataset_from_name(
         df = pd.read_csv(StringIO(csv_text))
         df["path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
+            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
+            + x
         )  # AnimalSpeak missing gs path
         return df
     elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
@@ -180,8 +179,10 @@ def _get_dataset_from_name(
             dataset_path = Path(FM_DATASETS_PATH)
 
         if name == "humbugdb":
-            csv_file = dataset_path / 'HumBugDB' / 'data' / 'metadata' / "{}.csv".format(split)
-            audio_path = dataset_path / 'HumBugDB' / "data" / "audio"
+            csv_file = (
+                dataset_path / "HumBugDB" / "data" / "metadata" / "{}.csv".format(split)
+            )
+            audio_path = dataset_path / "HumBugDB" / "data" / "audio"
         elif name == "cbi" or name == "dogs":
             csv_file = dataset_path / name / "annotations.{}.csv".format(split)
             audio_path = dataset_path / name / "wav"
@@ -207,26 +208,28 @@ def _get_dataset_from_name(
         else:
             dataset_path = Path(ESC50_PATH)
 
-        df = pd.read_csv(dataset_path / 'meta' / 'esc50.csv')
+        df = pd.read_csv(dataset_path / "meta" / "esc50.csv")
 
         def convert(row):
-            new_row = pd.Series({
-                'path': dataset_path / row['filename'],
-                'category': row['category'],
-                'target': row['target'],
-                'fold': row['fold']
-            })
+            new_row = pd.Series(
+                {
+                    "path": dataset_path / row["filename"],
+                    "category": row["category"],
+                    "target": row["target"],
+                    "fold": row["fold"],
+                }
+            )
             return new_row
 
         df = df.apply(convert, axis=1)
 
-        ### add path column
+        # add path column
         if split == "test":
-            df = df[df['fold'] == 5]
+            df = df[df["fold"] == 5]
         elif split == "valid":
-            df = df[df['fold'] == 4]
+            df = df[df["fold"] == 4]
         else:
-            df = df[df['fold'] <= 3]
+            df = df[df["fold"] <= 3]
         return df
     else:
         raise NotImplementedError("Dataset not supported")
@@ -236,9 +239,7 @@ def get_dataset_dummy(
     data_config: DatasetConfig,
     split: str,
     preprocessor: Optional[Callable] = None,
-    postprocessors: Optional[
-        List[Callable[[Dict[str, Any]], Dict[str, Any]]]
-    ] = None,
+    postprocessors: Optional[List[Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -268,14 +269,16 @@ def get_dataset_dummy(
     metadata = {}
 
     if data_config.transformations:
-        transforms = build_transforms(data_config.transformations)
-        for transform in transforms:
+        for cfg in data_config.transformations:
+            transform = transform_from_config(cfg)
             df, md = transform(df)
 
             # TODO (milad): hacky but let's think about it
             # TODO (test if keys already exist and shout?)
             if md:
                 metadata.update(md)
+
+    # TODO (milad) transform API should be AudioDataset -> AudioDataset not df->df
 
     return AudioDataset(
         df=df,
