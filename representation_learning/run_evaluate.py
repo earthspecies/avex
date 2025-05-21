@@ -251,7 +251,10 @@ def run_experiment(
             raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
         with ckpt_path.open("rb") as f:
             state = torch.load(f, map_location=device)
-        base_model.load_state_dict(state["model_state_dict"], strict=False)
+        if "model_state_dict" in state:
+            base_model.load_state_dict(state["model_state_dict"], strict=False)
+        else:
+            base_model.load_state_dict(state, strict=False)
         logger.info("Loaded checkpoint from %s", ckpt_path)
 
     base_model.eval()
