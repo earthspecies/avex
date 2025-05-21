@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Optional, Union
 
 from pydantic import BaseModel, field_validator
 
@@ -16,10 +16,13 @@ class DatasetConfig(BaseModel):
     multi_label: bool | None = None
     sample_rate: int | None = None  # Sample rate for audio data
     metrics: list[str] | None = None
+    audio_path_col: str | None = None
 
     @field_validator("transformations", mode="before")
     @classmethod
-    def convert_none(cls, v: Any) -> Any:
+    def convert_none(
+        cls, v: Optional[Union[str, list[RegisteredTransformConfigs]]]
+    ) -> Optional[list[RegisteredTransformConfigs]]:
         if v in ("None", "none"):
             return None
         return v

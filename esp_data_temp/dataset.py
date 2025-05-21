@@ -22,6 +22,7 @@ DATA_ROOT = (
     "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
     "foundation-model-data/"
 )
+DATA_ROOT = "gs://foundation-model-data/"
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
@@ -142,7 +143,9 @@ class AudioDataset:
 
         item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label_feature"],
+            "text_label": row["label_feature"]
+            if "label_feature" in row
+            else row["label"],
             "label": row.label,
             "path": str(audio_path),
         }
