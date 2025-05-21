@@ -7,18 +7,13 @@ from typing import Dict, List, Tuple
 import h5py
 import numpy as np
 import torch
+from cloudpathlib import GSPath
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.models.base_model import ModelBase
 
 logger = logging.getLogger(__name__)
-
-# Optional cloud storage support (gs://)
-try:
-    from cloudpathlib import GSPath  # type: ignore
-except ImportError:  # pragma: no cover – cloudpathlib optional
-    GSPath = None  # type: ignore
 
 
 def extract_embeddings_for_split(
