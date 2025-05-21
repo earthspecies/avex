@@ -14,7 +14,7 @@ import soundfile as sf
 from google.cloud.storage.client import Client
 
 from .config import DatasetConfig
-from .transformations import build_transforms
+from .transforms import transform_from_config
 
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
@@ -124,7 +124,6 @@ class AudioDataset:
 
         target_sr = self.data_config.sample_rate
         if target_sr is not None and sr != target_sr:
-
             audio = librosa.resample(
                 y=audio,
                 orig_sr=sr,
@@ -133,7 +132,6 @@ class AudioDataset:
                 res_type="kaiser_best",
             )
             sr = target_sr
-
 
         item = {
             "raw_wav": audio.astype(np.float32),
@@ -170,7 +168,8 @@ def _get_dataset_from_name(
         df = pd.read_csv(StringIO(csv_text))
         df["gs_path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
+            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
+            + x
         )  # AnimalSpeak missing gs path
         return df
     elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
@@ -236,9 +235,7 @@ def get_dataset_dummy(
     data_config: DatasetConfig,
     split: str,
     preprocessor: Optional[Callable] = None,
-    postprocessors: Optional[
-        List[Callable[[Dict[str, Any]], Dict[str, Any]]]
-    ] = None,
+    postprocessors: Optional[List[Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
 ) -> AudioDataset:
     """
     Dataset entry point that supports both local and GS paths, with transformations.
@@ -268,14 +265,16 @@ def get_dataset_dummy(
     metadata = {}
 
     if data_config.transformations:
-        transforms = build_transforms(data_config.transformations)
-        for transform in transforms:
+        for cfg in data_config.transformations:
+            transform = transform_from_config(cfg)
             df, md = transform(df)
 
             # TODO (milad): hacky but let's think about it
             # TODO (test if keys already exist and shout?)
             if md:
                 metadata.update(md)
+
+    # TODO (milad) transform API should be AudioDataset -> AudioDataset not df->df
 
     return AudioDataset(
         df=df,
