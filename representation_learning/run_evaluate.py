@@ -170,7 +170,10 @@ def run_experiment(
         with ckpt_path.open("rb") as f:
             state = torch.load(f, map_location=device)
 
-        base_model.load_state_dict(state["model_state_dict"], strict=False)
+        if "model_state_dict" in state:
+            base_model.load_state_dict(state["model_state_dict"], strict=False)
+        else:
+            base_model.load_state_dict(state, strict=False)
         logger.info("Loaded model checkpoint from %s", ckpt_path)
 
     base_model.eval()  # TODO: is this right?
