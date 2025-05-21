@@ -1,4 +1,5 @@
 from representation_learning.configs import ModelSpec
+from representation_learning.models.aves_model import Model as AVESModel
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.clip import CLIPModel
 from representation_learning.models.efficientnetb0 import (
@@ -45,7 +46,13 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
-
+    elif model_name == "aves_bio":
+        return AVESModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
     elif model_name == "clip":
         return CLIPModel(
             device=model_config.device,
@@ -63,7 +70,9 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
         )
     elif model_name == "beats":
-        from representation_learning.models.beats_model import Model as BeatsModel
+        from representation_learning.models.beats_model import (
+            Model as BeatsModel,
+        )
 
         return BeatsModel(
             num_classes=num_classes,
