@@ -1,4 +1,3 @@
-import os
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
@@ -19,10 +18,13 @@ from .transforms import transform_from_config
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument?
+# maybe consider giving this as a parameter in the config or command line argument?
+DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/"  # noqa: E501
+
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
+
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
@@ -154,24 +156,48 @@ def _get_dataset_from_name(
 
     if name == "animalspeak":
         if split == "test":
+            # TODO (milad) this is not okay. We should panic here
             return None
+
         anaimspeak_path = (
             ANIMALSPEAK_PATH_EVAL if split == "valid" else ANIMALSPEAK_PATH
         )
+
+        # TODO (milad) why wouldn't it this with gs://?
         if ANIMALSPEAK_PATH.startswith("gs://"):
             csv_path = GSPath(anaimspeak_path)
         else:
             csv_path = Path(anaimspeak_path)
 
-        # Read CSV content
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
+
+        # AnimalSpeak has some columns that are list[str] but they're stored as
+        # comma-separated strings. We convert them to actual lists here:
+        def _to_list(v: str | float) -> list[str]:
+            if pd.isna(v):
+                return []
+            elif isinstance(v, str):
+                return [item.strip() for item in v.split(",")]
+            else:
+                raise ValueError(
+                    f"Expected a string or NaN, but got {v} of type {type(v)}"
+                )
+
+        # TODO: Maybe we want to normalise the values even more? for instance apply
+        # .lower()?
+        df.background_species_sci = df.background_species_sci.apply(_to_list)
+        df.background_species_common = df.background_species_common.apply(_to_list)
+
+        # TODO (milad) what's the point of this column?
         df["gs_path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
+            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"  # noqa: E501
             + x
         )  # AnimalSpeak missing gs path
+
         return df
+
     elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
         if FM_DATASETS_PATH.startswith("gs://"):
             dataset_path = GSPath(FM_DATASETS_PATH)
@@ -179,8 +205,10 @@ def _get_dataset_from_name(
             dataset_path = Path(FM_DATASETS_PATH)
 
         if name == "humbugdb":
-            csv_file = dataset_path / 'HumBugDB' / 'data' / 'metadata' / "{}.csv".format(split)
-            audio_path = dataset_path / 'HumBugDB' / "data" / "audio"
+            csv_file = (
+                dataset_path / "HumBugDB" / "data" / "metadata" / "{}.csv".format(split)
+            )
+            audio_path = dataset_path / "HumBugDB" / "data" / "audio"
         elif name == "cbi" or name == "dogs":
             csv_file = dataset_path / name / "annotations.{}.csv".format(split)
             audio_path = dataset_path / name / "wav"
@@ -206,26 +234,28 @@ def _get_dataset_from_name(
         else:
             dataset_path = Path(ESC50_PATH)
 
-        df = pd.read_csv(dataset_path / 'meta' / 'esc50.csv')
+        df = pd.read_csv(dataset_path / "meta" / "esc50.csv")
 
-        def convert(row):
-            new_row = pd.Series({
-                'path': dataset_path / row['filename'],
-                'category': row['category'],
-                'target': row['target'],
-                'fold': row['fold']
-            })
+        def convert(row: pd.Series) -> pd.Series:
+            new_row = pd.Series(
+                {
+                    "path": dataset_path / row["filename"],
+                    "category": row["category"],
+                    "target": row["target"],
+                    "fold": row["fold"],
+                }
+            )
             return new_row
 
         df = df.apply(convert, axis=1)
 
-        ### add gs_path column
+        # add gs_path column
         if split == "test":
-            df = df[df['fold'] == 5]
+            df = df[df["fold"] == 5]
         elif split == "valid":
-            df = df[df['fold'] == 4]
+            df = df[df["fold"] == 4]
         else:
-            df = df[df['fold'] <= 3]
+            df = df[df["fold"] <= 3]
         return df
     else:
         raise NotImplementedError("Dataset not supported")
