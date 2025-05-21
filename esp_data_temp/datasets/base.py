@@ -256,6 +256,29 @@ class Dataset(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    @classmethod
+    def from_config(
+        cls,
+        dataset_config: DatasetInfo,
+        split: str = "train",
+    ) -> Self:
+        """Create a dataset instance from a configuration.
+
+        Parameters
+        ----------
+        dataset_config : DatasetInfo
+            The configuration for the dataset.
+        split : str
+            The split to load. Can be "train" or "validation".
+
+        Returns
+        -------
+        Self
+            The dataset instance.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def __len__(self) -> int:
         """Return the total number of samples in the dataset.
 
