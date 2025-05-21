@@ -85,6 +85,7 @@ class ModelBase(nn.Module):
             If none of the supplied *layers* are found in the model.
         """
         embeddings = []
+        hooks = []
 
         def hook_fn(
             module: nn.Module,
@@ -92,13 +93,16 @@ class ModelBase(nn.Module):
             output: torch.Tensor,
         ) -> None:
             # Capture the tensor without detaching so gradients can propagate
-            embeddings.append(output)  # noqa: F821
+            embeddings.append(output)
 
-        hooks = []
         try:
+            # Register hooks for specified layers
             for name, module in self.named_modules():
                 if name in layers:
                     hooks.append(module.register_forward_hook(hook_fn))
+
+            if not hooks:
+                raise ValueError(f"No layers found matching: {layers}")
 
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)
             if isinstance(x, dict):
@@ -115,10 +119,6 @@ class ModelBase(nn.Module):
                 else:
                     self(x, padding_mask)
 
-            # Concatenate embeddings
-            if not embeddings:
-                raise ValueError(f"No layers found matching: {layers}")
-
             # Process embeddings
             result = []
             for emb in embeddings:
@@ -132,5 +132,5 @@ class ModelBase(nn.Module):
             # Ensure hooks are always removed
             for hook in hooks:
                 hook.remove()
-            # Clear any remaining references
-            del embeddings
+            # Clear the embeddings list
+            embeddings.clear()

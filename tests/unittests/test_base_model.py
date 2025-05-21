@@ -110,3 +110,31 @@ def test_extract_embeddings_gradient_propagation() -> None:
     # Check that gradients were computed
     assert x.grad is not None
     assert not torch.isnan(x.grad).any()
+
+
+def test_extract_embeddings_main() -> None:
+    """Main test function that demonstrates extract_embeddings functionality."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = MockModel(device)
+    model.prepare_inference()
+
+    # Create dummy input
+    batch_size = 4
+    seq_length = 10
+    x = torch.randn(batch_size, seq_length).to(device)
+
+    # Extract embeddings from both layers
+    layers = ["model.0", "model.1"]
+    embeddings = model.extract_embeddings(x, layers)
+
+    print("\nExtract Embeddings Test Results:")
+    print(f"Input shape: {x.shape}")
+    print(f"Output embeddings shape: {embeddings.shape}")
+    print(f"Device: {embeddings.device}")
+    print(f"Layer names: {layers}")
+    print("Number of features per layer: [20, 30]")
+    print(f"Total features: {embeddings.shape[1]}")
+
+
+if __name__ == "__main__":
+    test_extract_embeddings_main()
