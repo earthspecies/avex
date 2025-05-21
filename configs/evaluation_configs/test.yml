@@ -2,11 +2,11 @@
 dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 20
-  lr: 0.0001
+  train_epochs: 100
+  lr: 0.0003
   batch_size: 32
-  optimizer: adamw          # common default for AudioMAE
-  weight_decay: 0.01        # mild regularisation
+  optimizer: adamw
+  weight_decay: 0.01
   amp: false
   amp_dtype: bf16
 
@@ -19,13 +19,22 @@ experiments:
   #   layers: last_layer
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   checkpoint_path: runs/efficientnet_base_no_mixup/checkpoints/checkpoint_epoch_024.pt
-  - run_name: clap
+  # - run_name: clap
+  #   run_config: configs/run_configs/clip_base.yml
+  #   ### which layers to probe for embeddings
+  #   layers: audio_projection
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   # checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
+  #   checkpoint_path: runs/clip_baseline_full/checkpoints/checkpoint_epoch_014.pt
+
+  - run_name: clap_linear_probe
     run_config: configs/run_configs/clip_base.yml
     ### which layers to probe for embeddings
     layers: audio_projection
     ### whether to use pretrained model or the one we train on bioacoustic data
-    # checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
-    checkpoint_path: runs/clip_baseline_full/checkpoints/checkpoint_epoch_014.pt
+    pretrained: false
+    checkpoint_path: ~/representation-learning/runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
+
 # Where to save the evaluation results
 save_dir: evaluation_results
 
@@ -36,7 +45,7 @@ seed: 42
 num_workers: 8  # Enable workers for better memory management
 
 # Whether to freeze the backbone (train only the linear probe)
-frozen: false
+frozen: true
 
 # Evaluation phases
 eval_modes:

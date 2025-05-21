@@ -31,8 +31,13 @@ from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.embedding_utils import (
     EmbeddingDataset,
     extract_embeddings_for_split,
+    load_embeddings_arrays,
+    save_embeddings_arrays,
 )
-from representation_learning.evaluation.retrieval import evaluate_ranking
+from representation_learning.evaluation.retrieval import (
+    evaluate_auc_roc,
+    evaluate_precision,
+)
 from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.models.get_model import get_model
 from representation_learning.models.linear_probe import LinearProbe
@@ -80,7 +85,7 @@ def _parse_args() -> argparse.Namespace:
 def _train_and_eval_linear_probe(
     train_ds: torch.utils.data.Dataset,
     val_ds: torch.utils.data.Dataset,
-    test_dl_raw: torch.utils.data.DataLoader,
+    test_embed_ds: torch.utils.data.Dataset,
     base_model: torch.nn.Module,
     num_labels: int,
     layer_names: List[str],
@@ -89,14 +94,14 @@ def _train_and_eval_linear_probe(
     exp_logger: ExperimentLogger,
     multi_label: bool,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
-    """Train a linear probe and evaluate it on *raw* test audio.
+    """Train a linear probe and evaluate it on *cached* test embeddings.
 
     Returns
     -------
     Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]
         • **train_metrics** – aggregated over training split
         • **val_metrics**   – aggregated over validation split
-        • **probe_test_metrics** – metrics on raw-audio test split
+        • **probe_test_metrics** – metrics on cached-embedding test split
     """
     probe = LinearProbe(
         base_model, layer_names, num_labels, device=device, feature_mode=True
@@ -109,6 +114,8 @@ def _train_and_eval_linear_probe(
         logger.info("Freezing backbone parameters (eval_cfg.frozen=True)")
         for p in base_model.parameters():
             p.requires_grad = False
+    else:
+        raise NotImplementedError("Full fine-tuning not supported")
 
     optim = get_optimizer(probe.parameters(), eval_cfg.training_params)
 
@@ -135,19 +142,24 @@ def _train_and_eval_linear_probe(
         num_epochs=eval_cfg.training_params.train_epochs
     )
 
-    # ---------- probe evaluation on raw test audio ----------
-    metric_names = test_dl_raw.dataset.metadata["metrics"]
+    # ---------- probe evaluation on cached test embeddings ----------
+    test_loader = torch.utils.data.DataLoader(
+        test_embed_ds,
+        batch_size=eval_cfg.training_params.batch_size,
+        shuffle=False,
+    )
+
+    # Metric selection (fallback to accuracy)
+    metric_names = getattr(test_embed_ds, "metadata", {}).get("metrics", ["accuracy"])
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
-    probe.eval()
+    probe.eval()  # feature_mode stays True (inputs are embeddings)
     with torch.no_grad():
-        for batch in test_dl_raw:
-            x = batch["raw_wav"].to(device)
-            mask = batch.get("padding_mask")
-            mask = mask.to(device) if mask is not None else None
+        for batch in test_loader:
+            z = batch["embed"].to(device)
             y = batch["label"].to(device)
 
-            logits = probe(x, padding_mask=mask) if mask is not None else probe(x)
+            logits = probe(z)
             for met in metrics:
                 met.update(logits, y)
 
@@ -165,15 +177,20 @@ def _eval_retrieval(
     embeds: torch.Tensor,
     labels: torch.Tensor,
 ) -> Dict[str, float]:
-    """Compute retrieval ROC-AUC.
+    """Compute retrieval metrics using modular evaluation utilities.
 
     Returns
     -------
     Dict[str, float]
-        A dict ``{"retrieval_roc_auc": value}``.
+        ``{"retrieval_roc_auc": value, "retrieval_precision_at_1": value}``.
     """
-    roc_auc = evaluate_ranking(embeds.numpy(), labels.numpy())
-    return {"retrieval_roc_auc": roc_auc}
+    roc_auc = evaluate_auc_roc(embeds.numpy(), labels.numpy())
+    precision_at_1 = evaluate_precision(embeds.numpy(), labels.numpy(), k=1)
+
+    return {
+        "retrieval_roc_auc": roc_auc,
+        "retrieval_precision_at_1": precision_at_1,
+    }
 
 
 # -------------------------------------------------------------------- #
@@ -198,7 +215,7 @@ def run_experiment(
     #  Build run config
     # ------------------------------------------------------------------ #
     run_cfg: RunConfig = load_config(experiment_cfg.run_config)
-    run_cfg.model_spec.audio_config.window_selection = "left"
+    run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
     run_cfg.model_spec.device = device
     run_cfg.augmentations = []  # disable training-time noise / mix-up
@@ -250,27 +267,59 @@ def run_experiment(
     else:
         layer_names = experiment_cfg.layers.split(",")
 
-    # ------------------------------------------------------------------ #
-    #  Extract embeddings once (train / val / test)
-    # ------------------------------------------------------------------ #
-    train_embeds, train_labels = extract_embeddings_for_split(
-        base_model, train_dl_raw, layer_names, device
-    )
-    val_embeds, val_labels = extract_embeddings_for_split(
-        base_model, val_dl_raw, layer_names, device
-    )
-    test_embeds, test_labels = extract_embeddings_for_split(
-        base_model, test_dl_raw, layer_names, device
-    )
+    # Flags to determine which embeddings we need
+    need_probe = "linear_probe" in eval_cfg.eval_modes
+    need_retrieval = "retrieval" in eval_cfg.eval_modes
 
-    train_ds = EmbeddingDataset(train_embeds, train_labels)
-    val_ds = EmbeddingDataset(val_embeds, val_labels)
+    overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
+
+    train_ds: EmbeddingDataset | None = None  # will remain None if not needed
+    val_ds: EmbeddingDataset | None = None
+    test_embeds: torch.Tensor | None = None
+    test_labels: torch.Tensor | None = None
+
+    emb_base_dir = save_dir / experiment_name / dataset_name
+
+    # ------------------- embeddings for linear probe ------------------- #
+    if need_probe:
+        train_path = emb_base_dir / "embedding_train.h5"
+        val_path = emb_base_dir / "embedding_val.h5"
+
+        if (not overwrite) and train_path.exists() and val_path.exists():
+            train_embeds, train_labels = load_embeddings_arrays(train_path)
+            val_embeds, val_labels = load_embeddings_arrays(val_path)
+        else:
+            train_embeds, train_labels = extract_embeddings_for_split(
+                base_model, train_dl_raw, layer_names, device
+            )
+            val_embeds, val_labels = extract_embeddings_for_split(
+                base_model, val_dl_raw, layer_names, device
+            )
+
+            # Persist to disk
+            save_embeddings_arrays(train_embeds, train_labels, train_path)
+            save_embeddings_arrays(val_embeds, val_labels, val_path)
+
+        train_ds = EmbeddingDataset(train_embeds, train_labels)
+        val_ds = EmbeddingDataset(val_embeds, val_labels)
+
+    # ------------------- embeddings for retrieval ---------------------- #
+    if need_retrieval or need_probe:
+        test_path = emb_base_dir / "embedding_test.h5"
+
+        if (not overwrite) and test_path.exists():
+            test_embeds, test_labels = load_embeddings_arrays(test_path)
+        else:
+            test_embeds, test_labels = extract_embeddings_for_split(
+                base_model, test_dl_raw, layer_names, device
+            )
+            save_embeddings_arrays(test_embeds, test_labels, test_path)
 
     # ------------------------------------------------------------------ #
     #  Experiment logger
     # ------------------------------------------------------------------ #
     exp_logger = ExperimentLogger.from_config(experiment_cfg)
-    exp_logger.log_dir = save_dir / dataset_name / experiment_name
+    exp_logger.log_dir = save_dir / experiment_name / dataset_name
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ #
@@ -288,7 +337,7 @@ def run_experiment(
         ) = _train_and_eval_linear_probe(
             train_ds,
             val_ds,
-            test_dl_raw,
+            EmbeddingDataset(test_embeds, test_labels),
             base_model,
             num_labels,
             layer_names,
@@ -333,8 +382,13 @@ def main() -> None:
     benchmark_cfg = load_config(eval_cfg.dataset_config, config_type="benchmark")
 
     # 2. Output dir & device
-    save_dir = Path(eval_cfg.save_dir).expanduser()
-    save_dir.mkdir(parents=True, exist_ok=True)
+    if str(eval_cfg.save_dir).startswith("gs://"):
+        save_dir = GSPath(str(eval_cfg.save_dir))
+        # For GCS paths we rely on cloudpathlib to create objects lazily when
+        # data is written, so no mkdir is needed here.
+    else:
+        save_dir = Path(str(eval_cfg.save_dir)).expanduser()
+        save_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
 

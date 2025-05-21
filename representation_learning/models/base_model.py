@@ -66,13 +66,20 @@ class ModelBase(nn.Module):
             embeds.append(embedding)
         return torch.cat(embeds, axis=0)
 
-    def extract_embeddings(self, x: torch.Tensor, layers: List[str]) -> torch.Tensor:
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
+        layers: List[str],
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Extract embeddings from specified layers of the model.
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
             layers: List of layer names to extract embeddings from
+            padding_mask: Optional padding mask tensor
 
         Returns
         -------
@@ -91,24 +98,39 @@ class ModelBase(nn.Module):
             input: tuple[torch.Tensor, ...],
             output: torch.Tensor,
         ) -> None:
+            nonlocal embeddings  # noqa: F823 – defined in enclosing scope
             # Capture the tensor without detaching so gradients can propagate
-            embeddings.append(output)  # noqa: F821
+            if isinstance(output, dict):
+                embeddings.append(output["x"])
+            else:
+                embeddings.append(output)
 
         hooks = []
         try:
             for name, module in self.named_modules():
                 if name in layers:
+                    logger.info(f"Registering forward hook for {name}")
                     hooks.append(module.register_forward_hook(hook_fn))
 
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)
             if isinstance(x, dict):
-                # If input is a dictionary, extract raw_wav and padding_mask
+                # Input provided as dictionary with explicit padding mask
                 raw_wav = x["raw_wav"]
-                padding_mask = x["padding_mask"]
-                self(raw_wav, padding_mask)
+                p_mask = x["padding_mask"]
+                if self.__class__.__name__ == "CLIPModel":
+                    dummy_text = ["" for _ in range(raw_wav.size(0))]
+                    self(raw_wav, dummy_text, p_mask)
+                else:
+                    self(raw_wav, p_mask)
+
             else:
-                # For backward compatibility, create a padding mask of ones
-                padding_mask = torch.ones(x.size(0), x.size(1), device=x.device)
+                # Tensor input – use provided mask if available, otherwise assume
+                # fully-valid signal (all ones).
+                if padding_mask is None:
+                    padding_mask = torch.ones(
+                        x.size(0), x.size(1), device=x.device, dtype=torch.bool
+                    )
+
                 if self.__class__.__name__ == "CLIPModel":
                     dummy_text = ["" for _ in range(x.size(0))]
                     self(x, dummy_text, padding_mask)
@@ -119,18 +141,14 @@ class ModelBase(nn.Module):
             if not embeddings:
                 raise ValueError(f"No layers found matching: {layers}")
 
-            # Process embeddings
             result = []
             for emb in embeddings:
-                # Flatten while keeping on GPU
                 flattened = emb.flatten(start_dim=1)
                 result.append(flattened)
 
             return torch.cat(result, dim=1)
 
         finally:
-            # Ensure hooks are always removed
             for hook in hooks:
                 hook.remove()
-            # Clear any remaining references
             del embeddings

@@ -342,6 +342,16 @@ class EvaluateConfig(BaseModel):
         description="Which evaluation types to execute during run_evaluate.py",
     )
 
+    # Whether to force recomputation of embeddings even if cached versions exist
+    overwrite_embeddings: bool = Field(
+        False,
+        description=(
+            "If False and cached embeddings are found on disk, they will be loaded "
+            "instead of recomputed.  If True, embeddings are always recomputed and "
+            "the cache is overwritten."
+        ),
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 

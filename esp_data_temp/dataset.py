@@ -19,7 +19,7 @@ from .transformations import build_transforms
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument? 
+DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument?
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
@@ -71,7 +71,7 @@ class AudioDataset:
         self.data_config = data_config
         self.preprocessor = preprocessor
 
-        self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
+        self.audio_path_col = "path"  # modify if your CSV uses a different name
 
         self.metadata = metadata
 
@@ -108,7 +108,7 @@ class AudioDataset:
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
         if isinstance(path_str, GSPath) or isinstance(path_str, Path):
             audio_path = path_str
-        elif path_str.startswith("gs://"):
+        elif str(path_str).startswith("gs://"):
             if GSPath is None:
                 raise ImportError("cloudpathlib is required to handle gs:// paths.")
             audio_path = GSPath(path_str)
@@ -168,7 +168,7 @@ def _get_dataset_from_name(
         # Read CSV content
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
-        df["gs_path"] = df["local_path"].apply(
+        df["path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
             lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/" + x
         )  # AnimalSpeak missing gs path
@@ -188,7 +188,7 @@ def _get_dataset_from_name(
         else:
             csv_file = dataset_path / name / "annotations.{}.csv".format(split)
             audio_path = dataset_path / name / "audio"
-       
+
         # Read CSV content
         csv_text = csv_file.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
@@ -220,7 +220,7 @@ def _get_dataset_from_name(
 
         df = df.apply(convert, axis=1)
 
-        ### add gs_path column
+        ### add path column
         if split == "test":
             df = df[df['fold'] == 5]
         elif split == "valid":

@@ -14,6 +14,12 @@ from representation_learning.models.base_model import ModelBase
 
 logger = logging.getLogger(__name__)
 
+# Optional cloud storage support (gs://)
+try:
+    from cloudpathlib import GSPath  # type: ignore
+except ImportError:  # pragma: no cover – cloudpathlib optional
+    GSPath = None  # type: ignore
+
 
 def extract_embeddings_for_split(
     model: ModelBase,
@@ -206,3 +212,113 @@ def load_embeddings_from_disk(save_dir: Path, split: str) -> torch.utils.data.Da
                 self.h5_file.close()
 
     return HDF5EmbeddingDataset(save_dir / "embeddings" / f"{split}.h5")
+
+
+# ----------------------------------------------------------------------------- #
+# Utility: load / save pre-computed embeddings & labels to disk (HDF5)
+# ----------------------------------------------------------------------------- #
+
+
+def load_embeddings_arrays(path: Path) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Load embeddings & labels previously saved by *save_embeddings_arrays*.
+
+    Parameters
+    ----------
+    path : Path
+        Location of the *.h5* file
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor]
+        (embeddings, labels) on CPU
+
+    Raises
+    ------
+    FileNotFoundError
+        If the provided *path* does not exist.
+    """
+
+    # cloudpathlib.GSPath and pathlib.Path both provide .exists and .open
+    if not path.exists():
+        raise FileNotFoundError(f"Embeddings file not found: {path}")
+
+    # Handle remote (gs://) paths by streaming through a file-like object
+    if GSPath is not None and isinstance(path, GSPath):
+        with path.open("rb") as fh, h5py.File(fh, "r") as h5f:
+            embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
+            labels = torch.from_numpy(np.asarray(h5f["labels"]))
+    else:
+        with h5py.File(str(path), "r") as h5f:
+            embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
+            labels = torch.from_numpy(np.asarray(h5f["labels"]))
+
+    return embeds, labels
+
+
+# ----------------------------------------------------------------------------- #
+# Save routine
+# ----------------------------------------------------------------------------- #
+
+
+def save_embeddings_arrays(
+    embeddings: torch.Tensor,
+    labels: torch.Tensor,
+    save_path: Path,
+    compression: str = "gzip",
+    compression_level: int = 4,
+) -> None:
+    """Save already-computed embeddings/labels to an HDF5 file.
+
+    Parameters
+    ----------
+    embeddings : torch.Tensor, shape (N, D)
+        Embeddings tensor (on CPU or GPU). Will be moved to CPU and stored as
+        float32.
+    labels : torch.Tensor, shape (N,)
+        Corresponding integer class labels (any integer dtype).
+    save_path : Path
+        Destination filepath. Parent directories are created automatically and
+        file is overwritten if it already exists.
+    compression : str, optional
+        HDF5 compression algorithm (default: "gzip").
+    compression_level : int, optional
+        Compression level for *gzip* (default: 4).
+    """
+
+    # Ensure directory exists for local filesystem paths
+    if not (GSPath is not None and isinstance(save_path, GSPath)):
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Prepare numpy arrays
+    embeds_np = embeddings.detach().cpu().numpy().astype(np.float32)
+    labels_np = labels.detach().cpu().numpy()
+
+    # Write file – use file-like stream for GCS
+    if GSPath is not None and isinstance(save_path, GSPath):
+        with save_path.open("wb") as fh, h5py.File(fh, "w") as h5f:
+            h5f.create_dataset(
+                "embeddings",
+                data=embeds_np,
+                compression=compression,
+                compression_opts=compression_level,
+            )
+            h5f.create_dataset(
+                "labels",
+                data=labels_np,
+                compression=compression,
+                compression_opts=compression_level,
+            )
+    else:
+        with h5py.File(str(save_path), "w") as h5f:
+            h5f.create_dataset(
+                "embeddings",
+                data=embeds_np,
+                compression=compression,
+                compression_opts=compression_level,
+            )
+            h5f.create_dataset(
+                "labels",
+                data=labels_np,
+                compression=compression,
+                compression_opts=compression_level,
+            )
