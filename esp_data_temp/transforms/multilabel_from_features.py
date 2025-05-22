@@ -84,17 +84,30 @@ class MultiLabelFromFeatures:
 
         label_map = {lbl: idx for idx, lbl in enumerate(sorted(uniques))}
 
-        def _row_to_ids(row: pd.Series) -> list:
+        def _row_to_ids(row: pd.Series) -> list | None:
             row_labels = []
             for f in self.features:
-                if not isinstance(row[f], list):
-                    v = [row[f]]
-                else:
+                if isinstance(row[f], list):
                     v = row[f]
+                elif pd.isna(row[f]):
+                    continue
+                else:
+                    v = [row[f]]
                 row_labels.extend(map(lambda x: label_map[x], v))
-            return sorted(row_labels)
+
+            if row_labels:
+                return sorted(row_labels)
+            else:
+                return None
 
         df[self.output_feature] = df[self.features].apply(_row_to_ids, axis="columns")
+
+        df_clean = df.dropna(subset=self.output_feature)
+
+        if len(df_clean) != len(df):
+            logger.warning(
+                f"Dropped {len(df) - len(df_clean)} rows with {self.output_feature}=NaN"
+            )
 
         metadata = {
             "label_feature": self.features,
@@ -104,7 +117,7 @@ class MultiLabelFromFeatures:
             else self.num_classes,
         }
 
-        return df, metadata
+        return df_clean, metadata
 
 
 register_transform(MultiLabelFromFeaturesConfig, MultiLabelFromFeatures)

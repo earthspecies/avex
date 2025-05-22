@@ -5,7 +5,7 @@ from esp_data_temp.transforms import MultiLabelFromFeatures
 
 
 @pytest.mark.parametrize(
-    "features, data, expected_labels, expected_map",
+    "features, df, expected_labels, expected_map",
     [
         # Single column, all strings
         (
@@ -51,16 +51,52 @@ from esp_data_temp.transforms import MultiLabelFromFeatures
             [[1, 2], [0, 3], [1, 2, 4, 5], [4, 5]],
             {"apple": 0, "banana": 1, "grape": 2, "kiwi": 3, "melon": 4, "orange": 5},
         ),
+        # Multiple columns, some rows have NaN in just one column
+        (
+            ["col1", "col2"],
+            pd.DataFrame(
+                {
+                    "col1": ["banana", ["apple"], float("nan"), "orange"],
+                    "col2": [["grape"], float("nan"), ["grape", "melon"], "melon"],
+                }
+            ),
+            [[1, 2], [0], [2, 3], [3, 4]],
+            {"apple": 0, "banana": 1, "grape": 2, "melon": 3, "orange": 4},
+        ),
+        # Multiple columns, some rows have NaN in both columns
+        (
+            ["col1", "col2"],
+            pd.DataFrame(
+                {
+                    "col1": [
+                        float("nan"),
+                        ["apple"],
+                        float("nan"),
+                        "orange",
+                        float("nan"),
+                    ],
+                    "col2": [
+                        float("nan"),
+                        float("nan"),
+                        ["grape", "melon"],
+                        float("nan"),
+                        [],
+                    ],
+                }
+            ),
+            [[0], [1, 2], [3]],
+            {"apple": 0, "grape": 1, "melon": 2, "orange": 3},
+        ),
     ],
 )
 def test_multilabel_from_features(
     features: list[str],
-    data: pd.DataFrame,
+    df: pd.DataFrame,
     expected_labels: list[list[str]],
     expected_map: dict[str, int],
 ) -> None:
     t = MultiLabelFromFeatures(features=features)
-    df_out, meta = t(data.copy())
+    df_out, meta = t(df.copy())
     assert df_out["label"].tolist() == expected_labels
     assert meta["label_map"] == expected_map
     assert meta["num_classes"] == len(expected_map)
