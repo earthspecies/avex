@@ -54,7 +54,7 @@ class MultiLabelFromFeatures:
                 else:
                     v = row[f]
                 row_labels.extend(map(lambda x: label_map[x], v))
-            return row_labels
+            return sorted(row_labels)
 
         df[self.output_feature] = df[self.features].apply(_row_to_ids, axis="columns")
 
