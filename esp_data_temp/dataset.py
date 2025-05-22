@@ -1,3 +1,4 @@
+import pathlib
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
@@ -113,7 +114,7 @@ class AudioDataset:
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
         if isinstance(path_str, cloudpathlib.GSPath) or isinstance(
-            path_str, cloudpathlib.Path
+            path_str, pathlib.Path
         ):
             audio_path = path_str
         elif str(path_str).startswith("gs://"):
