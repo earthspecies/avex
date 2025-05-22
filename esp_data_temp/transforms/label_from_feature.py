@@ -52,8 +52,6 @@ class LabelFromFeature:
         label_mapping = {lbl: idx for idx, lbl in enumerate(uniques)}
         df_clean[self.output_feature] = df_clean[self.feature].map(label_mapping)
 
-        # TODO (milad): hacky. Just here to make things run
-        # We should think about how transforms can add/modify dataset-wide properties
         metadata = {
             "label_feature": self.feature,
             "label_map": label_mapping,
