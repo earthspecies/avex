@@ -18,6 +18,44 @@ class MultiLabelFromFeaturesConfig(BaseModel):
 
 
 class MultiLabelFromFeatures:
+    """
+    A transform that generates multi-label targets from one or more feature columns.
+
+    This class goes through one or more specified columns and generates a mapping of
+    unique values to integer IDs. It then uses this mapping to generate a new column
+    where each row contains a list of integer label IDs corresponding to the unique
+    values found in the specified feature columns. It is useful for preparing data for
+    multi-label classification tasks, where each sample may be associated with multiple
+    labels.
+
+    Notes
+    -----
+    If element values are themselves lists, the transform will explode them first before
+    constructing the mapping dictionary and converting the values.
+
+    Parameters
+    ----------
+    features : list[str]
+        The names of the columns in the DataFrame to use as sources for the labels. Each
+        column can contain a single value or a list of values per row.
+    num_classes : int or "auto", default="auto"
+        The number of unique classes. If set to "auto", the number of classes is
+        inferred from the data.
+    output_feature : str, default="label"
+        The name of the output column to store the generated label lists.
+    override : bool, default=False
+        If False and the output_feature already exists in the dataset, an error is
+        raised. If True, the output_feature will be overwritten.
+
+    Methods
+    -------
+    from_config(cfg: MultiLabelFromFeaturesConfig) -> MultiLabelFromFeatures
+        Instantiates the transform from a configuration object.
+    __call__(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]
+        Applies the transform to the DataFrame, returning the modified DataFrame and
+        metadata about the label mapping.
+    """
+
     def __init__(
         self,
         *,
