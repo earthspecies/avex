@@ -112,4 +112,4 @@ class Model(ModelBase):
         if self._return_features_only:
             return pooled
         else:
-            return self.classifier(pooled) 
+            return self.classifier(pooled)

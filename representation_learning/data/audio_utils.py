@@ -26,7 +26,7 @@ def pad_or_window(
         Input waveform tensor
     target_len : int
         Target length to pad or window to
-    window_selection : Literal["random", "center"]
+    window_selection : Literal["random", "center", "start"]
         How to select the window if cropping is needed
 
     Returns
@@ -54,6 +54,8 @@ def pad_or_window(
             start = (wav_len - target_len) // 2
             end = start + target_len
             return wav[..., start:end], torch.ones(target_len, dtype=torch.bool)
+        elif window_selection == "start":
+            return wav[..., :target_len], torch.ones(target_len, dtype=torch.bool)
         else:
             raise ValueError(f"Unknown window selection: {window_selection}")
 

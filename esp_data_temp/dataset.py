@@ -1,4 +1,3 @@
-import os
 from collections.abc import Callable
 from functools import lru_cache
 from io import StringIO
@@ -19,10 +18,15 @@ from .transforms import transform_from_config
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/" ### maybe consider giving this as a parameter in the config or command line argument?
+DATA_ROOT = (
+    "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+    "foundation-model-data/"
+)
+
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
+
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
@@ -38,8 +42,10 @@ class GSPath(cloudpathlib.GSPath):
     def __init__(
         self,
         client_path: str | Self | cloudpathlib.AnyPath,
-        client: cloudpathlib.GSClient = _get_client(),
+        client: Optional[cloudpathlib.GSClient] = None,
     ) -> None:
+        if client is None:
+            client = _get_client()
         super().__init__(client_path, client=client)
 
 
@@ -71,7 +77,7 @@ class AudioDataset:
         self.data_config = data_config
         self.preprocessor = preprocessor
 
-        self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
+        self.audio_path_col = data_config.audio_path_col
 
         self.metadata = metadata
 
@@ -106,9 +112,11 @@ class AudioDataset:
         path_str: str = row[self.audio_path_col]
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        if isinstance(path_str, cloudpathlib.GSPath) or isinstance(path_str, cloudpathlib.Path):
+        if isinstance(path_str, cloudpathlib.GSPath) or isinstance(
+            path_str, cloudpathlib.Path
+        ):
             audio_path = path_str
-        elif path_str.startswith("gs://"):
+        elif str(path_str).startswith("gs://"):
             if GSPath is None:
                 raise ImportError("cloudpathlib is required to handle gs:// paths.")
             audio_path = GSPath(path_str)
@@ -135,7 +143,9 @@ class AudioDataset:
 
         item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label_feature"],
+            "text_label": row["label_feature"]
+            if "label_feature" in row
+            else row["label"],
             "label": row.label,
             "path": str(audio_path),
         }
@@ -166,10 +176,12 @@ def _get_dataset_from_name(
         # Read CSV content
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
-        df["gs_path"] = df["local_path"].apply(
+        df["path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"
-            + x
+            lambda x: (
+                "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+                "foundation-model-data/audio_16k/" + x
+            )
         )  # AnimalSpeak missing gs path
         return df
     elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
@@ -179,8 +191,10 @@ def _get_dataset_from_name(
             dataset_path = Path(FM_DATASETS_PATH)
 
         if name == "humbugdb":
-            csv_file = dataset_path / 'HumBugDB' / 'data' / 'metadata' / "{}.csv".format(split)
-            audio_path = dataset_path / 'HumBugDB' / "data" / "audio"
+            csv_file = (
+                dataset_path / "HumBugDB" / "data" / "metadata" / "{}.csv".format(split)
+            )
+            audio_path = dataset_path / "HumBugDB" / "data" / "audio"
         elif name == "cbi" or name == "dogs":
             csv_file = dataset_path / name / "annotations.{}.csv".format(split)
             audio_path = dataset_path / name / "wav"
@@ -206,26 +220,28 @@ def _get_dataset_from_name(
         else:
             dataset_path = Path(ESC50_PATH)
 
-        df = pd.read_csv(dataset_path / 'meta' / 'esc50.csv')
+        df = pd.read_csv(dataset_path / "meta" / "esc50.csv")
 
-        def convert(row):
-            new_row = pd.Series({
-                'path': dataset_path / row['filename'],
-                'category': row['category'],
-                'target': row['target'],
-                'fold': row['fold']
-            })
+        def convert(row: pd.Series) -> pd.Series:
+            new_row = pd.Series(
+                {
+                    "path": dataset_path / row["filename"],
+                    "category": row["category"],
+                    "target": row["target"],
+                    "fold": row["fold"],
+                }
+            )
             return new_row
 
         df = df.apply(convert, axis=1)
 
-        ### add gs_path column
+        # add path column
         if split == "test":
-            df = df[df['fold'] == 5]
+            df = df[df["fold"] == 5]
         elif split == "valid":
-            df = df[df['fold'] == 4]
+            df = df[df["fold"] == 4]
         else:
-            df = df[df['fold'] <= 3]
+            df = df[df["fold"] <= 3]
         return df
     else:
         raise NotImplementedError("Dataset not supported")

@@ -17,6 +17,7 @@ class LinearProbe(torch.nn.Module):
         layers: List of layer names to extract embeddings from.
         num_classes: Number of output classes.
         device: Device on which to place both backbone and probe.
+        feature_mode: Whether to use the input directly as embeddings.
     """
 
     def __init__(
@@ -25,11 +26,13 @@ class LinearProbe(torch.nn.Module):
         layers: List[str],
         num_classes: int,
         device: str = "cuda",
+        feature_mode: bool = False,
     ) -> None:
         super().__init__()
         self.device = device
         self.base_model = base_model
         self.layers = layers
+        self.feature_mode = feature_mode
 
         # Calculate input dimension based on concatenated embeddings
         # We'll get this from a forward pass with a dummy input
@@ -60,10 +63,9 @@ class LinearProbe(torch.nn.Module):
         Returns:
             Classification logits of shape (batch_size, num_classes)
         """
-        # Extract embeddings from the base model
-        embeddings = self.base_model.extract_embeddings(
-            x, self.layers, padding_mask=padding_mask
-        )
+        if self.feature_mode:
+            embeddings = x  # type: ignore[arg-type]
+        else:
+            embeddings = self.base_model.extract_embeddings(x, self.layers)
 
-        # Pass through the linear classifier
         return self.classifier(embeddings)
