@@ -31,4 +31,4 @@ seed: 42
 num_workers: 8  # Enable workers for better memory management
 
 # Whether to freeze the backbone (train only the linear probe)
-frozen: false
+frozen: true
