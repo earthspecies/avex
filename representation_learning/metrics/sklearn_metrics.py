@@ -274,3 +274,65 @@ class BalancedAccuracy:
             Balanced accuracy score
         """
         return self.get_metric()["balanced_acc"]
+
+
+class ROCAUC:
+    """Compute (macro) ROC-AUC for (multi-)class classification.
+
+    This implementation collects logits and targets and computes a *macro-
+    averaged* ROC-AUC using ``sklearn.metrics.roc_auc_score``.  For binary
+    problems it yields the standard AUC of the positive class.  If a class is
+    missing in the ground-truth or predictions the sample is skipped to avoid
+    ``ValueError``.
+    """
+
+    def __init__(self) -> None:
+        self.y_true: list[np.ndarray] = []
+        self.y_scores: list[np.ndarray] = []
+
+    def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:  # noqa: D401
+        """Accumulate a minibatch.
+
+        Parameters
+        ----------
+        logits : torch.Tensor
+            Raw model outputs of shape (N, C).
+        y : torch.Tensor
+            Integer class labels (N,) or one-hot / multi-hot (N, C).
+        """
+        self.y_scores.append(logits.detach().cpu().numpy())
+        self.y_true.append(y.detach().cpu().numpy())
+
+    def _stack(self) -> tuple[np.ndarray, np.ndarray]:
+        y_true = np.concatenate(self.y_true, axis=0)
+        y_scores = np.concatenate(self.y_scores, axis=0)
+        return y_true, y_scores
+
+    def get_metric(self) -> Dict[str, float]:
+        """Return a dict with the macro ROC-AUC.
+
+        Returns
+        -------
+        Dict[str, float]
+            ``{"roc_auc": value}``
+        """
+        from sklearn.metrics import roc_auc_score
+
+        if not self.y_true:
+            return {"roc_auc": 0.0}
+        y_true, y_scores = self._stack()
+
+        # Handle binary vs multi-class automatically
+        try:
+            auc = roc_auc_score(
+                y_true,
+                y_scores,
+                multi_class="ovr" if y_scores.shape[1] > 2 else "raise",
+                average="macro",
+            )
+        except ValueError:
+            auc = 0.0  # Occurs when only one class present
+        return {"roc_auc": float(auc)}
+
+    def get_primary_metric(self) -> float:  # noqa: D401
+        return self.get_metric()["roc_auc"]

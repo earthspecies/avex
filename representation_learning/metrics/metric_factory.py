@@ -5,6 +5,7 @@ Factory module for creating metric instances.
 from typing import Optional, Type, Union
 
 from representation_learning.metrics.sklearn_metrics import (
+    ROCAUC,
     Accuracy,
     BalancedAccuracy,
     BinaryF1Score,
@@ -34,6 +35,7 @@ def get_metric_class(
         "binary_f1": BinaryF1Score,
         "multiclass_f1": lambda: MulticlassBinaryF1Score(num_classes),
         "map": MeanAveragePrecision,
+        "roc_auc": ROCAUC,
     }
 
     if metric_name not in metric_map:

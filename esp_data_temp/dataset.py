@@ -18,8 +18,10 @@ from .transforms import transform_from_config
 ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
 ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
 
-# maybe consider giving this as a parameter in the config or command line argument?
-DATA_ROOT = "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/"  # noqa: E501
+DATA_ROOT = (
+    "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+    "foundation-model-data/"
+)
 
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
@@ -40,8 +42,10 @@ class GSPath(cloudpathlib.GSPath):
     def __init__(
         self,
         client_path: str | Self | cloudpathlib.AnyPath,
-        client: cloudpathlib.GSClient = _get_client(),
+        client: Optional[cloudpathlib.GSClient] = None,
     ) -> None:
+        if client is None:
+            client = _get_client()
         super().__init__(client_path, client=client)
 
 
@@ -73,7 +77,7 @@ class AudioDataset:
         self.data_config = data_config
         self.preprocessor = preprocessor
 
-        self.audio_path_col = "gs_path"  # modify if your CSV uses a different name
+        self.audio_path_col = data_config.audio_path_col
 
         self.metadata = metadata
 
@@ -108,9 +112,11 @@ class AudioDataset:
         path_str: str = row[self.audio_path_col]
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        if isinstance(path_str, GSPath) or isinstance(path_str, Path):
+        if isinstance(path_str, cloudpathlib.GSPath) or isinstance(
+            path_str, cloudpathlib.Path
+        ):
             audio_path = path_str
-        elif path_str.startswith("gs://"):
+        elif str(path_str).startswith("gs://"):
             if GSPath is None:
                 raise ImportError("cloudpathlib is required to handle gs:// paths.")
             audio_path = GSPath(path_str)
@@ -137,7 +143,9 @@ class AudioDataset:
 
         item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label_feature"],
+            "text_label": row["label_feature"]
+            if "label_feature" in row
+            else row["label"],
             "label": row.label,
             "path": str(audio_path),
         }
@@ -190,10 +198,12 @@ def _get_dataset_from_name(
         df.background_species_common = df.background_species_common.apply(_to_list)
 
         # TODO (milad) what's the point of this column?
-        df["gs_path"] = df["local_path"].apply(
+        df["path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
-            lambda x: "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/"  # noqa: E501
-            + x
+            lambda x: (
+                "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+                "foundation-model-data/audio_16k/" + x
+            )
         )  # AnimalSpeak missing gs path
 
         return df
@@ -249,7 +259,7 @@ def _get_dataset_from_name(
 
         df = df.apply(convert, axis=1)
 
-        # add gs_path column
+        # add path column
         if split == "test":
             df = df[df["fold"] == 5]
         elif split == "valid":

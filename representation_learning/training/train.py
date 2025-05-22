@@ -967,24 +967,18 @@ class FineTuneTrainer:
         """
         loader = self.train_loader if train else self.val_loader
 
-        if train:
-            self.model.train()
-        else:
-            self.model.eval()
-
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
 
-        # Disable gradients during evaluation for speed / memory
-        grad_ctx = torch.enable_grad() if train else torch.no_grad()
-
-        with grad_ctx:
-            for batch in tqdm(
-                loader,
-                desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
-                leave=False,
-            ):
+        for batch in tqdm(
+            loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
+        ):
+            if "embed" in batch:
+                z = batch["embed"].to(self.device)
+                logits = self.model(z)
+                y = batch["label"].to(self.device)
+            else:
                 x = batch["raw_wav"].to(self.device)
                 mask = batch.get("padding_mask")
                 if mask is not None:
@@ -996,23 +990,27 @@ class FineTuneTrainer:
                     if mask is not None
                     else self.model(x)
                 )
-                loss = self.criterion(logits, y)
 
-                if train:
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
+            loss = self.criterion(logits, y)
 
-                if self.multi_label:
-                    pred = (torch.sigmoid(logits) > 0.5).float()
-                    correct = (pred == y).all(dim=1).sum().item()
-                else:
-                    pred = logits.argmax(dim=1)
-                    correct = (pred == y).sum().item()
+            # Backward pass if training
+            if train:
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
-                total_loss += loss.item() * y.size(0)
-                total_correct += correct
-                total_samples += y.size(0)
+            # Calculate accuracy
+            if self.multi_label:
+                pred = (torch.sigmoid(logits) > 0.5).float()
+                correct = (pred == y).all(dim=1).sum().item()
+            else:
+                pred = logits.argmax(dim=1)
+                correct = (pred == y).sum().item()
+
+            # Update metrics
+            total_loss += loss.item() * y.size(0)
+            total_correct += correct
+            total_samples += y.size(0)
 
         return total_loss / total_samples, total_correct / total_samples
 

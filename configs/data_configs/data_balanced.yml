@@ -7,6 +7,7 @@ balancing_method: upsample
 subset_percentage: 1.0              # <1 to consider a subset of data
 audio_max_length_seconds: 10
 multi_label: false
+audio_path_col: path
 
 transformations:
   - type: label_from_feature

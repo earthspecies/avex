@@ -349,6 +349,22 @@ class EvaluateConfig(BaseModel):
         description="If True, do not update base model weights during linear probing.",
     )
 
+    # Which evaluation phases to run
+    eval_modes: List[Literal["linear_probe", "retrieval"]] = Field(
+        default_factory=lambda: ["linear_probe"],
+        description="Which evaluation types to execute during run_evaluate.py",
+    )
+
+    # Whether to force recomputation of embeddings even if cached versions exist
+    overwrite_embeddings: bool = Field(
+        False,
+        description=(
+            "If False and cached embeddings are found on disk, they will be loaded "
+            "instead of recomputed.  If True, embeddings are always recomputed and "
+            "the cache is overwritten."
+        ),
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 

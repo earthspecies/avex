@@ -1,0 +1,34 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark_small.yml
+
+training_params:
+  train_epochs: 20
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw          # common default for AudioMAE
+  weight_decay: 0.01        # mild regularisation
+  amp: false
+  amp_dtype: bf16
+
+
+# Which experiments to evaluate
+experiments:
+  - run_name: bird_aves_bio
+    run_config: configs/run_configs/aves_base.yml
+    ### which layers to probe for embeddings
+    layers: last_layer
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    ### path to the checkpoint file
+    checkpoint_path: checkpoints/birdaves-biox-base.torchaudio.pt
+# Where to save the evaluation results
+save_dir: evaluation_results
+
+device: cuda
+
+seed: 42
+
+num_workers: 8  # Enable workers for better memory management
+
+# Whether to freeze the backbone (train only the linear probe)
+frozen: false

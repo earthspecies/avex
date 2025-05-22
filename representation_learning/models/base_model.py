@@ -100,8 +100,12 @@ class ModelBase(nn.Module):
             input: tuple[torch.Tensor, ...],
             output: torch.Tensor,
         ) -> None:
+            nonlocal embeddings  # noqa: F823 – defined in enclosing scope
             # Capture the tensor without detaching so gradients can propagate
-            embeddings.append(output)  # noqa: F821
+            if isinstance(output, dict):
+                embeddings.append(output["x"])
+            else:
+                embeddings.append(output)
 
         hooks = []
         try:
@@ -115,7 +119,12 @@ class ModelBase(nn.Module):
                 # Input provided as dictionary with explicit padding mask
                 raw_wav = x["raw_wav"]
                 p_mask = x["padding_mask"]
-                self(raw_wav, p_mask)
+                if self.__class__.__name__ == "CLIPModel":
+                    dummy_text = ["" for _ in range(raw_wav.size(0))]
+                    self(raw_wav, dummy_text, p_mask)
+                else:
+                    self(raw_wav, p_mask)
+
             else:
                 # Tensor input – use provided mask if available, otherwise assume
                 # fully-valid signal (all ones).
@@ -136,8 +145,37 @@ class ModelBase(nn.Module):
 
             result = []
             for emb in embeddings:
-                flattened = emb.flatten(start_dim=1)
-                result.append(flattened)
+                if emb.dim() == 2:
+                    # Already in correct shape, just append
+                    result.append(emb)
+                elif emb.dim() == 3:
+                    # Need to aggregate over time dimension
+                    if padding_mask is not None:
+                        # Use attention-based aggregation with padding mask
+                        # Create attention weights
+                        attention_weights = torch.softmax(
+                            torch.sum(emb, dim=-1) / emb.size(-1), dim=-1
+                        )
+                        # Apply padding mask
+                        attention_weights = attention_weights.masked_fill(
+                            padding_mask, 0.0
+                        )
+                        # Normalize weights
+                        attention_weights = attention_weights / (
+                            attention_weights.sum(dim=-1, keepdim=True) + 1e-8
+                        )
+                        # Weighted sum over time
+                        aggregated = torch.sum(
+                            emb * attention_weights.unsqueeze(-1), dim=1
+                        )
+                    else:
+                        # Simple mean pooling over time if no padding mask
+                        aggregated = torch.mean(emb, dim=1)
+                    result.append(aggregated)
+                else:
+                    raise ValueError(
+                        f"Unexpected embedding dimension: {emb.dim()}. Expected 2 or 3."
+                    )
 
             return torch.cat(result, dim=1)
 
