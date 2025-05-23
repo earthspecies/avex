@@ -22,7 +22,7 @@ experiments:
     ### path to the checkpoint file
     checkpoint_path: checkpoints/birdaves-biox-base.torchaudio.pt
     # Whether to freeze the backbone (train only the linear probe)
-    frozen: false
+    frozen: true
 # Where to save the evaluation results
 save_dir: evaluation_results
 

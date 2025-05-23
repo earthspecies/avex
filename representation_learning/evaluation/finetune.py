@@ -4,11 +4,11 @@ from typing import Dict, List, Optional, Tuple
 import torch
 
 from representation_learning.configs import EvaluateConfig
-from representation_learning.evaluation.metrics import get_metric_class
-from representation_learning.evaluation.trainer import FineTuneTrainer
+from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.models.linear_probe import LinearProbe
 from representation_learning.training.optimisers import get_optimizer
-from representation_learning.utils.logger import ExperimentLogger
+from representation_learning.training.train import FineTuneTrainer
+from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
