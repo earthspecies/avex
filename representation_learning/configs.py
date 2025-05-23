@@ -313,6 +313,12 @@ class ExperimentConfig(BaseModel):
         ),
     )
 
+    # Whether to freeze the backbone and train only the linear probe
+    frozen: bool = Field(
+        True,
+        description="If True, do not update base model weights during linear probing.",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -342,12 +348,6 @@ class EvaluateConfig(BaseModel):
     device: str = Field(..., description="Device to run the evaluation on")
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
-
-    # Whether to freeze the backbone and train only the linear probe
-    frozen: bool = Field(
-        True,
-        description="If True, do not update base model weights during linear probing.",
-    )
 
     # Which evaluation phases to run
     eval_modes: List[Literal["linear_probe", "retrieval"]] = Field(
