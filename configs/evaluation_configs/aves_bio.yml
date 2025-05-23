@@ -22,7 +22,7 @@ experiments:
     ### path to the checkpoint file
     checkpoint_path: checkpoints/birdaves-biox-base.torchaudio.pt
 # Where to save the evaluation results
-save_dir: evaluation_results
+save_dir: evaluation_results_aves
 
 device: cuda
 

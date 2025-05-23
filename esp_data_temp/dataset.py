@@ -113,7 +113,7 @@ class AudioDataset:
 
         # Use GSPath for gs:// paths if available, otherwise use the local Path.
         if isinstance(path_str, cloudpathlib.GSPath) or isinstance(
-            path_str, cloudpathlib.Path
+            path_str, cloudpathlib.CloudPath
         ):
             audio_path = path_str
         elif str(path_str).startswith("gs://"):
@@ -174,6 +174,7 @@ def _get_dataset_from_name(
             csv_path = Path(anaimspeak_path)
 
         # Read CSV content
+        print(csv_path)
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
         df["path"] = df["local_path"].apply(

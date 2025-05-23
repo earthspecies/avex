@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -411,7 +412,7 @@ def main() -> None:
             )
 
     # 4. Write summary
-    summary_path = save_dir / "summary.txt"
+    summary_path = save_dir / f"summary_{datetime.now()}.txt"
     with summary_path.open("w") as f:
         f.write("Experiment Summary\n==================\n\n")
         for r in all_results:

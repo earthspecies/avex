@@ -1,29 +1,34 @@
 ---
-# BEATs backbone for audio classification (masked pooling + linear head)
+# Perch model for bird audio classification
 model_spec:
-  name: beats
-  pretrained: false  # Set to true when loading pretrained BEATs weights
+  name: perch
+  pretrained: true  # Use Google's pretrained Perch weights
+  model_size: base  # Options: "base", "large"
+  embedding_dim: 1024  # Dimension of feature embeddings
   device: cuda
-  audio_config:  # Still define for completeness; BEATs does its own Fbank conversion
-    sample_rate: 16000
-    representation: raw  # BEATs expects raw waveform
-    normalize: false
-    target_length_seconds: 10
+  audio_config:
+    sample_rate: 32000  # Perch typically uses 32kHz
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 5
     window_selection: random
+    n_mels: 128
+    n_fft: 2048
+    hop_length: 512
 
 # Dataset configuration (path to a valid dataset config)
 dataset_config: configs/data_configs/data_base.yml
 
 # Output directory for checkpoints and logs
-output_dir: "./beats_baseline_full"
+output_dir: "./perch_baseline"
 
 label_type: supervised
 
-# audio preprocessing (none – handled inside the model)
+# Audio preprocessing
 preprocessing: null
 
 # Target sample-rate expected by the model
-sr: 16000
+sr: 32000
 debug_mode: false
 
 # Log training runs to MLflow
@@ -33,18 +38,18 @@ logging: mlflow
 resume_from_checkpoint: null
 
 training_params:
-  train_epochs: 60
+  train_epochs: 30
   lr: 0.0001
-  batch_size: 256
+  batch_size: 128  # Smaller batch size for larger model
   optimizer: adamw
   weight_decay: 0.01
-  amp: false
+  amp: true
   amp_dtype: bf16
 
 # Learning rate scheduler configuration
 scheduler:
   name: cosine
-  warmup_steps: 500
+  warmup_steps: 300
   min_lr: 1e-6
 
 augmentations: []
@@ -55,7 +60,7 @@ loss_function: cross_entropy
 # General settings
 device: cuda
 seed: 42
-num_workers: 10
+num_workers: 8
 
-run_name: beats_base
+run_name: perch_base
 wandb_project: representation_learning 

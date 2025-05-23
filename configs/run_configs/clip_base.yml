@@ -5,9 +5,9 @@ model_spec:
   pretrained: true
   audio_config:
     sample_rate: 16000
-    n_fft: 800
-    hop_length: 160
-    win_length: 800
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
     window: hann
     n_mels: 128
     representation: mel_spectrogram
@@ -51,7 +51,7 @@ training_params:
 # Learning rate scheduler configuration
 scheduler:
   name: cosine
-  warmup_steps: 500
+  warmup_steps: 4000
   min_lr: 1e-6
 
 augmentations:

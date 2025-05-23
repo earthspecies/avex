@@ -109,7 +109,7 @@ class Collater:
 
         return {
             "raw_wav": audio_tensor,
-            "padding_mask": mask_tensor,
+            "padding_mask": ~mask_tensor,
             "label": label_tensor,
             "text_label": text_labels,
         }

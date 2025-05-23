@@ -5,6 +5,7 @@ from representation_learning.models.clip import CLIPModel
 from representation_learning.models.efficientnetb0 import (
     Model as EfficientNetB0,
 )
+from representation_learning.models.perch import Model as PerchModel
 from representation_learning.models.resnet import Model as ResNetModel
 
 
@@ -17,6 +18,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     currently supports:
     - 'efficientnetb0': Audio classification model
     - 'clip': CLIP-like model for audio-text contrastive learning
+    - 'perch': Google's Perch bird audio classification model
 
     Args:
         model_config: Model configuration object containing:
@@ -27,6 +29,8 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             - text_model_name: (for CLIP) Name of the text model to use
             - projection_dim: (for CLIP) Dimension of the projection space
             - temperature: (for CLIP) Temperature for contrastive loss
+            - model_size: (for Perch) Size of the model ("base" or "large")
+            - embedding_dim: (for Perch) Dimension of embeddings
         num_classes: The number of classes to be used in the model.
 
     Returns:
@@ -60,6 +64,15 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             text_model_name=getattr(model_config, "text_model_name", "roberta-base"),
             projection_dim=getattr(model_config, "projection_dim", 512),
             temperature=getattr(model_config, "temperature", 0.07),
+        )
+    elif model_name == "perch":
+        return PerchModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            model_size=getattr(model_config, "model_size", "base"),
+            embedding_dim=getattr(model_config, "embedding_dim", 1024),
         )
     elif model_name in {"resnet18", "resnet50", "resnet152"}:
         return ResNetModel(
@@ -105,17 +118,11 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
-            embed_dim=embed_dim,
-            patch_size=patch_size,
-            target_length=target_length,
-            enable_ema=enable_ema,
-            pretraining_mode=pretraining_mode,
-            eat_cfg=eat_cfg_overrides,
         )
     else:
         # Fallback
         supported = (
-            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', 'resnet152',\
+            "'efficientnetb0', 'clip', 'perch', 'eat', 'resnet18', 'resnet50', 'resnet152',\
                 'beats'"
         )
         raise NotImplementedError(

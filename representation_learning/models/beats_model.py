@@ -1,12 +1,15 @@
 from typing import Optional
 
+from representation_learning.utils import universal_torch_load
 import torch
 import torch.nn as nn
+from typing import List
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.beats.beats import BEATs, BEATsConfig
 
+BEATS_PRETRAINED_PATH =  "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
 
 class Model(ModelBase):
     """Wrapper that adapts the raw *BEATs* backbone for our training loop.
@@ -35,7 +38,7 @@ class Model(ModelBase):
         self,
         *,
         num_classes: int,
-        pretrained: bool = False,  # Currently unused; placeholder for future.
+        pretrained: bool = False,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
         return_features_only: bool = False,
@@ -45,23 +48,21 @@ class Model(ModelBase):
         # ------------------------------------------------------------------
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
-        cfg = BEATsConfig()
-        # A small, square patch (4×4) works well for the 128-bin log-mel FBanks
-        # produced by the internal pre-processing.  The original BEATs model
-        # also uses a 4×4 patch when the input resolution is 128×1024.
-        cfg.input_patch_size = 4
-        # We do **not** enable the internal predictor head as we attach our own
-        # classifier below, hence ``finetuned_model`` stays *False*.
 
-        self.backbone = BEATs(cfg)
+        beats_ckpt = universal_torch_load(BEATS_PRETRAINED_PATH, cache_mode="use", map_location="cpu")
+
+
+        beats_cfg = BEATsConfig(beats_ckpt["cfg"])
+        self.backbone = BEATs(beats_cfg)
         self.backbone.to(device)
+        self.backbone.load_state_dict(beats_ckpt["model"])
 
         # ------------------------------------------------------------------
         # 2.  Optional classifier for supervised training
         # ------------------------------------------------------------------
         self._return_features_only = return_features_only
         if not return_features_only:
-            self.classifier = nn.Linear(cfg.encoder_embed_dim, num_classes)
+            self.classifier = nn.Linear(768, num_classes)
         else:
             self.register_module("classifier", None)  # type: ignore[arg-type]
 
@@ -95,6 +96,7 @@ class Model(ModelBase):
         x = self.process_audio(x)
 
         features, frame_padding = self.backbone(x, padding_mask)
+
         # features: (B, T', D)
         # frame_padding: (B, T') or None
 
@@ -109,7 +111,14 @@ class Model(ModelBase):
         else:
             pooled = features.mean(dim=1)
 
-        if self._return_features_only:
+        if self._return_features_only:  
             return pooled
         else:
             return self.classifier(pooled)
+
+    def extract_embeddings(self, x: torch.Tensor, layers: List[str]) -> torch.Tensor:
+        self._return_features_only = True
+        if type(x) == dict:
+            return self.forward(x["raw_wav"], x["padding_mask"])
+        else:
+            return self.forward(x)

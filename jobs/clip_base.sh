@@ -8,4 +8,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/clip_base.yml
+srun uv run representation_learning/run_train.py --config configs/run_configs/clip_base_beans.yml
