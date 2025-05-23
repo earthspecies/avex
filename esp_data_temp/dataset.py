@@ -165,18 +165,40 @@ def _get_dataset_from_name(
 
     if name == "animalspeak":
         if split == "test":
+            # TODO (milad) this is not okay. We should panic here
             return None
+
         anaimspeak_path = (
             ANIMALSPEAK_PATH_EVAL if split == "valid" else ANIMALSPEAK_PATH
         )
+
+        # TODO (milad) why wouldn't it this with gs://?
         if ANIMALSPEAK_PATH.startswith("gs://"):
             csv_path = GSPath(anaimspeak_path)
         else:
             csv_path = Path(anaimspeak_path)
 
-        # Read CSV content
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
+
+        # AnimalSpeak has some columns that are list[str] but they're stored as
+        # comma-separated strings. We convert them to actual lists here:
+        def _to_list(v: str | float) -> list[str]:
+            if pd.isna(v):
+                return []
+            elif isinstance(v, str):
+                return [item.strip() for item in v.split(",")]
+            else:
+                raise ValueError(
+                    f"Expected a string or NaN, but got {v} of type {type(v)}"
+                )
+
+        # TODO: Maybe we want to normalise the values even more? for instance apply
+        # .lower()?
+        df.background_species_sci = df.background_species_sci.apply(_to_list)
+        df.background_species_common = df.background_species_common.apply(_to_list)
+
+        # TODO (milad) what's the point of this column?
         df["path"] = df["local_path"].apply(
             # lambda x: "gs://" + x
             lambda x: (
@@ -184,7 +206,9 @@ def _get_dataset_from_name(
                 "foundation-model-data/audio_16k/" + x
             )
         )  # AnimalSpeak missing gs path
+
         return df
+
     elif name in ["egyptian_fruit_bats", "dogs", "humbugdb", "cbi", "watkins"]:
         if FM_DATASETS_PATH.startswith("gs://"):
             dataset_path = GSPath(FM_DATASETS_PATH)
