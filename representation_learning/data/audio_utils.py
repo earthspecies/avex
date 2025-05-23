@@ -17,6 +17,7 @@ def pad_or_window(
     wav: torch.Tensor,
     target_len: int,
     window_selection: Literal["random", "center"] = "random",
+    invert: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Pad or window a waveform to a target length.
 
@@ -28,6 +29,9 @@ def pad_or_window(
         Target length to pad or window to
     window_selection : Literal["random", "center", "start"]
         How to select the window if cropping is needed
+    invert : bool, default=True
+        Whether to invert the boolean mask. When True, True values indicate padding
+        regions.
 
     Returns
     -------
@@ -40,31 +44,33 @@ def pad_or_window(
         If window_selection is not "random" or "center"
     """
     wav_len = wav.size(-1)
+    mask = torch.ones(target_len, dtype=torch.bool)
+    processed_wav = wav
 
     if wav_len == target_len:
-        mask = torch.ones(target_len, dtype=torch.bool)
-        return wav, mask
-
-    if wav_len > target_len:  # crop
+        pass
+    elif wav_len > target_len:  # crop
         if window_selection == "random":
             start = torch.randint(0, wav_len - target_len + 1, ()).item()
             end = start + target_len
-            return wav[..., start:end], torch.ones(target_len, dtype=torch.bool)
+            processed_wav = wav[..., start:end]
         elif window_selection == "center":
             start = (wav_len - target_len) // 2
             end = start + target_len
-            return wav[..., start:end], torch.ones(target_len, dtype=torch.bool)
+            processed_wav = wav[..., start:end]
         elif window_selection == "start":
-            return wav[..., :target_len], torch.ones(target_len, dtype=torch.bool)
+            processed_wav = wav[..., :target_len]
         else:
             raise ValueError(f"Unknown window selection: {window_selection}")
+    else:  # pad
+        pad_len = target_len - wav_len
+        processed_wav = F.pad(wav, (0, pad_len))
+        mask[wav_len:] = False
 
-    # pad
-    pad_len = target_len - wav_len
-    padded = F.pad(wav, (0, pad_len))
-    mask = torch.zeros(target_len, dtype=torch.bool)
-    mask[:wav_len] = True
-    return padded, mask
+    if invert:
+        mask = ~mask
+
+    return processed_wav, mask
 
 
 class AudioProcessor:
