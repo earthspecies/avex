@@ -2,7 +2,7 @@
 
 #SBATCH --partition=a100-40
 #SBATCH --gpus=2
-#SBATCH --ntasks-per-gpu=1
+#SBATCH --ntasks=2
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="representation learning clip"
 

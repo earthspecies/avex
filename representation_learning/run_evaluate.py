@@ -171,6 +171,15 @@ def _train_and_eval_linear_probe(
     return train_metrics, val_metrics, probe_test_metrics
 
 
+def _process_state_dict(state_dict: dict) -> dict:
+    if "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+    # drop classifier.weight and classifier.bias
+    del state_dict["classifier.weight"]
+    del state_dict["classifier.bias"]
+    return state_dict
+
+
 # -------------------------------------------------------------------- #
 #  Retrieval helper
 # -------------------------------------------------------------------- #
@@ -252,10 +261,8 @@ def run_experiment(
             raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
         with ckpt_path.open("rb") as f:
             state = torch.load(f, map_location=device)
-        if "model_state_dict" in state:
-            base_model.load_state_dict(state["model_state_dict"], strict=False)
-        else:
-            base_model.load_state_dict(state, strict=False)
+        state = _process_state_dict(state)
+        base_model.load_state_dict(state, strict=False)
         logger.info("Loaded checkpoint from %s", ckpt_path)
 
     base_model.eval()

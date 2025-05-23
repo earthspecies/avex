@@ -33,6 +33,7 @@ dependencies = [
   "transformers>=4.51.3",
   "psutil>=7.0.0",
   "h5py>=3.13.0",
+  "tensorflow>=2.19.0",
 ]
 
 [dependency-groups]
