@@ -103,7 +103,7 @@ class ModelBase(nn.Module):
         ) -> None:
             nonlocal embeddings  # noqa: F823 – defined in enclosing scope
             # Capture the tensor without detaching so gradients can propagate
-            if isinstance(output, dict): # TODO: hacky - model-specific handling
+            if isinstance(output, dict):  # TODO: hacky - model-specific handling
                 embeddings.append(output["x"])
             elif isinstance(output, tuple):
                 embeddings.append(output[0])
@@ -155,7 +155,6 @@ class ModelBase(nn.Module):
                 elif emb.dim() == 3:
                     # Need to aggregate over time dimension
                     if output_padding_mask is not None:
-                        
                         # Use attention-based aggregation with padding mask
                         # Create attention weights
                         attention_weights = torch.softmax(

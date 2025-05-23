@@ -1,15 +1,17 @@
-from typing import Optional
+from typing import List, Optional
 
-from representation_learning.utils import universal_torch_load
 import torch
 import torch.nn as nn
-from typing import List
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.beats.beats import BEATs, BEATsConfig
+from representation_learning.utils import universal_torch_load
 
-BEATS_PRETRAINED_PATH =  "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
+BEATS_PRETRAINED_PATH = (
+    "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
+)
+
 
 class Model(ModelBase):
     """Wrapper that adapts the raw *BEATs* backbone for our training loop.
@@ -49,8 +51,9 @@ class Model(ModelBase):
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
 
-        beats_ckpt = universal_torch_load(BEATS_PRETRAINED_PATH, cache_mode="use", map_location="cpu")
-
+        beats_ckpt = universal_torch_load(
+            BEATS_PRETRAINED_PATH, cache_mode="use", map_location="cpu"
+        )
 
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
         self.backbone = BEATs(beats_cfg)
@@ -111,7 +114,7 @@ class Model(ModelBase):
         else:
             pooled = features.mean(dim=1)
 
-        if self._return_features_only:  
+        if self._return_features_only:
             return pooled
         else:
             return self.classifier(pooled)

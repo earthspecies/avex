@@ -17,16 +17,15 @@ from __future__ import annotations
 
 import importlib
 import logging
-from types import ModuleType
-from typing import Any, Dict, Optional, Union, Literal
 import os
-from pathlib import Path
-
 from functools import lru_cache
-import cloudpathlib
-from google.cloud.storage.client import Client
-import torch
+from pathlib import Path
+from types import ModuleType
+from typing import Any, Dict, Literal, Optional, Union
 
+import cloudpathlib
+import torch
+from google.cloud.storage.client import Client
 
 from representation_learning.configs import RunConfig
 
@@ -159,9 +158,11 @@ def get_logger(cfg: RunConfig) -> ExperimentLogger:
         _instance = ExperimentLogger.from_config(cfg)
     return _instance
 
+
 @lru_cache(maxsize=1)
 def _get_client():
     return cloudpathlib.GSClient(storage_client=Client())
+
 
 class GSPath(cloudpathlib.GSPath):
     """
