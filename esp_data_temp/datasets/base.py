@@ -1,36 +1,18 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Self
+from typing import Any, Dict, Iterator, Self
 
-import cloudpathlib
 import semver
-from google.cloud.storage.client import Client
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from esp_data_temp.config import DatasetConfig
 from esp_data_temp.transforms import (
     RegisteredTransformConfigs,
     transform_from_config,
 )
 
-
-@lru_cache(maxsize=1)
-def _get_client() -> cloudpathlib.GSClient:
-    return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
-
-
-class GSPath(cloudpathlib.GSPath):
-    """
-    A wrapper for the cloudpathlib GSPath that provides a default client.
-    This avoids issues when the GOOGLE_APPLICATION_CREDENTIALS variable is not set.
-    """
-
-    def __init__(
-        self,
-        client_path: str | Self | cloudpathlib.AnyPath,
-    ) -> None:
-        super().__init__(client_path, client=_get_client())
+from .dataset_utils import GSPath
 
 
 class DatasetInfo(BaseModel):
@@ -107,12 +89,12 @@ class DatasetInfo(BaseModel):
         website(s) or multiple sources in a comma-separated list""",
     )
 
-    license: Optional[str] = Field(
+    license: str = Field(
         default_factory=lambda: "unknown",
         description="License for the dataset, if applicable",
     )
 
-    changelog: Optional[str] = Field(
+    changelog: str = Field(
         default_factory=lambda: "", description="Changelog from previous version"
     )
 
@@ -225,6 +207,28 @@ class Dataset(ABC):
         """
         self.output_take_and_give = output_take_and_give
 
+    @property
+    def available_splits(self) -> Sequence[str]:
+        """Get the available splits of the dataset.
+
+        Returns
+        -------
+        Sequence[str]
+            A sequence of split names available in the dataset.
+        """
+        raise NotImplementedError
+
+    @property
+    def columns(self) -> Sequence[str]:
+        """Get the columns of the dataset.
+
+        Returns
+        -------
+        Sequence[str]
+            A sequence of column names in the dataset.
+        """
+        raise NotImplementedError
+
     # TODO (discuss) do we want the underlying data object to be public ?
     # @property
     # @abstractmethod
@@ -255,12 +259,11 @@ class Dataset(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def from_config(
         cls,
-        dataset_config: DatasetInfo,
-        split: str = "train",
+        dataset_config: DatasetConfig,
     ) -> Self:
         """Create a dataset instance from a configuration.
 
@@ -268,8 +271,6 @@ class Dataset(ABC):
         ----------
         dataset_config : DatasetInfo
             The configuration for the dataset.
-        split : str
-            The split to load. Can be "train" or "validation".
 
         Returns
         -------
@@ -410,14 +411,15 @@ def print_registered_datasets() -> None:
         print(dataset_class.info.model_dump_json(indent=2))
 
 
-def load_dataset(dataset_name: str, **kwargs: dict) -> Dataset:
-    """Load a dataset by name.
+def dataset_from_config(dataset_config: DatasetConfig) -> Dataset:
+    """Load a dataset from a configuration.
 
     Parameters
     ----------
-    dataset_name : str
-        Name of the dataset to get
-    **kwargs : dict
+    dataset_config : DatasetConfig
+        The configuration for the dataset.
+    split : str
+        The split to load. Can be "train" or "validation".
 
     Returns
     -------
@@ -429,7 +431,7 @@ def load_dataset(dataset_name: str, **kwargs: dict) -> Dataset:
     ValueError
         If the dataset is not registered
     """
-    if dataset_name in _dataset_registry:
-        return _dataset_registry[dataset_name](**kwargs)
-    else:
-        raise ValueError(f"Dataset '{dataset_name}' is not registered.")
+    _dataset_class = _dataset_registry.get(dataset_config.dataset_name)
+    if _dataset_class is None:
+        raise ValueError(f"Dataset '{dataset_config.dataset_name}' is not registered.")
+    return _dataset_class.from_config(dataset_config)

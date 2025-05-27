@@ -1,10 +1,11 @@
 import pytest
 
+from esp_data_temp.config import DatasetConfig
 from esp_data_temp.datasets import (
     Dataset,
     DatasetInfo,
+    dataset_from_config,
     list_registered_datasets,
-    load_dataset,
     print_registered_datasets,
 )
 
@@ -60,7 +61,10 @@ def test_list_registered_datasets() -> None:
 
 def test_load_dataset() -> None:
     """Test if the load_dataset function loads the dataset correctly."""
-    dataset = load_dataset("animalspeak", split="validation")
+    cfg = DatasetConfig(
+        dataset_name="animalspeak", split="validation", audio_path_col="gs_path"
+    )
+    dataset = dataset_from_config(cfg)
     assert dataset is not None
     assert isinstance(
         dataset, Dataset

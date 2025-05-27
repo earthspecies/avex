@@ -18,6 +18,7 @@ class DatasetConfig(BaseModel):
     metrics: list[str] | None = None
     audio_path_col: str | None = None
     output_take_and_give: dict[str, str] | None = None
+    split: str = "train"
 
     @field_validator("transformations", mode="before")
     @classmethod

@@ -1,102 +1,102 @@
-"""Test suite for the AnimalSpeak dataset."""
+"""Test suite for the BarkleyCanyon dataset."""
 
 import pytest
 
 from esp_data_temp.config import DatasetConfig
-from esp_data_temp.datasets import AnimalSpeak, Dataset
+from esp_data_temp.datasets import BarkleyCanyon, Dataset
 
 
 @pytest.fixture
 def dataset() -> Dataset:
-    """Fixture providing an AnimalSpeak dataset instance.
+    """Fixture providing an BarkleyCanyon dataset instance.
 
     Returns
     -------
     Dataset
-        An instance of the AnimalSpeak dataset.
+        An instance of the BarkleyCanyon dataset.
     """
-    ds = AnimalSpeak(split="validation")
+    ds = BarkleyCanyon(split="train")
     return ds
 
 
 @pytest.fixture
 def dataset_with_transforms() -> Dataset:
-    """Fixture providing an AnimalSpeak dataset instance with transformations
+    """Fixture providing an BarkleyCanyon dataset instance with transformations
     applied.
 
     Returns
     -------
     Dataset
-        An instance of the AnimalSpeak dataset with transformations applied.
+        An instance of the BarkleyCanyon dataset with transformations applied.
     """
 
     dataset_config = DatasetConfig(
-        dataset_name="animalspeak",
+        dataset_name="barkley_canyon",
         transformations=[
             {
                 "type": "label_from_feature",
-                "feature": "canonical_name",
+                "feature": "species_scientific",
                 "output_feature": "label",
             },
             {
                 "type": "filter",
-                "mode": "include",
-                "property": "source",
-                "values": ["xeno-canto", "iNaturalist"],
+                "mode": "exclude",
+                "property": "genus",
+                "values": ["Lagenorhynchus"],
             },
         ],
     )
-    ds = AnimalSpeak(split="validation")
+    ds = BarkleyCanyon(split="train")
     ds.apply_transformations(dataset_config.transformations)
     return ds
 
 
 @pytest.fixture
 def dataset_with_output_mapping() -> Dataset:
-    """Fixture providing an AnimalSpeak dataset instance with output mapping.
+    """Fixture providing an BarkleyCanyon dataset instance with output mapping.
 
     Returns
     -------
     Dataset
-        An instance of the AnimalSpeak dataset with output mapping applied.
+        An instance of the BarkleyCanyon dataset with output mapping applied.
     """
     dataset_config = DatasetConfig(
-        dataset_name="animalspeak",
-        output_take_and_give={"canonical_name": "species", "country": "location"},
+        dataset_name="BarkleyCanyon",
+        output_take_and_give={"species_scientific": "species", "family": "fam"},
     )
-    ds = AnimalSpeak(
-        split="validation", output_take_and_give=dataset_config.output_take_and_give
+    ds = BarkleyCanyon(
+        split="train", output_take_and_give=dataset_config.output_take_and_give
     )
     return ds
 
 
 def test_info_property(dataset: Dataset) -> None:
     """Test if the info property returns correct metadata."""
-    assert dataset.info.name == "animalspeak"
+    assert dataset.info.name == "barkley_canyon"
     assert dataset.info.version == "0.1.0"
     assert "train" in dataset.info.split_paths
-    assert "validation" in dataset.info.split_paths
+    assert "validation" not in dataset.info.split_paths
 
 
 def test_data_property(dataset: Dataset) -> None:
     """Test if the data property returns correct dataframes."""
     # Data should be _loaded in __init__
     assert dataset._data is not None
-    assert "audio_id" in dataset._data
-    assert "country" in dataset._data
+    assert "local_path" in dataset._data
+    assert "gbifID" in dataset._data
 
 
 def test_columns_property(dataset: Dataset) -> None:
     """Test if the columns property returns correct column names."""
     # Columns should match the dataframe columns
-    expected_columns = ["audio_id", "country", "gs_path"]
+    expected_columns = ["local_path", "gbifID", "gs_path"]
     assert all(col in dataset.columns for col in expected_columns)
 
 
 def test_available_splits(dataset: Dataset) -> None:
     """Test if available_splits returns correct split names."""
     # Available splits should match the dataset info
-    expected_splits = ["train", "validation"]
+    expected_splits = ["train"]
     assert set(dataset.available_splits) == set(expected_splits)
 
 
@@ -112,8 +112,8 @@ def test_getitem(dataset: Dataset) -> None:
     # Get first sample
     sample = dataset[0]
     assert isinstance(sample, dict)
-    assert "audio_id" in sample
-    assert "country" in sample
+    assert "Call Type" in sample
+    assert "species_scientific" in sample
     assert "audio" in sample
 
 
@@ -129,13 +129,14 @@ def test_iteration(dataset: Dataset) -> None:
 def test_load_from_config() -> None:
     """Test if dataset can be loaded from configuration."""
     dataset_config = DatasetConfig(
-        dataset_name="animalspeak",
-        split="validation",
+        dataset_name="BarkleyCanyon",
+        split="train",
     )
-    dataset = AnimalSpeak.from_config(dataset_config)
-    assert isinstance(dataset, AnimalSpeak)
-    assert dataset.info.name == "animalspeak"
-    assert dataset.info.split_paths["validation"] is not None
+    dataset = BarkleyCanyon.from_config(dataset_config)
+    assert isinstance(dataset, BarkleyCanyon)
+    assert dataset.info.name == "barkley_canyon"
+    assert dataset.info.split_paths["train"] is not None
+    assert len(dataset) > 0, "Dataset should not be empty"
 
 
 def test_invalid_split(dataset: Dataset) -> None:
@@ -151,7 +152,7 @@ def test_sample_consistency(dataset: Dataset) -> None:
     iter_sample = next(iter(dataset))
 
     # Compare samples
-    assert direct_sample["country"] == iter_sample["country"]
+    assert direct_sample["gs_path"] == iter_sample["gs_path"]
 
 
 def test_transformations(dataset_with_transforms: Dataset) -> None:
@@ -159,18 +160,17 @@ def test_transformations(dataset_with_transforms: Dataset) -> None:
 
     This test verifies that:
     1. The label_from_feature transformation creates a label column
-    2. The filter transformation only keeps specified sources
-    3. The metadata is updated with transformation information
+    2. The filter transformation excludes specified genera
+
     """
     # Check that label column was created
     assert "label" in dataset_with_transforms._data.columns
 
-    # Check that only specified sources are present
-    sources = dataset_with_transforms._data["source"].unique()
-    assert set(sources).issubset({"xeno-canto", "iNaturalist"})
-
-    # Check that no other sources are present
-    assert "Watkins" not in sources
+    # Check that the excluded genus is not present
+    excluded_genus = "Lagenorhynchus"
+    assert not any(dataset_with_transforms._data["genus"] == excluded_genus), (
+        f"Genus '{excluded_genus}' should be excluded from the dataset."
+    )
 
 
 def test_output_take_and_give(dataset_with_output_mapping: Dataset) -> None:
@@ -185,11 +185,11 @@ def test_output_take_and_give(dataset_with_output_mapping: Dataset) -> None:
     sample = dataset_with_output_mapping[0]
 
     # Check that only mapped columns are present
-    assert set(sample.keys()) == {"species", "location"}
+    assert set(sample.keys()) == {"species", "fam"}
 
     # Get the original row to compare values
     original_row = dataset_with_output_mapping._data.iloc[0]
 
     # Verify the mapping and values
-    assert sample["species"] == original_row["canonical_name"]
-    assert sample["location"] == original_row["country"]
+    assert sample["species"] == original_row["species_scientific"]
+    assert sample["fam"] == original_row["family"]

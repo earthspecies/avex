@@ -1,16 +1,17 @@
+from .animalspeak import AnimalSpeak
+from .barkley_canyon import BarkleyCanyon
 from .base import (
     Dataset,
     DatasetInfo,
+    dataset_from_config,
     list_registered_datasets,
-    load_dataset,
     print_registered_datasets,
 )
-from .registered_datasets import AnimalSpeak, BarkleyCanyon
 
 __all__ = [
     "list_registered_datasets",
     "print_registered_datasets",
-    "load_dataset",
+    "dataset_from_config",
     "DatasetInfo",
     "Dataset",
     "AnimalSpeak",

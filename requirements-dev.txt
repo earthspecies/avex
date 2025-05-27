@@ -48,7 +48,6 @@ stack-data==0.6.3
 tornado==6.5
 traitlets==5.14.3
 typing-extensions==4.13.2 ; python_full_version < '3.12'
-semver==3.0.4
 virtualenv==20.31.2
 wcwidth==0.2.13
 yamllint==1.35.1

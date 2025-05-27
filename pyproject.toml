@@ -32,6 +32,7 @@ dependencies = [
   "transformers>=4.51.3",
   "psutil>=7.0.0",
   "h5py>=3.13.0",
+  "semver>=3.0.4",
 ]
 
 [dependency-groups]
@@ -44,7 +45,6 @@ dev = [
   "isort<=5.13.2",
   "pytest<=7.4.0",
   "yamllint<=1.35.1",
-  "semver>=3.0.4",
   "ipykernel>=6.29.5",
 ]
 
