@@ -7,13 +7,16 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from esp_data_temp.dataset import AudioDataset
 from representation_learning.configs import (
     AudioConfig,
     RunConfig,
     TrainingParams,
 )
-from representation_learning.data.data_utils import build_dataloaders
-from representation_learning.data.dataset import AudioDataset, get_dataset_dummy
+from representation_learning.data.dataset import (
+    build_dataloaders,
+    get_dataset_dummy,
+)
 
 
 def create_test_csv(tmp_path: Path) -> Path:

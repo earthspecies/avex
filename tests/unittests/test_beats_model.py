@@ -1,10 +1,10 @@
 import torch
 
+from representation_learning.models.beats_model import Model as BeatsModel
+
 # ---------------------------------------------------------------------------
 #  Now that stubs are in place, we can safely import the model under test.
 # ---------------------------------------------------------------------------
-
-from representation_learning.models.beats_model import Model as BeatsModel
 
 
 def test_beats_model_forward():
@@ -32,4 +32,4 @@ def test_beats_model_forward():
 
     # Assertions
     assert logits.shape == (batch_size, num_classes)
-    assert not torch.isnan(logits).any() 
+    assert not torch.isnan(logits).any()
