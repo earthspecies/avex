@@ -786,7 +786,7 @@ def init_bert_params(module):
     This overrides the default initializations depending on the specified arguments.
         1. If normal_init_linear_weights is set then weights of linear
            layer will be initialized using the normal distribution and
-           bais will be set to the specified value.
+           bias will be set to the specified value.
         2. If normal_init_embed_weights is set then weights of embedding
            layer will be initialized using the normal distribution.
         3. If normal_init_proj_weights is set then weights of
