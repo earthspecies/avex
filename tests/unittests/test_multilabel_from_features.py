@@ -100,3 +100,37 @@ def test_multilabel_from_features(
     assert df_out["label"].tolist() == expected_labels
     assert meta["label_map"] == expected_map
     assert meta["num_classes"] == len(expected_map)
+
+
+def test_multilabel_from_features_with_extra_labels() -> None:
+    df = pd.DataFrame({"col1": ["banana", "apple", "banana", "orange"]})
+    label_map = {"apple": 0, "banana": 1, "orange": 2, "grape": 3, "melon": 4}
+    t = MultiLabelFromFeatures(features=["col1"], label_map=label_map)
+    df_out, meta = t(df.copy())
+    # Only present labels should be used in output
+    assert df_out["label"].tolist() == [[1], [0], [1], [2]]
+    assert meta["label_map"] == label_map
+    assert meta["num_classes"] == len(label_map)
+
+
+def test_multilabel_from_features_with_noncontiguous_indices() -> None:
+    df = pd.DataFrame({"col1": ["banana", "apple", "banana", "orange"]})
+    label_map = {"apple": 100, "banana": 101, "orange": 102}
+    t = MultiLabelFromFeatures(features=["col1"], label_map=label_map)
+    df_out, meta = t(df.copy())
+    assert df_out["label"].tolist() == [[101], [100], [101], [102]]
+    assert meta["label_map"] == label_map
+    assert meta["num_classes"] == len(label_map)
+
+
+def test_multilabel_from_features_label_map_remains_none() -> None:
+    df = pd.DataFrame({"col1": ["banana", "apple", "banana", "orange"]})
+    t = MultiLabelFromFeatures(features=["col1"])
+    assert t.label_map is None
+    df_out, meta = t(df.copy())
+    # The transform should still not set t.label_map
+    assert t.label_map is None
+    # The output should be correct
+    assert sorted(meta["label_map"].keys()) == ["apple", "banana", "orange"]
+    assert meta["num_classes"] == 3
+    assert df_out["label"].tolist() == [[1], [0], [1], [2]]
