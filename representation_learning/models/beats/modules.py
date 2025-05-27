@@ -28,7 +28,7 @@ class GradMultiply(torch.autograd.Function):
 
 
 class SamePad(nn.Module):
-    def __init__(self, kernel_size, causal=False):
+    def __init__(self, kernel_size, causal=False) -> None:
         super().__init__()
         if causal:
             self.remove = kernel_size - 1

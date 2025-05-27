@@ -26,7 +26,7 @@ from .modules import (
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args) -> None:
         super().__init__()
 
         self.dropout = args.dropout
@@ -313,7 +313,7 @@ class MultiheadAttention(nn.Module):
         max_distance=128,
         gru_rel_pos=False,
         rescale_init=False,
-    ):
+    ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim

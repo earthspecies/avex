@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class BEATsConfig:
-    def __init__(self, cfg=None):
+    def __init__(self, cfg=None) -> None:
         self.input_patch_size: int = -1  # path size of patch embedding
         self.embed_dim: int = 512  # patch embedding dimension
         self.conv_bias: bool = False  # include bias in conv encoder
