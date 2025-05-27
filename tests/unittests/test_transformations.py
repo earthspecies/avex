@@ -5,14 +5,15 @@ Unit tests for data transformations.
 import pandas as pd
 import pytest
 
-from representation_learning.configs import FilterConfig, SubsampleConfig
-
-# TODO (milad) move these?
-from representation_learning.data.transformations import (
+from esp_data_temp.transforms import (
     Filter,
+    FilterConfig,
     Subsample,
-    build_transforms,
+    SubsampleConfig,
+    transform_from_config,
 )
+
+# TODO (milad) add tests for returned metadata
 
 
 def test_filter_dataframe() -> None:
@@ -28,60 +29,29 @@ def test_filter_dataframe() -> None:
 
     # Test include operation
     config = FilterConfig(
-        property="source", values=["xeno-canto", "iNaturalist"], operation="include"
+        type="filter",
+        property="source",
+        values=["xeno-canto", "iNaturalist"],
+        mode="include",
     )
-    filter_transform = Filter(config)
-    filtered_df = filter_transform(df)
+    filter_transform = Filter.from_config(config)
+    filtered_df, _ = filter_transform(df)
 
     assert len(filtered_df) == 2
     assert set(filtered_df["source"]) == {"xeno-canto", "iNaturalist"}
 
     # Test exclude operation
     config = FilterConfig(
-        property="source", values=["xeno-canto", "iNaturalist"], operation="exclude"
+        type="filter",
+        property="source",
+        values=["xeno-canto", "iNaturalist"],
+        mode="exclude",
     )
-    filter_transform = Filter(config)
-    filtered_df = filter_transform(df)
+    filter_transform = Filter.from_config(config)
+    filtered_df, _ = filter_transform(df)
 
     assert len(filtered_df) == 2
     assert set(filtered_df["source"]) == {"Watkins", "other"}
-
-
-def test_filter_dict() -> None:
-    """Test filtering a dictionary of data."""
-    # Create test data
-    data = {
-        "1": {"source": "xeno-canto", "class": "birds", "value": 1},
-        "2": {"source": "iNaturalist", "class": "mammals", "value": 2},
-        "3": {"source": "Watkins", "class": "amphibians", "value": 3},
-        "4": {"source": "other", "class": "reptiles", "value": 4},
-    }
-
-    # Test include operation
-    config = FilterConfig(
-        property="source", values=["xeno-canto", "iNaturalist"], operation="include"
-    )
-    filter_transform = Filter(config)
-    filtered_data = filter_transform(data)
-
-    assert len(filtered_data) == 2
-    assert set(
-        k
-        for k, v in filtered_data.items()
-        if v["source"] in ["xeno-canto", "iNaturalist"]
-    ) == {"1", "2"}
-
-    # Test exclude operation
-    config = FilterConfig(
-        property="source", values=["xeno-canto", "iNaturalist"], operation="exclude"
-    )
-    filter_transform = Filter(config)
-    filtered_data = filter_transform(data)
-
-    assert len(filtered_data) == 2
-    assert set(
-        k for k, v in filtered_data.items() if v["source"] in ["Watkins", "other"]
-    ) == {"3", "4"}
 
 
 def test_subsample_dataframe() -> None:
@@ -96,12 +66,12 @@ def test_subsample_dataframe() -> None:
 
     # Test subsampling with different ratios
     config = SubsampleConfig(
+        type="subsample",
         property="class",
-        operation="subsample",
         ratios={"birds": 0.5, "mammals": 0.3, "amphibians": 0.7},
     )
-    subsample_transform = Subsample(config)
-    subsampled_df = subsample_transform(df)
+    subsample_transform = Subsample.from_config(config)
+    subsampled_df, _ = subsample_transform(df)
 
     # Check that the ratios are approximately correct
     class_counts = subsampled_df["class"].value_counts()
@@ -111,10 +81,12 @@ def test_subsample_dataframe() -> None:
 
     # Test with 'other' class
     config = SubsampleConfig(
-        property="class", operation="subsample", ratios={"birds": 0.5, "other": 0.2}
+        type="subsample",
+        property="class",
+        ratios={"birds": 0.5, "other": 0.2},
     )
-    subsample_transform = Subsample(config)
-    subsampled_df = subsample_transform(df)
+    subsample_transform = Subsample.from_config(config)
+    subsampled_df, _ = subsample_transform(df)
 
     # Check that 'other' class (mammals + amphibians) is subsampled correctly
     other_count = len(
@@ -123,88 +95,50 @@ def test_subsample_dataframe() -> None:
     assert abs(other_count / 200 - 0.2) < 0.1
 
 
-def test_subsample_dict() -> None:
-    """Test subsampling a dictionary of data."""
-    # Create test data with known class distribution
-    data = {str(i): {"class": "birds", "value": i} for i in range(100)}
-    data.update({str(i): {"class": "mammals", "value": i} for i in range(100, 200)})
-    data.update({str(i): {"class": "amphibians", "value": i} for i in range(200, 300)})
-
-    # Test subsampling with different ratios
-    config = SubsampleConfig(
-        property="class",
-        operation="subsample",
-        ratios={"birds": 0.5, "mammals": 0.3, "amphibians": 0.7},
-    )
-    subsample_transform = Subsample(config)
-    subsampled_data = subsample_transform(data)
-
-    # Check that the ratios are approximately correct
-    class_counts = {
-        "birds": sum(1 for v in subsampled_data.values() if v["class"] == "birds"),
-        "mammals": sum(1 for v in subsampled_data.values() if v["class"] == "mammals"),
-        "amphibians": sum(
-            1 for v in subsampled_data.values() if v["class"] == "amphibians"
-        ),
-    }
-    assert abs(class_counts["birds"] / 100 - 0.5) < 0.1
-    assert abs(class_counts["mammals"] / 100 - 0.3) < 0.1
-    assert abs(class_counts["amphibians"] / 100 - 0.7) < 0.1
-
-
-def test_build_transforms() -> None:
+def test_transform_from_config() -> None:
     """Test building transformations from configuration."""
     # Test building a single filter transform
     configs = [
-        {
-            "filter": {
-                "property": "source",
-                "values": ["xeno-canto", "iNaturalist"],
-                "operation": "include",
-            }
-        }
+        FilterConfig(
+            type="filter",
+            property="source",
+            values=["xeno-canto", "iNaturalist"],
+            mode="include",
+        )
     ]
-    transforms = build_transforms(configs)
-    assert len(transforms) == 1
+    transforms = [transform_from_config(c) for c in configs]
     assert isinstance(transforms[0], Filter)
 
     # Test building a single subsample transform
     configs = [
-        {
-            "subsample": {
-                "property": "class",
-                "operation": "subsample",
-                "ratios": {"birds": 0.5},
-            }
-        }
+        SubsampleConfig(
+            type="subsample",
+            property="class",
+            ratios={"birds": 0.5},
+        )
     ]
-    transforms = build_transforms(configs)
-    assert len(transforms) == 1
+    transforms = [transform_from_config(c) for c in configs]
     assert isinstance(transforms[0], Subsample)
 
     # Test building multiple transforms
     configs = [
-        {
-            "filter": {
-                "property": "source",
-                "values": ["xeno-canto"],
-                "operation": "include",
-            }
-        },
-        {
-            "subsample": {
-                "property": "class",
-                "operation": "subsample",
-                "ratios": {"birds": 0.5},
-            }
-        },
+        FilterConfig(
+            type="filter",
+            property="source",
+            values=["xeno-canto"],
+            mode="include",
+        ),
+        SubsampleConfig(
+            type="subsample",
+            property="class",
+            ratios={"birds": 0.5},
+        ),
     ]
-    transforms = build_transforms(configs)
-    assert len(transforms) == 2
+    transforms = [transform_from_config(c) for c in configs]
     assert isinstance(transforms[0], Filter)
     assert isinstance(transforms[1], Subsample)
 
     # Test invalid transform type
-    configs = [{"invalid": {}}]
+    configs = {"invalid": {}}
     with pytest.raises(ValueError):
         build_transforms(configs)
