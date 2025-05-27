@@ -12,7 +12,7 @@ logger = logging.Logger("esp_data")
 class LabelFromFeatureConfig(BaseModel):
     type: Literal["label_from_feature"]
     feature: str
-    num_classes: int | Literal["auto"] = "auto"
+    label_map: dict[str, int] | None = None
     output_feature: str = "label"
     override: bool = False
 
@@ -22,12 +22,12 @@ class LabelFromFeature:
         self,
         *,
         feature: str,
-        num_classes: int | Literal["auto"] = "auto",
+        label_map: dict[str, int] | None = None,
         output_feature: str = "label",
         override: bool = False,
     ) -> None:
         self.feature = feature
-        self.num_classes = num_classes
+        self.label_map = label_map
         self.override = override
         self.output_feature = output_feature
 
@@ -48,16 +48,18 @@ class LabelFromFeature:
                 f"Dropped {len(df) - len(df_clean)} rows with {self.feature}=NaN"
             )
 
-        uniques = sorted(df_clean[self.feature].unique())
-        label_mapping = {lbl: idx for idx, lbl in enumerate(uniques)}
-        df_clean[self.output_feature] = df_clean[self.feature].map(label_mapping)
+        if self.label_map is None:
+            uniques = sorted(df_clean[self.feature].unique())
+            label_map = {lbl: idx for idx, lbl in enumerate(uniques)}
+        else:
+            label_map = self.label_map
+
+        df_clean[self.output_feature] = df_clean[self.feature].map(label_map)
 
         metadata = {
             "label_feature": self.feature,
-            "label_map": label_mapping,
-            "num_classes": len(uniques)
-            if self.num_classes == "auto"
-            else self.num_classes,
+            "label_map": label_map,
+            "num_classes": len(label_map),
         }
 
         return df_clean, metadata
