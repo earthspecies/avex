@@ -12,7 +12,7 @@ logger = logging.Logger("esp_data")
 class MultiLabelFromFeaturesConfig(BaseModel):
     type: Literal["labels_from_features"]
     features: str | list[str]
-    num_classes: int | Literal["auto"] = "auto"
+    label_map: dict[str, int] | None = None
     output_feature: str = "label"
     override: bool = False
 
@@ -38,9 +38,9 @@ class MultiLabelFromFeatures:
     features : list[str]
         The names of the columns in the DataFrame to use as sources for the labels. Each
         column can contain a single value or a list of values per row.
-    num_classes : int or "auto", default="auto"
-        The number of unique classes. If set to "auto", the number of classes is
-        inferred from the data.
+    label_map : dict[str, int] | None, default=None
+        A mapping of unique values to integer IDs. If not provided, the transform will
+        generate a mapping based on the unique values in the specified feature columns.
     output_feature : str, default="label"
         The name of the output column to store the generated label lists.
     override : bool, default=False
@@ -60,12 +60,12 @@ class MultiLabelFromFeatures:
         self,
         *,
         features: list[str],
-        num_classes: int | Literal["auto"] = "auto",
+        label_map: dict[str, int] | None = None,
         output_feature: str = "label",
         override: bool = False,
     ) -> None:
         self.features = features
-        self.num_classes = num_classes
+        self.label_map = label_map
         self.override = override
         self.output_feature = output_feature
 
@@ -77,12 +77,15 @@ class MultiLabelFromFeatures:
         if self.output_feature in df and not self.override:
             raise AssertionError("TODO (milad)")
 
-        uniques = set()
-        for f in self.features:
-            # explode() turns empty lists into NaNs hence the dropna()
-            uniques |= set(df[f].explode().dropna().unique())
+        if self.label_map is None:
+            uniques = set()
+            for f in self.features:
+                # explode() turns empty lists into NaNs hence the dropna()
+                uniques |= set(df[f].explode().dropna().unique())
 
-        label_map = {lbl: idx for idx, lbl in enumerate(sorted(uniques))}
+            label_map = {lbl: idx for idx, lbl in enumerate(sorted(uniques))}
+        else:
+            label_map = self.label_map
 
         def _row_to_ids(row: pd.Series) -> list | None:
             row_labels = []
@@ -112,9 +115,7 @@ class MultiLabelFromFeatures:
         metadata = {
             "label_feature": self.features,
             "label_map": label_map,
-            "num_classes": len(uniques)
-            if self.num_classes == "auto"
-            else self.num_classes,
+            "num_classes": len(label_map),
         }
 
         return df_clean, metadata
