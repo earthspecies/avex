@@ -33,6 +33,7 @@ dependencies = [
   "psutil>=7.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
+  "esp-data",
 ]
 
 [dependency-groups]
@@ -48,8 +49,18 @@ dev = [
   "ipykernel>=6.29.5",
 ]
 
+# esp_data package
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+esp-data = { index = "esp-pypi" }
+
 [tool.uv]
 default-groups = ["dev", "gpu"]
+keyring-provider = "subprocess"
 
 [project.urls]
 Homepage = "https://github.com/earthspecies/representation-learning"

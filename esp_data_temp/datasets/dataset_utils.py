@@ -26,48 +26,6 @@ class GSPath(cloudpathlib.GSPath):
         super().__init__(client_path, client=_get_client())
 
 
-# TODO (gagan): Use esp_data.io for reading audio files
-def read_audio(audio_path: os.PathLike) -> tuple[np.ndarray, int]:
-    """Read an audio file and return the audio data and sample rate.
-    Parameters
-    ----------
-    audio_path : os.PathLike
-        The path to the audio file. Can be a local path or a GSPath object.
-    Returns
-    -------
-    tuple[np.ndarray, int]
-        A tuple containing the audio data as a numpy array and
-        the sample rate as an integer.
-
-    Raises
-    -------
-    FileNotFoundError
-        If the audio file does not exist.
-    ValueError
-        If the audio file cannot be read or is not in a supported format.
-    """
-    # Open the audio file. Using the .open('rb') method works for both local and
-    # GSPath objects.
-    try:
-        with audio_path.open("rb") as f:
-            audio, sr = sf.read(f)
-    except FileNotFoundError as e:
-        raise FileNotFoundError(f"Audio file not found: {audio_path}") from e
-    except ValueError as e:
-        raise ValueError(
-            f"Could not read audio file {audio_path}. "
-            "Ensure it is in a supported format (e.g., WAV, FLAC, MP3, OGG)."
-        ) from e
-
-    if audio.ndim > 1:
-        # find the channel dim
-        channel_dim = np.argmin(audio.shape)
-        # take mean across the channel dimension
-        audio = np.mean(audio, axis=channel_dim)
-
-    return audio, sr
-
-
 def read_audio_clip(
     audio_path: os.PathLike,
     start_time: float = None,
