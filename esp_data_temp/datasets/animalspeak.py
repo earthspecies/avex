@@ -253,15 +253,6 @@ class AnimalSpeak(Dataset):
             sr = target_sr
 
         row["audio"] = audio
-        # TODO (gagan / milad) this should be handled by the output_take_and_give
-        # item = {
-        #     "raw_wav": audio.astype(np.float32),
-        #     "text_label": row["label_feature"]
-        #     if "label_feature" in row
-        #     else row["label"],
-        #     "label": row.label,
-        #     "path": str(audio_path),
-        # }
 
         if self.output_take_and_give:
             item = {}

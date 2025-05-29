@@ -8,15 +8,14 @@ and marine mammal research,”
 The Journal of the Acoustical Society of America, vol. 148,
 """
 
-import pathlib
 from io import StringIO
-from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
 import librosa
 import numpy as np
 import pandas as pd
-from esp_data.io import GSPath
+import soundfile as sf
+from esp_data.io import GSPath, anypath, read_audio
 
 from esp_data_temp.config import DatasetConfig
 from esp_data_temp.datasets.base import (
@@ -25,8 +24,6 @@ from esp_data_temp.datasets.base import (
     register_dataset,
 )
 
-from .dataset_utils import read_audio_clip
-
 
 @register_dataset
 class BarkleyCanyon(Dataset):
@@ -34,6 +31,10 @@ class BarkleyCanyon(Dataset):
 
     Example:
     --------
+    >>> from esp_data_temp.datasets import BarkleyCanyon
+    >>> dataset = BarkleyCanyon(split="train")
+    >>> print(dataset.info.name)
+    barkley_canyon
     """
 
     info = DatasetInfo(
@@ -123,22 +124,23 @@ class BarkleyCanyon(Dataset):
 
     @classmethod
     def from_config(cls, cfg: DatasetConfig) -> "BarkleyCanyon":
-        """Create a CSVDataset instance from a configuration dictionary.
+        """Create a Dataset instance from a configuration dictionary.
 
         Parameters
         ----------
         cfg : DatasetConfig
-            Configuration dictionary containing dataset parameters.
+            Configuration dictionary containing dataset parametesf
 
         Returns
         -------
-        CSVAudioDataset
-            An instance of the CSVDataset class.
+        Dataset
+            An instance of the Dataset class.
 
         Raises
         -------
         ValueError
             If the configuration is missing required fields or contains invalid values.
+
         """
         cfg = cfg.model_dump(exclude=("dataset_name", "transformations"))
 
@@ -189,10 +191,12 @@ class BarkleyCanyon(Dataset):
         Returns
         -------
         dict[str, Any]
-            A dictionary containing the audio data, text label, label, and path.
+            A dictionary containing the data.
 
         Raises
         ------
+        ValueError
+            If the start time is beyond the audio duration.
         IndexError
             If the index is out of bounds.
         """
@@ -204,22 +208,42 @@ class BarkleyCanyon(Dataset):
         row = self._data.iloc[idx].to_dict()
         path_str: str = row[self.audio_path_col]
 
-        # Use GSPath for gs:// paths if available, otherwise use the local Path.
-        # TODO (gagan / milad) Replace with esp_data.io
-        if isinstance(path_str, GSPath) or isinstance(path_str, pathlib.Path):
-            audio_path = path_str
-        elif str(path_str).startswith("gs://"):
-            audio_path = GSPath(path_str)
-        else:
-            audio_path = Path(path_str)
+        file_path = anypath(path_str)
 
-        audio, sr = read_audio_clip(
-            audio_path,
-            start_time=row["start_times(sec)"],
-            end_time=row["end_times(sec)"],
-            to_mono=True,
-            mono_method="average",
+        # Get file info first to calculate frame positions
+        info = sf.info(file_path)
+        sr = info.samplerate
+        start_frame = (
+            int(row["start_times(sec)"] * sr)
+            if row["start_times(sec)"] is not None
+            else 0
         )
+        end_frame = (
+            int(row["end_times(sec)"] * sr)
+            if row["end_times(sec)"] is not None
+            else info.frames
+        )
+        frames_to_read = end_frame - start_frame
+
+        if frames_to_read <= 0:
+            raise ValueError(
+                f"start_time ({row['start_times(sec)']}s) is beyond the audio duration"
+            )
+
+        # Read the audio clip
+        audio, sr = read_audio(
+            file_path,
+            frames=frames_to_read,
+            start=start_frame,
+        )
+
+        # Stereo to mono if necessary.
+        # Find the channel dimension (typically the smaller dimension)
+        if audio.ndim > 1:
+            channel_dim = np.argmin(audio.shape)
+            # Take mean across the channel dimension
+            audio = np.mean(audio, axis=channel_dim)
+
         audio = audio.astype(np.float32)
 
         target_sr = self.sample_rate
