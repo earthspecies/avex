@@ -321,7 +321,6 @@ class Model(ModelBase):
         )
 
         feats: torch.Tensor = backbone_out["x"]  # (B, L, D)
-        print(f"feats shape: {feats.shape} pooling: {pooling}")
         if pooling == "cls":
             return feats[:, 0]  # CLS token
         elif pooling == "mean":

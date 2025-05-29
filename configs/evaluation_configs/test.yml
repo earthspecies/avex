@@ -22,13 +22,13 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
 
-  - run_name: eat_pretrain
-    run_config: configs/run_configs/eat_pretrain.yml
-    ### which layers to probe for embeddings
-    layers: last_layer
-    ### whether to use pretrained model or the one we train on bioacoustic data
-    checkpoint_path: runs/eat_pretrain_bf16_25_05_nopad/checkpoints/checkpoint_epoch_002.pt
-    pretrained: true
+  # - run_name: eat_pretrain
+  #   run_config: configs/run_configs/eat_pretrain.yml
+  #   ### which layers to probe for embeddings
+  #   layers: last_layer
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   checkpoint_path: runs/eat_pretrain_bf16_25_05_nopad/checkpoints/checkpoint_epoch_003.pt
+  #   pretrained: false
 
   # - run_name: clap
   #   run_config: configs/run_configs/clip_base_beans.yml
@@ -63,7 +63,7 @@ experiments:
     ### path to the checkpoint file
 
 # Where to save the evaluation results
-save_dir: evaluation_results/aves_masked
+save_dir: evaluation_results/debug
 
 device: cuda
 
@@ -76,7 +76,7 @@ frozen: true
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
 
-overwrite_embeddings: false
+overwrite_embeddings: true

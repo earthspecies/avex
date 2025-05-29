@@ -216,6 +216,7 @@ def run_experiment(
     device: torch.device,
     save_dir: Path,
 ) -> ExperimentResult:
+    logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
     logger.info(
@@ -321,10 +322,14 @@ def run_experiment(
     if need_retrieval or need_probe:
         
         test_path = emb_base_dir / "embedding_test.h5"
-        test_path = Path("~/EAT/bat_embeddings_consolidated.h5")
+        # test_path = Path("~/EAT/bat_embeddings_consolidated.h5").expanduser()
+        # print("exists", test_path.exists())
+        # test_path = Path("~/EAT/cbi_embeddings_consolidated.h5")
+        logger.info(test_path)
 
         if (not overwrite) and test_path.exists():
             test_embeds, test_labels = load_embeddings_arrays(test_path)
+            print(test_embeds.shape, test_labels[0])
         else:
             test_embeds, test_labels = extract_embeddings_for_split(
                 base_model, test_dl_raw, layer_names, device
@@ -369,6 +374,7 @@ def run_experiment(
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
         retrieval_metrics = _eval_retrieval(test_embeds, test_labels)
+        # logger.info("retrieval metrics", retrieval_metrics)
 
     # Log & finish
     exp_logger.log_metrics(train_metrics, step=0, split="train_final")
@@ -396,6 +402,7 @@ def main() -> None:
     # 1. Load configs
     eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
     benchmark_cfg = load_config(eval_cfg.dataset_config, config_type="benchmark")
+    # logger.info("eval cfg", eval_cfg)
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):

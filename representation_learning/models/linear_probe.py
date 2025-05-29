@@ -46,7 +46,6 @@ class LinearProbe(torch.nn.Module):
                 device
             )  # Use correct input length
             embeddings = self.base_model.extract_embeddings(dummy_input, self.layers)
-            print(f"Embeddings shape: {embeddings.shape}")
             input_dim = embeddings.shape[1]
 
         self.classifier = torch.nn.Linear(input_dim, num_classes).to(device)
@@ -68,6 +67,4 @@ class LinearProbe(torch.nn.Module):
         else:
             embeddings = self.base_model.extract_embeddings(x, self.layers)
         
-        print("e shape", embeddings.shape)
-
         return self.classifier(embeddings)

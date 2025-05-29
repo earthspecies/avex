@@ -79,7 +79,7 @@ model_spec:
 # -----------------------------------------------------------------------------
 # Dataset + preprocessing
 # -----------------------------------------------------------------------------
-dataset_config: configs/data_configs/data_base.yml
+dataset_config: configs/data_configs/data_caption.yml
 label_type: self_supervised
 preprocessing: null
 sr: 16000

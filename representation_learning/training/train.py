@@ -990,7 +990,6 @@ class FineTuneTrainer:
         ):
             if "embed" in batch:
                 z = batch["embed"].to(self.device)
-                print("z shape", z.shape)
                 logits = self.model(z)
                 y = batch["label"].to(self.device)
             else:

@@ -118,11 +118,10 @@ class Model(ModelBase):
         if isinstance(features, list):
             features = torch.stack(features, dim=0) if len(features) > 1 else features[0]
 
-        return features
+        return features[-1]
 
 
-
-    def extract_embeddings(self, x: Any | dict[str, Any], layers: List[str], *, padding_mask: Any | None = None) -> torch.Tensor:
+    def extract_embeddings(self, x: Any | dict[str, Any], layers: List[str], *, padding_mask: Any | None = None, masked_mean: bool = False) -> torch.Tensor:
         # ------------------------------------------------------------------ #
         #  Construct / down-sample padding mask (if supplied)               #
         # ------------------------------------------------------------------ #
@@ -160,8 +159,8 @@ class Model(ModelBase):
         # ------------------------------------------------------------------ #
         #  Pool over time dimension                                         #
         # ------------------------------------------------------------------ #
-
-        if frame_mask is None:
+        if not masked_mean or frame_mask is None:
+            
             return sequence_embeddings.mean(dim=1)  # (B, C)
 
         return _masked_mean(sequence_embeddings, frame_mask)
