@@ -16,12 +16,12 @@ from typing import Any, Callable, Dict, Iterator, List, Optional
 import librosa
 import numpy as np
 import pandas as pd
+from esp_data.io import GSPath
 
 from esp_data_temp.config import DatasetConfig
 from esp_data_temp.datasets.base import (
     Dataset,
     DatasetInfo,
-    GSPath,
     register_dataset,
 )
 

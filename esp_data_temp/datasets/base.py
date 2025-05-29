@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, Self
 
 import semver
+from esp_data.io import GSPath
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from esp_data_temp.config import DatasetConfig
@@ -11,8 +12,6 @@ from esp_data_temp.transforms import (
     RegisteredTransformConfigs,
     transform_from_config,
 )
-
-from .dataset_utils import GSPath
 
 
 class DatasetInfo(BaseModel):

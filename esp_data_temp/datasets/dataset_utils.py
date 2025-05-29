@@ -1,29 +1,7 @@
 import os
-from functools import lru_cache
-from typing import Self
 
-import cloudpathlib
 import numpy as np
 import soundfile as sf
-from google.cloud.storage.client import Client
-
-
-@lru_cache(maxsize=1)
-def _get_client() -> cloudpathlib.GSClient:
-    return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
-
-
-class GSPath(cloudpathlib.GSPath):
-    """
-    A wrapper for the cloudpathlib GSPath that provides a default client.
-    This avoids issues when the GOOGLE_APPLICATION_CREDENTIALS variable is not set.
-    """
-
-    def __init__(
-        self,
-        client_path: str | Self | cloudpathlib.AnyPath,
-    ) -> None:
-        super().__init__(client_path, client=_get_client())
 
 
 def read_audio_clip(
