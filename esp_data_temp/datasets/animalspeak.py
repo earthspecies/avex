@@ -27,9 +27,12 @@ class AnimalSpeak(Dataset):
     Example:
     --------
     >>> from esp_data_temp.datasets import AnimalSpeak
-    >>> dataset = AnimalSpeak(split="validation",
-                    output_take_and_give={"species_common": "comm"})
-    >>> print(dataset.info)
+    >>> dataset = AnimalSpeak(
+    ...     split="validation",
+    ...     output_take_and_give={"species_common": "comm"}
+    ... )
+    >>> print(dataset.info.name)
+    animalspeak
     """
 
     info = DatasetInfo(
