@@ -138,10 +138,10 @@ def test_load_from_config() -> None:
     assert dataset.info.split_paths["validation"] is not None
 
 
-def test_invalid_split(dataset: Dataset) -> None:
-    """Test if _loading invalid split raises error."""
+def test_invalid_split() -> None:
+    """Test if initializing with invalid split raises error."""
     with pytest.raises(ValueError):
-        dataset._load("invalid_split")
+        AnimalSpeak(split="invalid_split")
 
 
 def test_sample_consistency(dataset: Dataset) -> None:

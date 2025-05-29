@@ -76,8 +76,9 @@ class BarkleyCanyon(Dataset):
             A list of post-processing functions to apply to each sample after loading.
         """
         super().__init__(output_take_and_give)  # Initialize the parent Dataset class
+        self.split = split
         self._data: pd.DataFrame = None
-        self._load(split)  # Load the dataset (fills self._data)
+        self._load()  # Load the dataset (fills self._data)
         self.sample_rate = sample_rate
         self.audio_path_col = audio_path_col
         self.postprocessors = postprocessors or []
@@ -92,26 +93,21 @@ class BarkleyCanyon(Dataset):
         """Return the available splits of the dataset."""
         return list(self.info.split_paths.keys())
 
-    def _load(self, split: str) -> None:
-        """Load the given split of the dataset and return them.
-
-        Parameters
-        ----------
-        split : str
-            Which split of the dataset to load. Must be one of info.split_paths keys.
+    def _load(self) -> None:
+        """Load the dataset.
 
         Raises
         ------
         ValueError
             If the split is not valid.
         """
-        if split not in self.info.split_paths:
+        if self.split not in self.info.split_paths:
             raise ValueError(
-                f"Invalid split: {split}. "
+                f"Invalid split: {self.split}. "
                 f"Expected one of {list(self.info.split_paths.keys())}"
             )
 
-        location = self.info.split_paths[split]
+        location = self.info.split_paths[self.split]
         # Read CSV content
         csv_text = GSPath(location).read_text(encoding="utf-8")
         self._data = pd.read_csv(StringIO(csv_text))

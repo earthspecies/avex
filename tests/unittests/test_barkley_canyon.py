@@ -139,10 +139,10 @@ def test_load_from_config() -> None:
     assert len(dataset) > 0, "Dataset should not be empty"
 
 
-def test_invalid_split(dataset: Dataset) -> None:
+def test_invalid_split() -> None:
     """Test if _loading invalid split raises error."""
     with pytest.raises(ValueError):
-        dataset._load("invalid_split")
+        BarkleyCanyon(split="invalid_split")
 
 
 def test_sample_consistency(dataset: Dataset) -> None:
