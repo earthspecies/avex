@@ -229,19 +229,6 @@ class Dataset(ABC):
         """
         raise NotImplementedError
 
-    # TODO (discuss) do we want the underlying data object to be public ?
-    # @property
-    # @abstractmethod
-    # def data(self) -> Sequence[Any]:
-    #     """The dataset as a sequence of objects.
-
-    #     Returns
-    #     -------
-    #     Sequence[Any]
-    #         The dataset as a sequence of objects.
-    #     """
-    #     raise NotImplementedError
-
     @abstractmethod
     def _load(self, split: str) -> Sequence[Any]:
         """Load one split of the dataset.
