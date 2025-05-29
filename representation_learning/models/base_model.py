@@ -177,9 +177,13 @@ class ModelBase(nn.Module):
                         aggregated = torch.mean(emb, dim=1)
                     result.append(aggregated)
                 else:
-                    raise ValueError(
-                        f"Unexpected embedding dimension: {emb.dim()}. Expected 2 or 3."
-                    )
+                    # e.g. 4-D CNN feature maps (batch, channels, height, width)
+                    # or any higher-dimensional tensors. We spatially average over
+                    # all dimensions beyond (batch, feature) to yield a 2-D tensor
+                    # so the resulting shape is (batch, feature_dim).
+                    spatial_dims = tuple(range(2, emb.dim()))
+                    aggregated = torch.mean(emb, dim=spatial_dims)
+                    result.append(aggregated)
 
             return torch.cat(result, dim=1)
 

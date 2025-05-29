@@ -33,12 +33,12 @@ logging: mlflow
 resume_from_checkpoint: null
 
 training_params:
-  train_epochs: 60
+  train_epochs: 20
   lr: 0.0001
-  batch_size: 256
+  batch_size: 64
   optimizer: adamw
   weight_decay: 0.01
-  amp: false
+  amp: true
   amp_dtype: bf16
 
 # Learning rate scheduler configuration

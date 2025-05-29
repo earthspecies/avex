@@ -174,9 +174,12 @@ def _train_and_eval_linear_probe(
 def _process_state_dict(state_dict: dict) -> dict:
     if "model_state_dict" in state_dict:
         state_dict = state_dict["model_state_dict"]
-    # drop classifier.weight and classifier.bias
-    del state_dict["classifier.weight"]
-    del state_dict["classifier.bias"]
+    # drop classifier.weight and classifier.bias safely
+    state_dict.pop("classifier.weight", None)
+    state_dict.pop("classifier.bias", None)
+    state_dict.pop("model.classifier.1.weight", None)
+    state_dict.pop("model.classifier.1.bias", None)
+
     return state_dict
 
 
@@ -316,7 +319,9 @@ def run_experiment(
 
     # ------------------- embeddings for retrieval ---------------------- #
     if need_retrieval or need_probe:
+        
         test_path = emb_base_dir / "embedding_test.h5"
+        test_path = Path("~/EAT/bat_embeddings_consolidated.h5")
 
         if (not overwrite) and test_path.exists():
             test_embeds, test_labels = load_embeddings_arrays(test_path)

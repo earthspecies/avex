@@ -21,6 +21,8 @@ from representation_learning.data.augmentations import (
     AugmentationProcessor,
     make_item_postprocessor,
 )
+import logging
+from pathlib import Path
 
 
 # --------------------------------------------------------------------------- #
@@ -41,6 +43,7 @@ class Collater:
         preprocessor: Optional[str] = None,
         device: str = "cpu",
         batch_aug_processor: Optional[AugmentationProcessor] = None,
+        num_classes: Optional[int] = None,
     ) -> None:
         self.audio_max_length_seconds = audio_max_length_seconds
         self.window_selection = window_selection
@@ -49,6 +52,7 @@ class Collater:
         self.sr = sr
         self.device = device
         self.batch_aug_processor = batch_aug_processor
+        self.num_classes = num_classes
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
         # First prepare data with uniform lengths
@@ -95,16 +99,35 @@ class Collater:
         audio_tensor = torch.stack(audios)  # [B, T] float32
         mask_tensor = torch.stack(masks)  # [B, T] bool
 
-        # Handle different label formats (int → long, multi-hot → float32)
+        # ------------------------------------------------------------------
+        #  Label stacking (single-label vs multi-label)
+        # ------------------------------------------------------------------
         if all(isinstance(lbl, (int, np.integer)) for lbl in labels):
+            # Standard single-label classification → LongTensor of class indices
             label_tensor = torch.tensor(labels, dtype=torch.long)
         else:
-            label_tensors = [
-                torch.as_tensor(lbl, dtype=torch.float32)
-                if not isinstance(lbl, torch.Tensor)
-                else lbl.float()
-                for lbl in labels
-            ]
+            # Multi-label: each *lbl* is a list/1-D tensor of class indices.
+            # Convert to fixed-length multi-hot vectors so ``torch.stack`` works.
+
+            # Determine number of classes from the *maximum* index observed in
+            # this mini-batch.  This is safe because the final linear layer has
+            # fixed out-features and BCEWithLogitsLoss ignores extra zeros.
+            max_cls_batch = max(int(max(l)) if len(l) > 0 else 0 for l in labels)  # type: ignore[arg-type]
+            num_classes = max(
+                (self.num_classes or 0),  # global if provided
+                max_cls_batch + 1,
+            )
+
+            def _to_multihot(lbl: list[int] | torch.Tensor) -> torch.Tensor:
+                idx_list = (
+                    lbl.tolist() if isinstance(lbl, torch.Tensor) else list(lbl)
+                )
+                mh = torch.zeros(num_classes, dtype=torch.float32)
+                if idx_list:
+                    mh[idx_list] = 1.0
+                return mh
+
+            label_tensors = [_to_multihot(lbl) for lbl in labels]
             label_tensor = torch.stack(label_tensors)
 
         return {
@@ -246,6 +269,10 @@ def build_dataloaders(
     # ------------------------------------------------------------------ #
     # Collaters
     # ------------------------------------------------------------------ #
+    global_num_classes = None
+    if hasattr(ds_train, "metadata") and "num_classes" in ds_train.metadata:
+        global_num_classes = ds_train.metadata["num_classes"]
+
     collate_fn_train = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
@@ -253,6 +280,7 @@ def build_dataloaders(
         keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=aug_processor,
+        num_classes=global_num_classes,
     )
     collate_fn_eval = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
@@ -261,6 +289,7 @@ def build_dataloaders(
         keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=None,  # no augmentation during eval
+        num_classes=global_num_classes,
     )
 
     # ------------------------------------------------------------------ #

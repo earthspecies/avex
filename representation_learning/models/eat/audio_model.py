@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
+from typing import List
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
@@ -16,6 +17,19 @@ from .eat import (
     Modality,
 )
 from .image import D2vImageConfig
+
+# Mask helpers
+from representation_learning.data.audio_utils import (
+    waveform_to_frame_mask,
+    sync_crop_or_pad_time,
+    frame_mask_to_patch_mask,
+)
+
+# ------------------------------------------------------------------ #
+#  Local imports
+# ------------------------------------------------------------------ #
+
+from .audio_processor import EATAudioProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +49,11 @@ class Model(ModelBase):
         audio_config: Optional[AudioConfig] = None,
         embed_dim: int = 768,
         patch_size: int = 16,
-        target_length: int = 256,
+        target_length: int = 1024,
         return_features_only: bool = False,
         enable_ema: bool = False,
         pretraining_mode: bool = False,
+        skip_padding_logic: bool = True,
         eat_cfg: Optional[Dict[str, Any]] = None,
     ) -> None:
         # Initialise the generic ESP model wrapper
@@ -49,6 +64,7 @@ class Model(ModelBase):
         # ------------------------------------------------------------------ #
         self.return_features_only: bool = return_features_only
         self.pretraining_mode: bool = pretraining_mode
+        self.skip_padding_logic: bool = skip_padding_logic
 
         # Auto-enable EMA teacher when in pre-training mode (unless user overrode)
         if self.pretraining_mode and not enable_ema:
@@ -89,6 +105,16 @@ class Model(ModelBase):
 
         # Simple linear classifier for clip-level logits
         self.classifier: nn.Linear = nn.Linear(embed_dim, num_classes).to(self.device)
+
+        # ------------------------------------------------------------------ #
+        #  Audio pre-processing                                             #
+        # ------------------------------------------------------------------ #
+
+        self.audio_processor = EATAudioProcessor(
+            sample_rate=16_000,
+            target_length=target_length,
+            n_mels=128,
+        )
 
     # --------------------------------------------------------------------- #
     # Utility: pad or crop the time dimension to a fixed length
@@ -162,28 +188,40 @@ class Model(ModelBase):
                 "AudioProcessor must return a 3-D tensor with shape (B, F, T)"
             )
 
-        # 2) Re-arrange to (B, T, F) and pad / crop
-        spec = spec.permute(0, 2, 1)  # -> (B, T, F)
-        spec = self._pad_or_crop_time(
-            spec, self.backbone.cfg.modalities.image.target_length
-        )
+        # 2) Re-arrange to (B, T, F)
+        # spec = spec.permute(0, 2, 1)  # -> (B, T, F)
+
+        # ------------------------------------------------------------------ #
+        #  Optional: propagate padding mask (waveform → frame → patch)        #
+        # ------------------------------------------------------------------ #
+        patch_mask = None
+
+        # 3) Add channel dimension expected by ImageEncoder
         spec = spec.unsqueeze(1)  # (B, 1, T, F)
 
-        # 3) Backbone
+        # 4) Backbone
         if self.pretraining_mode:
             # Backbone handles masking & loss internally
-            return self.backbone(spec, mask=True, features_only=False)
+            return self.backbone(
+                spec,
+                padding_mask=patch_mask,
+                mask=True,
+                features_only=False,
+            )
 
         # Features-only path for fine-tuning / inference
         backbone_out: Dict[str, Any] = self.backbone(
-            spec, mask=False, features_only=True
+            spec,
+            padding_mask=patch_mask,
+            mask=False,
+            features_only=True,
         )
         features: torch.Tensor = backbone_out["x"].mean(dim=1)  # global average pool
 
         if self.return_features_only:
             return features  # (B, embed_dim)
 
-        # 4) Classification head
+        # 5) Classification head
         return self.classifier(features)  # (B, num_classes)
 
     # --------------------------------------------------------------------- #
@@ -226,3 +264,68 @@ class Model(ModelBase):
                     pass  # fall through and set raw string
 
             setattr(obj, key, val)
+
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
+        layers: List[str],  # currently unused for EAT
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+        pooling: str = "cls",  # one of: "cls", "mean"
+    ) -> torch.Tensor:
+        """Return a clip-level embedding using *pooling* strategy.
+
+        Parameters
+        ----------
+        x : Tensor | dict
+            Either a raw waveform tensor (B, T) or a dict with ``{"raw_wav",
+            "padding_mask"}``.
+        layers : List[str]
+            Ignored for the moment – kept for interface parity with other
+            models.
+        padding_mask : Tensor | None, optional
+            Explicit mask when *x* is provided as a raw tensor.
+        pooling : {"cls", "mean"}
+            • ``"cls"`` – return the CLS token (default).
+            • ``"mean"`` – mean-pool patch embeddings along the time axis.
+        """
+        # ------------------------------------------------------------------ #
+        #  Flexible input handling                                           #
+        # ------------------------------------------------------------------ #
+        if isinstance(x, dict):
+            wav = x["raw_wav"]
+            padding_mask = x.get("padding_mask")
+        else:
+            wav = x  # type: ignore[assignment]
+
+        # 1) Spectrogram extraction via AudioProcessor
+        spec = super().process_audio(wav)
+        if spec.dim() != 3:
+            raise RuntimeError(
+                "AudioProcessor must return a 3-D tensor with shape (B, F, T)"
+            )
+
+        # 2) Re-arrange to (B, T, F)
+        # spec = spec.permute(0, 2, 1)
+
+        spec = spec.unsqueeze(1)  # (B, 1, T, F)
+
+        remove_extra = pooling != "cls"
+
+        backbone_out: Dict[str, Any] = self.backbone(
+            spec,
+            # padding_mask=patch_mask,
+            mask=False,
+            features_only=True,
+            remove_extra_tokens=remove_extra,
+        )
+
+        feats: torch.Tensor = backbone_out["x"]  # (B, L, D)
+        print(f"feats shape: {feats.shape} pooling: {pooling}")
+        if pooling == "cls":
+            return feats[:, 0]  # CLS token
+        elif pooling == "mean":
+            return feats.mean(dim=1)  # global average over patches
+        else:
+            raise ValueError("pooling must be 'cls' or 'mean'")
+

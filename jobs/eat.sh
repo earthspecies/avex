@@ -5,6 +5,7 @@
 #SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="eat pretraining"
+#SBATCH --cpus-per-gpu=10
 
 cd ~/representation-learning
 uv sync

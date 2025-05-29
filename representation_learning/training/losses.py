@@ -188,6 +188,65 @@ class ClipLoss(nn.Module):
         return total_loss
 
 
+# --------------------------------------------------------------------------- #
+#  Focal loss for multi-label classification (sigmoid variant)
+# --------------------------------------------------------------------------- #
+
+
+class FocalLoss(nn.Module):
+    """Sigmoid-based focal loss (BCE variant) for multi-label tasks.
+
+    Parameters
+    ----------
+    gamma : float, default=2.0
+        Focusing parameter that down-weights well-classified examples.
+    alpha : float | None, default=None
+        Balancing factor between positive / negative examples.  Common values
+        are ``0.25`` (as in the RetinaNet paper) or ``None`` to disable.
+    reduction : str, {"mean", "sum", "none"}
+        Reduction method applied to the per-sample loss.
+    """
+
+    def __init__(
+        self,
+        gamma: float = 2.0,
+        alpha: float | None = None,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+        if reduction not in {"mean", "sum", "none"}:
+            raise ValueError("reduction must be 'mean', 'sum', or 'none'")
+        self.reduction = reduction
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        if targets.dtype != torch.float32:
+            targets = targets.float()
+
+        bce = torch.nn.functional.binary_cross_entropy_with_logits(
+            logits, targets, reduction="none"
+        )
+
+        # Convert BCE loss back to probability space for focal scaling
+        prob = torch.sigmoid(logits)
+        p_t = prob * targets + (1 - prob) * (1 - targets)
+
+        focal_factor = (1 - p_t) ** self.gamma
+        loss = focal_factor * bce
+
+        if self.alpha is not None:
+            alpha_factor = self.alpha * targets + (1 - self.alpha) * (1 - targets)
+            loss = alpha_factor * loss
+
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        else:
+            return loss
+
+
 def _build_criterion(loss_name: str) -> nn.Module:
     if loss_name == "cross_entropy":
         return nn.CrossEntropyLoss()
@@ -199,5 +258,7 @@ def _build_criterion(loss_name: str) -> nn.Module:
         return nn.BCEWithLogitsLoss()
     elif loss_name in {"clip", "contrastive"}:
         return ClipLoss()
+    elif loss_name in {"focal", "focal_loss"}:
+        return FocalLoss()
     else:
         raise ValueError(f"Unknown loss_function: {loss_name}")

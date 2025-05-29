@@ -32,6 +32,7 @@ from representation_learning.configs import EvaluateConfig, RunConfig
 from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
+    get_local_device_index,
     is_main_process,
 )
 from representation_learning.training.losses import ClipLoss, _build_criterion
@@ -167,12 +168,25 @@ class Trainer:
         if self.is_distributed:
             logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
 
-            self.model = parallel.DistributedDataParallel(
-                self.model,
-                device_ids=[self.local_rank],
-                output_device=self.local_rank,
-                find_unused_parameters=True,
-            )
+            # Get the actual device index that the model is on
+            model_device = self.device
+            if model_device.type == "cuda":
+                # Use SLURM-aware device index to handle GPU allocation properly
+                device_index = get_local_device_index()
+                logger.info(f"Using CUDA device index {device_index} for DDP")
+                self.model = parallel.DistributedDataParallel(
+                    self.model,
+                    device_ids=[device_index],
+                    output_device=device_index,
+                    find_unused_parameters=True,
+                )
+            else:
+                # For CPU or when device index is None, let DDP auto-detect
+                logger.info("Using CPU or auto-detect for DDP")
+                self.model = parallel.DistributedDataParallel(
+                    self.model,
+                    find_unused_parameters=True,
+                )
             self.model_unwrapped = self.model.module
         else:
             self.model_unwrapped = self.model
@@ -976,6 +990,7 @@ class FineTuneTrainer:
         ):
             if "embed" in batch:
                 z = batch["embed"].to(self.device)
+                print("z shape", z.shape)
                 logits = self.model(z)
                 y = batch["label"].to(self.device)
             else:

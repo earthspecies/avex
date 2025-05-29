@@ -84,6 +84,7 @@ class AudioProcessor:
         self.normalize = cfg.normalize
         self.target_length_seconds = cfg.target_length_seconds
         self.window_selection = cfg.window_selection
+        self.center = cfg.center
 
         # Pre‑compute mel filter bank if required
         if self.representation == "mel_spectrogram":
@@ -133,6 +134,7 @@ class AudioProcessor:
             hop_length=self.hop_length,
             win_length=self.win_length,
             window=self._get_window().to(waveform.device),
+            center=self.center,
             return_complex=True,
         )
         spectrogram = stft.abs().pow(2)
@@ -164,3 +166,139 @@ class AudioProcessor:
             - x.amin(dim=(-2, -1), keepdim=True)
             + 1e-8
         )
+
+# --------------------------------------------------------------------------- #
+#  Padding-mask helpers (added for precise mask propagation to frame / patch) #
+# --------------------------------------------------------------------------- #
+
+def waveform_to_frame_mask(
+    padding_mask: Tensor,
+    *,
+    hop_length: int,
+) -> Tensor:
+    """Down-sample a **sample-level** padding mask to STFT frame resolution.
+
+    Parameters
+    ----------
+    padding_mask : Tensor
+        Boolean mask shaped ``(B, T_samples)`` where *True* denotes **padded**
+        (invalid) samples.
+    hop_length : int
+        Hop length (stride) used for the STFT.
+
+    Returns
+    -------
+    Tensor
+        Boolean mask of shape ``(B, T_frames)`` with the same semantics
+        (*True* → frame should be masked).  A frame is marked as padded **only
+        if *all* samples that map to it are padded**, mimicking the behaviour
+        used by BEATs' ``forward_padding_mask`` helper.
+    """
+
+    if padding_mask.ndim != 2:
+        raise ValueError("Expected padding_mask of shape (B, T)")
+
+    bsz, n_samples = padding_mask.shape
+    if hop_length <= 0:
+        raise ValueError("hop_length must be positive")
+
+    # Trim so the length is divisible by *hop_length* to allow cheap view-based
+    # pooling (this replicates the logic used in BEATs).
+    extra = n_samples % hop_length
+    if extra > 0:
+        padding_mask = padding_mask[:, :-extra]
+
+    n_frames = padding_mask.shape[1] // hop_length
+    frame_mask = padding_mask.view(bsz, n_frames, hop_length).all(dim=-1)
+    return frame_mask
+
+
+def sync_crop_or_pad_time(
+    spec: Tensor,
+    frame_mask: Tensor | None,
+    target_len: int,
+) -> tuple[Tensor, Tensor | None]:
+    """Centre-crop or right-pad *spec* **and** *frame_mask* identically.
+
+    This mirrors the behaviour of :py:meth:`Model._pad_or_crop_time` but keeps
+    the two tensors in lock-step so their time dimensions always agree.
+
+    Parameters
+    ----------
+    spec : Tensor
+        Spectrogram of shape ``(B, T, F)``.
+    frame_mask : Tensor | None
+        Optional frame-level padding mask of shape ``(B, T)`` where *True*
+        denotes padded frames.
+    target_len : int
+        Desired time dimension after cropping / padding.
+
+    Returns
+    -------
+    tuple[Tensor, Tensor | None]
+        ``(spec_out, mask_out)`` – *mask_out* is ``None`` when *frame_mask* was
+        ``None``.
+    """
+
+    bsz, t, feat_dim = spec.shape
+
+    if t == target_len:
+        if frame_mask is not None and frame_mask.shape[1] != target_len:
+            raise ValueError("frame_mask length does not match spectrogram")
+        return spec, frame_mask
+
+    # --------------------------- crop ---------------------------------- #
+    if t > target_len:
+        start = (t - target_len) // 2
+        spec_out = spec[:, start : start + target_len, :]
+        if frame_mask is not None:
+            mask_out = frame_mask[:, start : start + target_len]
+        else:
+            mask_out = None
+        return spec_out, mask_out
+
+    # --------------------------- pad  ---------------------------------- #
+    pad_len = target_len - t
+    pad_spec = spec.new_zeros(bsz, pad_len, feat_dim)
+    spec_out = torch.cat([spec, pad_spec], dim=1)
+
+    if frame_mask is not None:
+        pad_mask = torch.ones(bsz, pad_len, dtype=frame_mask.dtype, device=frame_mask.device)
+        mask_out = torch.cat([frame_mask, pad_mask], dim=1)
+    else:
+        mask_out = None
+
+    return spec_out, mask_out
+
+# --------------------------------------------------------------------------- #
+#  Patch-level mask helper                                                   #
+# --------------------------------------------------------------------------- #
+
+def frame_mask_to_patch_mask(
+    frame_mask: Tensor,
+    *,
+    patch_size_time: int,
+    n_freq_bins: int,
+) -> Tensor:
+    """Convert a frame-level mask to the flattened 2-D patch sequence mask.
+
+    The token ordering matches the `einsum('nchpwq -> nhwpqc')` pattern used in
+    :pymeth:`ImageEncoder.patchify` (row-major across time patches, then
+    frequency patches).
+    """
+
+    if frame_mask.ndim != 2:
+        raise ValueError("Expected frame_mask of shape (B, T_frames)")
+
+    bsz, t_frames = frame_mask.shape
+    if t_frames % patch_size_time != 0:
+        raise ValueError("Time dimension must be divisible by patch size")
+
+    t_patches = t_frames // patch_size_time
+    time_patch_mask = frame_mask.view(bsz, t_patches, patch_size_time).all(dim=-1)
+
+    # Frequency dimension is always valid; replicate the time-patch mask across
+    # *n_freq_patches* columns.
+    freq_patches = n_freq_bins // patch_size_time
+    patch_mask = time_patch_mask.repeat_interleave(freq_patches, dim=1)
+    return patch_mask

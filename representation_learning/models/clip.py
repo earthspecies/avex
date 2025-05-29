@@ -96,7 +96,7 @@ class CLIPModel(ModelBase):
         # Move token tensors to *current* device of the module (safe for DDP)
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, max_length=50, return_tensors="pt"
+            text, padding=True, truncation=True, max_length=40, return_tensors="pt"
         ).to(current_device)
 
         # Get text embeddings

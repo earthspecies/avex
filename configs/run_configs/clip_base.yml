@@ -33,7 +33,7 @@ debug_mode: false
 
 # Log training runs to MLflow
 logging: mlflow
-output_dir: "./runs/clip_baseline_19_05"
+output_dir: "./runs/clip_baseline_24_05"
 
 # Path to checkpoint to resume from (set to null or a path)
 # resume_from_checkpoint: null
@@ -41,7 +41,7 @@ output_dir: "./runs/clip_baseline_19_05"
 training_params:
   train_epochs: 45
   lr: 0.0001
-  batch_size: 512
+  batch_size: 300
   optimizer: adamw8bit
   weight_decay: 0.01
   amp: true
