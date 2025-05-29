@@ -320,7 +320,6 @@ def run_experiment(
 
     # ------------------- embeddings for retrieval ---------------------- #
     if need_retrieval or need_probe:
-        
         test_path = emb_base_dir / "embedding_test.h5"
         # test_path = Path("~/EAT/bat_embeddings_consolidated.h5").expanduser()
         # print("exists", test_path.exists())

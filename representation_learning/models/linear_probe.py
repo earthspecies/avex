@@ -66,5 +66,5 @@ class LinearProbe(torch.nn.Module):
             embeddings = x  # type: ignore[arg-type]
         else:
             embeddings = self.base_model.extract_embeddings(x, self.layers)
-        
+
         return self.classifier(embeddings)

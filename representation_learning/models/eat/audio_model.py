@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
-from typing import List
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 
+from .audio_processor import EATAudioProcessor
 from .eat import (
     D2vModalitiesConfig,
     Data2VecMultiConfig,
@@ -19,17 +19,11 @@ from .eat import (
 from .image import D2vImageConfig
 
 # Mask helpers
-from representation_learning.data.audio_utils import (
-    waveform_to_frame_mask,
-    sync_crop_or_pad_time,
-    frame_mask_to_patch_mask,
-)
 
 # ------------------------------------------------------------------ #
 #  Local imports
 # ------------------------------------------------------------------ #
 
-from .audio_processor import EATAudioProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -327,4 +321,3 @@ class Model(ModelBase):
             return feats.mean(dim=1)  # global average over patches
         else:
             raise ValueError("pooling must be 'cls' or 'mean'")
-

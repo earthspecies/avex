@@ -113,15 +113,23 @@ class Model(ModelBase):
         x = self._prep_input(x)
 
         features = self.model.extract_features(x)[0]
-        
+
         # Ensure features is a tensor, not a list
         if isinstance(features, list):
-            features = torch.stack(features, dim=0) if len(features) > 1 else features[0]
+            features = (
+                torch.stack(features, dim=0) if len(features) > 1 else features[0]
+            )
 
         return features[-1]
 
-
-    def extract_embeddings(self, x: Any | dict[str, Any], layers: List[str], *, padding_mask: Any | None = None, masked_mean: bool = False) -> torch.Tensor:
+    def extract_embeddings(
+        self,
+        x: Any | dict[str, Any],
+        layers: List[str],
+        *,
+        padding_mask: Any | None = None,
+        masked_mean: bool = False,
+    ) -> torch.Tensor:
         # ------------------------------------------------------------------ #
         #  Construct / down-sample padding mask (if supplied)               #
         # ------------------------------------------------------------------ #
@@ -137,11 +145,14 @@ class Model(ModelBase):
             # feature-frame resolution produced by the AVES convolutional front-end.
             # Each conv stride is 320 samples, so we emulate BEATs' approach and
             # use a 1-D max-pool across that window.
-            frame_mask = F.max_pool1d(
-                padding_mask.float().unsqueeze(1),  # (B, 1, T_samples)
-                kernel_size=320,
-                stride=320,
-            ) > 0  # (B, T_frames)
+            frame_mask = (
+                F.max_pool1d(
+                    padding_mask.float().unsqueeze(1),  # (B, 1, T_samples)
+                    kernel_size=320,
+                    stride=320,
+                )
+                > 0
+            )  # (B, T_frames)
 
             # Invert semantics → *True* means **keep** (non-padded) so it aligns
             # with the helper below.
@@ -160,11 +171,11 @@ class Model(ModelBase):
         #  Pool over time dimension                                         #
         # ------------------------------------------------------------------ #
         if not masked_mean or frame_mask is None:
-            
             return sequence_embeddings.mean(dim=1)  # (B, C)
 
         return _masked_mean(sequence_embeddings, frame_mask)
- 
+
+
 def _masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     """Mean-pool a sequence while ignoring padded frames.
 
@@ -181,11 +192,13 @@ def _masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     torch.Tensor
         Tensor of shape ``(B, C)`` – mean of the unmasked frames.
     """
-    
+
     # Ensure x is a tensor
     if not isinstance(x, torch.Tensor):
-        raise TypeError(f"Expected x to be a torch.Tensor, but got {type(x)}. Value: {x}")
-    
+        raise TypeError(
+            f"Expected x to be a torch.Tensor, but got {type(x)}. Value: {x}"
+        )
+
     # Add broadcast-friendly channel dimension
     mask_expanded = mask.unsqueeze(-1).type_as(x)  # (B, T, 1)
 
