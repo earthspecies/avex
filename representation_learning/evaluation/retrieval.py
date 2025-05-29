@@ -3,12 +3,36 @@
 from __future__ import annotations
 
 import logging
-from typing import Sequence
+from typing import Dict, Sequence
 
 import numpy as np
+import torch
 from sklearn.metrics import roc_auc_score
 
 logger = logging.getLogger(__name__)
+
+
+# -------------------------------------------------------------------- #
+#  Retrieval helper
+# -------------------------------------------------------------------- #
+def eval_retrieval(
+    embeds: torch.Tensor,
+    labels: torch.Tensor,
+) -> Dict[str, float]:
+    """Compute retrieval metrics using modular evaluation utilities.
+
+    Returns
+    -------
+    Dict[str, float]
+        ``{"retrieval_roc_auc": value, "retrieval_precision_at_1": value}``.
+    """
+    roc_auc = evaluate_auc_roc(embeds.numpy(), labels.numpy())
+    precision_at_1 = evaluate_precision(embeds.numpy(), labels.numpy(), k=1)
+
+    return {
+        "retrieval_roc_auc": roc_auc,
+        "retrieval_precision_at_1": precision_at_1,
+    }
 
 
 def evaluate_auc_roc(

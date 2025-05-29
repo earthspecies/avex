@@ -214,51 +214,11 @@ def load_embeddings_from_disk(save_dir: Path, split: str) -> torch.utils.data.Da
 # ----------------------------------------------------------------------------- #
 
 
-def load_embeddings_arrays(path: Path) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Load embeddings & labels previously saved by *save_embeddings_arrays*.
-
-    Parameters
-    ----------
-    path : Path
-        Location of the *.h5* file
-
-    Returns
-    -------
-    Tuple[torch.Tensor, torch.Tensor]
-        (embeddings, labels) on CPU
-
-    Raises
-    ------
-    FileNotFoundError
-        If the provided *path* does not exist.
-    """
-
-    # cloudpathlib.GSPath and pathlib.Path both provide .exists and .open
-    if not path.exists():
-        raise FileNotFoundError(f"Embeddings file not found: {path}")
-
-    # Handle remote (gs://) paths by streaming through a file-like object
-    if GSPath is not None and isinstance(path, GSPath):
-        with path.open("rb") as fh, h5py.File(fh, "r") as h5f:
-            embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
-            labels = torch.from_numpy(np.asarray(h5f["labels"]))
-    else:
-        with h5py.File(str(path), "r") as h5f:
-            embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
-            labels = torch.from_numpy(np.asarray(h5f["labels"]))
-
-    return embeds, labels
-
-
-# ----------------------------------------------------------------------------- #
-# Save routine
-# ----------------------------------------------------------------------------- #
-
-
 def save_embeddings_arrays(
     embeddings: torch.Tensor,
     labels: torch.Tensor,
     save_path: Path,
+    num_labels: int,
     compression: str = "gzip",
     compression_level: int = 4,
 ) -> None:
@@ -274,6 +234,8 @@ def save_embeddings_arrays(
     save_path : Path
         Destination filepath. Parent directories are created automatically and
         file is overwritten if it already exists.
+    num_labels : int
+        Number of unique labels in the dataset.
     compression : str, optional
         HDF5 compression algorithm (default: "gzip").
     compression_level : int, optional
@@ -303,6 +265,7 @@ def save_embeddings_arrays(
                 compression=compression,
                 compression_opts=compression_level,
             )
+            h5f.attrs["num_labels"] = num_labels
     else:
         with h5py.File(str(save_path), "w") as h5f:
             h5f.create_dataset(
@@ -317,3 +280,42 @@ def save_embeddings_arrays(
                 compression=compression,
                 compression_opts=compression_level,
             )
+            h5f.attrs["num_labels"] = num_labels
+
+
+def load_embeddings_arrays(path: Path) -> Tuple[torch.Tensor, torch.Tensor, int]:
+    """Load embeddings & labels previously saved by *save_embeddings_arrays*.
+
+    Parameters
+    ----------
+    path : Path
+        Location of the *.h5* file
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor, int]
+        (embeddings, labels, num_labels) on CPU
+
+    Raises
+    ------
+    FileNotFoundError
+        If the provided *path* does not exist.
+    """
+
+    # cloudpathlib.GSPath and pathlib.Path both provide .exists and .open
+    if not path.exists():
+        raise FileNotFoundError(f"Embeddings file not found: {path}")
+
+    # Handle remote (gs://) paths by streaming through a file-like object
+    if GSPath is not None and isinstance(path, GSPath):
+        with path.open("rb") as fh, h5py.File(fh, "r") as h5f:
+            embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
+            labels = torch.from_numpy(np.asarray(h5f["labels"]))
+            num_labels = h5f.attrs.get("num_labels", None)
+    else:
+        with h5py.File(str(path), "r") as h5f:
+            embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
+            labels = torch.from_numpy(np.asarray(h5f["labels"]))
+            num_labels = h5f.attrs.get("num_labels", None)
+
+    return embeds, labels, num_labels

@@ -74,6 +74,7 @@ class ModelBase(nn.Module):
         layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
+        average_over_time: bool = True,
     ) -> torch.Tensor:
         """
         Extract embeddings from specified layers of the model.
@@ -143,41 +144,23 @@ class ModelBase(nn.Module):
             if not embeddings:
                 raise ValueError(f"No layers found matching: {layers}")
 
-            result = []
-            for emb in embeddings:
-                if emb.dim() == 2:
-                    # Already in correct shape, just append
-                    result.append(emb)
-                elif emb.dim() == 3:
-                    # Need to aggregate over time dimension
-                    if padding_mask is not None:
-                        # Use attention-based aggregation with padding mask
-                        # Create attention weights
-                        attention_weights = torch.softmax(
-                            torch.sum(emb, dim=-1) / emb.size(-1), dim=-1
-                        )
-                        # Apply padding mask
-                        attention_weights = attention_weights.masked_fill(
-                            padding_mask, 0.0
-                        )
-                        # Normalize weights
-                        attention_weights = attention_weights / (
-                            attention_weights.sum(dim=-1, keepdim=True) + 1e-8
-                        )
-                        # Weighted sum over time
-                        aggregated = torch.sum(
-                            emb * attention_weights.unsqueeze(-1), dim=1
-                        )
-                    else:
-                        # Simple mean pooling over time if no padding mask
+            if average_over_time:
+                result = []
+                for emb in embeddings:
+                    if emb.dim() == 2:
+                        # Already in correct shape, just append
+                        result.append(emb)
+                    elif emb.dim() == 3:
                         aggregated = torch.mean(emb, dim=1)
-                    result.append(aggregated)
-                else:
-                    raise ValueError(
-                        f"Unexpected embedding dimension: {emb.dim()}. Expected 2 or 3."
-                    )
-
-            return torch.cat(result, dim=1)
+                        result.append(aggregated)
+                    else:
+                        raise ValueError(
+                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Expected 2 or 3."
+                        )
+                return torch.cat(result, dim=1)
+            else:
+                return embeddings
 
         finally:
             for hook in hooks:

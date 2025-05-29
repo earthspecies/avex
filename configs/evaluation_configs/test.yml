@@ -43,6 +43,7 @@ experiments:
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     checkpoint_path: ~/representation-learning/runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
+    frozen: true
 
 # Where to save the evaluation results
 save_dir: evaluation_results
@@ -52,9 +53,6 @@ device: cuda
 seed: 42
 
 num_workers: 8  # Enable workers for better memory management
-
-# Whether to freeze the backbone (train only the linear probe)
-frozen: true
 
 # Evaluation phases
 eval_modes:

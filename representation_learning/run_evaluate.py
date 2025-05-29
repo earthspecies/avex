@@ -15,7 +15,7 @@ import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional
 
 import torch
 from cloudpathlib import GSPath
@@ -34,15 +34,12 @@ from representation_learning.evaluation.embedding_utils import (
     load_embeddings_arrays,
     save_embeddings_arrays,
 )
-from representation_learning.evaluation.retrieval import (
-    evaluate_auc_roc,
-    evaluate_precision,
+from representation_learning.evaluation.finetune import (
+    train_and_eval_full_fine_tune,
+    train_and_eval_linear_probe,
 )
-from representation_learning.metrics.metric_factory import get_metric_class
+from representation_learning.evaluation.retrieval import eval_retrieval
 from representation_learning.models.get_model import get_model
-from representation_learning.models.linear_probe import LinearProbe
-from representation_learning.training.optimisers import get_optimizer
-from representation_learning.training.train import FineTuneTrainer
 from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger("run_finetune")
@@ -80,120 +77,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 # -------------------------------------------------------------------- #
-#  Linear-probe helper
-# -------------------------------------------------------------------- #
-def _train_and_eval_linear_probe(
-    train_ds: torch.utils.data.Dataset,
-    val_ds: torch.utils.data.Dataset,
-    test_embed_ds: torch.utils.data.Dataset,
-    base_model: torch.nn.Module,
-    num_labels: int,
-    layer_names: List[str],
-    eval_cfg: EvaluateConfig,
-    device: torch.device,
-    exp_logger: ExperimentLogger,
-    multi_label: bool,
-) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
-    """Train a linear probe and evaluate it on *cached* test embeddings.
-
-    Returns
-    -------
-    Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]
-        • **train_metrics** – aggregated over training split
-        • **val_metrics**   – aggregated over validation split
-        • **probe_test_metrics** – metrics on cached-embedding test split
-    """
-    probe = LinearProbe(
-        base_model, layer_names, num_labels, device=device, feature_mode=True
-    )
-    logger.info(
-        "Linear probe → %d parameters", sum(p.numel() for p in probe.parameters())
-    )
-
-    if eval_cfg.frozen:
-        logger.info("Freezing backbone parameters (eval_cfg.frozen=True)")
-        for p in base_model.parameters():
-            p.requires_grad = False
-    else:
-        raise NotImplementedError("Full fine-tuning not supported")
-
-    optim = get_optimizer(probe.parameters(), eval_cfg.training_params)
-
-    trainer = FineTuneTrainer(
-        model=probe,
-        optimizer=optim,
-        train_loader=torch.utils.data.DataLoader(
-            train_ds,
-            batch_size=eval_cfg.training_params.batch_size,
-            shuffle=True,
-        ),
-        val_loader=torch.utils.data.DataLoader(
-            val_ds,
-            batch_size=eval_cfg.training_params.batch_size,
-            shuffle=False,
-        ),
-        device=device,
-        cfg=eval_cfg,
-        exp_logger=exp_logger,
-        multi_label=multi_label,
-    )
-
-    train_metrics, val_metrics = trainer.train(
-        num_epochs=eval_cfg.training_params.train_epochs
-    )
-
-    # ---------- probe evaluation on cached test embeddings ----------
-    test_loader = torch.utils.data.DataLoader(
-        test_embed_ds,
-        batch_size=eval_cfg.training_params.batch_size,
-        shuffle=False,
-    )
-
-    # Metric selection (fallback to accuracy)
-    metric_names = getattr(test_embed_ds, "metadata", {}).get("metrics", ["accuracy"])
-    metrics = [get_metric_class(m, num_labels) for m in metric_names]
-
-    probe.eval()  # feature_mode stays True (inputs are embeddings)
-    with torch.no_grad():
-        for batch in test_loader:
-            z = batch["embed"].to(device)
-            y = batch["label"].to(device)
-
-            logits = probe(z)
-            for met in metrics:
-                met.update(logits, y)
-
-    probe_test_metrics = {
-        name: met.get_primary_metric()
-        for name, met in zip(metric_names, metrics, strict=False)
-    }
-    return train_metrics, val_metrics, probe_test_metrics
-
-
-# -------------------------------------------------------------------- #
-#  Retrieval helper
-# -------------------------------------------------------------------- #
-def _eval_retrieval(
-    embeds: torch.Tensor,
-    labels: torch.Tensor,
-) -> Dict[str, float]:
-    """Compute retrieval metrics using modular evaluation utilities.
-
-    Returns
-    -------
-    Dict[str, float]
-        ``{"retrieval_roc_auc": value, "retrieval_precision_at_1": value}``.
-    """
-    roc_auc = evaluate_auc_roc(embeds.numpy(), labels.numpy())
-    precision_at_1 = evaluate_precision(embeds.numpy(), labels.numpy(), k=1)
-
-    return {
-        "retrieval_roc_auc": roc_auc,
-        "retrieval_precision_at_1": precision_at_1,
-    }
-
-
-# -------------------------------------------------------------------- #
 #  Core routine for one (dataset, experiment) pair
 # -------------------------------------------------------------------- #
 def run_experiment(
@@ -205,10 +88,13 @@ def run_experiment(
 ) -> ExperimentResult:
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
+    frozen = experiment_cfg.frozen
+
     logger.info(
-        "Running experiment '%s' on dataset '%s'",
+        "Running experiment '%s' on dataset '%s' with frozen: %s",
         experiment_name,
         dataset_name,
+        frozen,
     )
 
     # ------------------------------------------------------------------ #
@@ -222,76 +108,132 @@ def run_experiment(
 
     dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
 
-    # ------------------------------------------------------------------ #
-    #  Dataloaders (raw audio)
-    # ------------------------------------------------------------------ #
-    train_dl_raw, val_dl_raw, test_dl_raw = build_dataloaders(
-        run_cfg, dataset_cfg, device
-    )
-    logger.info(
-        "Dataset ready: %d/%d/%d raw batches",
-        len(train_dl_raw),
-        len(val_dl_raw),
-        len(test_dl_raw),
-    )
-
-    # ------------------------------------------------------------------ #
-    #  Backbone (optionally load checkpoint)
-    # ------------------------------------------------------------------ #
-    num_labels = len(train_dl_raw.dataset.metadata["label_map"])
-    base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
-
-    if experiment_cfg.checkpoint_path:
-        ckpt_path = (
-            GSPath(experiment_cfg.checkpoint_path)
-            if experiment_cfg.checkpoint_path.startswith("gs://")
-            else Path(experiment_cfg.checkpoint_path).expanduser()
-        )
-        if not ckpt_path.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-        with ckpt_path.open("rb") as f:
-            state = torch.load(f, map_location=device)
-        if "model_state_dict" in state:
-            base_model.load_state_dict(state["model_state_dict"], strict=False)
-        else:
-            base_model.load_state_dict(state, strict=False)
-        logger.info("Loaded checkpoint from %s", ckpt_path)
-
-    base_model.eval()
-
-    # ------------------------------------------------------------------ #
-    #  Layer selection
-    # ------------------------------------------------------------------ #
-    if experiment_cfg.layers == "last_layer":
-        linear_layers = [
-            n for n, m in base_model.named_modules() if isinstance(m, torch.nn.Linear)
-        ]
-        layer_names = [linear_layers[-1]]
-    else:
-        layer_names = experiment_cfg.layers.split(",")
+    # Embedding paths
+    emb_base_dir = save_dir / experiment_name / dataset_name
+    train_path = emb_base_dir / "embedding_train.h5"
+    val_path = emb_base_dir / "embedding_val.h5"
+    test_path = emb_base_dir / "embedding_test.h5"
 
     # Flags to determine which embeddings we need
     need_probe = "linear_probe" in eval_cfg.eval_modes
     need_retrieval = "retrieval" in eval_cfg.eval_modes
 
     overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
+    need_recompute_embeddings_train = overwrite or (
+        need_probe and not (train_path.exists() and val_path.exists())
+    )
+    need_recompute_embeddings_test = overwrite or (
+        (need_retrieval or need_probe) and not test_path.exists()
+    )
+    logger.info(
+        "Need to recompute embeddings for train: %s and test: %s",
+        need_recompute_embeddings_train,
+        need_recompute_embeddings_test,
+    )
+
+    need_base_model = (
+        need_recompute_embeddings_train
+        or need_recompute_embeddings_test
+        or (not frozen and "linear_probe" in eval_cfg.eval_modes)
+    )
+    logger.info(f"Need to load base model: {need_base_model}")
+
+    need_raw_dataloaders = (
+        need_recompute_embeddings_train
+        or need_recompute_embeddings_test
+        or (not frozen and "linear_probe" in eval_cfg.eval_modes)
+    )
+    logger.info(f"Need to build raw dataloaders: {need_raw_dataloaders}")
+
+    # ------------------------------------------------------------------ #
+    #  Dataloaders (raw audio)
+    # ------------------------------------------------------------------ #
+    train_dl_raw = None
+    val_dl_raw = None
+    test_dl_raw = None
+    num_labels = None
+
+    if need_raw_dataloaders:
+        train_dl_raw, val_dl_raw, test_dl_raw = build_dataloaders(
+            run_cfg, dataset_cfg, device
+        )
+        logger.info(
+            "Raw dataloaders ready: %d/%d/%d raw batches",
+            len(train_dl_raw),
+            len(val_dl_raw),
+            len(test_dl_raw),
+        )
+        num_labels = len(train_dl_raw.dataset.metadata["label_map"])
+
+    # ------------------------------------------------------------------ #
+    #  Backbone (optionally load checkpoint)
+    # ------------------------------------------------------------------ #
+    base_model: Optional[torch.nn.Module] = None
+
+    if need_base_model:
+        if num_labels is None:
+            # Try to get num_labels from existing embeddings
+            if train_path.exists():
+                _, _, num_labels = load_embeddings_arrays(train_path)
+            elif test_path.exists():
+                _, _, num_labels = load_embeddings_arrays(test_path)
+            if num_labels is None:
+                raise ValueError(
+                    "Could not determine number of labels from "
+                    "embeddings or raw dataloaders"
+                )
+
+        base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
+
+        if experiment_cfg.checkpoint_path:
+            ckpt_path = (
+                GSPath(experiment_cfg.checkpoint_path)
+                if experiment_cfg.checkpoint_path.startswith("gs://")
+                else Path(experiment_cfg.checkpoint_path).expanduser()
+            )
+            if not ckpt_path.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+            with ckpt_path.open("rb") as f:
+                state = torch.load(f, map_location=device)
+            if "model_state_dict" in state:
+                base_model.load_state_dict(state["model_state_dict"], strict=False)
+            else:
+                base_model.load_state_dict(state, strict=False)
+            logger.info("Loaded checkpoint from %s", ckpt_path)
+
+        if frozen:
+            base_model.eval()
+
+    # ------------------------------------------------------------------ #
+    #  Layer selection
+    # ------------------------------------------------------------------ #
+    if base_model is not None:
+        if experiment_cfg.layers == "last_layer":
+            linear_layers = [
+                n
+                for n, m in base_model.named_modules()
+                if isinstance(m, torch.nn.Linear)
+            ]
+            layer_names = [linear_layers[-1]]
+        else:
+            layer_names = experiment_cfg.layers.split(",")
+    else:
+        # When base_model is None, we don't need layer names
+        layer_names = []
 
     train_ds: EmbeddingDataset | None = None  # will remain None if not needed
     val_ds: EmbeddingDataset | None = None
     test_embeds: torch.Tensor | None = None
     test_labels: torch.Tensor | None = None
 
-    emb_base_dir = save_dir / experiment_name / dataset_name
-
     # ------------------- embeddings for linear probe ------------------- #
-    if need_probe:
-        train_path = emb_base_dir / "embedding_train.h5"
-        val_path = emb_base_dir / "embedding_val.h5"
-
-        if (not overwrite) and train_path.exists() and val_path.exists():
-            train_embeds, train_labels = load_embeddings_arrays(train_path)
-            val_embeds, val_labels = load_embeddings_arrays(val_path)
+    if need_probe and frozen:
+        if not need_recompute_embeddings_train:
+            train_embeds, train_labels, num_labels = load_embeddings_arrays(train_path)
+            val_embeds, val_labels, _ = load_embeddings_arrays(val_path)
         else:
+            if base_model is None:
+                raise ValueError("base_model is required to compute embeddings")
             train_embeds, train_labels = extract_embeddings_for_split(
                 base_model, train_dl_raw, layer_names, device
             )
@@ -300,23 +242,23 @@ def run_experiment(
             )
 
             # Persist to disk
-            save_embeddings_arrays(train_embeds, train_labels, train_path)
-            save_embeddings_arrays(val_embeds, val_labels, val_path)
+            save_embeddings_arrays(train_embeds, train_labels, train_path, num_labels)
+            save_embeddings_arrays(val_embeds, val_labels, val_path, num_labels)
 
         train_ds = EmbeddingDataset(train_embeds, train_labels)
         val_ds = EmbeddingDataset(val_embeds, val_labels)
 
     # ------------------- embeddings for retrieval ---------------------- #
-    if need_retrieval or need_probe:
-        test_path = emb_base_dir / "embedding_test.h5"
-
-        if (not overwrite) and test_path.exists():
-            test_embeds, test_labels = load_embeddings_arrays(test_path)
+    if need_retrieval or (need_probe and frozen):
+        if not need_recompute_embeddings_test:
+            test_embeds, test_labels, num_labels = load_embeddings_arrays(test_path)
         else:
+            if base_model is None:
+                raise ValueError("base_model is required to compute embeddings")
             test_embeds, test_labels = extract_embeddings_for_split(
                 base_model, test_dl_raw, layer_names, device
             )
-            save_embeddings_arrays(test_embeds, test_labels, test_path)
+            save_embeddings_arrays(test_embeds, test_labels, test_path, num_labels)
 
     # ------------------------------------------------------------------ #
     #  Experiment logger
@@ -333,29 +275,50 @@ def run_experiment(
     probe_test_metrics: Dict[str, float] = {}
 
     if "linear_probe" in eval_cfg.eval_modes:
-        (
-            train_metrics,
-            val_metrics,
-            probe_test_metrics,
-        ) = _train_and_eval_linear_probe(
-            train_ds,
-            val_ds,
-            EmbeddingDataset(test_embeds, test_labels),
-            base_model,
-            num_labels,
-            layer_names,
-            eval_cfg,
-            device,
-            exp_logger,
-            dataset_cfg.multi_label,
-        )
+        if frozen:
+            (
+                train_metrics,
+                val_metrics,
+                probe_test_metrics,
+            ) = train_and_eval_linear_probe(
+                train_ds,
+                val_ds,
+                EmbeddingDataset(test_embeds, test_labels),
+                base_model,
+                num_labels,
+                layer_names,
+                eval_cfg,
+                device,
+                exp_logger,
+                dataset_cfg.multi_label,
+            )
+        else:
+            # For fine-tuning, use raw dataloaders
+            (
+                train_metrics,
+                val_metrics,
+                probe_test_metrics,
+            ) = train_and_eval_full_fine_tune(
+                train_dl_raw,
+                val_dl_raw,
+                test_dl_raw,
+                base_model,
+                num_labels,
+                layer_names,
+                eval_cfg,
+                device,
+                exp_logger,
+                dataset_cfg.multi_label,
+            )
+    else:
+        logger.info("Linear probe not run because not in eval_modes")
 
     # ------------------------------------------------------------------ #
     #  (2) Retrieval (from cached test embeddings)
     # ------------------------------------------------------------------ #
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
-        retrieval_metrics = _eval_retrieval(test_embeds, test_labels)
+        retrieval_metrics = eval_retrieval(test_embeds, test_labels)
 
     # Log & finish
     exp_logger.log_metrics(train_metrics, step=0, split="train_final")
