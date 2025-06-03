@@ -120,3 +120,83 @@ datasets:
     metrics:
       - accuracy
       - balanced_accuracy
+
+  - dataset_name: enabirds-detection
+    type: classification
+    label_column: answer
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+    sample_rate: 16000
+    metrics:
+      - accuracy
+
+  - dataset_name: rfcx-detection
+    type: classification
+    label_column: answer
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+    sample_rate: 16000
+    metrics:
+      - accuracy
+
+  - dataset_name: hiceas-detection
+    type: classification
+    label_column: answer
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+    sample_rate: 16000
+    metrics:
+      - accuracy
+
+  - dataset_name: hainan-gibbons-detection
+    type: classification
+    label_column: answer
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+    sample_rate: 16000
+    metrics:
+      - accuracy
+
+  - dataset_name: dcase-detection
+    type: classification
+    label_column: answer
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+    sample_rate: 16000
+    metrics:
+      - accuracy

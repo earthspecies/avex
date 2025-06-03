@@ -1,25 +1,41 @@
 data_path: benchmark
 
 datasets:
-  - dataset_name: dogs
+  - dataset_name: hiceas-detection
     type: classification
-    label_column: label
+    label_column: answer
     audio_path_col: path
     multi_label: false
     label_type: supervised
     audio_max_length_seconds: 5
     transformations:
-      - type: label_from_feature
-        feature: label
+      - type: labels_from_features
+        features:
+          - answer
         override: true
-    # transformations:
-    #   - type: uniform_sample
-    #     property: label
-    #     ratio: 0.01
     sample_rate: 16000
     metrics:
       - accuracy
-      - balanced_accuracy
+
+  # - dataset_name: dogs
+  #   type: classification
+  #   label_column: label
+  #   audio_path_col: path
+  #   multi_label: false
+  #   label_type: supervised
+  #   audio_max_length_seconds: 5
+  #   transformations:
+  #     - type: label_from_feature
+  #       feature: label
+  #       override: true
+  #   # transformations:
+  #   #   - type: uniform_sample
+  #   #     property: label
+  #   #     ratio: 0.01
+  #   sample_rate: 16000
+  #   metrics:
+  #     - accuracy
+  #     - balanced_accuracy
 
   # - dataset_name: esc-50
   #   type: classification

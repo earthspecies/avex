@@ -1,3 +1,4 @@
+import json
 import pathlib
 from collections.abc import Callable
 from functools import lru_cache
@@ -267,6 +268,30 @@ def _get_dataset_from_name(
             df = df[df["fold"] == 4]
         else:
             df = df[df["fold"] <= 3]
+        return df
+    elif name in [
+        "dcase-detection",
+        "hainan-gibbons-detection",
+        "hiceas-detection",
+        "rfcx-detection",
+        "enabirds-detection",
+    ]:
+        if DATA_ROOT.startswith("gs://"):
+            dataset_path = GSPath(DATA_ROOT)
+        else:
+            dataset_path = Path(DATA_ROOT)
+
+        json_path = dataset_path / "data" / name / "{}.jsonl".format(split)
+        data = []
+        with open(json_path, "r") as f:
+            for line in f:
+                if line.strip():  # Skip empty lines
+                    data.append(json.loads(line))
+
+        df = pd.DataFrame(data)
+        df["path"] = df["path"].apply(lambda x: dataset_path / x)
+        df["label"] = df["answer"].apply(lambda x: x.split(",")[-1].strip())
+
         return df
     else:
         raise NotImplementedError("Dataset not supported")
