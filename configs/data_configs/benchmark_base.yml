@@ -125,7 +125,7 @@ datasets:
     type: classification
     label_column: answer
     audio_path_col: path
-    multi_label: false
+    multi_label: true
     label_type: supervised
     audio_max_length_seconds: 5
     transformations:
@@ -141,7 +141,7 @@ datasets:
     type: classification
     label_column: answer
     audio_path_col: path
-    multi_label: false
+    multi_label: true
     label_type: supervised
     audio_max_length_seconds: 5
     transformations:
@@ -157,7 +157,7 @@ datasets:
     type: classification
     label_column: answer
     audio_path_col: path
-    multi_label: false
+    multi_label: true
     label_type: supervised
     audio_max_length_seconds: 5
     transformations:
@@ -173,7 +173,7 @@ datasets:
     type: classification
     label_column: answer
     audio_path_col: path
-    multi_label: false
+    multi_label: true
     label_type: supervised
     audio_max_length_seconds: 5
     transformations:
@@ -189,7 +189,7 @@ datasets:
     type: classification
     label_column: answer
     audio_path_col: path
-    multi_label: false
+    multi_label: true
     label_type: supervised
     audio_max_length_seconds: 5
     transformations:
