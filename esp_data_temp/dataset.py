@@ -144,9 +144,7 @@ class AudioDataset:
 
         item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label_feature"]
-            if "label_feature" in row
-            else row["label"],
+            "text_label": row[self.metadata["label_feature"]],
             "label": row.label,
             "path": str(audio_path),
         }
@@ -178,7 +176,26 @@ def _get_dataset_from_name(
         else:
             csv_path = Path(anaimspeak_path)
 
-        csv_text = csv_path.read_text(encoding="utf-8")
+        # ------------------------------------------------------------------ #
+        #  Robust read with retries (handles concurrent downloads in DDP)     #
+        # ------------------------------------------------------------------ #
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                csv_text = csv_path.read_text(encoding="utf-8")
+                break  # Success
+            except FileNotFoundError:
+                if attempt == max_attempts:
+                    raise
+                import time
+
+                wait = 2 * attempt
+                print(
+                    f"[esp_data_temp.dataset] CSV download missing on attempt {attempt}/{max_attempts}. "
+                    f"Waiting {wait}s and retrying…"
+                )
+                time.sleep(wait)
+
         df = pd.read_csv(StringIO(csv_text))
 
         # AnimalSpeak has some columns that are list[str] but they're stored as
@@ -206,6 +223,7 @@ def _get_dataset_from_name(
                 "foundation-model-data/audio_16k/" + x
             )
         )  # AnimalSpeak missing gs path
+        df.to_csv(f"animalspeak_{split}.csv", index=False)
 
         return df
 
@@ -238,6 +256,7 @@ def _get_dataset_from_name(
             df["path"] = df["path"].apply(
                 lambda x: audio_path / x.split("/")[-1]
             )  # Extract just the filename and append to audio_path
+        df.to_csv(f"{name}_{split}.csv", index=False)
         return df
     elif name == "esc-50":
         if ESC50_PATH.startswith("gs://"):

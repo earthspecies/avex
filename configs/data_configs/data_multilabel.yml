@@ -1,0 +1,20 @@
+dataset_name: animalspeak
+dataset_version: 0.0
+balance: false
+balance_attribute: canonical_name
+custom_balancing: false
+balancing_method: upsample
+subset_percentage: 1.0
+audio_max_length_seconds: 10
+audio_path_col: path
+
+# Multi-label transform: generating label list per sample
+transformations:
+  - type: labels_from_features
+    features: canonical_name  # use existing column (single value but multi-hot downstream)
+    num_classes: auto
+    output_feature: label
+    override: true
+
+# Explicitly mark dataset as multi-label so evaluation pipeline can choose BCE
+multi_label: true 

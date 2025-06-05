@@ -10,19 +10,21 @@
 model_spec:
   name: eat
   pretrained: false              # start from scratch
+  handle_padding: false          # Enable patch-level padding masks (set to true to enable)
   # Device and audio processing settings
   device: cuda                   # override on CPU if needed
   audio_config:
     sample_rate: 16000
-    n_fft: 2048
-    hop_length: 512
-    win_length: 2048
+    n_fft: 400
+    hop_length: 160
+    win_length: 400
     window: hann
     n_mels: 128
     representation: mel_spectrogram
     normalize: false
     target_length_seconds: 10
     window_selection: random
+    center: false
 
   # ---------------------------------------------------------------------------
   # EAT-specific overrides
@@ -85,16 +87,17 @@ sr: 16000
 
 debug_mode: false
 logging: mlflow
-output_dir: "./runs/eat_pretrain_bf16"
+output_dir: "./runs/eat_pretrain_bf16_25_05_nopad"
 resume_from_checkpoint: null
 
 # -----------------------------------------------------------------------------
 training_params:
-  train_epochs: 30          # SSL usually needs more epochs – adjust as needed
+  train_epochs: 20
   lr: 5.0e-4
   batch_size: 48
   optimizer: adamw
-  weight_decay: 0.01
+  weight_decay: 0.05
+  adam_betas: [0.9, 0.95]
   amp: true
   amp_dtype: bf16
   log_steps: 100

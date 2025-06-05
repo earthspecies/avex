@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -77,6 +78,31 @@ def _parse_args() -> argparse.Namespace:
 
 
 # -------------------------------------------------------------------- #
+#  Checkpoint sanitiser helper                                         #
+# -------------------------------------------------------------------- #
+
+
+def _process_state_dict(state_dict: dict) -> dict:
+    """Remove classifier layers when loading backbone checkpoints.
+
+    Returns
+    -------
+    dict
+        Processed state dictionary with classifier layers removed.
+    """
+    if "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+
+    # Safely drop common classifier parameter names (different wrappers)
+    state_dict.pop("classifier.weight", None)
+    state_dict.pop("classifier.bias", None)
+    state_dict.pop("model.classifier.1.weight", None)
+    state_dict.pop("model.classifier.1.bias", None)
+
+    return state_dict
+
+
+# -------------------------------------------------------------------- #
 #  Core routine for one (dataset, experiment) pair
 # -------------------------------------------------------------------- #
 def run_experiment(
@@ -86,6 +112,7 @@ def run_experiment(
     device: torch.device,
     save_dir: Path,
 ) -> ExperimentResult:
+    logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
     frozen = experiment_cfg.frozen
@@ -196,7 +223,8 @@ def run_experiment(
             with ckpt_path.open("rb") as f:
                 state = torch.load(f, map_location=device)
             if "model_state_dict" in state:
-                base_model.load_state_dict(state["model_state_dict"], strict=False)
+                state = _process_state_dict(state)
+                base_model.load_state_dict(state, strict=False)
             else:
                 base_model.load_state_dict(state, strict=False)
             logger.info("Loaded checkpoint from %s", ckpt_path)
@@ -247,11 +275,19 @@ def run_experiment(
 
         train_ds = EmbeddingDataset(train_embeds, train_labels)
         val_ds = EmbeddingDataset(val_embeds, val_labels)
+        num_labels = len(train_labels.unique()) if num_labels is None else num_labels
 
     # ------------------- embeddings for retrieval ---------------------- #
-    if need_retrieval or (need_probe and frozen):
-        if not need_recompute_embeddings_test:
-            test_embeds, test_labels, num_labels = load_embeddings_arrays(test_path)
+    if need_retrieval or need_probe:
+        test_path = emb_base_dir / "embedding_test.h5"
+        # test_path = Path("~/EAT/cbi_embeddings_consolidated_03_10-warm2.h5").expanduser()
+        print("exists", test_path.exists(), test_path)
+        # test_path = Path("~/EAT/cbi_embeddings_consolidated.h5")
+        logger.info(test_path)
+
+        if (not overwrite) and test_path.exists():
+            test_embeds, test_labels, _ = load_embeddings_arrays(test_path)
+            print(test_embeds.shape, test_labels[0])
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
@@ -259,6 +295,8 @@ def run_experiment(
                 base_model, test_dl_raw, layer_names, device
             )
             save_embeddings_arrays(test_embeds, test_labels, test_path, num_labels)
+
+        num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 
     # ------------------------------------------------------------------ #
     #  Experiment logger
@@ -319,6 +357,7 @@ def run_experiment(
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
         retrieval_metrics = eval_retrieval(test_embeds, test_labels)
+        # logger.info("retrieval metrics", retrieval_metrics)
 
     # Log & finish
     exp_logger.log_metrics(train_metrics, step=0, split="train_final")
@@ -346,6 +385,7 @@ def main() -> None:
     # 1. Load configs
     eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
     benchmark_cfg = load_config(eval_cfg.dataset_config, config_type="benchmark")
+    # logger.info("eval cfg", eval_cfg)
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
@@ -374,7 +414,7 @@ def main() -> None:
             )
 
     # 4. Write summary
-    summary_path = save_dir / "summary.txt"
+    summary_path = save_dir / f"summary_{datetime.now()}.txt"
     with summary_path.open("w") as f:
         f.write("Experiment Summary\n==================\n\n")
         for r in all_results:

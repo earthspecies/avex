@@ -119,7 +119,9 @@ class Subsample:
 
     #     if "other" in ratios:
     #         other_keys = [
-    #             k for k, v in data.items() if v[prop] not in (ratios.keys() - {"other"})
+    #             k
+    #             for k, v in data.items()
+    #             if v[prop] not in (ratios.keys() - {"other"})
     #         ]
     #         for k in self._choose_keys(other_keys, ratios["other"]):
     #             selected[k] = data[k]

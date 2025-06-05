@@ -42,6 +42,51 @@ def get_slurm_env() -> Tuple[int, int, int, int, str]:
     return node_id, local_rank, global_rank, world_size, master_addr
 
 
+def get_local_device_index() -> int:
+    """
+    Get the local CUDA device index for this process.
+
+    In SLURM environments, this uses SLURM_LOCALID but ensures the device
+    index is valid. Falls back to auto-detection if needed.
+
+    Returns
+    -------
+    int
+        The CUDA device index this process should use
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return 0
+
+    visible_devices = torch.cuda.device_count()
+
+    # In SLURM, if only one GPU is visible per process, use device 0
+    if visible_devices == 1:
+        return 0
+
+    # For multi-GPU setups, use SLURM_LOCALID if available
+    if "SLURM_LOCALID" in os.environ:
+        local_rank = int(os.environ["SLURM_LOCALID"])
+        # Ensure the device index is valid
+        if local_rank < visible_devices:
+            return local_rank
+        else:
+            logger.warning(
+                f"SLURM_LOCALID={local_rank} >= visible devices {visible_devices}. "
+                f"Using device 0."
+            )
+            return 0
+
+    # Fallback: use LOCAL_RANK from torchrun if available
+    if "LOCAL_RANK" in os.environ:
+        local_rank = int(os.environ["LOCAL_RANK"])
+        return min(local_rank, visible_devices - 1)
+
+    # Final fallback
+    return 0
+
+
 def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int, bool]:
     """
     Initialize distributed training.
@@ -65,6 +110,14 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
     is_distributed = False
     rank = 0
     world_size = 1
+
+    # Check for backend override from environment variable
+    env_backend = os.environ.get("PYTORCH_DISTRIBUTED_BACKEND", backend)
+    if env_backend != backend:
+        logger.info(
+            f"Using backend '{env_backend}' from PYTORCH_DISTRIBUTED_BACKEND environment variable"
+        )
+        backend = env_backend
 
     # Check if SLURM environment variables are set
     if "SLURM_PROCID" in os.environ and "SLURM_NTASKS" in os.environ:
@@ -95,6 +148,21 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                 job_port = port
             os.environ["MASTER_PORT"] = str(job_port)
 
+            # Get the correct local device index
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    local_device_index = get_local_device_index()
+                    torch.cuda.set_device(local_device_index)
+                    logger.info(
+                        f"Set CUDA device to {local_device_index} "
+                        f"(SLURM_LOCALID={local_rank}, "
+                        f"visible_devices={torch.cuda.device_count()})"
+                    )
+            except Exception as e:  # pragma: no cover – log but don't crash
+                logger.warning("Failed to set CUDA device: %s", e)
+
             logger.info(
                 f"Initializing distributed training with rank {rank}, "
                 f"world size {world_size}, master addr {master_addr}:{job_port}"
@@ -120,6 +188,18 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
             rank = int(os.environ["RANK"])
             world_size = int(os.environ["WORLD_SIZE"])
             if world_size > 1:
+                # Ensure each process uses the correct local GPU when launched
+                # via `torchrun`/`torch.distributed.run` (LOCAL_RANK is set).
+                try:
+                    import torch
+
+                    local_gpu_idx = get_local_device_index()
+                    if torch.cuda.is_available():
+                        torch.cuda.set_device(local_gpu_idx)
+                        logger.info("Set CUDA device to LOCAL_RANK=%s", local_gpu_idx)
+                except Exception as e:  # pragma: no cover – best-effort only
+                    logger.warning("Failed to set CUDA device: %s", e)
+
                 dist.init_process_group(backend=backend, init_method="env://")
                 suppress_non_master_prints(rank == 0)
                 is_distributed = True

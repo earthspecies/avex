@@ -12,7 +12,7 @@ decorator==5.2.1
 distlib==0.3.9
 executing==2.2.0
 filelock==3.18.0
-identify==2.6.10
+identify==2.6.12
 iniconfig==2.1.0
 ipykernel==6.29.5
 ipython==9.2.0
@@ -20,7 +20,7 @@ ipython-pygments-lexers==1.1.1
 isort==5.13.2
 jedi==0.19.2
 jupyter-client==8.6.3
-jupyter-core==5.7.2
+jupyter-core==5.8.1
 matplotlib-inline==0.1.7
 nest-asyncio==1.6.0
 nodeenv==1.9.1
@@ -45,7 +45,7 @@ pyzmq==26.4.0
 ruff==0.11.2
 six==1.17.0
 stack-data==0.6.3
-tornado==6.5
+tornado==6.5.1
 traitlets==5.14.3
 typing-extensions==4.13.2 ; python_full_version < '3.12'
 virtualenv==20.31.2

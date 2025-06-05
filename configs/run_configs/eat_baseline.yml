@@ -1,0 +1,41 @@
+---
+# Model configuration
+model_spec:
+  name: eat_hf
+  pretrained: true
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_base.yml
+
+# How to use the labels (supervised: use class indices, text: use text labels)
+label_type: supervised
+debug_mode: false
+
+# audio preprocessing (e.g. event detection)
+preprocessing: null
+
+# Target sample‑rate expected by the model
+sr: 16000
+
+# Training parameters (for evaluation fine-tuning)
+training_params:
+  train_epochs: 100
+  lr: 0.0003
+  batch_size: 16
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Required fields for RunConfig schema
+output_dir: "./runs/eat_hf_baseline"
+loss_function: cross_entropy
+
+device: cuda
+seed: 42
+num_workers: 8

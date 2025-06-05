@@ -72,7 +72,9 @@ class GLU_Linear(nn.Module):
             self.linear = nn.Linear(input_dim, output_dim * 2, False)
 
     def forward(self, x):
-        # to be consistent with GLU_Linear, we assume the input always has the #channel (#dim) in the last dimension of the tensor, so need to switch the dimension first for 1D-Conv case
+        # to be consistent with GLU_Linear, we assume the input always has the
+        # #channel (#dim) in the last dimension of the tensor, so need to switch
+        # the dimension first for 1D-Conv case
         x = self.linear(x)
 
         if self.glu_type == "bilinear":
@@ -108,7 +110,9 @@ def get_activation_fn(activation: str):
     elif activation == "gelu":
         return gelu
     elif activation == "gelu_fast":
-        warnings.warn("--activation-fn=gelu_fast has been renamed to gelu_accurate")
+        warnings.warn(
+            "--activation-fn=gelu_fast has been renamed to gelu_accurate", stacklevel=2
+        )
         return gelu_accurate
     elif activation == "gelu_accurate":
         return gelu_accurate

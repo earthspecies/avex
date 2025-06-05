@@ -12,7 +12,7 @@ logger = logging.Logger("esp_data")
 class MultiLabelFromFeaturesConfig(BaseModel):
     type: Literal["labels_from_features"]
     features: str | list[str]
-    label_map: dict[str, int] | None = None
+    num_classes: int | Literal["auto"] = "auto"
     output_feature: str = "label"
     override: bool = False
 

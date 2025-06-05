@@ -26,13 +26,17 @@ dependencies = [
   "resampy>=0.4.3",
   "soundfile>=0.13.1",
   "timm>=1.0.15",
-  "torch==2.2.1",
+  "torch==2.5.0",
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
-  "transformers>=4.51.3",
+  "transformers==4.51",
   "psutil>=7.0.0",
   "h5py>=3.13.0",
+  "tensorflow>=2.19.0",
+  "pytorch-lightning>=2.5.1.post0",
+  "tensorflow-hub>=0.16.1",
+  "einops>=0.8.1",
 ]
 
 [dependency-groups]
@@ -71,6 +75,7 @@ indent-width = 4
 exclude = [
     "fix_paths.py",
     "representation_learning/models/eat.py",
+    "representation_learning/models/beats/",
 ]
 
 [tool.ruff.lint]
@@ -100,3 +105,6 @@ skip = "*.csv"
 profile = "black"
 line_length = 80
 filter_files = true
+
+[tool.uv.sources]
+transformers = { git = "https://github.com/huggingface/transformers" }

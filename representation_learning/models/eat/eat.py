@@ -363,6 +363,7 @@ class Data2VecMultiModel(nn.Module):
         force_remove_masked: bool = False,
         remove_extra_tokens: bool = True,
         precomputed_mask: Optional[MaskSeed] = None,
+        **kwargs: Any,
     ) -> Dict[str, torch.Tensor]:
         if mode is None:
             mode = self.cfg.supported_modality
@@ -558,6 +559,16 @@ class Data2VecMultiModel(nn.Module):
         result["sample_size"] = sample_size
 
         # 3. LOSS COMPUTATION ---------------------------------------------
+
+        # Get patch padding mask if provided by audio model
+        patch_padding_mask = kwargs.get("patch_padding_mask", None)
+
+        # Handle clone_batch for patch padding mask
+        if patch_padding_mask is not None and self.cfg.clone_batch > 1:
+            patch_padding_mask = patch_padding_mask.repeat_interleave(
+                self.cfg.clone_batch, 0
+            )
+
         if self.cfg.d2v_loss > 0:
             for i, x_ in enumerate(xs_masked):
                 # NOTE: keep per-element loss tensor – reduction happens later in
@@ -569,6 +580,13 @@ class Data2VecMultiModel(nn.Module):
                     beta=self.cfg.loss_beta,
                     scale=self.cfg.loss_scale,
                 )
+
+                # Apply patch padding mask if available
+                if patch_padding_mask is not None:
+                    reg_elem = self._apply_patch_padding_mask(
+                        reg_elem, patch_padding_mask, encoder_mask.mask
+                    )
+
                 key = (
                     f"{mode}_regression_{i}"
                     if len(xs_masked) > 1
@@ -590,15 +608,34 @@ class Data2VecMultiModel(nn.Module):
             recon = xs_masked[0]
             if self.recon_proj is not None:
                 recon = self.recon_proj(recon)
-            result["losses"]["recon"] = (
-                _d2v_loss_fn(recon, target_patch) * self.cfg.recon_loss
-            )
+            recon_loss = _d2v_loss_fn(recon, target_patch)
+
+            # Apply patch padding mask if available
+            if patch_padding_mask is not None:
+                recon_loss = self._apply_patch_padding_mask(
+                    recon_loss, patch_padding_mask, encoder_mask.mask
+                )
+
+            result["losses"]["recon"] = recon_loss * self.cfg.recon_loss
 
         if self.cfg.cls_loss > 0:
             assert extra_tokens > 0, "CLS loss requires extra tokens"
-            cls_target = orig_targets.mean(dim=1)
+            # Align teacher targets with possible clone_batch replication
+            cls_targets_src = orig_targets
             if self.cfg.clone_batch > 1:
-                cls_target = cls_target.repeat_interleave(self.cfg.clone_batch, 0)
+                cls_targets_src = cls_targets_src.repeat_interleave(
+                    self.cfg.clone_batch, 0
+                )
+
+            if patch_padding_mask is not None:
+                # Only average over valid patches for teacher target
+                valid_mask = patch_padding_mask.unsqueeze(-1)  # (B*, num_patches, 1)
+                masked_targets = cls_targets_src * valid_mask.float()
+                cls_target = masked_targets.sum(dim=1) / valid_mask.sum(dim=1).clamp(
+                    min=1
+                )
+            else:
+                cls_target = cls_targets_src.mean(dim=1)
             cls_pred = x[:, extra_tokens - 1]
             if self.cfg.utterance_level:
                 cls_target = cls_target - self.center
@@ -686,6 +723,45 @@ class Data2VecMultiModel(nn.Module):
         if self.cfg.instance_norm_targets:
             y = F.instance_norm(y.transpose(1, 2)).transpose(1, 2)
         return y
+
+    def _apply_patch_padding_mask(
+        self,
+        loss_tensor: torch.Tensor,
+        patch_padding_mask: torch.Tensor,
+        masked_positions: torch.Tensor,
+    ) -> torch.Tensor:
+        """Apply patch-level padding mask to loss computation."""
+        # loss_tensor shape: (num_masked_patches, embed_dim) after d2v_loss_fn
+        # patch_padding_mask shape: (B, num_patches)
+        # masked_positions shape: (B, num_patches)
+
+        # Only apply to positions that were both masked AND valid (not padded)
+        valid_masked = patch_padding_mask & masked_positions.bool()
+        valid_masked_flat = valid_masked[
+            masked_positions.bool()
+        ]  # (num_masked_patches,)
+
+        # Apply mask based on tensor dimensions
+        if loss_tensor.dim() == 2:
+            # Loss has shape (num_masked_patches, embed_dim)
+            valid_mask_expanded = valid_masked_flat.unsqueeze(1).expand_as(loss_tensor)
+            return loss_tensor * valid_mask_expanded.float()
+        elif loss_tensor.dim() == 1:
+            # Loss is flattened: (num_masked_patches * embed_dim,)
+            if loss_tensor.numel() % valid_masked_flat.numel() == 0:
+                embed_dim = loss_tensor.numel() // valid_masked_flat.numel()
+                valid_mask_expanded = (
+                    valid_masked_flat.unsqueeze(1).expand(-1, embed_dim).flatten()
+                )
+                return loss_tensor * valid_mask_expanded.float()
+            else:
+                # Fallback: apply patch-level mask
+                return loss_tensor * valid_masked_flat.float()
+        else:
+            # Fallback: apply patch-level mask with broadcasting
+            return loss_tensor * valid_masked_flat.float().view(
+                -1, *([1] * (loss_tensor.dim() - 1))
+            )
 
     @staticmethod
     def compute_var(y: torch.Tensor) -> torch.Tensor:

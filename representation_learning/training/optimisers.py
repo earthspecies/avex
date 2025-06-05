@@ -54,6 +54,7 @@ def get_optimizer(
     opt_name: str = training_params.optimizer.lower()
     lr: float = float(training_params.lr)
     weight_decay: float = float(training_params.weight_decay)
+    adam_betas = getattr(training_params, "adam_betas", None)
 
     # --------------------------------------------------------------------- #
     #  Parameter grouping – honour `weight_decay_scale` & `param_group`      #
@@ -86,6 +87,7 @@ def get_optimizer(
                 "weight_decay": weight_decay * float(scale),
                 "lr": lr,
                 "group_name": gname,
+                **({"betas": tuple(adam_betas)} if adam_betas is not None else {}),
             }
         )
 

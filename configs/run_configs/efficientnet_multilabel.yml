@@ -15,13 +15,13 @@ model_spec:
     target_length_seconds: 10
     window_selection: random
 
-dataset_config: configs/data_configs/data_base.yml
+dataset_config: configs/data_configs/data_multilabel.yml
 
 # How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised
 debug_mode: false
 
-# Enable multi-label classification
+# Enable multi-label classification (RunConfig field)
 multilabel: true
 
 # audio preprocessing (e.g. event detection)
@@ -84,8 +84,8 @@ augmentations:
       augmentation_prob: 0.5  # Probability of applying mixup to a batch
 
 
-# Binary cross entropy with logits loss for multi-label classification
-loss_function: bce
+# Focal loss for multi-label classification
+loss_function: focal
 
 device: cuda
 
