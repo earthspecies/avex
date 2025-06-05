@@ -135,7 +135,7 @@ datasets:
         override: true
     sample_rate: 16000
     metrics:
-      - accuracy
+      - multiclass_f1
 
   - dataset_name: rfcx-detection
     type: classification
@@ -151,7 +151,7 @@ datasets:
         override: true
     sample_rate: 16000
     metrics:
-      - accuracy
+      - multiclass_f1
 
   - dataset_name: hiceas-detection
     type: classification
@@ -167,7 +167,7 @@ datasets:
         override: true
     sample_rate: 16000
     metrics:
-      - accuracy
+      - multiclass_f1
 
   - dataset_name: hainan-gibbons-detection
     type: classification
@@ -183,7 +183,7 @@ datasets:
         override: true
     sample_rate: 16000
     metrics:
-      - accuracy
+      - multiclass_f1
 
   - dataset_name: dcase-detection
     type: classification
@@ -199,4 +199,4 @@ datasets:
         override: true
     sample_rate: 16000
     metrics:
-      - accuracy
+      - multiclass_f1

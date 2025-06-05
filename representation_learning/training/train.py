@@ -600,7 +600,7 @@ class Trainer:
         # matching dimensions.
         if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss) and target.dim() == 1:
             target = torch.nn.functional.one_hot(
-                target, num_classes=outputs.size(1)
+                target.long(), num_classes=outputs.size(1)
             ).float()
 
         loss = self.criterion(outputs, target)
@@ -1005,7 +1005,9 @@ class FineTuneTrainer:
                 correct = (pred == y).all(dim=1).sum().item()
             else:
                 pred = logits.argmax(dim=1)
-                correct = (pred == y).sum().item()
+                # Convert one-hot labels back to class indices for comparison
+                y_indices = y.argmax(dim=1)
+                correct = (pred == y_indices).sum().item()
 
             # Update metrics
             total_loss += loss.item() * y.size(0)
