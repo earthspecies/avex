@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 import torch
 from torchaudio.models import wav2vec2_model
@@ -108,3 +108,18 @@ class Model(ModelBase):
         features = self.model.extract_features(x)[0]
 
         return features
+
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],  # noqa: ANN401
+        layers: List[str],
+        *,
+        padding_mask: torch.Tensor | None = None,  # noqa: ANN401
+        masked_mean: bool = False,
+    ) -> torch.Tensor:
+        if isinstance(x, dict):
+            sequence_embeddings = self.forward(x["raw_wav"], padding_mask)
+        else:
+            sequence_embeddings = self.forward(x, padding_mask)
+
+        return sequence_embeddings.mean(dim=1)  # (B, C)
