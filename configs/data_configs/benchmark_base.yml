@@ -122,7 +122,7 @@ datasets:
       - balanced_accuracy
 
   - dataset_name: enabirds-detection
-    type: classification
+    type: detection
     label_column: answer
     audio_path_col: path
     multi_label: true
@@ -138,7 +138,7 @@ datasets:
       - multiclass_f1
 
   - dataset_name: rfcx-detection
-    type: classification
+    type: detection
     label_column: answer
     audio_path_col: path
     multi_label: true
@@ -154,7 +154,7 @@ datasets:
       - multiclass_f1
 
   - dataset_name: hiceas-detection
-    type: classification
+    type: detection
     label_column: answer
     audio_path_col: path
     multi_label: true
@@ -170,7 +170,7 @@ datasets:
       - multiclass_f1
 
   - dataset_name: hainan-gibbons-detection
-    type: classification
+    type: detection
     label_column: answer
     audio_path_col: path
     multi_label: true
@@ -186,7 +186,7 @@ datasets:
       - multiclass_f1
 
   - dataset_name: dcase-detection
-    type: classification
+    type: detection
     label_column: answer
     audio_path_col: path
     multi_label: true
@@ -196,6 +196,86 @@ datasets:
       - type: labels_from_features
         features:
           - answer
+        override: true
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-POW
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-PER
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-NES
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-NBP
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-HSN
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
         override: true
     sample_rate: 16000
     metrics:

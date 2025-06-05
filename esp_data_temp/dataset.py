@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 from google.cloud.storage.client import Client
+from sklearn.model_selection import train_test_split
 
 from .config import DatasetConfig
 from .transforms import transform_from_config
@@ -24,7 +25,6 @@ DATA_ROOT = (
     "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
     "foundation-model-data/"
 )
-
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
@@ -32,7 +32,10 @@ ESC50_PATH = "gs://esc50_dataset"
 
 @lru_cache(maxsize=1)
 def _get_client() -> cloudpathlib.GSClient:
-    return cloudpathlib.GSClient(storage_client=Client(), file_cache_mode="close_file")
+    client = cloudpathlib.GSClient(
+        storage_client=Client(), file_cache_mode="close_file"
+    )
+    return client
 
 
 class GSPath(cloudpathlib.GSPath):
@@ -283,15 +286,51 @@ def _get_dataset_from_name(
 
         json_path = dataset_path / "data" / name / "{}.jsonl".format(split)
         data = []
-        with open(json_path, "r") as f:
+        with json_path.open("r") as f:
             for line in f:
                 if line.strip():  # Skip empty lines
                     data.append(json.loads(line))
 
         df = pd.DataFrame(data)
         df["path"] = df["path"].apply(lambda x: dataset_path / x)
-        df["label"] = df["answer"].apply(lambda x: x.split(",")[-1].strip())
+        df["label"] = df["answer"].apply(lambda x: x.split(","))
 
+        return df
+    elif name.startswith("birdset"):
+        subsplit = "test" if split == "test" else "train"
+        if DATA_ROOT.startswith("gs://"):
+            dataset_path = GSPath(DATA_ROOT)
+        else:
+            dataset_path = Path(DATA_ROOT)
+
+        subdataset = name.split("-")[1].upper()
+        assert subdataset in ["HSN", "NBP", "NES", "PER", "POW"]
+
+        # For birdset, we always use the train split since that's where the data is
+        json_path = (
+            dataset_path
+            / "data"
+            / "birdset-{}".format(subsplit)
+            / subdataset
+            / "{}_common.jsonl".format(subdataset)
+        )
+        data = []
+        with json_path.open("r") as f:
+            for line in f:
+                if line.strip():  # Skip empty lines
+                    data.append(json.loads(line))
+        df = pd.DataFrame(data)
+        df["path"] = df["path"].apply(lambda x: dataset_path / x)
+        df["label"] = df["label"].apply(lambda x: x.split(","))
+        if split in ["train", "valid"]:
+            # stratified split on 'label' the data into train and valid
+            df_train, df_valid = train_test_split(
+                df, test_size=0.1, random_state=42, stratify=df["label"]
+            )
+            if split == "train":
+                return df_train
+            else:
+                return df_valid
         return df
     else:
         raise NotImplementedError("Dataset not supported")
