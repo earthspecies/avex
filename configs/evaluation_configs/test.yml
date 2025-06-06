@@ -36,14 +36,21 @@ experiments:
   #   # checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
   #   checkpoint_path: runs/clip_baseline_full/checkpoints/checkpoint_epoch_014.pt
 
-  - run_name: clap_linear_probe
-    run_config: configs/run_configs/clip_base.yml
-    ### which layers to probe for embeddings
-    layers: audio_projection
-    ### whether to use pretrained model or the one we train on bioacoustic data
+  # - run_name: clap_linear_probe
+  #   run_config: configs/run_configs/clip_base.yml
+  #   ### which layers to probe for embeddings
+  #   layers: audio_projection
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: false
+  #   checkpoint_path: ~/representation-learning/runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
+  #   frozen: true
+
+  - run_name: bird_aves_bio
+    run_config: configs/run_configs/aves_base.yml
+    layers: last_layer
     pretrained: false
-    checkpoint_path: ~/representation-learning/runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
     frozen: true
+
 
 # Where to save the evaluation results
 save_dir: evaluation_results
@@ -56,5 +63,5 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval

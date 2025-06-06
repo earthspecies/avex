@@ -107,7 +107,7 @@ class Model(ModelBase):
 
         features = self.model.extract_features(x)[0]
 
-        return features
+        return features[-1]
 
     def extract_embeddings(
         self,
