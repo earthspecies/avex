@@ -5,7 +5,7 @@ from functools import lru_cache
 from io import StringIO
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Dict, Iterator, List, Optional, Self, Type
+from typing import Any, Dict, Iterator, List, Optional, Self, Type, Union
 
 import cloudpathlib
 import librosa
@@ -161,6 +161,47 @@ class AudioDataset:
         return item
 
 
+def to_list(value: Union[str, float]) -> list[str]:
+    """Convert a comma-separated string to a list of strings.
+
+    This function handles the conversion of comma-separated strings to lists,
+    with special handling for NaN/None values. It's commonly used for processing
+    dataset columns that store list data as comma-separated strings.
+
+    Parameters
+    ----------
+    value : Union[str, float]
+        The input value to convert. Can be a string containing comma-separated values,
+        or a float (typically NaN) for empty values.
+
+    Returns
+    -------
+    list[str]
+        A list of strings, with each string trimmed of whitespace.
+        Returns an empty list if the input is NaN/None.
+
+    Raises
+    ------
+    ValueError
+        If the input is neither a string nor NaN/None.
+
+    Examples
+    --------
+    >>> to_list("a, b, c")
+    ['a', 'b', 'c']
+    >>> to_list(float('nan'))
+    []
+    """
+    if pd.isna(value):
+        return []
+    elif isinstance(value, str):
+        return [item.strip() for item in value.split(",")]
+    else:
+        raise ValueError(
+            f"Expected a string or NaN, but got {value} of type {type(value)}"
+        )
+
+
 def _get_dataset_from_name(
     name: str,
     split: str = "train",
@@ -187,20 +228,8 @@ def _get_dataset_from_name(
 
         # AnimalSpeak has some columns that are list[str] but they're stored as
         # comma-separated strings. We convert them to actual lists here:
-        def _to_list(v: str | float) -> list[str]:
-            if pd.isna(v):
-                return []
-            elif isinstance(v, str):
-                return [item.strip() for item in v.split(",")]
-            else:
-                raise ValueError(
-                    f"Expected a string or NaN, but got {v} of type {type(v)}"
-                )
-
-        # TODO: Maybe we want to normalise the values even more? for instance apply
-        # .lower()?
-        df.background_species_sci = df.background_species_sci.apply(_to_list)
-        df.background_species_common = df.background_species_common.apply(_to_list)
+        df.background_species_sci = df.background_species_sci.apply(to_list)
+        df.background_species_common = df.background_species_common.apply(to_list)
 
         # TODO (milad) what's the point of this column?
         df["path"] = df["local_path"].apply(
@@ -293,7 +322,7 @@ def _get_dataset_from_name(
 
         df = pd.DataFrame(data)
         df["path"] = df["path"].apply(lambda x: dataset_path / x)
-        df["label"] = df["answer"].apply(lambda x: x.split(","))
+        df.answer = df.answer.apply(to_list)
 
         return df
     elif name.startswith("birdset"):
@@ -321,11 +350,12 @@ def _get_dataset_from_name(
                     data.append(json.loads(line))
         df = pd.DataFrame(data)
         df["path"] = df["path"].apply(lambda x: dataset_path / x)
-        df["label"] = df["label"].apply(lambda x: x.split(","))
+        df.label = df.label.apply(to_list)
+
         if split in ["train", "valid"]:
             # stratified split on 'label' the data into train and valid
             df_train, df_valid = train_test_split(
-                df, test_size=0.1, random_state=42, stratify=df["label"]
+                df, test_size=0.2, random_state=42, stratify=df["label"]
             )
             if split == "train":
                 return df_train
