@@ -36,12 +36,19 @@ class CLIPModel(ModelBase):
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
 
-        # Projection layers
-        # EfficientNetB0 feature dimension before classifier is 1280
+        # Projection heads: two-layer MLP (Linear → ReLU → Linear)
         audio_feature_dim = 1280
-        self.audio_projection = nn.Linear(audio_feature_dim, projection_dim)
-        self.text_projection = nn.Linear(
-            self.text_encoder.config.hidden_size, projection_dim
+        hidden_dim = projection_dim
+        self.audio_projection = nn.Sequential(
+            nn.Linear(audio_feature_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, projection_dim),
+        )
+        text_feature_dim = self.text_encoder.config.hidden_size
+        self.text_projection = nn.Sequential(
+            nn.Linear(text_feature_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, projection_dim),
         )
 
         # Learnable log-logit scale parameter as in original CLIP implementation
@@ -89,7 +96,7 @@ class CLIPModel(ModelBase):
         # Move token tensors to *current* device of the module (safe for DDP)
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, max_length=50, return_tensors="pt"
+            text, padding=True, truncation=True, max_length=40, return_tensors="pt"
         ).to(current_device)
 
         # Get text embeddings

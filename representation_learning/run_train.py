@@ -18,7 +18,10 @@ from representation_learning.configs import (  # type: ignore
 )
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
-from representation_learning.training.distributed import init_distributed
+from representation_learning.training.distributed import (
+    get_local_device_index,
+    init_distributed,
+)
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import Trainer
 from representation_learning.utils import ExperimentLogger
@@ -65,19 +68,16 @@ def main() -> None:
         backend=config.distributed_backend,
     )
 
-    visible_gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
-
-    if is_distributed and visible_gpu_count == 1:
-        # Only one GPU is visible in this process → always use cuda:0
-        local_device_index = 0
+    # Get the correct local device index using the improved logic
+    if torch.cuda.is_available():
+        local_device_index = get_local_device_index()
+        torch.cuda.set_device(local_device_index)
+        device = torch.device("cuda", local_device_index)
+        logger.info(f"Using CUDA device {local_device_index}")
     else:
-        local_device_index = local_rank if torch.cuda.is_available() else 0
-
-    device = (
-        torch.device("cuda", local_device_index)
-        if torch.cuda.is_available()
-        else torch.device("cpu")
-    )
+        local_device_index = 0
+        device = torch.device("cpu")
+        logger.info("Using CPU device")
 
     torch.manual_seed(config.seed)
 

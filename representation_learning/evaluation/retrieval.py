@@ -87,7 +87,8 @@ def evaluate_auc_roc(
         try:
             auc = roc_auc_score(y_true[mask], y_score[mask])
             aucs.append(float(auc))
-        except ValueError:
+        except ValueError as v:
+            print("error in auc roc", v)
             # Happens when only one class present after masking (shouldn't) but be safe
             logger.warning("Only one class present after masking for query %d", i)
             continue

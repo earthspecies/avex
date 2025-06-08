@@ -32,6 +32,7 @@ from representation_learning.configs import EvaluateConfig, RunConfig
 from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
+    get_local_device_index,
     is_main_process,
 )
 from representation_learning.training.losses import ClipLoss, _build_criterion
@@ -167,12 +168,25 @@ class Trainer:
         if self.is_distributed:
             logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
 
-            self.model = parallel.DistributedDataParallel(
-                self.model,
-                device_ids=[self.local_rank],
-                output_device=self.local_rank,
-                find_unused_parameters=True,
-            )
+            # Get the actual device index that the model is on
+            model_device = self.device
+            if model_device.type == "cuda":
+                # Use SLURM-aware device index to handle GPU allocation properly
+                device_index = get_local_device_index()
+                logger.info(f"Using CUDA device index {device_index} for DDP")
+                self.model = parallel.DistributedDataParallel(
+                    self.model,
+                    device_ids=[device_index],
+                    output_device=device_index,
+                    find_unused_parameters=True,
+                )
+            else:
+                # For CPU or when device index is None, let DDP auto-detect
+                logger.info("Using CPU or auto-detect for DDP")
+                self.model = parallel.DistributedDataParallel(
+                    self.model,
+                    find_unused_parameters=True,
+                )
             self.model_unwrapped = self.model.module
         else:
             self.model_unwrapped = self.model
@@ -206,6 +220,10 @@ class Trainer:
         # Load checkpoint if specified (only on main process)
         if is_main_process() and resume_from_checkpoint:
             self._load_checkpoint(resume_from_checkpoint)
+
+        # Broadcast critical state from main process to all processes in distributed training
+        if self.is_distributed:
+            self._broadcast_training_state()
 
         # Log static hyper‑parameters once (only on master process)
         if is_main_process() and self.log:
@@ -408,14 +426,11 @@ class Trainer:
                     target_model = (
                         self.model_unwrapped if self.is_distributed else self.model
                     )
-                    if self.is_eat_ssl and hasattr(target_model, "backbone"):
+                    if self.is_eat_ssl:
                         backbone = target_model.backbone
-                        if hasattr(backbone, "set_num_updates"):
-                            backbone.set_num_updates(self._global_updates)
+                        backbone.set_num_updates(self._global_updates)
 
-                    # Scheduler (after optimiser update)
-                    if self.scheduler is not None:
-                        self.scheduler.step()
+                    self.scheduler.step()
 
                 # ------------------------------------
                 # Accumulate statistics
@@ -721,6 +736,18 @@ class Trainer:
             for k, v in out["losses"].items()
         }
 
+        # Add additional EAT metrics that are already computed
+        if "masked_pct" in out:
+            self._last_batch_ssl_metrics["masked_pct"] = out["masked_pct"].item()
+
+        if "target_var" in out:
+            self._last_batch_ssl_metrics["target_var"] = out["target_var"].item()
+
+        # Add prediction variance metrics (there can be multiple pred_var_i)
+        for key, value in out.items():
+            if key.startswith("pred_var_"):
+                self._last_batch_ssl_metrics[key] = value.item()
+
         total_loss = sum(v.sum() for v in out["losses"].values())
         sample_size = out.get("sample_size", audio.size(0)).clamp(min=1).float()
         loss = total_loss / sample_size
@@ -866,6 +893,36 @@ class Trainer:
             f"Resuming training from epoch {self.start_epoch} with best validation "
             f"accuracy {self.best_val_acc:.4f}"
         )
+
+    def _broadcast_training_state(self) -> None:
+        """Broadcast critical training state from main process to all processes."""
+        if not self.is_distributed:
+            return
+
+        import torch.distributed as dist
+
+        # Create tensors for the state we need to broadcast
+        # Using float tensors since dist.broadcast requires tensors
+        state_tensor = torch.tensor(
+            [
+                float(self.start_epoch),
+                self.best_val_acc,
+            ],
+            dtype=torch.float32,
+            device=self.device,
+        )
+
+        # Broadcast from rank 0 to all other ranks
+        dist.broadcast(state_tensor, src=0)
+
+        # Update state on non-main processes
+        if not is_main_process():
+            self.start_epoch = int(state_tensor[0].item())
+            self.best_val_acc = state_tensor[1].item()
+            logger.info(
+                f"Rank {dist.get_rank()}: Synchronized training state - "
+                f"start_epoch={self.start_epoch}, best_val_acc={self.best_val_acc:.4f}"
+            )
 
 
 class FineTuneTrainer:

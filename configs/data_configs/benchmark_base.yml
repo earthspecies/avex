@@ -27,7 +27,7 @@ datasets:
     audio_path_col: path
     multi_label: false
     label_type: supervised
-    audio_max_length_seconds: 5
+    audio_max_length_seconds: 10
     transformations:
       - type: label_from_feature
         feature: label
@@ -67,7 +67,7 @@ datasets:
     audio_path_col: path
     multi_label: false
     label_type: supervised
-    audio_max_length_seconds: 5
+    audio_max_length_seconds: 3
     transformations:
       - type: label_from_feature
         feature: label
@@ -87,7 +87,7 @@ datasets:
     audio_path_col: path
     multi_label: false
     label_type: supervised
-    audio_max_length_seconds: 5
+    audio_max_length_seconds: 10
     transformations:
       - type: label_from_feature
         feature: label
@@ -107,7 +107,7 @@ datasets:
     audio_path_col: path
     multi_label: false
     label_type: supervised
-    audio_max_length_seconds: 5
+    audio_max_length_seconds: 3
     transformations:
       - type: label_from_feature
         feature: label

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -9,6 +9,7 @@ import torch.nn as nn
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 
+from .audio_processor import EATAudioProcessor
 from .eat import (
     D2vModalitiesConfig,
     Data2VecMultiConfig,
@@ -16,6 +17,40 @@ from .eat import (
     Modality,
 )
 from .image import D2vImageConfig
+from .patch_padding import PatchPaddingHandler
+
+# Mask helpers
+
+# ------------------------------------------------------------------ #
+#  Utility classes
+# ------------------------------------------------------------------ #
+
+
+class AudioWithLength:
+    """Wrapper to attach original audio lengths to tensor for padding mask computation."""
+
+    def __init__(self, tensor: torch.Tensor, original_lengths: torch.Tensor):
+        self.tensor = tensor
+        self.original_lengths = original_lengths
+
+    def __getattr__(self, name):
+        # Delegate all other attributes to the underlying tensor
+        return getattr(self.tensor, name)
+
+    @property
+    def shape(self):
+        return self.tensor.shape
+
+    def to(self, *args, **kwargs):
+        return AudioWithLength(
+            self.tensor.to(*args, **kwargs), self.original_lengths.to(*args, **kwargs)
+        )
+
+
+# ------------------------------------------------------------------ #
+#  Local imports
+# ------------------------------------------------------------------ #
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +70,12 @@ class Model(ModelBase):
         audio_config: Optional[AudioConfig] = None,
         embed_dim: int = 768,
         patch_size: int = 16,
-        target_length: int = 256,
+        target_length: int = 1024,
         return_features_only: bool = False,
         enable_ema: bool = False,
         pretraining_mode: bool = False,
+        skip_padding_logic: bool = True,
+        handle_padding: bool = False,
         eat_cfg: Optional[Dict[str, Any]] = None,
     ) -> None:
         # Initialise the generic ESP model wrapper
@@ -49,6 +86,8 @@ class Model(ModelBase):
         # ------------------------------------------------------------------ #
         self.return_features_only: bool = return_features_only
         self.pretraining_mode: bool = pretraining_mode
+        self.skip_padding_logic: bool = skip_padding_logic
+        self.handle_padding: bool = handle_padding
 
         # Auto-enable EMA teacher when in pre-training mode (unless user overrode)
         if self.pretraining_mode and not enable_ema:
@@ -57,6 +96,27 @@ class Model(ModelBase):
                 "automatically enabling EMA teacher."
             )
             enable_ema = True
+
+        # ------------------------------------------------------------------ #
+        #  Audio pre-processing                                             #
+        # ------------------------------------------------------------------ #
+
+        self.audio_processor = EATAudioProcessor(
+            sample_rate=16_000,
+            target_length=target_length,
+            n_mels=128,
+        )
+
+        # ------------------------------------------------------------------ #
+        #  Patch-level padding handler
+        # ------------------------------------------------------------------ #
+        self.padding_handler = None
+        if self.handle_padding:
+            self.padding_handler = PatchPaddingHandler(
+                patch_size=patch_size,
+                hop_length=self.audio_processor.hop_length,
+                threshold=0.5,
+            )
 
         # ------------------------------------------------------------------ #
         #  Build EAT backbone
@@ -139,7 +199,7 @@ class Model(ModelBase):
         ----------
         x : torch.Tensor
             Raw waveform (B, T) – will be converted to spectrogram by
-            ``ModelBase.process_audio``.
+            ``ModelBase.process_audio``. Can also be AudioWithLength for padding handling.
         padding_mask : Optional[torch.Tensor]
             Not used here; kept for interface compatibility.
 
@@ -155,6 +215,21 @@ class Model(ModelBase):
             shape ``(B, F, T)``.
 
         """
+        # Derive original (unpadded) lengths from the sample-level padding mask
+        original_lengths = None
+        if padding_mask is not None:
+            # *padding_mask* coming from the DataLoader has **True** for *valid* samples.
+            # Count valid samples per clip to reconstruct original waveform length.
+            original_lengths = padding_mask.sum(dim=1)
+
+        # Backwards-compat: allow the legacy AudioWithLength wrapper
+        if original_lengths is None:
+            if isinstance(x, AudioWithLength):
+                original_lengths = x.original_lengths
+                x = x.tensor
+            elif self.handle_padding and hasattr(x, "original_lengths"):
+                original_lengths = x.original_lengths
+
         # 1) Spectrogram extraction via AudioProcessor in ModelBase
         spec = super().process_audio(x)
         if spec.dim() != 3:
@@ -162,28 +237,54 @@ class Model(ModelBase):
                 "AudioProcessor must return a 3-D tensor with shape (B, F, T)"
             )
 
-        # 2) Re-arrange to (B, T, F) and pad / crop
-        spec = spec.permute(0, 2, 1)  # -> (B, T, F)
-        spec = self._pad_or_crop_time(
-            spec, self.backbone.cfg.modalities.image.target_length
-        )
+        # 2) Re-arrange to (B, T, F)
+        # spec = spec.permute(0, 2, 1)  # -> (B, T, F)
+
+        # ------------------------------------------------------------------ #
+        #  Optional: propagate padding mask (waveform → frame → patch)        #
+        # ------------------------------------------------------------------ #
+        patch_mask = None
+        if self.handle_padding and original_lengths is not None:
+            patch_mask = self.padding_handler.compute_patch_mask(
+                original_lengths, target_frames=spec.size(2), n_mels=spec.size(1)
+            )
+
+        # Invert patch mask for transformer attention: True -> padded
+        attn_padding_mask = None
+        if patch_mask is not None:
+            attn_padding_mask = ~patch_mask
+
+        # 3) Add channel dimension expected by ImageEncoder
         spec = spec.unsqueeze(1)  # (B, 1, T, F)
 
-        # 3) Backbone
+        # 4) Backbone
         if self.pretraining_mode:
             # Backbone handles masking & loss internally
-            return self.backbone(spec, mask=True, features_only=False)
+            result = self.backbone(
+                spec,
+                padding_mask=attn_padding_mask,
+                mask=True,
+                features_only=False,
+                patch_padding_mask=patch_mask,  # Pass for loss computation
+            )
+            # Store patch mask for loss computation if needed
+            if patch_mask is not None:
+                result["patch_padding_mask"] = patch_mask
+            return result
 
         # Features-only path for fine-tuning / inference
         backbone_out: Dict[str, Any] = self.backbone(
-            spec, mask=False, features_only=True
+            spec,
+            padding_mask=attn_padding_mask,
+            mask=False,
+            features_only=True,
         )
         features: torch.Tensor = backbone_out["x"].mean(dim=1)  # global average pool
 
         if self.return_features_only:
             return features  # (B, embed_dim)
 
-        # 4) Classification head
+        # 5) Classification head
         return self.classifier(features)  # (B, num_classes)
 
     # --------------------------------------------------------------------- #
@@ -226,3 +327,108 @@ class Model(ModelBase):
                     pass  # fall through and set raw string
 
             setattr(obj, key, val)
+
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
+        layers: List[str],  # currently unused for EAT
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+        pooling: str = "cls",  # one of: "cls", "mean"
+    ) -> torch.Tensor:
+        """Return a clip-level embedding using *pooling* strategy.
+
+        Parameters
+        ----------
+        x : Tensor | dict
+            Either a raw waveform tensor (B, T) or a dict with ``{"raw_wav",
+            "padding_mask"}``.
+        layers : List[str]
+            Ignored for the moment – kept for interface parity with other
+            models.
+        padding_mask : Tensor | None, optional
+            Explicit mask when *x* is provided as a raw tensor.
+        pooling : {"cls", "mean"}
+            • ``"cls"`` – return the CLS token (default).
+            • ``"mean"`` – mean-pool patch embeddings along the time axis.
+
+        Returns
+        -------
+        torch.Tensor
+            Clip-level embedding tensor with shape (B, D) where D is the
+            embedding dimension.
+
+        Raises
+        ------
+        RuntimeError
+            If AudioProcessor does not return a 3-D tensor with shape (B, F, T).
+        ValueError
+            If pooling is not 'cls' or 'mean'.
+        """
+        # ------------------------------------------------------------------ #
+        #  Flexible input handling                                           #
+        # ------------------------------------------------------------------ #
+        if isinstance(x, dict):
+            wav = x["raw_wav"]
+            # padding_mask would be x.get("padding_mask") but it's not used currently
+        else:
+            wav = x  # type: ignore[assignment]
+
+        # Derive original (unpadded) lengths from the sample-level padding mask
+        original_lengths = None
+        if padding_mask is not None:
+            # *padding_mask* coming from the DataLoader has **True** for *valid* samples.
+            # Count valid samples per clip to reconstruct original waveform length.
+            original_lengths = padding_mask.sum(dim=1)
+
+        # Backwards-compat: allow the legacy AudioWithLength wrapper
+        if original_lengths is None:
+            if isinstance(wav, AudioWithLength):
+                original_lengths = wav.original_lengths
+                wav = wav.tensor
+            elif self.handle_padding and hasattr(wav, "original_lengths"):
+                original_lengths = wav.original_lengths
+
+        # 1) Spectrogram extraction via AudioProcessor
+        spec = super().process_audio(wav)
+        if spec.dim() != 3:
+            raise RuntimeError(
+                "AudioProcessor must return a 3-D tensor with shape (B, F, T)"
+            )
+
+        # 2) Re-arrange to (B, T, F)
+        # spec = spec.permute(0, 2, 1)
+
+        # ------------------------------------------------------------------ #
+        #  Optional: compute patch padding mask                              #
+        # ------------------------------------------------------------------ #
+        patch_mask = None
+        if self.handle_padding and original_lengths is not None:
+            patch_mask = self.padding_handler.compute_patch_mask(
+                original_lengths, target_frames=spec.size(2), n_mels=spec.size(1)
+            )
+
+        # Invert patch mask for transformer attention (True -> padded)
+        attn_padding_mask = None
+        if patch_mask is not None:
+            attn_padding_mask = ~patch_mask
+
+        spec = spec.unsqueeze(1)  # (B, 1, T, F)
+
+        remove_extra = pooling != "cls"
+
+        backbone_out: Dict[str, Any] = self.backbone(
+            spec,
+            padding_mask=attn_padding_mask,
+            mask=False,
+            features_only=True,
+            remove_extra_tokens=remove_extra,
+        )
+
+        feats: torch.Tensor = backbone_out["x"]  # (B, L, D)
+        if pooling == "cls":
+            return feats[:, 0]  # CLS token
+        elif pooling == "mean":
+            return feats.mean(dim=1)  # global average over patches
+        else:
+            raise ValueError("pooling must be 'cls' or 'mean'")
