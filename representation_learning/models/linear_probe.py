@@ -68,9 +68,6 @@ class LinearProbe(torch.nn.Module):
                 dummy = torch.randn(1, target_length, device=device)
                 inferred_dim = base_model.extract_embeddings(dummy, layers).shape[1]
 
-        print(f"inferred_dim: {inferred_dim}")
-        print(f"num_classes: {num_classes}")
-
         self.classifier = torch.nn.Linear(inferred_dim, num_classes).to(device)
 
     def forward(
