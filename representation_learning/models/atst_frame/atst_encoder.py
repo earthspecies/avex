@@ -61,19 +61,17 @@ class Model(ModelBase):
             )  # 768 is common ATST dimension
 
     def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
-        """Forward pass through the ATST model.
+        """Forward pass through ATST encoder.
 
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input audio tensor
-        padding_mask : torch.Tensor
-            Padding mask for the input (unused by ATST but kept for interface compliance)
+        Args:
+            x : torch.Tensor
+                Input audio tensor
+            padding_mask : torch.Tensor
+                Padding mask for the input (unused by ATST but kept for interface
+                compliance)
 
         Returns
-        -------
-        torch.Tensor
-            Model output (features or logits based on return_features_only flag)
+            torch.Tensor: Audio representation tensor
         """
         # Process audio using the base class method
         x = self.process_audio(x)

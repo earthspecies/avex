@@ -27,21 +27,50 @@ from .patch_padding import PatchPaddingHandler
 
 
 class AudioWithLength:
-    """Wrapper to attach original audio lengths to tensor for padding mask computation."""
+    """Wrapper to attach original audio lengths to tensor for padding mask
+    computation."""
 
-    def __init__(self, tensor: torch.Tensor, original_lengths: torch.Tensor):
+    def __init__(self, tensor: torch.Tensor, original_lengths: torch.Tensor) -> None:
+        """Initialize AudioWithLength wrapper.
+
+        Args:
+            tensor: The audio tensor
+            original_lengths: Original lengths before padding
+        """
         self.tensor = tensor
         self.original_lengths = original_lengths
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
+        """Delegate attribute access to underlying tensor.
+
+        Args:
+            name: Attribute name
+
+        Returns:
+            Any: The requested attribute from the underlying tensor
+        """
         # Delegate all other attributes to the underlying tensor
         return getattr(self.tensor, name)
 
     @property
-    def shape(self):
+    def shape(self) -> torch.Size:
+        """Get the shape of the underlying tensor.
+
+        Returns:
+            torch.Size: Shape of the tensor
+        """
         return self.tensor.shape
 
-    def to(self, *args, **kwargs):
+    def to(self, *args: Any, **kwargs: Any) -> "AudioWithLength":  # noqa: ANN401
+        """Move tensor to device/dtype.
+
+        Args:
+            *args: Positional arguments for tensor.to()
+            **kwargs: Keyword arguments for tensor.to()
+
+        Returns:
+            AudioWithLength: New instance with moved tensors
+        """
         return AudioWithLength(
             self.tensor.to(*args, **kwargs), self.original_lengths.to(*args, **kwargs)
         )
@@ -199,7 +228,8 @@ class Model(ModelBase):
         ----------
         x : torch.Tensor
             Raw waveform (B, T) – will be converted to spectrogram by
-            ``ModelBase.process_audio``. Can also be AudioWithLength for padding handling.
+            ``ModelBase.process_audio``. Can also be AudioWithLength for
+            padding handling.
         padding_mask : Optional[torch.Tensor]
             Not used here; kept for interface compatibility.
 
@@ -218,7 +248,8 @@ class Model(ModelBase):
         # Derive original (unpadded) lengths from the sample-level padding mask
         original_lengths = None
         if padding_mask is not None:
-            # *padding_mask* coming from the DataLoader has **True** for *valid* samples.
+            # *padding_mask* coming from the DataLoader has **True** for *valid*
+            # samples.
             # Count valid samples per clip to reconstruct original waveform length.
             original_lengths = padding_mask.sum(dim=1)
 
@@ -377,7 +408,8 @@ class Model(ModelBase):
         # Derive original (unpadded) lengths from the sample-level padding mask
         original_lengths = None
         if padding_mask is not None:
-            # *padding_mask* coming from the DataLoader has **True** for *valid* samples.
+            # *padding_mask* coming from the DataLoader has **True** for *valid*
+            # samples.
             # Count valid samples per clip to reconstruct original waveform length.
             original_lengths = padding_mask.sum(dim=1)
 

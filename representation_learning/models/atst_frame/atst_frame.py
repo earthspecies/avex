@@ -1,54 +1,157 @@
+"""ATST Frame model implementation.
+
+This module provides the Frame-level Attention-based Self-supervised Time-series (ATST)
+model for audio representation learning with support for multi-crop wrapper and
+Lightning integration.
+"""
+
+import argparse
 import math
 import warnings
 from functools import partial
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torchaudio
+from einops.layers.torch import Rearrange
 from pytorch_lightning import LightningModule
-from torch import nn
-from torch.nn import functional as F
-
-# from transformers.optimization import AdamW
+from torch.nn.init import trunc_normal_
 from torch.optim import AdamW
 from torchvision import transforms
 
 N_BLOCKS = 12
 
+__all__ = [
+    "FrameAST",
+    "FrameATST",
+    "FrameATSTLightningModule",
+    "FrameAST_small",
+    "FrameAST_base",
+    "FrameAST_large",
+    "load_model",
+    "get_scene_embedding",
+    "get_timestamp_embedding",
+]
+
+
+class LinearRandomCropTransform:
+    """Linear random crop transform for audio spectrograms."""
+
+    def __init__(self, size: int) -> None:
+        """Initialize the transform.
+
+        Args:
+            size: Target crop size
+        """
+        self.size = size
+
+    def __repr__(self) -> str:
+        """Return string representation of the transform.
+
+        Returns:
+            str: String representation of the transform class
+        """
+        return self.__class__.__name__ + "()"
+
 
 class CustomAudioTransform:
-    def __repr__(self):
+    """Base class for custom audio transformations."""
+
+    def __repr__(self) -> str:
+        """Return string representation of the transform.
+
+        Returns:
+            str: String representation of the transform class
+        """
         return self.__class__.__name__ + "()"
 
 
 class Identity(CustomAudioTransform):
-    def __call__(self, signal):
+    """Identity transform that returns input unchanged."""
+
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Apply identity transform.
+
+        Args:
+            signal: Input audio signal tensor
+
+        Returns:
+            torch.Tensor: Unchanged input signal
+        """
         return signal
 
 
 class GaussianNoise(CustomAudioTransform):
-    def __init__(self, g):
+    """Add Gaussian noise to audio signal."""
+
+    def __init__(self, g: float) -> None:
+        """Initialize Gaussian noise transform.
+
+        Args:
+            g: Noise scaling factor
+        """
         self.g = g
 
-    def __call__(self, signal):
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Apply Gaussian noise to signal.
+
+        Args:
+            signal: Input audio signal tensor
+
+        Returns:
+            torch.Tensor: Signal with added Gaussian noise
+        """
         return signal + self.g * torch.randn_like(signal)
 
 
 class PadToSize(CustomAudioTransform):
-    def __init__(self, size: int):
+    """Pad audio signal to specified size."""
+
+    def __init__(self, size: int) -> None:
+        """Initialize pad to size transform.
+
+        Args:
+            size: Target size for padding
+        """
         self.size = size
 
-    def __call__(self, signal):
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Pad signal to target size.
+
+        Args:
+            signal: Input audio signal tensor
+
+        Returns:
+            torch.Tensor: Padded signal
+        """
         if signal.shape[1] < self.size:
             signal = F.pad(signal, (0, self.size - signal.shape[1]))
         return signal
 
 
 class ToSizeN(CustomAudioTransform):
-    def __init__(self, size: int):
+    """Resize audio signal to multiple of specified size."""
+
+    def __init__(self, size: int) -> None:
+        """Initialize to size N transform.
+
+        Args:
+            size: Target size divisor
+        """
         self.size = size
 
-    def __call__(self, signal):
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Resize signal to multiple of target size.
+
+        Args:
+            signal: Input audio signal tensor
+
+        Returns:
+            torch.Tensor: Resized signal
+        """
         n = signal.shape[1] // self.size
         m = signal.shape[1] % self.size
         if m > self.size // 2 or n == 0:
@@ -59,11 +162,27 @@ class ToSizeN(CustomAudioTransform):
 
 
 class CentralCrop(CustomAudioTransform):
-    def __init__(self, size: int, pad: bool = True):
+    """Apply center cropping to audio signal."""
+
+    def __init__(self, size: int, pad: bool = True) -> None:
+        """Initialize central crop transform.
+
+        Args:
+            size: Target crop size
+            pad: Whether to pad if signal is too short
+        """
         self.size = size
         self.pad = pad
 
-    def __call__(self, signal):
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Apply central crop to signal.
+
+        Args:
+            signal: Input audio signal tensor
+
+        Returns:
+            torch.Tensor: Center-cropped signal
+        """
         if signal.shape[-1] < self.size:
             if self.pad:
                 signal = F.pad(signal, (0, self.size - signal.shape[-1]))
@@ -77,11 +196,27 @@ class CentralCrop(CustomAudioTransform):
 
 
 class RandomCrop(CustomAudioTransform):
-    def __init__(self, size: int, pad: bool = True):
+    """Apply random cropping to audio signal."""
+
+    def __init__(self, size: int, pad: bool = True) -> None:
+        """Initialize random crop transform.
+
+        Args:
+            size: Target crop size
+            pad: Whether to pad if signal is too short
+        """
         self.size = size
         self.pad = pad
 
-    def __call__(self, signal):
+    def __call__(self, signal: torch.Tensor) -> torch.Tensor:
+        """Apply random crop to signal.
+
+        Args:
+            signal: Input audio signal tensor
+
+        Returns:
+            torch.Tensor: Randomly cropped signal
+        """
         if signal.shape[1] < self.size:
             if self.pad:
                 signal = F.pad(signal, (0, self.size - signal.shape[-1]))
@@ -91,13 +226,30 @@ class RandomCrop(CustomAudioTransform):
 
 
 class Normalize(CustomAudioTransform):
-    def __init__(self, std_mean=None, reduce_dim=None):
+    """Normalize audio signal using mean and standard deviation."""
+
+    def __init__(
+        self,
+        std_mean: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        reduce_dim: Optional[Union[int, Tuple[int, ...]]] = None,
+    ) -> None:
+        """Initialize normalize transform.
+
+        Args:
+            std_mean: Optional precomputed (std, mean) tuple
+            reduce_dim: Dimensions along which to compute statistics
+        """
         self.std_mean = std_mean
         self.reduce_dim = reduce_dim
 
-    def __call__(self, input):
-        """
-        assuming input has shape [batch,nmels,time]
+    def __call__(self, input: torch.Tensor) -> torch.Tensor:
+        """Apply normalization to input.
+
+        Args:
+            input: Input tensor with shape [batch, nmels, time]
+
+        Returns:
+            torch.Tensor: Normalized tensor
         """
         std, mean = None, None
         if self.std_mean is None:
@@ -113,11 +265,31 @@ class Normalize(CustomAudioTransform):
 
 
 class MinMax(CustomAudioTransform):
-    def __init__(self, min, max):
+    """Apply min-max normalization to audio signal."""
+
+    def __init__(
+        self,
+        min: Optional[torch.Tensor],
+        max: Optional[torch.Tensor],
+    ) -> None:
+        """Initialize min-max normalization.
+
+        Args:
+            min: Minimum value for normalization
+            max: Maximum value for normalization
+        """
         self.min = min
         self.max = max
 
-    def __call__(self, input):
+    def __call__(self, input: torch.Tensor) -> torch.Tensor:
+        """Apply min-max normalization.
+
+        Args:
+            input: Input tensor
+
+        Returns:
+            torch.Tensor: Min-max normalized tensor in range [-1, 1]
+        """
         min_, max_ = None, None
         if self.min is None:
             min_ = torch.min(input)
@@ -130,15 +302,42 @@ class MinMax(CustomAudioTransform):
 
 
 class div(CustomAudioTransform):
-    def __init__(self, value=100):
+    """Divide input by a constant value."""
+
+    def __init__(self, value: float = 100) -> None:
+        """Initialize division transform.
+
+        Args:
+            value: Divisor value
+        """
         self.value = value
 
-    def __call__(self, input):
+    def __call__(self, input: torch.Tensor) -> torch.Tensor:
+        """Apply division to input.
+
+        Args:
+            input: Input tensor
+
+        Returns:
+            torch.Tensor: Divided tensor
+        """
         input /= 100
         return input
 
 
-def drop_path(x, drop_prob: float = 0.0, training: bool = False):
+def drop_path(
+    x: torch.Tensor, drop_prob: float = 0.0, training: bool = False
+) -> torch.Tensor:
+    """Drop paths (Stochastic Depth) per sample for residual blocks.
+
+    Args:
+        x: Input tensor
+        drop_prob: Drop probability
+        training: Whether in training mode
+
+    Returns:
+        torch.Tensor: Output tensor with dropped paths
+    """
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
@@ -152,25 +351,52 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False):
 
 
 class DropPath(nn.Module):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
+    """Drop paths (Stochastic Depth) per sample.
 
-    def __init__(self, drop_prob=None):
+    When applied in main path of residual blocks.
+    """
+
+    def __init__(self, drop_prob: Optional[float] = None) -> None:
+        """Initialize DropPath module.
+
+        Args:
+            drop_prob: Drop probability
+        """
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass with drop path.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            torch.Tensor: Output tensor with dropped paths
+        """
         return drop_path(x, self.drop_prob, self.training)
 
 
 class Mlp(nn.Module):
+    """Multi-layer perceptron."""
+
     def __init__(
         self,
-        in_features,
-        hidden_features=None,
-        out_features=None,
-        act_layer=nn.GELU,
-        drop=0.0,
-    ):
+        in_features: int,
+        hidden_features: Optional[int] = None,
+        out_features: Optional[int] = None,
+        act_layer: nn.Module = nn.GELU,
+        drop: float = 0.0,
+    ) -> None:
+        """Initialize MLP.
+
+        Args:
+            in_features: Number of input features
+            hidden_features: Number of hidden features
+            out_features: Number of output features
+            act_layer: Activation layer class
+            drop: Dropout probability
+        """
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -179,7 +405,15 @@ class Mlp(nn.Module):
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through MLP.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            torch.Tensor: Output tensor
+        """
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)
@@ -189,15 +423,27 @@ class Mlp(nn.Module):
 
 
 class Attention(nn.Module):
+    """Multi-head self-attention module."""
+
     def __init__(
         self,
-        dim,
-        num_heads=8,
-        qkv_bias=False,
-        qk_scale=None,
-        attn_drop=0.0,
-        proj_drop=0.0,
-    ):
+        dim: int,
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        qk_scale: Optional[float] = None,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+    ) -> None:
+        """Initialize attention module.
+
+        Args:
+            dim: Input dimension
+            num_heads: Number of attention heads
+            qkv_bias: Whether to use bias in QKV projection
+            qk_scale: Scale factor for QK dot product
+            attn_drop: Attention dropout probability
+            proj_drop: Projection dropout probability
+        """
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -208,7 +454,18 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x, mask):
+    def forward(
+        self, x: torch.Tensor, mask: Optional[torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass through attention module.
+
+        Args:
+            x: Input tensor with shape [batch, seq_len, dim]
+            mask: Optional attention mask
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Output tensor and attention weights
+        """
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -230,19 +487,35 @@ class Attention(nn.Module):
 
 
 class Block(nn.Module):
+    """Transformer block with multi-head attention and MLP."""
+
     def __init__(
         self,
-        dim,
-        num_heads,
-        mlp_ratio=4.0,
-        qkv_bias=False,
-        qk_scale=None,
-        drop=0.0,
-        attn_drop=0.0,
-        drop_path=0.0,
-        act_layer=nn.GELU,
-        norm_layer=nn.LayerNorm,
-    ):
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = False,
+        qk_scale: Optional[float] = None,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: nn.Module = nn.GELU,
+        norm_layer: nn.Module = nn.LayerNorm,
+    ) -> None:
+        """Initialize transformer block.
+
+        Args:
+            dim: Input dimension
+            num_heads: Number of attention heads
+            mlp_ratio: MLP hidden dimension ratio
+            qkv_bias: Whether to use bias in QKV projection
+            qk_scale: Scale factor for QK dot product
+            drop: Dropout probability
+            attn_drop: Attention dropout probability
+            drop_path: Drop path probability
+            act_layer: Activation layer class
+            norm_layer: Normalization layer class
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -263,7 +536,23 @@ class Block(nn.Module):
             drop=drop,
         )
 
-    def forward(self, x, length=None, return_attention=False):
+    def forward(
+        self,
+        x: torch.Tensor,
+        length: Optional[torch.Tensor] = None,
+        return_attention: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """Forward pass through transformer block.
+
+        Args:
+            x: Input tensor
+            length: Optional length tensor for attention masking
+            return_attention: Whether to return attention weights
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+                Output tensor or tuple of (output, attention) if return_attention=True
+        """
         if length is not None:
             mask_att = get_attention_mask(x, length)
         else:
@@ -278,7 +567,16 @@ class Block(nn.Module):
             return x
 
 
-def get_attention_mask(x, length):
+def get_attention_mask(x: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
+    """Create attention mask for padded sequences.
+
+    Args:
+        x: Input tensor with shape [batch, seq_len, dim]
+        length: Length tensor with shape [batch]
+
+    Returns:
+        torch.Tensor: Attention mask
+    """
     batch_size, max_len, _ = x.shape
     # create mask for padded elements and zero-out them
     mask = (
@@ -291,10 +589,26 @@ def get_attention_mask(x, length):
     return mask
 
 
-def _no_grad_trunc_normal_(tensor, mean, std, a, b):
-    # Cut & paste from PyTorch official master until it's in a few official releases - RW
-    # Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf
-    def norm_cdf(x):
+def _no_grad_trunc_normal_(
+    tensor: torch.Tensor, mean: float, std: float, a: float, b: float
+) -> torch.Tensor:
+    """Fill tensor with truncated normal distribution (no gradient tracking).
+
+    Cut & paste from PyTorch official master until it's in a few official releases - RW
+    Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf
+
+    Args:
+        tensor: Tensor to fill
+        mean: Mean of the distribution
+        std: Standard deviation of the distribution
+        a: Lower bound
+        b: Upper bound
+
+    Returns:
+        torch.Tensor: Filled tensor
+    """
+
+    def norm_cdf(x: float) -> float:
         # Computes standard normal cumulative distribution function
         return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
 
@@ -309,12 +623,12 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
         # Values are generated by using a truncated uniform distribution and
         # then using the inverse CDF for the normal distribution.
         # Get upper and lower cdf values
-        l = norm_cdf((a - mean) / std)
+        lower = norm_cdf((a - mean) / std)
         u = norm_cdf((b - mean) / std)
 
-        # Uniformly fill tensor with values from [l, u], then translate to
-        # [2l-1, 2u-1].
-        tensor.uniform_(2 * l - 1, 2 * u - 1)
+        # Uniformly fill tensor with values from [lower, u], then translate to
+        # [2lower-1, 2u-1].
+        tensor.uniform_(2 * lower - 1, 2 * u - 1)
 
         # Use inverse cdf transform for normal distribution to get truncated
         # standard normal
@@ -329,17 +643,41 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
         return tensor
 
 
-def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0):
-    # type: (Tensor, float, float, float, float) -> Tensor
-    return _no_grad_trunc_normal_(tensor, mean, std, a, b)
+def get_num_patches(
+    height: int = 64, width: int = 1001, patch_height: int = 16, patch_width: int = 16
+) -> int:
+    """Calculate number of patches for given dimensions.
 
+    Args:
+        height: Input height
+        width: Input width
+        patch_height: Patch height
+        patch_width: Patch width
 
-def get_num_patches(height=64, width=1001, patch_height=16, patch_width=16):
+    Returns:
+        int: Number of patches
+    """
     return (height // patch_height) * (width // patch_width)
 
 
 class PatchEmbed(nn.Module):
-    def __init__(self, patch_height=64, patch_width=4, embed_dim=768, input_dim=1):
+    """Patch embedding using convolutional layer."""
+
+    def __init__(
+        self,
+        patch_height: int = 64,
+        patch_width: int = 4,
+        embed_dim: int = 768,
+        input_dim: int = 1,
+    ) -> None:
+        """Initialize patch embedding layer.
+
+        Args:
+            patch_height: Height of each patch
+            patch_width: Width of each patch
+            embed_dim: Embedding dimension
+            input_dim: Input channel dimension
+        """
         super().__init__()
         self.patch_height = patch_height
         self.patch_width = patch_width
@@ -350,9 +688,20 @@ class PatchEmbed(nn.Module):
             stride=(patch_height, patch_width),
         )
 
-    def forward(self, melspec, length=None):
+    def forward(
+        self, melspec: torch.Tensor, length: Optional[torch.Tensor] = None
+    ) -> Tuple[None, torch.Tensor, Optional[torch.Tensor]]:
+        """Forward pass through patch embedding.
+
+        Args:
+            melspec: Input mel-spectrogram tensor
+            length: Optional length tensor
+
+        Returns:
+            Tuple[None, torch.Tensor, Optional[torch.Tensor]]:
+                (None, patch embeddings, patch lengths)
+        """
         height = melspec.shape[2] - melspec.shape[2] % self.patch_height
-        width = melspec.shape[3] - melspec.shape[3] % self.patch_width
         patch_embed = self.proj(melspec).squeeze(2).permute(0, 2, 1)
 
         if length is not None:
@@ -365,11 +714,24 @@ class PatchEmbed(nn.Module):
         return None, patch_embed, patch_length
 
 
-from einops.layers.torch import Rearrange
-
-
 class PatchEmbed_v2(nn.Module):
-    def __init__(self, patch_height=64, patch_width=4, embed_dim=768, input_dim=1):
+    """Patch embedding using rearrangement and linear projection."""
+
+    def __init__(
+        self,
+        patch_height: int = 64,
+        patch_width: int = 4,
+        embed_dim: int = 768,
+        input_dim: int = 1,
+    ) -> None:
+        """Initialize patch embedding layer v2.
+
+        Args:
+            patch_height: Height of each patch
+            patch_width: Width of each patch
+            embed_dim: Embedding dimension
+            input_dim: Input channel dimension
+        """
         super().__init__()
         self.patch_height = patch_height
         self.patch_width = patch_width
@@ -378,7 +740,19 @@ class PatchEmbed_v2(nn.Module):
         )
         self.patch_embed = nn.Linear(patch_height * patch_width * input_dim, embed_dim)
 
-    def forward(self, melspec, length=None):
+    def forward(
+        self, melspec: torch.Tensor, length: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        """Forward pass through patch embedding v2.
+
+        Args:
+            melspec: Input mel-spectrogram tensor
+            length: Optional length tensor
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+                (patches, patch embeddings, patch lengths)
+        """
         height = melspec.shape[2] - melspec.shape[2] % self.patch_height
         width = melspec.shape[3] - melspec.shape[3] % self.patch_width
         patch = self.patch_maker(melspec[:, :, :height, :width])
@@ -395,32 +769,57 @@ class PatchEmbed_v2(nn.Module):
 
 
 class FrameAST(nn.Module):
-    """Vision Transformer"""
+    """Vision Transformer for audio spectrogram processing."""
 
     def __init__(
         self,
-        nprompt=0,
-        spec_h=64,
-        spec_w=1001,
-        patch_w=16,
-        patch_h=16,
-        pos_type="cut",
-        avg_blocks=0,
-        in_chans=1,
-        num_classes=0,
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        mlp_ratio=4.0,
-        qkv_bias=False,
-        qk_scale=None,
-        drop_rate=0.0,
-        attn_drop_rate=0.0,
-        drop_path_rate=0.1,
-        norm_layer=nn.LayerNorm,
-        patch_embed="Linear",
-        **kwargs,
-    ):
+        nprompt: int = 0,
+        spec_h: int = 64,
+        spec_w: int = 1001,
+        patch_w: int = 16,
+        patch_h: int = 16,
+        pos_type: str = "cut",
+        avg_blocks: int = 0,
+        in_chans: int = 1,
+        num_classes: int = 0,
+        embed_dim: int = 768,
+        depth: int = 12,
+        num_heads: int = 12,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = False,
+        qk_scale: Optional[float] = None,
+        drop_rate: float = 0.0,
+        attn_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.1,
+        norm_layer: nn.Module = nn.LayerNorm,
+        patch_embed: str = "Linear",
+        **kwargs: Any,  # noqa: ANN401
+    ) -> None:
+        """Initialize FrameAST model.
+
+        Args:
+            nprompt: Number of prompt tokens
+            spec_h: Height of input spectrogram
+            spec_w: Width of input spectrogram
+            patch_w: Patch width
+            patch_h: Patch height
+            pos_type: Position encoding type
+            avg_blocks: Number of blocks to average
+            in_chans: Number of input channels
+            num_classes: Number of output classes
+            embed_dim: Embedding dimension
+            depth: Number of transformer layers
+            num_heads: Number of attention heads
+            mlp_ratio: MLP hidden dimension ratio
+            qkv_bias: Whether to use bias in QKV projection
+            qk_scale: Scale factor for QK dot product
+            drop_rate: Dropout rate
+            attn_drop_rate: Attention dropout rate
+            drop_path_rate: Drop path rate
+            norm_layer: Normalization layer class
+            patch_embed: Type of patch embedding
+            **kwargs: Additional keyword arguments
+        """
         super().__init__()
         self.num_features = self.embed_dim = embed_dim
         self.spec_w = spec_w
@@ -438,7 +837,7 @@ class FrameAST(nn.Module):
             self.patch_embed = PatchEmbed(patch_h, patch_w, embed_dim)
         else:
             raise NotImplementedError(
-                "patch_embed={} not implemted".format(patch_embed)
+                "patch_embed={} not implemented".format(patch_embed)
             )
 
         self.mask_embed = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
@@ -482,7 +881,12 @@ class FrameAST(nn.Module):
         trunc_normal_(self.mask_embed, std=0.02)
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module) -> None:
+        """Initialize weights for the model.
+
+        Args:
+            m: Module to initialize
+        """
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -491,7 +895,31 @@ class FrameAST(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def prepare_tokens(self, x, mask_index, length, mask=True):
+    def prepare_tokens(
+        self,
+        x: torch.Tensor,
+        mask_index: Optional[torch.Tensor],
+        length: Optional[torch.Tensor],
+        mask: bool = True,
+    ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        """Prepare tokens for transformer processing.
+
+        Args:
+            x: Input tensor
+            mask_index: Mask indices
+            length: Sequence lengths
+            mask: Whether to apply masking
+
+        Returns:
+            Tuple containing processed tokens and related tensors
+        """
         B, nc, h, w = x.shape
         mel_patches, x, patch_length = self.patch_embed(
             x, length
@@ -519,15 +947,34 @@ class FrameAST(nn.Module):
 
         return self.pos_drop(x), pos, mel_patches, h, w, patch_length
 
-    def freeze(self):
+    def freeze(self) -> None:
+        """Freeze model parameters."""
         for param in self.parameters():
             param.requires_grad = False
 
-    def unfreeze(self):
+    def unfreeze(self) -> None:
+        """Unfreeze model parameters."""
         for param in self.parameters():
             param.requires_grad = True
 
-    def forward(self, x, mask_index=None, mask_input=True, length=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask_index: Optional[torch.Tensor] = None,
+        mask_input: bool = True,
+        length: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Forward pass through FrameAST.
+
+        Args:
+            x: Input tensor
+            mask_index: Optional mask indices
+            mask_input: Whether to mask input
+            length: Optional sequence lengths
+
+        Returns:
+            torch.Tensor: Output features
+        """
         x, pos, mel_patches, h, w, patch_length = self.prepare_tokens(
             x, mask_index, length, mask_input
         )
@@ -554,7 +1001,18 @@ class FrameAST(nn.Module):
 
         return frame_repr[:, self.nprompt :][mask_index]
 
-    def get_cls(self, x, length=None):
+    def get_cls(
+        self, x: torch.Tensor, length: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        """Get CLS token representation.
+
+        Args:
+            x: Input tensor
+            length: Optional sequence lengths
+
+        Returns:
+            torch.Tensor: CLS token features
+        """
         x, pos, mel_patches, h, w, patch_length = self.prepare_tokens(
             x, None, length, False
         )
@@ -562,14 +1020,24 @@ class FrameAST(nn.Module):
         if self.nprompt > 0:
             x = torch.cat([self.prompt_embed.expand(x.shape[0], -1, -1), x], dim=1)
 
-        for i, blk in enumerate(self.blocks):
+        for _i, blk in enumerate(self.blocks):
             x = blk(x, patch_length + self.nprompt)
 
         frame_repr = self.norm_frame(x)
 
         return torch.mean(frame_repr[:, : self.nprompt], dim=1)
 
-    def interpolate_pos_encoding(self, x, h, w):
+    def interpolate_pos_encoding(self, x: torch.Tensor, h: int, w: int) -> torch.Tensor:
+        """Interpolate positional encoding for different input sizes.
+
+        Args:
+            x: Input tensor
+            h: Target height
+            w: Target width
+
+        Returns:
+            torch.Tensor: Interpolated positional encoding
+        """
         npatch = x.shape[1] - 1
         N = self.pos_embed.shape[1] - 1
         if npatch == N and w == self.spec_w and h == self.spec_h:
@@ -599,7 +1067,15 @@ class FrameAST(nn.Module):
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
         return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
-    def get_last_selfattention(self, x):
+    def get_last_selfattention(self, x: torch.Tensor) -> torch.Tensor:
+        """Get self-attention from the last layer.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            torch.Tensor: Self-attention weights
+        """
         x, _, _, _, _, _ = self.prepare_tokens(
             x, mask_index=None, length=None, mask=False
         )
@@ -614,7 +1090,20 @@ class FrameAST(nn.Module):
                 return atts
                 # return attention of the last block
 
-    def get_intermediate_layers(self, x, length, n=1, scene=True):
+    def get_intermediate_layers(
+        self, x: torch.Tensor, length: torch.Tensor, n: int = 1, scene: bool = True
+    ) -> List[torch.Tensor]:
+        """Get intermediate layer representations.
+
+        Args:
+            x: Input tensor
+            length: Sequence lengths
+            n: Number of layers to return
+            scene: Whether to return scene-level features
+
+        Returns:
+            List[torch.Tensor]: Intermediate representations
+        """
         x, _, _, _, _, patch_length = self.prepare_tokens(
             x, mask_index=None, length=length, mask=False
         )
@@ -634,8 +1123,6 @@ class FrameAST(nn.Module):
                     avg = torch.sum(
                         norm_x[:, self.nprompt :] * length_mask.unsqueeze(-1), dim=1
                     ) / (patch_length.unsqueeze(-1) + 1e-6)
-                    negative = (~length_mask) * -1e10
-                    # max = torch.max(norm_x[:,self.nprompt:]+negative.unsqueeze(-1),1).values
                     output.append(avg)
                     if self.nprompt > 0:
                         output.append(torch.mean(x[:, : self.nprompt], dim=1))
@@ -645,18 +1132,29 @@ class FrameAST(nn.Module):
         return torch.cat(output, dim=-1)
 
 
-import torch.nn as nn
+def build_mlp(
+    num_layers: int, input_dim: int, mlp_dim: int, output_dim: int, last_bn: bool = True
+) -> nn.Sequential:
+    """Build multi-layer perceptron.
 
+    Args:
+        num_layers: Number of layers
+        input_dim: Input dimension
+        mlp_dim: Hidden dimension
+        output_dim: Output dimension
+        last_bn: Whether to use batch norm in last layer
 
-def build_mlp(num_layers, input_dim, mlp_dim, output_dim, last_bn=True):
+    Returns:
+        nn.Sequential: MLP module
+    """
     mlp = []
-    for l in range(num_layers):
-        dim1 = input_dim if l == 0 else mlp_dim
-        dim2 = output_dim if l == num_layers - 1 else mlp_dim
+    for layer_idx in range(num_layers):
+        dim1 = input_dim if layer_idx == 0 else mlp_dim
+        dim2 = output_dim if layer_idx == num_layers - 1 else mlp_dim
 
         mlp.append(nn.Linear(dim1, dim2, bias=False))
 
-        if l < num_layers - 1:
+        if layer_idx < num_layers - 1:
             mlp.append(nn.BatchNorm1d(dim2))
             mlp.append(nn.ReLU(inplace=True))
         elif last_bn:
@@ -667,17 +1165,19 @@ def build_mlp(num_layers, input_dim, mlp_dim, output_dim, last_bn=True):
     return nn.Sequential(*mlp)
 
 
-def byol_loss_func(p: torch.Tensor, z: torch.Tensor, simplified: bool = True):
-    """
-    Computes BYOL's loss given batch of predicted features p and projected momentum features z.
-    Args:
-        p (torch.Tensor): NxD Tensor containing predicted features from view 1
-        z (torch.Tensor): NxD Tensor containing projected momentum features from view 2
-        simplified (bool): faster computation, but with same result. Defaults to True.
-    Returns:
-        torch.Tensor: BYOL loss.
-    """
+def byol_loss_func(
+    p: torch.Tensor, z: torch.Tensor, simplified: bool = True
+) -> torch.Tensor:
+    """Compute BYOL loss.
 
+    Args:
+        p: Predicted features
+        z: Target features
+        simplified: Whether to use simplified version
+
+    Returns:
+        torch.Tensor: BYOL loss
+    """
     if simplified:
         return 2 - 2 * F.cosine_similarity(p, z, dim=-1).mean()
 
@@ -687,7 +1187,15 @@ def byol_loss_func(p: torch.Tensor, z: torch.Tensor, simplified: bool = True):
     return 2 - 2 * (p * z).sum(dim=1).mean()
 
 
-def compute_var(y):
+def compute_var(y: torch.Tensor) -> torch.Tensor:
+    """Compute variance.
+
+    Args:
+        y: Input tensor
+
+    Returns:
+        torch.Tensor: Variance
+    """
     y = y.view(-1, y.size(-1))
     zc = torch.tensor(y.size(0)).cuda()
     zs = y.sum(dim=0)
@@ -702,11 +1210,27 @@ def compute_var(y):
 
 
 class ByolLoss(nn.Module):
-    def __init__(self, symmetric):
+    """BYOL loss module."""
+
+    def __init__(self, symmetric: bool) -> None:
+        """Initialize BYOL loss.
+
+        Args:
+            symmetric: Whether to use symmetric loss
+        """
         super().__init__()
         self.symmetric = symmetric
 
-    def forward(self, student, teacher):
+    def forward(self, student: torch.Tensor, teacher: torch.Tensor) -> torch.Tensor:
+        """Forward pass through BYOL loss.
+
+        Args:
+            student: Student features
+            teacher: Teacher features
+
+        Returns:
+            torch.Tensor: BYOL loss
+        """
         stu_frm = student
         tea_frm = teacher
 
@@ -733,16 +1257,27 @@ class ByolLoss(nn.Module):
 
 
 class MultiCropWrapper(nn.Module):
-    """
-    Perform forward pass separately on each resolution input.
-    The inputs corresponding to a single resolution are clubbed and single
-    forward is run on the same resolution inputs. Hence we do several
-    forward passes = number of different resolutions used. We then
-    concatenate all the output features and run the head forward on these
-    concatenated features.
+    """Multi-crop wrapper for self-supervised learning.
+
+    Performs the forward pass to compute the logits and the loss
+    of the view assignment task.
     """
 
-    def __init__(self, encoder, embed_dim, projector="mlp", predictor=True):
+    def __init__(
+        self,
+        encoder: nn.Module,
+        embed_dim: int,
+        projector: str = "mlp",
+        predictor: bool = True,
+    ) -> None:
+        """Initialize MultiCropWrapper.
+
+        Args:
+            encoder: Backbone encoder
+            embed_dim: Embedding dimension
+            projector: Type of projector
+            predictor: Whether to use predictor
+        """
         super(MultiCropWrapper, self).__init__()
         # disable layers dedicated to ImageNet labels classification
 
@@ -759,7 +1294,24 @@ class MultiCropWrapper(nn.Module):
         else:
             self.predictor = nn.Identity()
 
-    def forward(self, x, length, mask, mask_input):
+    def forward(
+        self,
+        x: Union[torch.Tensor, List[torch.Tensor]],
+        length: torch.Tensor,
+        mask: torch.Tensor,
+        mask_input: bool,
+    ) -> torch.Tensor:
+        """Forward pass through multi-crop wrapper.
+
+        Args:
+            x: Input tensor or list of tensors
+            length: Sequence lengths
+            mask: Attention mask
+            mask_input: Whether to mask input
+
+        Returns:
+            torch.Tensor: Output features
+        """
         # convert to list
         if not isinstance(x, list):
             x = [x]
@@ -770,7 +1322,7 @@ class MultiCropWrapper(nn.Module):
             )[1],
             0,
         )
-        start_idx, output_frame, output_cls = (
+        start_idx, output_frame, _output_cls = (
             0,
             torch.empty(0).to(x[0].device),
             torch.empty(0).to(x[0].device),
@@ -791,15 +1343,30 @@ class MultiCropWrapper(nn.Module):
 
 
 class FrameATST(nn.Module):
+    """Frame-level Audio Self-supervised Transformer."""
+
     def __init__(
         self,
-        arch="small",
-        symmetric=True,
-        pos_type="cut",
-        avg_blocks=0,
-        patch_embed="Linear",
-        **kwargs,
-    ):
+        arch: str = "small",
+        symmetric: bool = True,
+        pos_type: str = "cut",
+        avg_blocks: int = 0,
+        patch_embed: str = "Linear",
+        **kwargs: Any,  # noqa: ANN401
+    ) -> None:
+        """Initialize FrameATST model.
+
+        Args:
+            arch: Model architecture size
+            symmetric: Whether to use symmetric loss
+            pos_type: Position encoding type
+            avg_blocks: Number of blocks to average
+            patch_embed: Type of patch embedding
+            **kwargs: Additional keyword arguments
+
+        Raises:
+            RuntimeError: If architecture is not implemented
+        """
         super().__init__()
         if arch == "small":
             encoder_fn = FrameAST_small
@@ -858,7 +1425,19 @@ class FrameATST(nn.Module):
 
         self.loss_fn = ByolLoss(symmetric=symmetric)
 
-    def forward(self, x, length, mask):
+    def forward(
+        self, x: torch.Tensor, length: torch.Tensor, mask: torch.Tensor
+    ) -> torch.Tensor:
+        """Forward pass through FrameATST.
+
+        Args:
+            x: Input tensor
+            length: Sequence lengths
+            mask: Attention mask
+
+        Returns:
+            torch.Tensor: Loss value
+        """
         if self.symmetric:
             tea = self.teacher(x, length, mask, False)
             stu = self.student(x, length, mask, True)
@@ -868,7 +1447,12 @@ class FrameATST(nn.Module):
             stu = self.student(x[1:], length[1:], mask[1:], True)
             return self.loss_fn(stu, tea)
 
-    def update_teacher(self, m):
+    def update_teacher(self, m: float) -> None:
+        """Update teacher network with exponential moving average.
+
+        Args:
+            m: Momentum parameter
+        """
         with torch.no_grad():
             for param_q, param_k in zip(
                 self.student.encoder.parameters(),
@@ -883,15 +1467,32 @@ class FrameATST(nn.Module):
             ):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
-    def _init_teacher(self):
+    def _init_teacher(self) -> None:
+        """Initialize teacher network with student weights."""
         self.teacher.load_state_dict(
             {k: v for k, v in self.student.state_dict().items() if "predictor" not in k}
         )
 
 
 def cosine_scheduler_step(
-    base_value, final_value, max_steps, warmup_steps=0, start_warmup_value=0
-):
+    base_value: float,
+    final_value: float,
+    max_steps: int,
+    warmup_steps: int = 0,
+    start_warmup_value: float = 0,
+) -> np.ndarray:
+    """Create cosine learning rate schedule.
+
+    Args:
+        base_value: Base learning rate value
+        final_value: Final learning rate value
+        max_steps: Maximum number of steps
+        warmup_steps: Number of warmup steps
+        start_warmup_value: Starting warmup value
+
+    Returns:
+        np.ndarray: Learning rate schedule
+    """
     warmup_schedule = np.array([])
     if warmup_steps > 0:
         warmup_schedule = np.linspace(start_warmup_value, base_value, warmup_steps)
@@ -906,7 +1507,15 @@ def cosine_scheduler_step(
     return schedule
 
 
-def get_params_groups(model):
+def get_params_groups(model: nn.Module) -> List[dict]:
+    """Get parameter groups for optimizer.
+
+    Args:
+        model: Model to get parameters from
+
+    Returns:
+        List[dict]: Parameter groups
+    """
     regularized = []
     not_regularized = []
     for name, param in model.named_parameters():
@@ -920,9 +1529,17 @@ def get_params_groups(model):
     return [{"params": regularized}, {"params": not_regularized, "weight_decay": 0.0}]
 
 
-def bool_flag(s):
-    """
-    Parse boolean arguments from the command line.
+def bool_flag(s: Union[str, bool]) -> bool:
+    """Parse boolean arguments from the command line.
+
+    Args:
+        s: String or boolean value to parse
+
+    Returns:
+        bool: Parsed boolean value
+
+    Raises:
+        argparse.ArgumentTypeError: If string cannot be parsed as boolean
     """
     FALSY_STRINGS = {"off", "false", "0"}
     TRUTHY_STRINGS = {"on", "true", "1"}
@@ -935,19 +1552,35 @@ def bool_flag(s):
 
 
 class FrameATSTLightningModule(LightningModule):
+    """PyTorch Lightning module for FrameATST."""
+
     def __init__(
         self,
-        arch="small",
+        arch: str = "small",
         learning_rate: float = 5e-4,
-        warmup_steps=1300,
-        max_steps=39000,
-        ema=0.99,
-        symmetric=True,
-        pos_type="cut",
-        avg_blocks=0,
-        patch_embed="Linear",
-        **kwargs,
-    ):
+        warmup_steps: int = 1300,
+        max_steps: int = 39000,
+        ema: float = 0.99,
+        symmetric: bool = True,
+        pos_type: str = "cut",
+        avg_blocks: int = 0,
+        patch_embed: str = "Linear",
+        **kwargs: Any,  # noqa: ANN401
+    ) -> None:
+        """Initialize FrameATST Lightning module.
+
+        Args:
+            arch: Model architecture size
+            learning_rate: Learning rate
+            warmup_steps: Number of warmup steps
+            max_steps: Maximum training steps
+            ema: Exponential moving average coefficient
+            symmetric: Whether to use symmetric loss
+            pos_type: Position encoding type
+            avg_blocks: Number of blocks to average
+            patch_embed: Type of patch embedding
+            **kwargs: Additional keyword arguments
+        """
         super().__init__()
         self.model = FrameATST(
             arch=arch,
@@ -968,7 +1601,16 @@ class FrameATSTLightningModule(LightningModule):
         )
         self.save_hyperparameters()
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:  # noqa: ANN401
+        """Training step.
+
+        Args:
+            batch: Training batch
+            batch_idx: Batch index
+
+        Returns:
+            torch.Tensor: Loss value
+        """
         self.schedule()
         (melspecs, lengths, masks), _ = batch
         total_loss_frm, std_frm_stu, std_frm_tea = self.model(melspecs, lengths, masks)
@@ -990,7 +1632,8 @@ class FrameATSTLightningModule(LightningModule):
     def unfreeze(self) -> None:
         return super().unfreeze()
 
-    def schedule(self):
+    def schedule(self) -> None:
+        """Update learning rate schedule."""
         for i, param_group in enumerate(self.trainer.optimizers[0].param_groups):
             param_group["lr"] = self.mylr_scheduler[self.global_step]
             if i == 0:  # only the first group is regularized
@@ -999,7 +1642,12 @@ class FrameATSTLightningModule(LightningModule):
         self.log("wd", self.wd_scheduler[self.global_step], prog_bar=True, logger=True)
         self.log("lr", param_group["lr"], prog_bar=True, logger=True)
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        """Configure optimizers.
+
+        Returns:
+            torch.optim.Optimizer: Configured optimizer
+        """
         optimizer = AdamW(
             get_params_groups(self.model.student),
             lr=self.learning_rate,
@@ -1008,13 +1656,33 @@ class FrameATSTLightningModule(LightningModule):
         return [optimizer]
 
     def on_train_batch_end(
-        self, outputs, batch, batch_idx: int, unused: int = 0
+        self,
+        outputs: Any,  # noqa: ANN401
+        batch: Any,  # noqa: ANN401
+        batch_idx: int,
+        unused: int = 0,
     ) -> None:
+        """Called at the end of training batch.
+
+        Args:
+            outputs: Training step outputs
+            batch: Training batch
+            batch_idx: Batch index
+            unused: Unused parameter
+        """
         m = self.ema_scheduler[self.global_step]
         self.model.update_teacher(m)
 
     @staticmethod
-    def add_model_specific_args(parent_parser):
+    def add_model_specific_args(parent_parser: Any) -> Any:  # noqa: ANN401
+        """Add model specific arguments to parser.
+
+        Args:
+            parent_parser: Parent argument parser
+
+        Returns:
+            Any: Parser with added arguments
+        """
         parser = parent_parser.add_argument_group("FrameATSTModel")
         parser.add_argument("--arch", type=str, default="small")
         parser.add_argument(
@@ -1033,17 +1701,16 @@ class FrameATSTLightningModule(LightningModule):
             "--learning_rate",
             default=0.0005,
             type=float,
-            help="""Learning rate at the end of
-            linear warmup (highest LR used during training). The learning rate is linearly scaled
-            with the batch size, and specified here for a reference batch size of 256.""",
+            help="""Learning rate at the end of linear warmup (highest LR used
+            during training). The learning rate is linearly scaled with the batch
+            size, and specified here for a reference batch size of 256.""",
         )
         parser.add_argument(
             "--ema",
             default=0.99,
             type=float,
-            help="""Base EMA
-            parameter for teacher update. The value is increased to 1 during training with cosine schedule.
-            """,
+            help="""Base EMA parameter for teacher update. The value is increased
+            to 1 during training with cosine schedule.""",
         )
         parser.add_argument("--warmup_steps", default=1300, type=int)
         parser.add_argument("--max_steps", default=39010, type=int)
@@ -1051,7 +1718,8 @@ class FrameATSTLightningModule(LightningModule):
             "--pos_type",
             default="cut",
             type=str,
-            help='"cut" denotes absolute psitional embedding, "interpolate" denotes 2D positional embedding used in SSAST',
+            help='"cut" denotes absolute positional embedding, "interpolate" '
+            "denotes 2D positional embedding used in SSAST",
         )
         parser.add_argument(
             "--avg_blocks",
@@ -1068,7 +1736,17 @@ class FrameATSTLightningModule(LightningModule):
         return parent_parser
 
 
-def FrameAST_small(patch_h=64, patch_w=4, **kwargs):
+def FrameAST_small(patch_h: int = 64, patch_w: int = 4, **kwargs: Any) -> FrameAST:  # noqa: ANN401
+    """Create small FrameAST model.
+
+    Args:
+        patch_h: Patch height
+        patch_w: Patch width
+        **kwargs: Additional keyword arguments
+
+    Returns:
+        FrameAST: Small FrameAST model
+    """
     return FrameAST(
         patch_h=patch_h,
         patch_w=patch_w,
@@ -1081,7 +1759,17 @@ def FrameAST_small(patch_h=64, patch_w=4, **kwargs):
     )
 
 
-def FrameAST_base(patch_h=64, patch_w=4, **kwargs):
+def FrameAST_base(patch_h: int = 64, patch_w: int = 4, **kwargs: Any) -> FrameAST:  # noqa: ANN401
+    """Create base FrameAST model.
+
+    Args:
+        patch_h: Patch height
+        patch_w: Patch width
+        **kwargs: Additional keyword arguments
+
+    Returns:
+        FrameAST: Base FrameAST model
+    """
     return FrameAST(
         patch_h=patch_h,
         patch_w=patch_w,
@@ -1094,7 +1782,17 @@ def FrameAST_base(patch_h=64, patch_w=4, **kwargs):
     )
 
 
-def FrameAST_large(patch_h, patch_w, **kwargs):
+def FrameAST_large(patch_h: int, patch_w: int, **kwargs: Any) -> FrameAST:  # noqa: ANN401
+    """Create large FrameAST model.
+
+    Args:
+        patch_h: Patch height
+        patch_w: Patch width
+        **kwargs: Additional keyword arguments
+
+    Returns:
+        FrameAST: Large FrameAST model
+    """
     return FrameAST(
         patch_h=patch_h,
         patch_w=patch_w,
@@ -1107,7 +1805,17 @@ def FrameAST_large(patch_h, patch_w, **kwargs):
     )
 
 
-def load_model(model_path, device, ssl_model=False):
+def load_model(model_path: str, device: str, ssl_model: bool = False) -> Any:  # noqa: ANN401
+    """Load pretrained model.
+
+    Args:
+        model_path: Path to model checkpoint
+        device: Device to load model on
+        ssl_model: Whether this is an SSL model
+
+    Returns:
+        Any: Loaded model
+    """
     melspec_t = torchaudio.transforms.MelSpectrogram(
         16000,
         f_min=60,
@@ -1146,16 +1854,16 @@ def load_model(model_path, device, ssl_model=False):
     return pretrained_encoder
 
 
-def get_scene_embedding(audio, model):
-    """
-    extract scene (clip-level) embedding from an audio clip
-    =======================================
-    args:
-        audio: torch.tensor in the shape of [1,N] or [B,1,N]
-        model: the pretrained encoder returned by load_model
-    return:
-        emb: retured embedding in the shape of [1,N_BLOCKS*emb_size] or [B,N_BLOCKS*emb_size], where emb_size is 768 for base model and 384 for small model.
+def get_scene_embedding(audio: torch.Tensor, model: Any) -> torch.Tensor:  # noqa: ANN401
+    """Extract scene (clip-level) embedding from an audio clip.
 
+    Args:
+        audio: Audio tensor in the shape of [1,N] or [B,1,N]
+        model: The pretrained encoder returned by load_model
+
+    Returns:
+        torch.Tensor: Scene embedding in the shape of [1,N_BLOCKS*emb_size] or
+            [B,N_BLOCKS*emb_size]
     """
     if len(audio.shape) == 2:
         audio = audio.unsqueeze(1)
@@ -1165,7 +1873,6 @@ def get_scene_embedding(audio, model):
     model.to(audio.device)
     model.transform.transforms[0].to(audio.device)
     mel = model.transform(audio)
-    length = torch.tensor([mel.shape[-1]]).expand(mel.shape[0])
     chunk_len = 1001  # 10 secnods, consistent with the length of positional embedding
     total_len = mel.shape[-1]
     num_chunks = total_len // chunk_len + 1
@@ -1190,16 +1897,20 @@ def get_scene_embedding(audio, model):
     return output
 
 
-def get_timestamp_embedding(audio, model):
-    """
-    Extract frame-level embeddings from an audio clip
-    ==================================================
-    args:
-        audio: torch.tensor in the shape of [1,N] or [B,1,N]
-        model: the pretrained encoder returned by load_model
-    return:
-        emb: retured embedding in the shape of [1,T,N_BLOCKS*emb_size] or [B,T,N_BLOCKS,emb_size], where emb_size is 768 for base model and 384 for small model.
-        timestamps: timestamps in miliseconds
+def get_timestamp_embedding(
+    audio: torch.Tensor,
+    model: Any,  # noqa: ANN401
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Extract frame-level embeddings from an audio clip.
+
+    Args:
+        audio: Audio tensor in the shape of [1,N] or [B,1,N]
+        model: The pretrained encoder returned by load_model
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: Tuple of (embeddings, timestamps) where
+            embeddings are in shape [1,T,N_BLOCKS*emb_size] or [B,T,N_BLOCKS*emb_size],
+            timestamps are in milliseconds
     """
     if len(audio.shape) == 2:
         audio = audio.unsqueeze(1)
@@ -1234,8 +1945,4 @@ def get_timestamp_embedding(audio, model):
 
             output.append(output_chunk)
     output = torch.cat(output, dim=1)
-    length = output.shape[1]
-    timestamps = (
-        (torch.arange(length) * 40).float().unsqueeze(0).expand(mel.shape[0], -1)
-    )
     return output.permute(0, 2, 1)

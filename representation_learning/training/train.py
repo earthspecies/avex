@@ -221,7 +221,8 @@ class Trainer:
         if is_main_process() and resume_from_checkpoint:
             self._load_checkpoint(resume_from_checkpoint)
 
-        # Broadcast critical state from main process to all processes in distributed training
+        # Broadcast critical state from main process to all processes in
+        # distributed training
         if self.is_distributed:
             self._broadcast_training_state()
 

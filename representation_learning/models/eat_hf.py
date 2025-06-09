@@ -15,7 +15,25 @@ logger = logging.getLogger(__name__)
 
 
 def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
+    """Load fairseq weights into HuggingFace model.
+
+    Temporary function to load weights from fairseq checkpoint format
+    into a HuggingFace model.
+
+    Args:
+        model: HuggingFace model to load weights into
+        weights_path: Path to the fairseq checkpoint file
+    """
+
     def _rename_key(key: str) -> str:
+        """Rename fairseq keys to match HuggingFace naming convention.
+
+        Args:
+            key: Original fairseq key name
+
+        Returns:
+            str: Renamed key for HuggingFace model
+        """
         img_prefix = "modality_encoders.IMAGE."
         if key.startswith(img_prefix):
             key = "model." + key[len(img_prefix) :]
@@ -54,11 +72,11 @@ def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
 
 
 class EATHFModel(ModelBase):
-    """LWrapper exposing HuggingFace EAT checkpoints.
+    """Wrapper exposing HuggingFace EAT checkpoints.
 
     This class converts raw waveforms to
     **128-bin Mel FBanks** exactly like the original EAT pipeline and feeds
-    `the resulting spectrogram image to the Data2Vec-multi backbone obtained
+    the resulting spectrogram image to the Data2Vec-multi backbone obtained
     from :pyfunc:`transformers.AutoModel.from_pretrained`.
 
     Parameters
@@ -101,6 +119,17 @@ class EATHFModel(ModelBase):
         pooling: str = "cls",
         return_features_only: bool = True,
     ) -> None:
+        """Initialize EATHFModel.
+
+        Args:
+            model_name: HuggingFace repository ID or local path
+            num_classes: Number of output classes (0 for feature extraction only)
+            device: PyTorch device string
+            audio_config: Audio configuration (ignored, kept for API compatibility)
+            target_length: Required spectrogram length in time frames
+            pooling: Pooling method ("cls" or "mean")
+            return_features_only: Whether to return features only
+        """
         super().__init__(device=device, audio_config=audio_config)
 
         self.pooling = pooling
@@ -123,8 +152,14 @@ class EATHFModel(ModelBase):
             model_name, trust_remote_code=True
         ).to(self.device)
         # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        # load_fairseq_weights(self.backbone, "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt")
-        # load_fairseq_weights(self.backbone, "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt")
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt"
+        # )
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"
+        # )
 
         embed_dim = getattr(self.backbone.config, "hidden_size", 768)
 
@@ -143,7 +178,7 @@ class EATHFModel(ModelBase):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:  # noqa: D401 – keep signature consistent
-        """Forward pass.
+        """Forward pass through the EAT model.
 
         Parameters
         ----------
@@ -151,6 +186,16 @@ class EATHFModel(ModelBase):
             Raw waveform tensor of shape ``(B, T)``.
         padding_mask
             Not used (kept for interface compatibility).
+
+        Returns
+        -------
+        torch.Tensor
+            Either pooled feature embeddings or classification logits
+
+        Raises
+        ------
+        ValueError
+            If pooling method is not 'cls' or 'mean'
         """
         # 1) Waveform → Mel FBanks  (B, F, T)
         spec = self.process_audio(x)
@@ -189,7 +234,17 @@ class EATHFModel(ModelBase):
         padding_mask: Optional[torch.Tensor] = None,
         pooling: str = "cls",
     ) -> torch.Tensor:  # type: ignore[override]
-        """Return a clip-level embedding (CLS or mean-pooled)."""
+        """Return a clip-level embedding (CLS or mean-pooled).
+
+        Args:
+            x: Input tensor or dictionary containing 'raw_wav'
+            layers: Layer names (ignored, kept for API compatibility)
+            padding_mask: Optional padding mask (unused)
+            pooling: Pooling method ("cls" or "mean")
+
+        Returns:
+            torch.Tensor: Clip-level embedding tensor
+        """
         if isinstance(x, dict):
             wav = x["raw_wav"]
         else:

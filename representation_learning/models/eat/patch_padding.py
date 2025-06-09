@@ -8,7 +8,7 @@ class PatchPaddingHandler:
 
     def __init__(
         self, patch_size: int = 16, hop_length: int = 160, threshold: float = 0.5
-    ):
+    ) -> None:
         """
         Args:
             patch_size: Size of patches in spectrogram (typically 16x16)
@@ -34,7 +34,8 @@ class PatchPaddingHandler:
             n_mels: Number of mel frequency bins
 
         Returns:
-            patch_mask: (B, num_patches) bool tensor - True = valid patch, False = padded
+            patch_mask: (B, num_patches) bool tensor - True = valid patch,
+                False = padded
         """
         B = original_lengths.size(0)
         device = original_lengths.device
@@ -84,7 +85,8 @@ class PatchPaddingHandler:
         Args:
             loss_tensor: Per-element loss tensor
             patch_mask: (B, num_patches) validity mask
-            masked_positions: (B, num_patches) mask indicating which patches were selected for masking
+            masked_positions: (B, num_patches) mask indicating which patches were
+                selected for masking
 
         Returns:
             Masked loss tensor with padded regions zeroed out

@@ -23,11 +23,18 @@ _TF_HUB_HANDLE = "https://tfhub.dev/google/bird-vocalization-classifier/4"
 _tf_hub_model = None  # loaded on first use
 
 
-def _load_tf_model():
+def _load_tf_model() -> Any:  # noqa: ANN401
+    """Load the TensorFlow Hub model on first use.
+
+    Returns:
+        Any: The loaded TensorFlow Hub model
+
+    Raises:
+        ImportError: If TensorFlow or TensorFlow Hub are not installed
+    """
     global _tf_hub_model
     if _tf_hub_model is None:
         try:
-            import tensorflow as tf
             import tensorflow_hub as hub
         except ModuleNotFoundError as e:  # pragma: no cover
             raise ImportError(
@@ -72,6 +79,16 @@ class PerchModel(ModelBase):
         window_seconds: float = 5.0,
         freeze_backbone: bool = True,
     ) -> None:
+        """Initialize PerchModel.
+
+        Args:
+            num_classes: Number of output classes for classification head
+            device: PyTorch device to use
+            audio_config: Optional audio configuration (kept for API compatibility)
+            target_sample_rate: Expected sample rate in Hz
+            window_seconds: Duration of audio window in seconds
+            freeze_backbone: Whether to freeze the backbone (currently unused)
+        """
         super().__init__(device, audio_config)
 
         self.num_classes = num_classes
@@ -79,7 +96,7 @@ class PerchModel(ModelBase):
         self.window_samples = int(window_seconds * self.target_sr)
 
         # ↳ initialise TF-Hub backbone and infer embedding dimension once
-        tf_model = _load_tf_model()
+        _load_tf_model()  # Ensure model is loaded
         dummy = torch.zeros(1, self.window_samples)
         emb_dim = int(self._tf_forward(dummy).shape[-1])
         self.embedding_dim = emb_dim
@@ -95,9 +112,19 @@ class PerchModel(ModelBase):
     #  Private helpers
     # --------------------------------------------------------------------- #
     def _prepare_waveform(self, wav: torch.Tensor) -> torch.Tensor:
-        """
+        """Prepare waveform for Perch model input.
+
         • Ensures correct shape [B, N] and sample-rate.
         • Pads / crops to exactly 5 s (160 k samples).
+
+        Args:
+            wav: Input waveform tensor
+
+        Returns:
+            torch.Tensor: Prepared waveform of shape [B, window_samples]
+
+        Raises:
+            ValueError: If audio shape is not compatible
         """
         if wav.dim() == 3 and wav.size(1) == 1:  # (B,1,N) → (B,N)
             wav = wav.squeeze(1)
@@ -117,8 +144,15 @@ class PerchModel(ModelBase):
 
     @torch.inference_mode()
     def _tf_forward(self, audio: torch.Tensor) -> torch.Tensor:
-        """
+        """Run the TensorFlow backbone and return embeddings.
+
         Runs the TF backbone and returns embeddings as a *torch* tensor.
+
+        Args:
+            audio: Input audio tensor of shape [B, N]
+
+        Returns:
+            torch.Tensor: Embeddings tensor of shape [B, 1280]
         """
         import tensorflow as tf  # local import after verification
 
@@ -150,6 +184,15 @@ class PerchModel(ModelBase):
         audio: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,  # unused
     ) -> torch.Tensor:
+        """Extract features from audio using the Perch backbone.
+
+        Args:
+            audio: Input audio tensor
+            padding_mask: Unused, kept for API compatibility
+
+        Returns:
+            torch.Tensor: Extracted feature embeddings
+        """
         audio = self._prepare_waveform(audio).to(self.device)
         emb = self._tf_forward(audio)
         return emb.to(audio.device)
@@ -159,6 +202,15 @@ class PerchModel(ModelBase):
         audio: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        """Forward pass through the Perch model.
+
+        Args:
+            audio: Input audio tensor
+            padding_mask: Optional padding mask (unused)
+
+        Returns:
+            torch.Tensor: Model output (features or classification logits)
+        """
         feats = self.extract_features(audio, padding_mask)
         return self.classifier(feats) if self.classifier else feats
 
@@ -179,6 +231,14 @@ class PerchModel(ModelBase):
         ignore *layers* (only logging a warning if the caller requested a
         specific one) and return the features produced by
         :py:meth:`extract_features`.
+
+        Args:
+            x: Input audio tensor or dictionary containing 'raw_wav' key
+            layers: Layer names (ignored for Perch model)
+            padding_mask: Optional padding mask (unused)
+
+        Returns:
+            torch.Tensor: Extracted embeddings from the Perch backbone
         """
 
         if layers and layers != ["last_layer"]:

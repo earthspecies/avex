@@ -15,7 +15,7 @@ filelock==3.18.0
 identify==2.6.12
 iniconfig==2.1.0
 ipykernel==6.29.5
-ipython==9.2.0
+ipython==9.3.0
 ipython-pygments-lexers==1.1.1
 isort==5.13.2
 jedi==0.19.2
@@ -47,7 +47,7 @@ six==1.17.0
 stack-data==0.6.3
 tornado==6.5.1
 traitlets==5.14.3
-typing-extensions==4.13.2 ; python_full_version < '3.12'
+typing-extensions==4.14.0 ; python_full_version < '3.12'
 virtualenv==20.31.2
 wcwidth==0.2.13
 yamllint==1.35.1

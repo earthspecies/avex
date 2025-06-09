@@ -115,7 +115,8 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
     env_backend = os.environ.get("PYTORCH_DISTRIBUTED_BACKEND", backend)
     if env_backend != backend:
         logger.info(
-            f"Using backend '{env_backend}' from PYTORCH_DISTRIBUTED_BACKEND environment variable"
+            f"Using backend '{env_backend}' from PYTORCH_DISTRIBUTED_BACKEND "
+            f"environment variable"
         )
         backend = env_backend
 

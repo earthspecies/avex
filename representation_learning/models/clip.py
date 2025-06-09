@@ -25,14 +25,12 @@ class CLIPModel(ModelBase):
     ) -> None:
         super().__init__(device, audio_config)
 
-        # Initialize audio encoder (EfficientNetB0)
         self.audio_encoder = EfficientNetB0(
             device=device,
             audio_config=audio_config,
             return_features_only=True,  # Get features before classifier
         )
 
-        # Initialize text encoder (RoBERTa)
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
 
@@ -51,8 +49,6 @@ class CLIPModel(ModelBase):
             nn.Linear(hidden_dim, projection_dim),
         )
 
-        # Learnable log-logit scale parameter as in original CLIP implementation
-        # Start from log(1/temperature) so that exp(logit_scale) == 1/temperature.
         init_value = torch.log(torch.tensor(1.0 / temperature))
         self.logit_scale = torch.nn.Parameter(init_value)
 
@@ -93,13 +89,11 @@ class CLIPModel(ModelBase):
         torch.Tensor
             Normalized text embeddings
         """
-        # Move token tensors to *current* device of the module (safe for DDP)
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
             text, padding=True, truncation=True, max_length=40, return_tensors="pt"
         ).to(current_device)
 
-        # Get text embeddings
         outputs = self.text_encoder(**tokens)
         features = outputs.last_hidden_state[:, 0, :]  # Use [CLS] token
         return F.normalize(self.text_projection(features), dim=-1)
@@ -121,10 +115,8 @@ class CLIPModel(ModelBase):
         audio_embeddings = self.encode_audio(audio, padding_mask)
         text_embeddings = self.encode_text(text)
 
-        # Clamp temperature as in the original CLIP paper (<= log(100) ≈ 4.605).
         LOGIT_SCALE_MAX = math.log(1.0 / 0.01)  # log(100)
         with torch.no_grad():
             self.logit_scale.clamp_(max=LOGIT_SCALE_MAX)
 
-        # Return embeddings and *scalar* positive logit scale so the loss can
         return audio_embeddings, text_embeddings, self.logit_scale.exp()

@@ -8,7 +8,7 @@
 # --------------------------------------------------------
 
 import math
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -26,7 +26,14 @@ from .modules import (
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, args) -> None:
+    """Transformer encoder for BEATs model."""
+
+    def __init__(self, args: Any) -> None:
+        """Initialize TransformerEncoder.
+
+        Args:
+            args: Configuration object containing encoder parameters
+        """
         super().__init__()
 
         self.dropout = args.dropout
@@ -108,7 +115,22 @@ class TransformerEncoder(nn.Module):
             args, "layer_wise_gradient_decay_ratio", 1
         )
 
-    def forward(self, x, padding_mask=None, layer=None):
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        layer: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, list]:
+        """Forward pass through the transformer encoder.
+
+        Args:
+            x: Input tensor
+            padding_mask: Optional padding mask
+            layer: Optional target layer index
+
+        Returns:
+            Tuple[torch.Tensor, list]: Encoded features and layer results
+        """
         x, layer_results = self.extract_features(x, padding_mask, layer)
 
         if self.layer_norm_first and layer is None:
@@ -116,7 +138,22 @@ class TransformerEncoder(nn.Module):
 
         return x, layer_results
 
-    def extract_features(self, x, padding_mask=None, tgt_layer=None):
+    def extract_features(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        tgt_layer: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, list]:
+        """Extract features from input through transformer layers.
+
+        Args:
+            x: Input tensor
+            padding_mask: Optional padding mask
+            tgt_layer: Optional target layer to stop at
+
+        Returns:
+            Tuple[torch.Tensor, list]: Extracted features and layer results
+        """
         if padding_mask is not None:
             x[padding_mask] = 0
 
@@ -165,6 +202,8 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerSentenceEncoderLayer(nn.Module):
+    """Transformer sentence encoder layer for BEATs model."""
+
     def __init__(
         self,
         embedding_dim: float = 768,
@@ -227,11 +266,24 @@ class TransformerSentenceEncoderLayer(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        self_attn_mask: torch.Tensor = None,
-        self_attn_padding_mask: torch.Tensor = None,
+        self_attn_mask: Optional[torch.Tensor] = None,
+        self_attn_padding_mask: Optional[torch.Tensor] = None,
         need_weights: bool = False,
-        pos_bias=None,
-    ):
+        pos_bias: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """Forward pass through transformer sentence encoder layer.
+
+        Args:
+            x: Input tensor
+            self_attn_mask: Optional self-attention mask
+            self_attn_padding_mask: Optional self-attention padding mask
+            need_weights: Whether to return attention weights
+            pos_bias: Optional position bias
+
+        Returns:
+            Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+                Output tensor, attention weights, and position bias
+        """
         residual = x
 
         if self.layer_norm_first:
@@ -296,23 +348,23 @@ class MultiheadAttention(nn.Module):
 
     def __init__(
         self,
-        embed_dim,
-        num_heads,
-        kdim=None,
-        vdim=None,
-        dropout=0.0,
-        bias=True,
-        add_bias_kv=False,
-        add_zero_attn=False,
-        self_attention=False,
-        encoder_decoder_attention=False,
-        q_noise=0.0,
-        qn_block_size=8,
-        has_relative_attention_bias=False,
-        num_buckets=32,
-        max_distance=128,
-        gru_rel_pos=False,
-        rescale_init=False,
+        embed_dim: int,
+        num_heads: int,
+        kdim: Optional[int] = None,
+        vdim: Optional[int] = None,
+        dropout: float = 0.0,
+        bias: bool = True,
+        add_bias_kv: bool = False,
+        add_zero_attn: bool = False,
+        self_attention: bool = False,
+        encoder_decoder_attention: bool = False,
+        q_noise: float = 0.0,
+        qn_block_size: int = 8,
+        has_relative_attention_bias: bool = False,
+        num_buckets: int = 32,
+        max_distance: int = 128,
+        gru_rel_pos: bool = False,
+        rescale_init: bool = False,
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
@@ -380,7 +432,8 @@ class MultiheadAttention(nn.Module):
 
         self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
+        """Reset model parameters with Xavier initialization."""
         if self.qkv_same_dim:
             # Empirically observed the convergence to be much better with
             # the scaled initialization
@@ -402,7 +455,18 @@ class MultiheadAttention(nn.Module):
         if self.has_relative_attention_bias:
             nn.init.xavier_normal_(self.relative_attention_bias.weight)
 
-    def _relative_positions_bucket(self, relative_positions, bidirectional=True):
+    def _relative_positions_bucket(
+        self, relative_positions: torch.Tensor, bidirectional: bool = True
+    ) -> torch.Tensor:
+        """Convert relative positions to bucket indices.
+
+        Args:
+            relative_positions: Relative position tensor
+            bidirectional: Whether to use bidirectional buckets
+
+        Returns:
+            torch.Tensor: Bucket indices
+        """
         num_buckets = self.num_buckets
         max_distance = self.max_distance
         relative_buckets = 0
@@ -434,7 +498,16 @@ class MultiheadAttention(nn.Module):
         )
         return relative_buckets
 
-    def compute_bias(self, query_length, key_length):
+    def compute_bias(self, query_length: int, key_length: int) -> torch.Tensor:
+        """Compute relative position bias.
+
+        Args:
+            query_length: Length of query sequence
+            key_length: Length of key sequence
+
+        Returns:
+            torch.Tensor: Position bias tensor
+        """
         context_position = torch.arange(query_length, dtype=torch.long)[:, None]
         memory_position = torch.arange(key_length, dtype=torch.long)[None, :]
         relative_position = memory_position - context_position
@@ -450,7 +523,7 @@ class MultiheadAttention(nn.Module):
 
     def forward(
         self,
-        query,
+        query: torch.Tensor,
         key: Optional[Tensor],
         value: Optional[Tensor],
         key_padding_mask: Optional[Tensor] = None,
@@ -462,22 +535,31 @@ class MultiheadAttention(nn.Module):
         need_head_weights: bool = False,
         position_bias: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
-        """Input shape: Time x Batch x Channel
+        """Multi-head attention forward pass.
+
+        Input shape: Time x Batch x Channel
 
         Args:
-            key_padding_mask (ByteTensor, optional): mask to exclude
-                keys that are pads, of shape `(batch, src_len)`, where
-                padding elements are indicated by 1s.
-            need_weights (bool, optional): return the attention weights,
-                averaged over heads (default: False).
-            attn_mask (ByteTensor, optional): typically used to
-                implement causal attention, where the mask prevents the
-                attention from looking forward in time (default: None).
-            before_softmax (bool, optional): return the raw attention
-                weights and values before the attention softmax.
-            need_head_weights (bool, optional): return the attention
-                weights for each head. Implies *need_weights*. Default:
-                return the average attention weights over all heads.
+            query: Query tensor
+            key: Key tensor
+            value: Value tensor
+            key_padding_mask: Mask to exclude keys that are pads, of shape
+                `(batch, src_len)`, where padding elements are indicated by 1s
+            incremental_state: State for incremental decoding
+            need_weights: Return the attention weights, averaged over heads
+            static_kv: Use static key and value
+            attn_mask: Typically used to implement causal attention, where the
+                mask prevents the attention from looking forward in time
+            before_softmax: Return the raw attention weights and values before
+                the attention softmax
+            need_head_weights: Return the attention weights for each head.
+                Implies *need_weights*. Default: return the average attention
+                weights over all heads
+            position_bias: Optional position bias tensor
+
+        Returns:
+            Tuple[Tensor, Optional[Tensor], Optional[Tensor]]: Output tensor,
+                attention weights, and position bias
         """
         if need_head_weights:
             need_weights = True
@@ -773,16 +855,35 @@ class MultiheadAttention(nn.Module):
         self,
         incremental_state: Dict[str, Dict[str, Optional[Tensor]]],
         buffer: Dict[str, Optional[Tensor]],
-    ):
+    ) -> None:
+        """Set input buffer for incremental state.
+
+        Args:
+            incremental_state: Incremental state dictionary
+            buffer: Buffer to set
+        """
         return self.set_incremental_state(incremental_state, "attn_state", buffer)
 
-    def apply_sparse_mask(self, attn_weights, tgt_len: int, src_len: int, bsz: int):
+    def apply_sparse_mask(
+        self, attn_weights: torch.Tensor, tgt_len: int, src_len: int, bsz: int
+    ) -> torch.Tensor:
+        """Apply sparse mask to attention weights.
+
+        Args:
+            attn_weights: Attention weight tensor
+            tgt_len: Target sequence length
+            src_len: Source sequence length
+            bsz: Batch size
+
+        Returns:
+            torch.Tensor: Masked attention weights
+        """
         return attn_weights
 
 
-def init_bert_params(module):
-    """
-    Initialize the weights specific to the BERT Model.
+def init_bert_params(module: nn.Module) -> None:
+    """Initialize the weights specific to the BERT Model.
+
     This overrides the default initializations depending on the specified arguments.
         1. If normal_init_linear_weights is set then weights of linear
            layer will be initialized using the normal distribution and
@@ -792,9 +893,17 @@ def init_bert_params(module):
         3. If normal_init_proj_weights is set then weights of
            in_project_weight for MultiHeadAttention initialized using
            the normal distribution (to be validated).
+
+    Args:
+        module: PyTorch module to initialize
     """
 
-    def normal_(data):
+    def normal_(data: torch.Tensor) -> None:
+        """Initialize tensor with normal distribution.
+
+        Args:
+            data: Tensor to initialize
+        """
         # with FSDP, module params will be on CUDA, so we cast them back to CPU
         # so that the RNG is consistent with and without FSDP
         data.copy_(data.cpu().normal_(mean=0.0, std=0.02).to(data.device))

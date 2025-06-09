@@ -1,20 +1,14 @@
-from __future__ import annotations
+"""Audio processor for EAT model.
 
-"""Custom audio processor replicating the original EAT mel-FBank pipeline.
-
-The original EAT implementation converts raw waveforms into **128-bin Mel FBanks**
-using Kaldi's filter-bank extractor – identical to that used by BEATs.  This
-module re-implements the same logic so we can integrate it cleanly with the
-existing *representation-learning* code-base without pulling in the Fairseq
-stack.
-
-The output tensor is shaped **(B, F, T)** where `F == n_mels` and `T ==
-``target_length```, matching the expectations of
-:pyclass:`representation_learning.models.eat.audio_model.Model`.
+This module provides audio processing functionality for the EAT (Efficient Audio
+Transformer) model, including mel-spectrogram computation and audio preprocessing.
 """
+
+from __future__ import annotations
 
 from typing import Union
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio
@@ -75,7 +69,7 @@ class EATAudioProcessor:
     # ------------------------------------------------------------------ #
     # Public API                                                         #
     # ------------------------------------------------------------------ #
-    def __call__(self, wav: Union[torch.Tensor, "np.ndarray"]) -> torch.Tensor:  # noqa: D401,E501  – keep signature compatible with AudioProcessor
+    def __call__(self, wav: Union[torch.Tensor, np.ndarray]) -> torch.Tensor:
         """Convert *wav* to Mel FBanks.
 
         Parameters

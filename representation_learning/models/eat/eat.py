@@ -363,7 +363,7 @@ class Data2VecMultiModel(nn.Module):
         force_remove_masked: bool = False,
         remove_extra_tokens: bool = True,
         precomputed_mask: Optional[MaskSeed] = None,
-        **kwargs: Any,
+        **kwargs: Any,  # noqa: ANN401
     ) -> Dict[str, torch.Tensor]:
         if mode is None:
             mode = self.cfg.supported_modality
@@ -730,7 +730,17 @@ class Data2VecMultiModel(nn.Module):
         patch_padding_mask: torch.Tensor,
         masked_positions: torch.Tensor,
     ) -> torch.Tensor:
-        """Apply patch-level padding mask to loss computation."""
+        """Apply patch-level padding mask to loss computation.
+
+        Args:
+            loss_tensor: Per-element loss tensor
+            patch_padding_mask: (B, num_patches) validity mask
+            masked_positions: (B, num_patches) mask indicating which patches were
+                selected for masking
+
+        Returns:
+            torch.Tensor: Masked loss tensor with padded regions zeroed out
+        """
         # loss_tensor shape: (num_masked_patches, embed_dim) after d2v_loss_fn
         # patch_padding_mask shape: (B, num_patches)
         # masked_positions shape: (B, num_patches)
