@@ -124,6 +124,7 @@ class EATHFModel(ModelBase):
         ).to(self.device)
         # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
         # load_fairseq_weights(self.backbone, "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt")
+        load_fairseq_weights(self.backbone, "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/checkpoint_last.pt")
         # load_fairseq_weights(self.backbone, "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt")
 
         embed_dim = getattr(self.backbone.config, "hidden_size", 768)

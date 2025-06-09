@@ -104,6 +104,8 @@ class AudioConfig(BaseModel):
     target_length_seconds: Optional[int] = None
     window_selection: Literal["random", "center"] = "random"
     center: bool = True
+    fmin: Optional[float] = Field(None, ge=0, description="Minimum frequency for mel scale")
+    fmax: Optional[float] = Field(None, ge=0, description="Maximum frequency for mel scale")
 
     model_config = ConfigDict(extra="forbid")
 

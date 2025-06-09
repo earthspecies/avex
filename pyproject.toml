@@ -107,4 +107,4 @@ line_length = 80
 filter_files = true
 
 [tool.uv.sources]
-transformers = { git = "https://github.com/huggingface/transformers" }
+#transformers = { git = "https://github.com/huggingface/transformers" }

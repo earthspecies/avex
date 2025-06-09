@@ -91,6 +91,8 @@ class AudioProcessor:
         self.target_length_seconds = cfg.target_length_seconds
         self.window_selection = cfg.window_selection
         self.center = cfg.center
+        self.fmin = cfg.fmin
+        self.fmax = cfg.fmax
 
         # Pre‑compute mel filter bank if required
         if self.representation == "mel_spectrogram":
@@ -98,6 +100,8 @@ class AudioProcessor:
                 n_mels=self.n_mels,
                 sample_rate=self.sr,
                 n_stft=self.n_fft // 2 + 1,
+                f_min=self.fmin,
+                f_max=self.fmax,
             )
 
     # ------------------------------------------------------------------ #

@@ -1,19 +1,23 @@
 ---
 # Model configuration
 model_spec:
-  name: efficientnetb0
-  pretrained: true
-  audio_config:
-    sample_rate: 16000
-    n_fft: 2048
-    hop_length: 512
-    win_length: 2048
-    window: hann
-    n_mels: 128
-    representation: mel_spectrogram
-    normalize: false
-    target_length_seconds: 10
-    window_selection: random
+name: efficientnetb0
+pretrained: true
+audio_config:
+  sample_rate: 48000          # 48 kHz recorder rate
+  n_fft: 1024                 # ≈21 ms window
+  hop_length: 256             # 75 % overlap (≈5.3 ms)
+  win_length: 1024            # match n_fft
+  window: hann
+  n_mels: 128                 # balanced time–freq detail
+  fmin: 10                    # keep infrasonic energy
+  fmax: 24000                 # Nyquist at 48 kHz
+  representation: mel_spectrogram
+  center: false               # avoids boundary jitter
+  normalize: false
+  target_length_seconds: 10
+  window_selection: random
+
 
 # Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_base.yml
