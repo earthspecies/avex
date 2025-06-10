@@ -19,8 +19,8 @@ from typing import Dict, List, Optional
 
 import torch
 from cloudpathlib import GSPath
+from esp_data import DatasetConfig
 
-from esp_data_temp.config import DatasetConfig
 from representation_learning.configs import (
     EvaluateConfig,
     ExperimentConfig,

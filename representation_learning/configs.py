@@ -19,13 +19,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import yaml
+from esp_data import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from esp_data_temp.config import DatasetConfig
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters

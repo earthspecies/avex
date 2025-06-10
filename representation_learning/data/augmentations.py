@@ -29,8 +29,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: F401  – kept for downstream ops that often rely on F
 import torchaudio
+from esp_data.io import GSPath
 
-from esp_data_temp.dataset import GSPath
 from representation_learning.data.data_utils import combine_text_labels
 
 # Ensure RunConfig is **not** imported at the top level.

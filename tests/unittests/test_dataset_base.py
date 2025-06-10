@@ -1,8 +1,7 @@
 import pytest
-
-from esp_data_temp.config import DatasetConfig
-from esp_data_temp.datasets import (
+from esp_data import (
     Dataset,
+    DatasetConfig,
     DatasetInfo,
     dataset_from_config,
     list_registered_datasets,

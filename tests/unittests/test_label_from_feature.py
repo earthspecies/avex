@@ -1,7 +1,6 @@
 import pandas as pd
 import pytest
-
-from esp_data_temp.transforms import LabelFromFeature
+from esp_data.transforms import LabelFromFeature
 
 
 @pytest.mark.parametrize(
