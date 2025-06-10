@@ -109,13 +109,13 @@ class MulticlassBinaryF1Score:
 
         Args:
             logits: Model output logits of shape (N, C)
-            y: Ground truth labels of shape (N, C)
+            y: Ground truth labels of shape (N, C) for one-hot encoded labels
         """
-        y_scores = torch.sigmoid(logits).cpu().numpy()
-        y_true = y.cpu().numpy()
-
+        y_pred = logits.argmax(dim=1).cpu().numpy()
+        # Convert one-hot labels back to class indices
+        y_true = y.argmax(dim=1).cpu().numpy()
         self.y_true.extend(y_true)
-        self.y_scores.extend(y_scores)
+        self.y_pred.extend(y_pred)
 
     def get_metric(self) -> Dict[str, float]:
         """Get the current metric values.
