@@ -58,6 +58,11 @@ class TrainingParams(BaseModel):
     # Frequency (in *iterations*) of logging benchmarking stats & progress
     log_steps: int = Field(100, ge=1, description="Log interval in training steps")
 
+    # Gradient checkpointing for memory optimization
+    gradient_checkpointing: bool = Field(
+        False, description="Enable gradient checkpointing to save memory"
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -71,6 +76,12 @@ class NoiseAugment(BaseModel):
     noise_dirs: List[str]
     snr_db_range: Tuple[int, int] = Field(..., min_length=2, max_length=2)
     augmentation_prob: float = Field(..., ge=0, le=1)
+    mask_signal_prob: float = Field(
+        0.0,
+        ge=0,
+        le=1,
+        description="Probability of masking the original signal and using only noise",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -127,6 +138,11 @@ class ModelSpec(BaseModel):
     # When true the EAT model is instantiated for self-supervised pre-training.
     pretraining_mode: Optional[bool] = None
     handle_padding: Optional[bool] = None
+
+    # EfficientNet variant configuration
+    efficientnet_variant: Literal["b0", "b1"] = Field(
+        "b0", description="EfficientNet variant to use (b0 or b1)"
+    )
 
     model_config = ConfigDict(extra="forbid")
 

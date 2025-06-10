@@ -45,6 +45,21 @@ class ModelBase(nn.Module):
         target_device = next(self.parameters()).device
         return x.to(target_device)
 
+    def enable_gradient_checkpointing(self) -> None:
+        """
+        Enable gradient checkpointing for memory optimization.
+
+        Subclasses must implement this method to enable checkpointing
+        for their specific architecture.
+
+        Raises:
+            NotImplementedError: If the subclass doesn't implement this method
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support gradient checkpointing. "
+            f"Please implement the enable_gradient_checkpointing method."
+        )
+
     def batch_inference(self, batched_samples: torch.Tensor) -> torch.Tensor:
         """
         Perform batch inference on input samples.

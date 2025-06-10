@@ -29,13 +29,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, RunConfig
-from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
     get_local_device_index,
     is_main_process,
 )
-from representation_learning.training.losses import ClipLoss, _build_criterion
+from representation_learning.training.losses import ClipLoss, build_criterion
 from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger
 
@@ -99,6 +98,8 @@ class Trainer:
         Whether distributed training is enabled
     log_steps : int, optional
         Frequency of logging benchmarking results, by default 100
+    gradient_checkpointing : bool, optional
+        Whether to enable gradient checkpointing, by default False
     """
 
     # ----------------------------- initialisation -------------------------- #
@@ -129,6 +130,7 @@ class Trainer:
         resume_from_checkpoint: Optional[str] = None,
         run_config: Optional[RunConfig] = None,
         log_steps: int = 1,
+        gradient_checkpointing: bool = False,
     ) -> None:
         self.model = model
         self.train_dataloader = train_dl
@@ -159,6 +161,14 @@ class Trainer:
         else:
             self.device = torch.device(device)
         self.model.to(self.device)
+
+        # Enable gradient checkpointing if requested
+        if gradient_checkpointing:
+            logger.info("Enabling gradient checkpointing for memory optimization")
+            try:
+                self.model.enable_gradient_checkpointing()
+            except NotImplementedError as e:
+                logger.warning(f"Could not enable gradient checkpointing: {e}")
 
         # Distributed setup - parameters are now passed in
         self.local_rank = local_rank
@@ -193,7 +203,7 @@ class Trainer:
 
         # Optimizer, Criterion, Scheduler
         self.optimizer = optimizer
-        self.criterion = _build_criterion(criterion)
+        self.criterion = build_criterion(criterion)
         self.scheduler = (
             build_scheduler(
                 self.optimizer,
@@ -246,6 +256,7 @@ class Trainer:
                     "amp_dtype": amp_dtype,
                     "distributed": self.is_distributed,
                     "world_size": self.world_size,
+                    "gradient_checkpointing": gradient_checkpointing,
                     "scheduler": scheduler_config.get("name", "none")
                     if scheduler_config
                     else "none",
@@ -528,10 +539,6 @@ class Trainer:
             avg_acc = (avg_acc_a2t + avg_acc_t2a) / 2.0
         else:
             avg_acc = total_correct / total_samples if total_samples else 0.0
-
-        # Print profiling summary at the end of each epoch if we're training
-        if train and is_main_process():
-            print_profiling_summary()
 
         return avg_loss, avg_acc
 

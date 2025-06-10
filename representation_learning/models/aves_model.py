@@ -50,7 +50,7 @@ class Model(ModelBase):
     """Wrapper that adapts the raw *AVES* backbone for our training loop.
 
     This module follows the same conventions as the other model wrappers
-    (e.g. ``efficientnetb0.py``) so that it can be selected via
+    (e.g. ``efficientnet.py``) so that it can be selected via
     ``representation_learning.models.get_model.get_model``.
 
     The underlying AVES implementation operates directly on raw‐waveform

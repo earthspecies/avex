@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 
 import torch
@@ -25,9 +24,6 @@ from representation_learning.training.distributed import (
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import Trainer
 from representation_learning.utils import ExperimentLogger
-
-# Enable detailed noise augmentation profiling
-os.environ["PROFILE_NOISE_AUG"] = "1"
 
 # Configure logging to ensure INFO level logs are visible
 logging.basicConfig(
@@ -89,27 +85,6 @@ def main() -> None:
         len(val_dl),
     )
 
-    # Prefetch noise files metadata if main process and using augmentations
-    if not is_distributed or local_rank == 0:
-        if config.augmentations:
-            from representation_learning.data.augmentations import (
-                print_cache_stats,
-            )
-
-            logger.info("Prefetching noise files metadata on main process...")
-
-            # Extract augmentation processor from the dataloader's collate function
-            if (
-                hasattr(train_dl.collate_fn, "batch_aug_processor")
-                and train_dl.collate_fn.batch_aug_processor
-            ):
-                aug_processor = train_dl.collate_fn.batch_aug_processor
-                if hasattr(aug_processor, "prefetch_metadata"):
-                    aug_processor.prefetch_metadata(
-                        max_files_per_config=50
-                    )  # Prefetch a subset
-                    print_cache_stats()  # Print cache stats after prefetching
-
     num_labels = len(train_dl.dataset.metadata["label_map"])
 
     logger.info("Number of labels: %d", num_labels)
@@ -165,6 +140,7 @@ def main() -> None:
         resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
         run_config=config,
         log_steps=config.training_params.log_steps,
+        gradient_checkpointing=config.training_params.gradient_checkpointing,
     )
 
     # Train

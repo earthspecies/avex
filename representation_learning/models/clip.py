@@ -7,13 +7,13 @@ import torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
 
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.efficientnetb0 import (
-    Model as EfficientNetB0,
+from representation_learning.models.efficientnet import (
+    Model as EfficientNet,
 )
 
 
 class CLIPModel(ModelBase):
-    """CLIP-like model combining EfficientNetB0 for audio and RoBERTa for text."""
+    """CLIP-like model combining EfficientNet for audio and RoBERTa for text."""
 
     def __init__(
         self,
@@ -22,20 +22,23 @@ class CLIPModel(ModelBase):
         text_model_name: str = "roberta-base",
         projection_dim: int = 512,
         temperature: float = 0.07,
+        efficientnet_variant: str = "b0",
     ) -> None:
         super().__init__(device, audio_config)
 
-        self.audio_encoder = EfficientNetB0(
+        self.audio_encoder = EfficientNet(
             device=device,
             audio_config=audio_config,
             return_features_only=True,  # Get features before classifier
+            efficientnet_variant=efficientnet_variant,
         )
 
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
 
         # Projection heads: two-layer MLP (Linear → ReLU → Linear)
-        audio_feature_dim = 1280
+        # EfficientNet B0 has 1280 features, B1 has 1280 features too
+        audio_feature_dim = 1280  # Both B0 and B1 have the same feature dimension
         hidden_dim = projection_dim
         self.audio_projection = nn.Sequential(
             nn.Linear(audio_feature_dim, hidden_dim),
@@ -58,10 +61,18 @@ class CLIPModel(ModelBase):
         self.audio_projection.to(device)
         self.text_projection.to(device)
 
+    def enable_gradient_checkpointing(self) -> None:
+        """Enable gradient checkpointing for both audio and text encoders."""
+        # Enable checkpointing for audio encoder (EfficientNet)
+        self.audio_encoder.enable_gradient_checkpointing()
+
+        # Enable checkpointing for text encoder (HuggingFace transformer)
+        self.text_encoder.gradient_checkpointing_enable()
+
     def encode_audio(
         self, audio: torch.Tensor, padding_mask: torch.Tensor
     ) -> torch.Tensor:
-        """Encode audio input using EfficientNetB0.
+        """Encode audio input using EfficientNet.
 
         Parameters
         ----------

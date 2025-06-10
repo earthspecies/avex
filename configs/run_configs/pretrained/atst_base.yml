@@ -30,4 +30,4 @@ device: cuda
 seed: 42
 num_workers: 4
 
-augmentations: [] 
+augmentations: []

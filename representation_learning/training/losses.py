@@ -1,65 +1,151 @@
 from typing import Dict, Optional, Tuple, Union
 
 import torch
-import torch.distributed as dist
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.nn import functional as F
 
 from representation_learning.training.distributed import (
     get_rank,
     get_world_size,
 )
 
+try:
+    import torch.distributed.nn
+    from torch import distributed as dist
 
-def all_gather_features(features: torch.Tensor) -> torch.Tensor:
-    """Gather *features* from all ranks **while preserving gradients**.
+    has_distributed = True
+except ImportError:
+    has_distributed = False
 
-    Standard ``torch.distributed.all_gather`` fills the *output* tensors with
-    detached data, so gradients cannot flow back to the original *features*.
-    We fix this by overwriting the entry that corresponds to the *current*
-    rank with the original tensor after the collective.
+try:
+    import horovod.torch as hvd
+except ImportError:
+    hvd = None
 
-    This keeps the autograd graph intact for the local portion, which is all
-    that is required for correct gradient computation.
+
+def gather_features(
+    image_features: torch.Tensor,
+    text_features: torch.Tensor,
+    local_loss: bool = False,
+    gather_with_grad: bool = False,
+    rank: int = 0,
+    world_size: int = 1,
+    use_horovod: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Gather image and text features from all ranks for contrastive learning.
+
+    Parameters
+    ----------
+    image_features : torch.Tensor
+        Local image/audio features
+    text_features : torch.Tensor
+        Local text features
+    local_loss : bool, default=False
+        Whether to use local loss computation
+    gather_with_grad : bool, default=False
+        Whether to gather features with gradients
+    rank : int, default=0
+        Current process rank
+    world_size : int, default=1
+        Total number of processes
+    use_horovod : bool, default=False
+        Whether to use Horovod for distributed training
 
     Returns
     -------
-    torch.Tensor
-        Concatenation of features across all ranks (first dimension enlarged
-        by ``world_size``). Gradients propagate to the local slice.
+    Tuple[torch.Tensor, torch.Tensor]
+        Tuple of (all_image_features, all_text_features) gathered from all ranks
     """
+    assert has_distributed, (
+        "torch.distributed did not import correctly, "
+        "please use a PyTorch version with support."
+    )
+    if use_horovod:
+        assert hvd is not None, "Please install horovod"
+        if gather_with_grad:
+            all_image_features = hvd.allgather(image_features)
+            all_text_features = hvd.allgather(text_features)
+        else:
+            with torch.no_grad():
+                all_image_features = hvd.allgather(image_features)
+                all_text_features = hvd.allgather(text_features)
+            if not local_loss:
+                # ensure grads for local rank when all_* features don't have a gradient
+                gathered_image_features = list(
+                    all_image_features.chunk(world_size, dim=0)
+                )
+                gathered_text_features = list(
+                    all_text_features.chunk(world_size, dim=0)
+                )
+                gathered_image_features[rank] = image_features
+                gathered_text_features[rank] = text_features
+                all_image_features = torch.cat(gathered_image_features, dim=0)
+                all_text_features = torch.cat(gathered_text_features, dim=0)
+    else:
+        # We gather tensors from all gpus
+        if gather_with_grad:
+            all_image_features = torch.cat(
+                torch.distributed.nn.all_gather(image_features), dim=0
+            )
+            all_text_features = torch.cat(
+                torch.distributed.nn.all_gather(text_features), dim=0
+            )
+        else:
+            gathered_image_features = [
+                torch.zeros_like(image_features) for _ in range(world_size)
+            ]
+            gathered_text_features = [
+                torch.zeros_like(text_features) for _ in range(world_size)
+            ]
+            dist.all_gather(gathered_image_features, image_features)
+            dist.all_gather(gathered_text_features, text_features)
+            if not local_loss:
+                # ensure grads for local rank when all_* features don't have a gradient
+                gathered_image_features[rank] = image_features
+                gathered_text_features[rank] = text_features
+            all_image_features = torch.cat(gathered_image_features, dim=0)
+            all_text_features = torch.cat(gathered_text_features, dim=0)
 
-    world_size = get_world_size()
-    if world_size == 1:
-        return features
-
-    gathered: list[torch.Tensor] = [
-        torch.zeros_like(features, requires_grad=False) for _ in range(world_size)
-    ]
-
-    # Collective: each rank populates *gathered* (detached tensors)
-    dist.all_gather(gathered, features.contiguous())
-
-    # Replace this rank's slot with the original tensor (preserves grad)
-    rank = get_rank()
-    gathered[rank] = features
-
-    return torch.cat(gathered, dim=0)
+    return all_image_features, all_text_features
 
 
 class ClipLoss(nn.Module):
+    """CLIP contrastive loss implementation with distributed training support.
+
+    Parameters
+    ----------
+    local_loss : bool, default=False
+        Whether to compute loss locally vs. globally across all ranks
+    gather_with_grad : bool, default=False
+        Whether to gather features with gradients preserved
+    cache_labels : bool, default=False
+        Whether to cache ground truth labels for efficiency
+    rank : int, default=0
+        Current process rank (will be overridden dynamically)
+    world_size : int, default=1
+        Total number of processes (will be overridden dynamically)
+    use_horovod : bool, default=False
+        Whether to use Horovod for distributed training
+    """
+
     def __init__(
         self,
         local_loss: bool = False,
         gather_with_grad: bool = False,
         cache_labels: bool = False,
+        rank: int = 0,
+        world_size: int = 1,
         use_horovod: bool = False,
     ) -> None:
         super().__init__()
         self.local_loss = local_loss
         self.gather_with_grad = gather_with_grad
         self.cache_labels = cache_labels
+        self.rank = rank
+        self.world_size = world_size
         self.use_horovod = use_horovod
+
+        # cache state
         self.prev_num_logits = 0
         self.labels: Dict[torch.device, torch.Tensor] = {}
 
@@ -78,6 +164,7 @@ class ClipLoss(nn.Module):
         torch.Tensor
             Labels tensor
         """
+        # calculated ground-truth and cache if enabled
         if self.prev_num_logits != num_logits or device not in self.labels:
             labels = torch.arange(num_logits, device=device, dtype=torch.long)
             if self.world_size > 1 and self.local_loss:
@@ -115,8 +202,16 @@ class ClipLoss(nn.Module):
             Tuple of (logits_per_image, logits_per_text)
         """
         if self.world_size > 1:
-            all_image_features = all_gather_features(image_features)
-            all_text_features = all_gather_features(text_features)
+            all_image_features, all_text_features = gather_features(
+                image_features,
+                text_features,
+                local_loss=self.local_loss,
+                gather_with_grad=self.gather_with_grad,
+                rank=self.rank,
+                world_size=self.world_size,
+                use_horovod=self.use_horovod,
+            )
+
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @ all_text_features.T
                 logits_per_text = logit_scale * text_features @ all_image_features.T
@@ -128,9 +223,11 @@ class ClipLoss(nn.Module):
         else:
             logits_per_image = logit_scale * image_features @ text_features.T
             logits_per_text = logit_scale * text_features @ image_features.T
+
         if logit_bias is not None:
             logits_per_image += logit_bias
             logits_per_text += logit_bias
+
         return logits_per_image, logits_per_text
 
     def forward(
@@ -167,20 +264,27 @@ class ClipLoss(nn.Module):
             Loss tensor, (loss, logits) tuple, or dict with loss
         """
         device = image_features.device
+
+        # Dynamically get rank and world_size
         world_size = get_world_size()
         rank = get_rank()
         self.world_size = world_size
         self.rank = rank
 
         logits_per_image, logits_per_text = self.get_logits(
-            image_features, text_features, logit_scale
+            image_features,
+            text_features,
+            logit_scale,
+            logit_bias=logit_bias,
         )
 
         labels = self.get_ground_truth(device, logits_per_image.shape[0])
+
         total_loss = (
             F.cross_entropy(logits_per_image, labels)
             + F.cross_entropy(logits_per_text, labels)
         ) / 2
+
         if output_dict:
             return {"contrastive_loss": total_loss}
         if output_logits:
@@ -247,7 +351,7 @@ class FocalLoss(nn.Module):
             return loss
 
 
-def _build_criterion(loss_name: str) -> nn.Module:
+def build_criterion(loss_name: str) -> nn.Module:
     if loss_name == "cross_entropy":
         return nn.CrossEntropyLoss()
     elif loss_name in {

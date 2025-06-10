@@ -1,7 +1,7 @@
 ---
 # Model configuration
 model_spec:
-  name: efficientnetb0
+  name: efficientnet
   pretrained: true
   audio_config:
     sample_rate: 16000

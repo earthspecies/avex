@@ -2,8 +2,8 @@ from representation_learning.configs import ModelSpec
 from representation_learning.models.aves_model import Model as AVESModel
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.clip import CLIPModel
-from representation_learning.models.efficientnetb0 import (
-    Model as EfficientNetB0,
+from representation_learning.models.efficientnet import (
+    Model as EfficientNet,
 )
 from representation_learning.models.perch import Model as PerchModel
 from representation_learning.models.resnet import Model as ResNetModel
@@ -14,9 +14,9 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     Factory function to obtain a model instance based on a static list of supported
     models.
     Model implementations are expected to reside in their own modules (e.g.
-    efficientnetb0.py) and define a class (always called 'Model'). This function
+    efficientnet.py) and define a class (always called 'Model'). This function
     currently supports:
-    - 'efficientnetb0': Audio classification model
+    - 'efficientnet': Audio classification model
     - 'clip': CLIP-like model for audio-text contrastive learning
     - 'perch': Google's Perch bird audio classification model
     - 'atst': ATST Frame model for timestamp embeddings
@@ -42,12 +42,13 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     """
     model_name = model_config.name.lower()
 
-    if model_name == "efficientnetb0":
-        return EfficientNetB0(
+    if model_name == "efficientnet":
+        return EfficientNet(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
+            efficientnet_variant=getattr(model_config, "efficientnet_variant", "b0"),
         )
     elif model_name == "aves_bio":
         return AVESModel(
@@ -63,6 +64,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             text_model_name=getattr(model_config, "text_model_name", "roberta-base"),
             projection_dim=getattr(model_config, "projection_dim", 512),
             temperature=getattr(model_config, "temperature", 0.07),
+            efficientnet_variant=getattr(model_config, "efficientnet_variant", "b0"),
         )
     elif model_name == "perch":
         return PerchModel(
@@ -161,7 +163,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     else:
         # Fallback
         supported = (
-            "'efficientnetb0', 'clip', 'perch', 'atst', 'eat', 'eat_hf', 'resnet18', "
+            "'efficientnet', 'clip', 'perch', 'atst', 'eat', 'eat_hf', 'resnet18', "
             "'resnet50', 'resnet152', 'beats'"
         )
         raise NotImplementedError(

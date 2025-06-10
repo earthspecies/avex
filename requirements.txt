@@ -159,7 +159,7 @@ torchaudio==2.5.0
 torchmetrics==1.7.2
 torchvision==0.20.0
 tqdm==4.67.1
-transformers @ git+https://github.com/huggingface/transformers@10627c1a0f6877ce6715b9537afe7fafb2a89edd
+transformers @ git+https://github.com/huggingface/transformers@d7b87b415a5dd4a3152051e1a0abd098a02c5bfa
 triton==3.1.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 typing-extensions==4.14.0
 typing-inspection==0.4.1

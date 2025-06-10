@@ -9,7 +9,7 @@
 
 import math
 import warnings
-from typing import Any, Callable, Tuple, Union
+from typing import Callable, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -20,7 +20,11 @@ class GradMultiply(torch.autograd.Function):
     """Gradient scaling function for layer-wise gradient decay."""
 
     @staticmethod
-    def forward(ctx: Any, x: torch.Tensor, scale: float) -> torch.Tensor:
+    def forward(
+        ctx: torch.autograd.function.FunctionCtx,
+        x: torch.Tensor,
+        scale: float,
+    ) -> torch.Tensor:
         """Forward pass that passes input unchanged while storing scale factor.
 
         Args:
@@ -36,7 +40,9 @@ class GradMultiply(torch.autograd.Function):
         return res
 
     @staticmethod
-    def backward(ctx: Any, grad: torch.Tensor) -> Tuple[torch.Tensor, None]:
+    def backward(
+        ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor
+    ) -> Tuple[torch.Tensor, None]:
         """Backward pass that scales gradients by stored factor.
 
         Args:
@@ -281,7 +287,7 @@ def quant_noise(
             k = module.kernel_size[0] * module.kernel_size[1]
             assert k % block_size == 0, "Kernel size must be a multiple of block size"
 
-    def _forward_pre_hook(mod: nn.Module, input: Any) -> None:
+    def _forward_pre_hook(mod: nn.Module, input: Tuple[torch.Tensor, ...]) -> None:
         """Pre-forward hook to apply quantization noise during training.
 
         Args:
