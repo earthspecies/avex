@@ -6,10 +6,14 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import torch
 import yaml
+
+# Cloud-agnostic path factory (local / gs:// / r2://).
+from esp_data.io.paths import anypath  # type: ignore
 
 from representation_learning.configs import (  # type: ignore
     RunConfig,
@@ -100,12 +104,21 @@ def main() -> None:
     model = get_model(config.model_spec, num_classes=num_labels).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
 
-    # Create output directory
-    output_dir = Path(config.output_dir)
-    output_dir.mkdir(exist_ok=True, parents=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    # Save the config
-    with open(output_dir / "config.yml", "w") as f:
+    base_out = anypath(config.output_dir)
+    output_dir = base_out / timestamp  # type: ignore[operator]
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
+    except AttributeError:
+        # CloudPath objects may not implement mkdir – will create implicitly
+        pass
+
+    config.output_dir = str(output_dir)
+
+    # Save the config (works for cloud & local)
+    with (output_dir / "config.yml").open("w") as f:
         yaml.dump(config.model_dump(mode="json"), f)
 
     # Create experiment logger
@@ -114,7 +127,6 @@ def main() -> None:
     # Create optimizer
     optim = get_optimizer(model.parameters(), config.training_params)
 
-    # Create trainer
     trainer = Trainer(
         model=model,
         optimizer=optim,
