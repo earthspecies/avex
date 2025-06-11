@@ -29,7 +29,7 @@ training_params:
   train_epochs: 70     # same as clip_base_beans
   lr: 0.0001
   batch_size: 512      # large batch from CLIP recipe
-  optimizer: adamw8bit # match opt
+  optimizer: adamw8bit     # match opt
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
@@ -66,4 +66,4 @@ device: cuda
 seed: 43
 num_workers: 8
 run_name: beats_beans_large_batch
-wandb_project: representation_learning 
+wandb_project: representation_learning

@@ -19,10 +19,8 @@ model_spec:
   projection_dim: 512
   temperature: 0.07
 
-# Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_base.yml
 
-# How to use the labels (supervised: use class indices, text: use text labels)
 label_type: text
 
 # audio preprocessing
@@ -42,13 +40,13 @@ output_dir: "./runs/clip_baseline_48khz_10_06"
 training_params:
   train_epochs: 30
   lr: 0.0001
-  batch_size: 400
+  batch_size: 200
   optimizer: adamw8bit
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
   log_steps: 100
-  gradient_checkpointing: true
+  gradient_checkpointing: false
 
 # Learning rate scheduler configuration
 scheduler:

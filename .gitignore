@@ -2,7 +2,7 @@
 benchmark/
 checkpoints/
 evaluation_results/
-pretrained/
+.pretrained/
 
 # VSCode
 .vscode/

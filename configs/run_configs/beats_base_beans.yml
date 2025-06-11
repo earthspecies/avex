@@ -66,4 +66,4 @@ device: cuda
 seed: 42
 num_workers: 10
 run_name: beats_base_beans
-wandb_project: representation_learning 
+wandb_project: representation_learning

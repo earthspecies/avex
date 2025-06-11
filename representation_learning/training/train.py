@@ -169,6 +169,7 @@ class Trainer:
                 self.model.enable_gradient_checkpointing()
             except NotImplementedError as e:
                 logger.warning(f"Could not enable gradient checkpointing: {e}")
+            logger.info("gradient checkpointing enabled successfully")
 
         # Distributed setup - parameters are now passed in
         self.local_rank = local_rank

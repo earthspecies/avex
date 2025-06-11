@@ -24,7 +24,7 @@ experiments:
     # Whether to freeze the backbone (train only the linear probe)
     frozen: true
 # Where to save the evaluation results
-save_dir: evaluation_results_aves
+save_dir: evaluation_results
 
 device: cuda
 
