@@ -90,10 +90,21 @@ class MulticlassBinaryF1Score:
         self.num_classes = num_classes
 
     def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
+        """Update metrics with new predictions and ground truth.
+
+        Args:
+            logits: Model output logits of shape (N, C)
+            y: Ground truth labels of shape (N, C) for one-hot encoded labels
+        """
         probs = torch.sigmoid(logits)
+        # Convert one-hot labels back to class indices
+        y_indices = y.argmax(dim=1)
         for i in range(self.num_classes):
             binary_logits = torch.stack((1 - probs[:, i], probs[:, i]), dim=1)
-            self.metrics[i].update(binary_logits, y[:, i])
+            # Create binary labels for this class
+            # (1 if this class is present, 0 otherwise)
+            binary_y = (y_indices == i).long()
+            self.metrics[i].update(binary_logits, binary_y)
 
     def get_metric(self) -> dict[str, float]:
         macro_prec = 0.0

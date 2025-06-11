@@ -12,6 +12,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
+        label_map: {'111': 0, '210': 1, '211': 2, '215': 3, '216': 4, '220': 5, '226': 6, '228': 7, '230': 8, '231': 9}
     # transformations:
     #   - type: uniform_sample
     #     property: label
@@ -32,6 +33,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
+        label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
     # transformations:
     #   - type: uniform_sample
     #     property: label
@@ -72,6 +74,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
+        label_map: {'ae aegypti': 0, 'an arabiensis': 1, 'an dirus': 2, 'an funestus sl': 3, 'an funestus ss': 4, 'an gambiae ss': 5, 'an harrisoni': 6, 'an maculatus': 7, 'an squamosus': 8, 'culex pipiens complex': 9, 'culex quinquefasciatus': 10, 'ma uniformis': 11, 'non-mosquito': 12, 'others': 13}
     # transformations:
     #   - type: uniform_sample
     #     property: label
@@ -92,6 +95,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
+        label_map: {'aldfly': 0, 'ameavo': 1, 'amebit': 2, 'amecro': 3, 'amegfi': 4, 'amekes': 5, 'amepip': 6, 'amered': 7, 'amerob': 8, 'amewig': 9, 'amewoo': 10, 'amtspa': 11, 'annhum': 12, 'astfly': 13, 'baisan': 14, 'baleag': 15, 'balori': 16, 'banswa': 17, 'barswa': 18, 'bawwar': 19, 'belkin1': 20, 'belspa2': 21, 'bewwre': 22, 'bkbcuc': 23, 'bkbmag1': 24, 'bkbwar': 25, 'bkcchi': 26, 'bkchum': 27, 'bkhgro': 28, 'bkpwar': 29, 'bktspa': 30, 'blkpho': 31, 'blugrb1': 32, 'blujay': 33, 'bnhcow': 34, 'boboli': 35, 'bongul': 36, 'brdowl': 37, 'brebla': 38, 'brespa': 39, 'brncre': 40, 'brnthr': 41, 'brthum': 42, 'brwhaw': 43, 'btbwar': 44, 'btnwar': 45, 'btywar': 46, 'buffle': 47, 'buggna': 48, 'buhvir': 49, 'bulori': 50, 'bushti': 51, 'buwtea': 52, 'buwwar': 53, 'cacwre': 54, 'calgul': 55, 'calqua': 56, 'camwar': 57, 'cangoo': 58, 'canwar': 59, 'canwre': 60, 'carwre': 61, 'casfin': 62, 'caster1': 63, 'casvir': 64, 'cedwax': 65, 'chispa': 66, 'chiswi': 67, 'chswar': 68, 'chukar': 69, 'clanut': 70, 'cliswa': 71, 'comgol': 72, 'comgra': 73, 'comloo': 74, 'commer': 75, 'comnig': 76, 'comrav': 77, 'comred': 78, 'comter': 79, 'comyel': 80, 'coohaw': 81, 'coshum': 82, 'cowscj1': 83, 'daejun': 84, 'doccor': 85, 'dowwoo': 86, 'dusfly': 87, 'eargre': 88, 'easblu': 89, 'easkin': 90, 'easmea': 91, 'easpho': 92, 'eastow': 93, 'eawpew': 94, 'eucdov': 95, 'eursta': 96, 'evegro': 97, 'fiespa': 98, 'fiscro': 99, 'foxspa': 100, 'gadwal': 101, 'gcrfin': 102, 'gnttow': 103, 'gnwtea': 104, 'gockin': 105, 'gocspa': 106, 'goleag': 107, 'grbher3': 108, 'grcfly': 109, 'greegr': 110, 'greroa': 111, 'greyel': 112, 'grhowl': 113, 'grnher': 114, 'grtgra': 115, 'grycat': 116, 'gryfly': 117, 'haiwoo': 118, 'hamfly': 119, 'hergul': 120, 'herthr': 121, 'hoomer': 122, 'hoowar': 123, 'horgre': 124, 'horlar': 125, 'houfin': 126, 'houspa': 127, 'houwre': 128, 'indbun': 129, 'juntit1': 130, 'killde': 131, 'labwoo': 132, 'larspa': 133, 'lazbun': 134, 'leabit': 135, 'leafly': 136, 'leasan': 137, 'lecthr': 138, 'lesgol': 139, 'lesnig': 140, 'lesyel': 141, 'lewwoo': 142, 'linspa': 143, 'lobcur': 144, 'lobdow': 145, 'logshr': 146, 'lotduc': 147, 'louwat': 148, 'macwar': 149, 'magwar': 150, 'mallar3': 151, 'marwre': 152, 'merlin': 153, 'moublu': 154, 'mouchi': 155, 'moudov': 156, 'norcar': 157, 'norfli': 158, 'norhar2': 159, 'normoc': 160, 'norpar': 161, 'norpin': 162, 'norsho': 163, 'norwat': 164, 'nrwswa': 165, 'nutwoo': 166, 'olsfly': 167, 'orcwar': 168, 'osprey': 169, 'ovenbi1': 170, 'palwar': 171, 'pasfly': 172, 'pecsan': 173, 'perfal': 174, 'phaino': 175, 'pibgre': 176, 'pilwoo': 177, 'pingro': 178, 'pinjay': 179, 'pinsis': 180, 'pinwar': 181, 'plsvir': 182, 'prawar': 183, 'purfin': 184, 'pygnut': 185, 'rebmer': 186, 'rebnut': 187, 'rebsap': 188, 'rebwoo': 189, 'redcro': 190, 'redhea': 191, 'reevir1': 192, 'renpha': 193, 'reshaw': 194, 'rethaw': 195, 'rewbla': 196, 'ribgul': 197, 'rinduc': 198, 'robgro': 199, 'rocpig': 200, 'rocwre': 201, 'rthhum': 202, 'ruckin': 203, 'rudduc': 204, 'rufgro': 205, 'rufhum': 206, 'rusbla': 207, 'sagspa1': 208, 'sagthr': 209, 'savspa': 210, 'saypho': 211, 'scatan': 212, 'scoori': 213, 'semplo': 214, 'semsan': 215, 'sheowl': 216, 'shshaw': 217, 'snobun': 218, 'snogoo': 219, 'solsan': 220, 'sonspa': 221, 'sora': 222, 'sposan': 223, 'spotow': 224, 'stejay': 225, 'swahaw': 226, 'swaspa': 227, 'swathr': 228, 'treswa': 229, 'truswa': 230, 'tuftit': 231, 'tunswa': 232, 'veery': 233, 'vesspa': 234, 'vigswa': 235, 'warvir': 236, 'wesblu': 237, 'wesgre': 238, 'weskin': 239, 'wesmea': 240, 'wessan': 241, 'westan': 242, 'wewpew': 243, 'whbnut': 244, 'whcspa': 245, 'whfibi': 246, 'whtspa': 247, 'whtswi': 248, 'wilfly': 249, 'wilsni1': 250, 'wiltur': 251, 'winwre3': 252, 'wlswar': 253, 'wooduc': 254, 'wooscj2': 255, 'woothr': 256, 'y00475': 257, 'yebfly': 258, 'yebsap': 259, 'yehbla': 260, 'yelwar': 261, 'yerwar': 262, 'yetvir': 263}
     # transformations:
     #   - type: uniform_sample
     #     property: label
@@ -112,6 +116,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
+        label_map: {'Atlantic_Spotted_Dolphin': 0, 'Bearded_Seal': 1, 'Beluga,_White_Whale': 2, 'Bottlenose_Dolphin': 3, 'Bowhead_Whale': 4, 'Clymene_Dolphin': 5, 'Common_Dolphin': 6, 'False_Killer_Whale': 7, 'Fin,_Finback_Whale': 8, 'Frasers_Dolphin': 9, 'Grampus,_Rissos_Dolphin': 10, 'Harp_Seal': 11, 'Humpback_Whale': 12, 'Killer_Whale': 13, 'Leopard_Seal': 14, 'Long-Finned_Pilot_Whale': 15, 'Melon_Headed_Whale': 16, 'Minke_Whale': 17, 'Narwhal': 18, 'Northern_Right_Whale': 19, 'Pantropical_Spotted_Dolphin': 20, 'Ross_Seal': 21, 'Rough-Toothed_Dolphin': 22, 'Short-Finned_Pacific_Pilot_Whale': 23, 'Southern_Right_Whale': 24, 'Sperm_Whale': 25, 'Spinner_Dolphin': 26, 'Striped_Dolphin': 27, 'Walrus': 28, 'White-beaked_Dolphin': 29, 'White-sided_Dolphin': 30}
     # transformations:
     #   - type: uniform_sample
     #     property: label
@@ -120,3 +125,173 @@ datasets:
     metrics:
       - accuracy
       - balanced_accuracy
+
+  - dataset_name: enabirds-detection
+    type: detection
+    label_column: answer
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+        label_map: {'American Crow': 0, 'American Goldfinch': 1, 'American Redstart': 2, 'American Robin': 3, 'Black-and-white Warbler': 4, 'Black-capped Chickadee': 5, 'Black-throated Blue Warbler': 6, 'Black-throated Green Warbler': 7, 'Blue Jay': 8, 'Blue-gray Gnatcatcher': 9, 'Blue-headed Vireo': 10, 'Brown-headed Cowbird': 11, 'Carolina Wren': 12, 'Common Yellowthroat': 13, 'Eastern Towhee': 14, 'Hermit Thrush': 15, 'Hooded Warbler': 16, "Kirtland's Warbler": 17, 'Louisiana Waterthrush': 18, 'None': 19, 'Northern Cardinal': 20, 'Northern Flicker': 21, 'Other Bird': 22, 'Ovenbird': 23, 'Red-bellied Woodpecker': 24, 'Red-eyed Vireo': 25, 'Rose-breasted Grosbeak': 26, 'Ruby-crowned Kinglet': 27, 'Scarlet Tanager': 28, "Swainson's Thrush": 29, 'Tufted Titmouse': 30, 'White-breasted Nuthatch': 31, 'Wild Turkey': 32, 'Wood Thrush': 33, 'Yellow-billed Cuckoo': 34}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: rfcx-detection
+    type: detection
+    label_column: answer
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+        label_map: {'Bananaquit': 0, 'Black-whiskered vireo': 1, 'Bronze coqui': 2, 'Common coqui': 3, 'Cricket coqui': 4, 'Dwarf coqui': 5, 'Elfin woods warbler': 6, 'Grass coqui': 7, "Hedrick's coqui": 8, 'Locust coqui': 9, 'Melodius coqui': 10, 'Mountain Coqui': 11, 'None': 12, 'Pearly-eyed thrasher': 13, 'Puerto Rican bullfinch': 14, 'Puerto Rican lizard cuckoo': 15, 'Puerto Rican owl': 16, 'Puerto Rican spindalis': 17, 'Puerto Rican tanager': 18, 'Puerto Rican tody': 19, 'Puerto Rican woodpecker': 20, 'Red-eyed coqui': 21, 'Red-legged thrush': 22, 'Scaly-naped pigeon': 23, 'White-lipped Frog': 24}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: hiceas-detection
+    type: detection
+    label_column: answer
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+        label_map: {"Minke Whale 'boing' call": 0, 'None': 1}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: hainan-gibbons-detection
+    type: detection
+    label_column: answer
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+        label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'None': 2, 'Single pulse gibbon call': 3}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: dcase-detection
+    type: detection
+    label_column: answer
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - answer
+        override: true
+        label_map: {'American Redstart': 0, 'Bay-breasted Warbler': 1, 'Black-throated Blue Warbler': 2, 'Chipping Sparrow': 3, 'Common Yellowthroat': 4, 'Gray-cheeked Thrush': 5, 'Hyena giggle': 6, 'Hyena groan and moo': 7, 'Hyena squitter': 8, 'Jackdaw call': 9, 'Meerkat close call': 10, 'Meerkat short note': 11, 'None': 12, 'Other Animal': 13, 'Ovenbird': 14, 'Rose-breasted Grosbeak': 15, 'Savannah Sparrow': 16, "Swainson's Thrush": 17, 'White-throated Sparrow': 18}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-POW
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+        label_map: {'American Crow': 0, 'American Golden-Plover': 1, 'American Redstart': 2, 'American Robin': 3, 'Baltimore Oriole': 4, 'Bay-breasted Warbler': 5, 'Black-and-white Warbler': 6, 'Black-capped Chickadee': 7, 'Black-throated Green Warbler': 8, 'Blue Jay': 9, 'Blue-gray Gnatcatcher': 10, 'Blue-headed Vireo': 11, 'Blue-winged Warbler': 12, 'Brown Creeper': 13, 'Brown-headed Cowbird': 14, 'Canada Goose': 15, 'Carolina Wren': 16, 'Cedar Waxwing': 17, 'Chestnut-sided Warbler': 18, 'Common Raven': 19, 'Common Yellowthroat': 20, 'Downy Woodpecker': 21, 'Eastern Towhee': 22, 'Eastern Wood-Pewee': 23, 'Hairy Woodpecker': 24, 'Hermit Thrush': 25, 'Hooded Warbler': 26, 'Kentucky Warbler': 27, 'Louisiana Waterthrush': 28, 'Nashville Warbler': 29, 'Northern Cardinal': 30, 'Northern Flicker': 31, 'Ovenbird': 32, 'Pileated Woodpecker': 33, 'Red-bellied Woodpecker': 34, 'Red-eyed Vireo': 35, 'Red-shouldered Hawk': 36, 'Red-winged Blackbird': 37, 'Rose-breasted Grosbeak': 38, 'Ruby-crowned Kinglet': 39, 'Scarlet Tanager': 40, "Swainson's Thrush": 41, 'Tufted Titmouse': 42, 'Veery': 43, 'White-breasted Nuthatch': 44, 'Wild Turkey': 45, 'Wood Thrush': 46, 'Yellow-billed Cuckoo': 47}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-PER
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+        label_map: {'Amazonian Barred-Woodcreeper': 0, 'Amazonian Grosbeak': 1, 'Amazonian Motmot': 2, 'Amazonian Pygmy-Owl': 3, 'Amazonian Trogon': 4, 'Ash-throated Gnateater': 5, 'Band-tailed Manakin': 6, 'Barred Antshrike': 7, 'Barred Forest-Falcon': 8, "Bartlett's Tinamou": 9, 'Black Caracara': 10, 'Black-billed Thrush': 11, 'Black-capped Becard': 12, 'Black-faced Antthrush': 13, 'Black-faced Cotinga': 14, 'Black-fronted Nunbird': 15, 'Black-spotted Bare-eye': 16, 'Black-tailed Trogon': 17, 'Black-throated Antbird': 18, 'Blue Ground Dove': 19, 'Blue-crowned Trogon': 20, 'Blue-headed Parrot': 21, 'Bluish-fronted Jacamar': 22, 'Bluish-gray Saltator': 23, 'Boat-billed Flycatcher': 24, 'Bright-rumped Attila': 25, "Buckley's Forest-Falcon": 26, 'Buff-breasted Wren': 27, 'Buff-throated Saltator': 28, 'Buff-throated Woodcreeper': 29, 'Chestnut-winged Foliage-gleaner': 30, 'Cinereous Mourner': 31, 'Cinereous Tinamou': 32, 'Cinnamon-rumped Foliage-gleaner': 33, 'Cinnamon-throated Woodcreeper': 34, 'Cobalt-winged Parakeet': 35, 'Collared Forest-Falcon': 36, 'Collared Trogon': 37, 'Common Potoo': 38, 'Dull-capped Attila': 39, 'Dusky-capped Flycatcher': 40, 'Dusky-capped Greenlet': 41, 'Dusky-headed Parakeet': 42, 'Dusky-throated Antshrike': 43, 'Elegant Woodcreeper': 44, "Euler's Flycatcher": 45, 'Fasciated Antshrike': 46, 'Ferruginous Pygmy-Owl': 47, 'Forest Elaenia': 48, 'Gilded Barbet': 49, "Goeldi's Antbird": 50, 'Golden-crowned Spadebill': 51, 'Golden-green Woodpecker': 52, 'Gray Antbird': 53, 'Gray Antwren': 54, 'Gray-capped Flycatcher': 55, 'Gray-cowled Wood-Rail': 56, 'Gray-crowned Flatbill': 57, 'Gray-fronted Dove': 58, 'Grayish Mourner': 59, 'Great Antshrike': 60, 'Great Tinamou': 61, 'Green Ibis': 62, 'Green-and-rufous Kingfisher': 63, 'Green-backed Trogon': 64, "Hauxwell's Thrush": 65, 'Horned Screamer': 66, 'Lemon-throated Barbet': 67, 'Little Tinamou': 68, 'Little Woodpecker': 69, 'Long-billed Woodcreeper': 70, 'Long-winged Antwren': 71, 'Mealy Amazon': 72, 'Musician Wren': 73, 'Ochre-throated Foliage-gleaner': 74, 'Olivaceous Woodcreeper': 75, 'Olive Oropendola': 76, 'Pale-vented Pigeon': 77, 'Paradise Tanager': 78, 'Piratic Flycatcher': 79, 'Plain-brown Woodcreeper': 80, 'Plain-throated Antwren': 81, 'Plain-winged Antshrike': 82, 'Plumbeous Antbird': 83, 'Plumbeous Pigeon': 84, 'Purple-throated Euphonia': 85, 'Purple-throated Fruitcrow': 86, 'Pygmy Antwren': 87, 'Red-bellied Macaw': 88, 'Red-crowned Ant-Tanager': 89, 'Red-necked Woodpecker': 90, 'Ringed Antpipit': 91, 'Ringed Kingfisher': 92, 'Ringed Woodpecker': 93, 'Ruddy Pigeon': 94, 'Ruddy Quail-Dove': 95, 'Rufous-capped Antthrush': 96, 'Rufous-fronted Antthrush': 97, 'Russet-backed Oropendola': 98, 'Rusty-fronted Tody-Flycatcher': 99, 'Scaled Pigeon': 100, 'Screaming Piha': 101, 'Solitary Black Cacique': 102, 'Speckled Chachalaca': 103, "Spix's Guan": 104, 'Spot-winged Antshrike': 105, 'Squirrel Cuckoo': 106, 'Starred Wood-Quail': 107, 'Straight-billed Woodcreeper': 108, 'Streaked Xenops': 109, 'Striped Cuckoo': 110, 'Striped Woodcreeper': 111, 'Tawny-bellied Screech-Owl': 112, 'Thrush-like Wren': 113, 'Tropical Royal Flycatcher': 114, 'Undulated Tinamou': 115, 'Waved Woodpecker (Scale-breasted)': 116, 'Western Striolated-Puffbird': 117, 'White-bellied Tody-Tyrant': 118, 'White-crested Spadebill': 119, 'White-flanked Antwren': 120, 'White-lored Tyrannulet': 121, 'White-necked Thrush': 122, 'White-rumped Sirystes': 123, 'White-throated Toucan': 124, 'White-throated Woodpecker': 125, 'White-winged Becard': 126, 'Wing-barred Piprites': 127, 'Yellow-crowned Tyrannulet': 128, 'Yellow-margined Flatbill': 129, 'Yellow-rumped Cacique': 130, 'Yellow-tufted Woodpecker': 131}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-NES
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+        label_map: {'Acorn Woodpecker': 0, 'Andean Emerald': 1, 'Andean Motmot': 2, 'Andean Solitaire': 3, "Azara's Spinetail": 4, 'Bananaquit': 5, 'Black-capped Tanager': 6, 'Black-chested Jay': 7, 'Black-headed Saltator': 8, 'Blue-gray Tanager': 9, 'Blue-vented Hummingbird': 10, 'Boat-billed Flycatcher': 11, 'Bronze-winged Parrot': 12, 'Brown Jay': 13, 'Buff-throated Saltator': 14, "Cabanis's Ground-Sparrow": 15, "Cabanis's Wren": 16, 'Chestnut-capped Brushfinch': 17, 'Clay-colored Thrush': 18, 'Colombian Chachalaca': 19, 'Common Pauraque': 20, 'Common Potoo': 21, 'Common Tody-Flycatcher': 22, 'Crimson-fronted Parakeet': 23, 'Dusky-capped Flycatcher': 24, 'Flame-rumped Tanager': 25, 'Golden-faced Tyrannulet': 26, 'Gray Hawk': 27, 'Gray-cowled Wood-Rail': 28, 'Gray-headed Chachalaca': 29, 'Great Kiskadee': 30, 'Great-tailed Grackle': 31, 'Green Jay': 32, "Hoffmann's Woodpecker": 33, 'Keel-billed Toucan': 34, 'Laughing Falcon': 35, "Lesson's Motmot": 36, 'Lineated Woodpecker': 37, 'Little Tinamou': 38, 'Long-tailed Manakin': 39, 'Masked Tityra': 40, 'Melodious Blackbird': 41, 'Melodious Warbler': 42, 'Montezuma Oropendola': 43, 'None': 44, 'Northern House Wren': 45, 'Olivaceous Woodcreeper': 46, 'Orange-billed Nightingale-Thrush': 47, 'Orange-chinned Parakeet': 48, 'Orange-fronted Parakeet': 49, 'Red-billed Pigeon': 50, 'Red-crowned Ant-Tanager': 51, 'Red-headed Barbet': 52, 'Ringed Kingfisher': 53, 'Roadside Hawk': 54, 'Rose-throated Becard': 55, 'Rufous-and-white Wren': 56, 'Rufous-breasted Wren': 57, 'Rufous-capped Warbler': 58, 'Rufous-collared Sparrow': 59, 'Rufous-tailed Hummingbird': 60, 'Russet-backed Oropendola': 61, 'Russet-crowned Warbler': 62, 'Rusty-margined Flycatcher': 63, 'Scrub Tanager': 64, 'Silver-beaked Tanager': 65, 'Slate-throated Redstart': 66, 'Social Flycatcher': 67, 'Squirrel Cuckoo': 68, 'Steely-vented Hummingbird': 69, 'Streak-headed Woodcreeper': 70, 'Streaked Saltator': 71, 'Tennessee Warbler': 72, 'Tropical Kingbird': 73, 'Tropical Screech-Owl': 74, 'Western Wood-Pewee': 75, 'Whiskered Wren': 76, 'White-crowned Parrot': 77, 'White-eared Ground-Sparrow': 78, 'White-fronted Amazon': 79, 'White-tipped Dove': 80, 'Yellow Warbler': 81, 'Yellow-backed Oriole': 82, 'Yellow-bellied Elaenia': 83, 'Yellow-crowned Euphonia': 84, 'Yellow-faced Grassquit': 85, 'Yellow-headed Caracara': 86, 'Yellow-throated Euphonia': 87, 'Yellow-throated Vireo': 88}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-NBP
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+        label_map: {'Barn Swallow': 0, 'Carrion Crow': 1, "Cetti's Warbler": 2, 'Cirl Bunting': 3, 'Coal Tit': 4, 'Common Buzzard': 5, 'Common Chaffinch': 6, 'Common Chiffchaff': 7, 'Common Firecrest': 8, 'Common Nightingale': 9, 'Common Wood-Pigeon': 10, 'Crested Lark': 11, 'Crested Tit': 12, 'Dartford Warbler': 13, 'Dunnock': 14, 'Eastern Subalpine Warbler': 15, 'Eurasian Blackbird': 16, 'Eurasian Blackcap': 17, 'Eurasian Blue Tit': 18, 'Eurasian Bullfinch': 19, 'Eurasian Collared-Dove': 20, 'Eurasian Golden Oriole': 21, 'Eurasian Jay': 22, 'Eurasian Linnet': 23, 'Eurasian Magpie': 24, 'Eurasian Nuthatch': 25, 'Eurasian Wren': 26, 'Eurasian Wryneck': 27, 'European Goldfinch': 28, 'European Greenfinch': 29, 'European Robin': 30, 'European Serin': 31, 'European Starling': 32, 'European Turtle-Dove': 33, 'Gray Wagtail': 34, 'Great Spotted Woodpecker': 35, 'Great Tit': 36, 'House Sparrow': 37, 'Long-tailed Tit': 38, 'Marsh Tit': 39, 'Red Crossbill': 40, 'Rock Sparrow': 41, 'Sardinian Warbler': 42, 'Short-toed Treecreeper': 43, 'Song Thrush': 44, 'Spotted Flycatcher': 45, "Thekla's Lark": 46, 'Tree Pipit': 47, 'Wood Lark': 48, 'Zitting Cisticola': 49}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1
+
+  - dataset_name: birdset-HSN
+    type: detection
+    label_column: label
+    audio_path_col: path
+    multi_label: true
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: labels_from_features
+        features:
+          - label
+        override: true
+        label_map: {'American Pipit': 0, 'American Robin': 1, "Brewer's Blackbird": 2, "Cassin's Finch": 3, "Clark's Nutcracker": 4, 'Dark-eyed Junco': 5, 'Dusky Flycatcher': 6, 'Fox Sparrow': 7, 'Gray-crowned Rosy-Finch': 8, 'Hermit Thrush': 9, 'Mallard': 10, 'Mountain Bluebird': 11, 'Mountain Chickadee': 12, 'Northern Flicker': 13, 'Orange-crowned Warbler': 14, 'Rock Wren': 15, 'Spotted Sandpiper': 16, 'Warbling Vireo': 17, 'White-crowned Sparrow': 18, 'Yellow Warbler': 19, 'Yellow-rumped Warbler': 20}
+    sample_rate: 16000
+    metrics:
+      - multiclass_f1

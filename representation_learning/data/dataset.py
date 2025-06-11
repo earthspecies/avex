@@ -41,6 +41,7 @@ class Collater:
         preprocessor: Optional[str] = None,
         device: str = "cpu",
         batch_aug_processor: Optional[AugmentationProcessor] = None,
+        num_labels: int = 0,
     ) -> None:
         self.audio_max_length_seconds = audio_max_length_seconds
         self.window_selection = window_selection
@@ -49,6 +50,8 @@ class Collater:
         self.sr = sr
         self.device = device
         self.batch_aug_processor = batch_aug_processor
+        assert num_labels > 1, "num_labels must be greater than 1"
+        self.num_labels = num_labels
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
         # First prepare data with uniform lengths
@@ -97,14 +100,20 @@ class Collater:
 
         # Handle different label formats (int → long, multi-hot → float32)
         if all(isinstance(lbl, (int, np.integer)) for lbl in labels):
-            label_tensor = torch.tensor(labels, dtype=torch.long)
+            # Convert integer labels to one-hot vectors for classification
+            label_tensor = torch.nn.functional.one_hot(
+                torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
+            ).float()
         else:
-            label_tensors = [
-                torch.as_tensor(lbl, dtype=torch.float32)
-                if not isinstance(lbl, torch.Tensor)
-                else lbl.float()
-                for lbl in labels
-            ]
+            # For multi-label case, convert lists of class indices to one-hot vectors
+            label_tensors = []
+            for lbl in labels:
+                # Create zero tensor of size num_labels
+                one_hot = torch.zeros(self.num_labels, dtype=torch.float32)
+                # Convert list of indices to tensor and set 1s at those indices
+                indices = torch.tensor(lbl, dtype=torch.long)
+                one_hot[indices] = 1.0
+                label_tensors.append(one_hot)
             label_tensor = torch.stack(label_tensors)
 
         return {
@@ -218,6 +227,7 @@ def build_dataloaders(
         )
     except Exception:
         ds_test = None
+    num_labels = len(ds_train.metadata["label_map"])
 
     # Create samplers for distributed training
     train_sampler = None
@@ -236,6 +246,7 @@ def build_dataloaders(
         keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=aug_processor,
+        num_labels=num_labels,
     )
     collate_fn_eval = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
@@ -244,6 +255,7 @@ def build_dataloaders(
         keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=None,  # no augmentation during eval
+        num_labels=num_labels,
     )
 
     # ------------------------------------------------------------------ #
