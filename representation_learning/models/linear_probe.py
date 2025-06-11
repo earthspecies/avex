@@ -37,43 +37,38 @@ class LinearProbe(torch.nn.Module):
         self.layers = layers
         self.feature_mode = feature_mode
 
-        if feature_mode:
-            if base_model is None and input_dim is None:
-                raise ValueError(
-                    "input_dim must be provided when base_model is None in feature mode"
-                )
+        # Determine classifier input dimension
+        if self.feature_mode:
+            # Embeddings will be fed directly – base_model may be None.
             if input_dim is not None:
-                self.classifier = torch.nn.Linear(input_dim, num_classes).to(device)
+                inferred_dim = input_dim
             else:
-                # Calculate input dimension based on concatenated embeddings
+                if base_model is None:
+                    raise ValueError(
+                        "input_dim must be provided when feature_mode=True "
+                        "and base_model is None"
+                    )
                 with torch.no_grad():
-                    # Get the target length from the audio config
+                    # Derive dim via one dummy forward
                     target_length = (
                         base_model.audio_processor.target_length_seconds
                         * base_model.audio_processor.sr
                     )
-                    dummy_input = torch.randn(1, target_length).to(device)
-                    embeddings = self.base_model.extract_embeddings(
-                        dummy_input, self.layers
-                    )
-                    input_dim = embeddings.shape[1]
-                self.classifier = torch.nn.Linear(input_dim, num_classes).to(device)
+                    dummy = torch.randn(1, target_length, device=device)
+                    inferred_dim = base_model.extract_embeddings(dummy, layers).shape[1]
         else:
+            # We will compute embeddings inside forward – need base_model.
             if base_model is None:
-                raise ValueError("base_model must be provided when not in feature mode")
-            # Calculate input dimension based on concatenated embeddings
+                raise ValueError("base_model must be provided when feature_mode=False")
             with torch.no_grad():
-                # Get the target length from the audio config
                 target_length = (
                     base_model.audio_processor.target_length_seconds
                     * base_model.audio_processor.sr
                 )
-                dummy_input = torch.randn(1, target_length).to(device)
-                embeddings = self.base_model.extract_embeddings(
-                    dummy_input, self.layers
-                )
-                input_dim = embeddings.shape[1]
-            self.classifier = torch.nn.Linear(input_dim, num_classes).to(device)
+                dummy = torch.randn(1, target_length, device=device)
+                inferred_dim = base_model.extract_embeddings(dummy, layers).shape[1]
+
+        self.classifier = torch.nn.Linear(inferred_dim, num_classes).to(device)
 
     def forward(
         self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None

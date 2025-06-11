@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 
 import torch
@@ -18,13 +17,13 @@ from representation_learning.configs import (  # type: ignore
 )
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
-from representation_learning.training.distributed import init_distributed
+from representation_learning.training.distributed import (
+    get_local_device_index,
+    init_distributed,
+)
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import Trainer
 from representation_learning.utils import ExperimentLogger
-
-# Enable detailed noise augmentation profiling
-os.environ["PROFILE_NOISE_AUG"] = "1"
 
 # Configure logging to ensure INFO level logs are visible
 logging.basicConfig(
@@ -65,19 +64,16 @@ def main() -> None:
         backend=config.distributed_backend,
     )
 
-    visible_gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
-
-    if is_distributed and visible_gpu_count == 1:
-        # Only one GPU is visible in this process → always use cuda:0
-        local_device_index = 0
+    # Get the correct local device index using the improved logic
+    if torch.cuda.is_available():
+        local_device_index = get_local_device_index()
+        torch.cuda.set_device(local_device_index)
+        device = torch.device("cuda", local_device_index)
+        logger.info(f"Using CUDA device {local_device_index}")
     else:
-        local_device_index = local_rank if torch.cuda.is_available() else 0
-
-    device = (
-        torch.device("cuda", local_device_index)
-        if torch.cuda.is_available()
-        else torch.device("cpu")
-    )
+        local_device_index = 0
+        device = torch.device("cpu")
+        logger.info("Using CPU device")
 
     torch.manual_seed(config.seed)
 
@@ -88,27 +84,6 @@ def main() -> None:
         len(train_dl),
         len(val_dl),
     )
-
-    # Prefetch noise files metadata if main process and using augmentations
-    if not is_distributed or local_rank == 0:
-        if config.augmentations:
-            from representation_learning.data.augmentations import (
-                print_cache_stats,
-            )
-
-            logger.info("Prefetching noise files metadata on main process...")
-
-            # Extract augmentation processor from the dataloader's collate function
-            if (
-                hasattr(train_dl.collate_fn, "batch_aug_processor")
-                and train_dl.collate_fn.batch_aug_processor
-            ):
-                aug_processor = train_dl.collate_fn.batch_aug_processor
-                if hasattr(aug_processor, "prefetch_metadata"):
-                    aug_processor.prefetch_metadata(
-                        max_files_per_config=50
-                    )  # Prefetch a subset
-                    print_cache_stats()  # Print cache stats after prefetching
 
     num_labels = len(train_dl.dataset.metadata["label_map"])
 
@@ -165,6 +140,7 @@ def main() -> None:
         resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
         run_config=config,
         log_steps=config.training_params.log_steps,
+        gradient_checkpointing=config.training_params.gradient_checkpointing,
     )
 
     # Train

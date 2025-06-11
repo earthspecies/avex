@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 import torch
 from torchaudio.models import wav2vec2_model
@@ -50,7 +50,7 @@ class Model(ModelBase):
     """Wrapper that adapts the raw *AVES* backbone for our training loop.
 
     This module follows the same conventions as the other model wrappers
-    (e.g. ``efficientnetb0.py``) so that it can be selected via
+    (e.g. ``efficientnet.py``) so that it can be selected via
     ``representation_learning.models.get_model.get_model``.
 
     The underlying AVES implementation operates directly on raw‐waveform
@@ -73,6 +73,12 @@ class Model(ModelBase):
         self.config = AVESConfig()
 
         self.model = wav2vec2_model(**self.config.to_dict(), aux_num_out=None)
+        state_dict = torch.hub.load_state_dict_from_url(
+            "https://storage.googleapis.com/esp-public-files/"
+            "birdaves/birdaves-biox-base.torchaudio.pt",
+            map_location=device,
+        )
+        self.model.load_state_dict(state_dict)
         self.model.to(device)
 
     def _prep_input(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -106,5 +112,18 @@ class Model(ModelBase):
         x = self._prep_input(x)
 
         features = self.model.extract_features(x)[0]
+        return features[-1]
 
-        return features
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],  # noqa: ANN401
+        layers: List[str],
+        *,
+        padding_mask: torch.Tensor | None = None,  # noqa: ANN401
+        masked_mean: bool = False,
+    ) -> torch.Tensor:
+        if isinstance(x, dict):
+            sequence_embeddings = self.forward(x["raw_wav"], padding_mask)
+        else:
+            sequence_embeddings = self.forward(x, padding_mask)
+        return sequence_embeddings.mean(dim=1)  # (B, C)

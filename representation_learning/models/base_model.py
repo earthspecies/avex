@@ -45,6 +45,21 @@ class ModelBase(nn.Module):
         target_device = next(self.parameters()).device
         return x.to(target_device)
 
+    def enable_gradient_checkpointing(self) -> None:
+        """
+        Enable gradient checkpointing for memory optimization.
+
+        Subclasses must implement this method to enable checkpointing
+        for their specific architecture.
+
+        Raises:
+            NotImplementedError: If the subclass doesn't implement this method
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support gradient checkpointing. "
+            f"Please implement the enable_gradient_checkpointing method."
+        )
+
     def batch_inference(self, batched_samples: torch.Tensor) -> torch.Tensor:
         """
         Perform batch inference on input samples.
@@ -95,6 +110,7 @@ class ModelBase(nn.Module):
             If none of the supplied *layers* are found in the model.
         """
         embeddings = []
+        output_padding_mask = []
 
         def hook_fn(
             module: nn.Module,
@@ -103,8 +119,11 @@ class ModelBase(nn.Module):
         ) -> None:
             nonlocal embeddings  # noqa: F823 – defined in enclosing scope
             # Capture the tensor without detaching so gradients can propagate
-            if isinstance(output, dict):
+            if isinstance(output, dict):  # TODO: hacky - model-specific handling
                 embeddings.append(output["x"])
+            elif isinstance(output, tuple):
+                embeddings.append(output[0])
+                output_padding_mask.append(output[1])
             else:
                 embeddings.append(output)
 
@@ -130,7 +149,7 @@ class ModelBase(nn.Module):
                 # Tensor input – use provided mask if available, otherwise assume
                 # fully-valid signal (all ones).
                 if padding_mask is None:
-                    padding_mask = torch.ones(
+                    padding_mask = torch.zeros(
                         x.size(0), x.size(1), device=x.device, dtype=torch.bool
                     )
 

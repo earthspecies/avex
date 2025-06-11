@@ -33,6 +33,7 @@ model_spec:
     ema_decay: 0.9998
     ema_end_decay: 0.99999
     ema_anneal_end_step: 100000
+    ema_same_dtype: false
     instance_norm_target_layer: true
     layer_norm_target_layer: false
     layer_norm_targets: true
@@ -87,15 +88,15 @@ sr: 16000
 
 debug_mode: false
 logging: mlflow
-output_dir: "./runs/eat_pretrain_bf16_25_05_nopad"
+output_dir: "./runs/eat_pretrain_handle_padding_v1.1"
 resume_from_checkpoint: null
 
 # -----------------------------------------------------------------------------
 training_params:
   train_epochs: 20
-  lr: 5.0e-4
-  batch_size: 48
-  optimizer: adamw
+  lr: 8.0e-4
+  batch_size: 96
+  optimizer: adamw8bit
   weight_decay: 0.05
   adam_betas: [0.9, 0.95]
   amp: true
@@ -104,7 +105,7 @@ training_params:
 
 scheduler:
   name: cosine
-  warmup_steps: 55000
+  warmup_steps: 15000
   min_lr: 1e-6
 
 # Augmentations – optional; start without heavy augmentation for SSL

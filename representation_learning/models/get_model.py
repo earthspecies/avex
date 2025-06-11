@@ -2,9 +2,10 @@ from representation_learning.configs import ModelSpec
 from representation_learning.models.aves_model import Model as AVESModel
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.clip import CLIPModel
-from representation_learning.models.efficientnetb0 import (
-    Model as EfficientNetB0,
+from representation_learning.models.efficientnet import (
+    Model as EfficientNet,
 )
+from representation_learning.models.perch import Model as PerchModel
 from representation_learning.models.resnet import Model as ResNetModel
 
 
@@ -13,10 +14,12 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     Factory function to obtain a model instance based on a static list of supported
     models.
     Model implementations are expected to reside in their own modules (e.g.
-    efficientnetb0.py) and define a class (always called 'Model'). This function
+    efficientnet.py) and define a class (always called 'Model'). This function
     currently supports:
-    - 'efficientnetb0': Audio classification model
+    - 'efficientnet': Audio classification model
     - 'clip': CLIP-like model for audio-text contrastive learning
+    - 'perch': Google's Perch bird audio classification model
+    - 'atst': ATST Frame model for timestamp embeddings
 
     Args:
         model_config: Model configuration object containing:
@@ -27,7 +30,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             - text_model_name: (for CLIP) Name of the text model to use
             - projection_dim: (for CLIP) Dimension of the projection space
             - temperature: (for CLIP) Temperature for contrastive loss
-        num_classes: The number of classes to be used in the model.
+            - atst_model_path: (for ATST) Path to pretrained ATST model checkpoint
 
     Returns:
         An instance of the corresponding model configured with the provided
@@ -39,12 +42,13 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     """
     model_name = model_config.name.lower()
 
-    if model_name == "efficientnetb0":
-        return EfficientNetB0(
+    if model_name == "efficientnet":
+        return EfficientNet(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
+            efficientnet_variant=getattr(model_config, "efficientnet_variant", "b0"),
         )
     elif model_name == "aves_bio":
         return AVESModel(
@@ -60,6 +64,30 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             text_model_name=getattr(model_config, "text_model_name", "roberta-base"),
             projection_dim=getattr(model_config, "projection_dim", 512),
             temperature=getattr(model_config, "temperature", 0.07),
+            efficientnet_variant=getattr(model_config, "efficientnet_variant", "b0"),
+        )
+    elif model_name == "perch":
+        return PerchModel(
+            num_classes=num_classes,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
+    elif model_name == "atst":
+        from representation_learning.models.atst_frame.atst_encoder import (
+            Model as ATSTModel,
+        )
+
+        # ATST requires model path
+        atst_model_path = getattr(
+            model_config, "atst_model_path", "pretrained/atst_as2M.pt"
+        )
+        # atst_model_path = "pretrained/atst_frame_base.pt"
+        return ATSTModel(
+            atst_model_path=atst_model_path,
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
         )
     elif model_name in {"resnet18", "resnet50", "resnet152"}:
         return ResNetModel(
@@ -80,6 +108,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         target_length = getattr(model_config, "target_length", 256)
         enable_ema = getattr(model_config, "enable_ema", False)
         pretraining_mode = getattr(model_config, "pretraining_mode", False)
+        handle_padding = getattr(model_config, "handle_padding", False)
         eat_cfg_overrides = getattr(model_config, "eat_cfg", None)
 
         return EATModel(
@@ -92,6 +121,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             target_length=target_length,
             enable_ema=enable_ema,
             pretraining_mode=pretraining_mode,
+            handle_padding=handle_padding,
             eat_cfg=eat_cfg_overrides,
         )
 
@@ -105,18 +135,36 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
-            embed_dim=embed_dim,
-            patch_size=patch_size,
+        )
+    elif model_name == "eat_hf":
+        from representation_learning.models.eat_hf import (
+            Model as EATHFModel,  # Local import to avoid HF deps when unused
+        )
+
+        target_length = getattr(model_config, "target_length", 1024)
+        pooling = getattr(model_config, "pooling", "cls")
+        model_id = getattr(
+            model_config,
+            "model_id",
+            # "worstchan/EAT-base_epoch30_pretrain",
+            "worstchan/EAT-base_epoch30_finetune_AS2M",
+        )
+        return_features_only = getattr(model_config, "return_features_only", True)
+
+        return EATHFModel(
+            model_name=model_id,
+            num_classes=num_classes,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
             target_length=target_length,
-            enable_ema=enable_ema,
-            pretraining_mode=pretraining_mode,
-            eat_cfg=eat_cfg_overrides,
+            pooling=pooling,
+            return_features_only=return_features_only,
         )
     else:
         # Fallback
         supported = (
-            "'efficientnetb0', 'clip', 'eat', 'resnet18', 'resnet50', 'resnet152',\
-                'beats'"
+            "'efficientnet', 'clip', 'perch', 'atst', 'eat', 'eat_hf', 'resnet18', "
+            "'resnet50', 'resnet152', 'beats'"
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"

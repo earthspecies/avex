@@ -135,8 +135,6 @@ def worker_init_fn(worker_id: int) -> None:
     import numpy as np
     import torch
 
-    from representation_learning.data.augmentations import _cached_audio_info
-
     logging.basicConfig(
         level=logging.INFO,
         format=(
@@ -155,7 +153,6 @@ def worker_init_fn(worker_id: int) -> None:
 
     data = _worker_init_data
     seed = data.get("seed", 42)
-    aug_processor = data.get("aug_processor")
 
     # Per-worker seed for deterministic but varied randomization
     worker_seed = seed + worker_id
@@ -163,20 +160,6 @@ def worker_init_fn(worker_id: int) -> None:
     random.seed(worker_seed)
     torch.manual_seed(worker_seed)
     logger.debug(f"Worker {worker_id} initialized with seed {worker_seed}")
-
-    # Prefetch noise-sample audio headers (worker 0 only, truncated)
-    if (
-        worker_id == 0
-        and aug_processor is not None
-        and hasattr(aug_processor, "_noise_pools")
-    ):
-        logger.info(f"Worker {worker_id}: Prefetching audio info for noise samples")
-        for _cfg_id, noise_files in aug_processor._noise_pools.items():
-            for noise_path in noise_files[:50]:  # limit to 50 per pool
-                try:
-                    _cached_audio_info(str(noise_path))
-                except Exception as e:
-                    logger.warning(f"Failed to prefetch info for {noise_path}: {e}")
 
 
 # Will be populated before DataLoader construction

@@ -45,11 +45,23 @@ class TrainingParams(BaseModel):
         0.0, ge=0, description="Weight decay for regularisation"
     )
 
+    # Optional override for Adam/AdamW beta parameters (β₁, β₂).  If omitted
+    # we fall back to the libraries' defaults (0.9, 0.999).
+    adam_betas: Optional[Tuple[float, float]] = Field(
+        default=None,
+        description="Override the (beta1, beta2) coefficients for Adam-type optimisers",
+    )
+
     amp: bool = False
     amp_dtype: Literal["bf16", "fp16"] = "bf16"
 
     # Frequency (in *iterations*) of logging benchmarking stats & progress
     log_steps: int = Field(100, ge=1, description="Log interval in training steps")
+
+    # Gradient checkpointing for memory optimization
+    gradient_checkpointing: bool = Field(
+        False, description="Enable gradient checkpointing to save memory"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -64,6 +76,12 @@ class NoiseAugment(BaseModel):
     noise_dirs: List[str]
     snr_db_range: Tuple[int, int] = Field(..., min_length=2, max_length=2)
     augmentation_prob: float = Field(..., ge=0, le=1)
+    mask_signal_prob: float = Field(
+        0.0,
+        ge=0,
+        le=1,
+        description="Probability of masking the original signal and using only noise",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -96,6 +114,7 @@ class AudioConfig(BaseModel):
     normalize: bool = True
     target_length_seconds: Optional[int] = None
     window_selection: Literal["random", "center"] = "random"
+    center: bool = True
 
     model_config = ConfigDict(extra="forbid")
 
@@ -118,6 +137,12 @@ class ModelSpec(BaseModel):
 
     # When true the EAT model is instantiated for self-supervised pre-training.
     pretraining_mode: Optional[bool] = None
+    handle_padding: Optional[bool] = None
+
+    # EfficientNet variant configuration
+    efficientnet_variant: Literal["b0", "b1"] = Field(
+        "b0", description="EfficientNet variant to use (b0 or b1)"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -189,6 +214,7 @@ class RunConfig(BaseModel):
         "binary_cross_entropy",
         "contrastive",
         "clip",
+        "focal",
     ]
 
     # Enable multi-label classification
@@ -270,10 +296,11 @@ class RunConfig(BaseModel):
         if v == "binary_cross_entropy":
             v = "bce"
 
-        # Check if multilabel is True but loss function isn't BCE
-        if data.get("multilabel", False) and v != "bce":
+        # Check if multilabel is True but loss function isn't BCE/Focal
+        if data.get("multilabel", False) and v not in {"bce", "focal"}:
             raise ValueError(
-                f"When multilabel=True, loss_function must be 'bce' (got '{v}' instead)"
+                "When multilabel=True, loss_function must be 'bce' or 'focal' "
+                f"(got '{v}' instead)"
             )
 
         # For self-supervised runs we don't impose any loss-type restrictions

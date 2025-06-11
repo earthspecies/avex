@@ -9,7 +9,7 @@
 
 
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -22,7 +22,14 @@ logger = logging.getLogger(__name__)
 
 
 class BEATsConfig:
-    def __init__(self, cfg=None) -> None:
+    """Configuration class for BEATs model parameters."""
+
+    def __init__(self, cfg: Optional[Dict[str, Any]] = None) -> None:
+        """Initialize BEATs configuration.
+
+        Args:
+            cfg: Optional dictionary containing configuration parameters
+        """
         self.input_patch_size: int = -1  # path size of patch embedding
         self.embed_dim: int = 512  # patch embedding dimension
         self.conv_bias: bool = False  # include bias in conv encoder
@@ -78,18 +85,35 @@ class BEATsConfig:
         if cfg is not None:
             self.update(cfg)
 
-    def update(self, cfg: dict):
+    def update(self, cfg: Dict[str, Any]) -> None:
+        """Update configuration with new parameters.
+
+        Args:
+            cfg: Dictionary containing new configuration parameters
+        """
         self.__dict__.update(cfg)
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to dictionary.
+
+        Returns:
+            Dict[str, Any]: Configuration as dictionary
+        """
         return self.__dict__
 
 
 class BEATs(nn.Module):
+    """BEATs (Bidirectional Encoder representation from Audio Transformers) model."""
+
     def __init__(
         self,
         cfg: BEATsConfig,
     ) -> None:
+        """Initialize BEATs model.
+
+        Args:
+            cfg: BEATs configuration object
+        """
         super().__init__()
         logger.info(f"BEATs Config: {cfg.__dict__}")
 
@@ -128,6 +152,15 @@ class BEATs(nn.Module):
         features: torch.Tensor,
         padding_mask: torch.Tensor,
     ) -> torch.Tensor:
+        """Process padding mask to match feature dimensions.
+
+        Args:
+            features: Feature tensor
+            padding_mask: Padding mask tensor
+
+        Returns:
+            torch.Tensor: Processed padding mask
+        """
         extra = padding_mask.size(1) % features.size(1)
         if extra > 0:
             padding_mask = padding_mask[:, :-extra]
@@ -141,6 +174,16 @@ class BEATs(nn.Module):
         fbank_mean: float = 15.41663,
         fbank_std: float = 6.55582,
     ) -> torch.Tensor:
+        """Preprocess audio waveforms to filterbank features.
+
+        Args:
+            source: Input waveform tensor
+            fbank_mean: Mean for filterbank normalization
+            fbank_std: Standard deviation for filterbank normalization
+
+        Returns:
+            torch.Tensor: Preprocessed filterbank features
+        """
         fbanks = []
         for waveform in source:
             waveform = waveform.unsqueeze(0) * 2**15
@@ -162,8 +205,21 @@ class BEATs(nn.Module):
         padding_mask: Optional[torch.Tensor] = None,
         fbank_mean: float = 15.41663,
         fbank_std: float = 6.55582,
-        feature_only=False,
-    ):
+        feature_only: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
+        """Extract features from audio input.
+
+        Args:
+            source: Input audio tensor
+            padding_mask: Optional padding mask
+            fbank_mean: Mean for filterbank normalization
+            fbank_std: Standard deviation for filterbank normalization
+            feature_only: Whether to return only features (no predictions)
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
+                Features or tuple of (features/logits, padding_mask)
+        """
         fbank = self.preprocess(source, fbank_mean=fbank_mean, fbank_std=fbank_std).to(
             torch.float32
         )
@@ -203,13 +259,21 @@ class BEATs(nn.Module):
             else:
                 logits = logits.mean(dim=1)
 
-            lprobs = torch.sigmoid(logits)
+            return logits, padding_mask
 
-            return lprobs, padding_mask
-        else:
-            return x, padding_mask
+        return x, padding_mask
 
     def forward(
         self, source: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ):
-        return self.extract_features(source, padding_mask, feature_only=True)
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
+        """Forward pass of BEATs model.
+
+        Args:
+            source: Input audio tensor
+            padding_mask: Optional padding mask
+
+        Returns:
+            Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
+                Model output (features or predictions)
+        """
+        return self.extract_features(source, padding_mask)

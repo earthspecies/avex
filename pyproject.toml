@@ -25,15 +25,19 @@ dependencies = [
   "resampy>=0.4.3",
   "soundfile>=0.13.1",
   "timm>=1.0.15",
-  "torch==2.2.1",
+  "torch==2.5.0",
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
-  "transformers>=4.51.3",
+  "transformers==4.51",
   "psutil>=7.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
-  "esp-data",
+  #"esp-data",
+  "tensorflow>=2.19.0",
+  "pytorch-lightning>=2.5.1.post0",
+  "tensorflow-hub>=0.16.1",
+  "einops>=0.8.1",
 ]
 
 [dependency-groups]
@@ -57,6 +61,7 @@ explicit = true
 
 [tool.uv.sources]
 esp-data = { index = "esp-pypi" }
+transformers = { git = "https://github.com/huggingface/transformers" }
 
 [tool.uv]
 default-groups = ["dev", "gpu"]
@@ -85,6 +90,7 @@ indent-width = 4
 exclude = [
     "fix_paths.py",
     "representation_learning/models/eat.py",
+    "representation_learning/models/beats/",
 ]
 
 [tool.ruff.lint]
@@ -110,3 +116,7 @@ max-complexity = 10
 [tool.codespell]
 skip = "*.csv"
 
+[tool.isort]
+profile = "black"
+line_length = 80
+filter_files = true

@@ -98,7 +98,7 @@ def create_test_config(tmp_path: Path, csv_path: Path) -> RunConfig:
 
     # Create run config
     run_config = RunConfig(
-        model_config={"name": "efficientnetb0", "pretrained": True},
+        model_config={"name": "efficientnet", "pretrained": True},
         dataset_config=str(data_config_path),
         preprocessing=None,
         sr=16000,

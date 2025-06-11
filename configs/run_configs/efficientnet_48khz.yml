@@ -1,10 +1,10 @@
 ---
 # Model configuration
 model_spec:
-  name: efficientnetb0
+  name: efficientnet
   pretrained: true
   audio_config:
-    sample_rate: 16000
+    sample_rate: 48000
     n_fft: 2048
     hop_length: 512
     win_length: 2048
@@ -27,45 +27,63 @@ debug_mode: false
 preprocessing: null
 
 # Target sample‑rate expected by the model
-sr: 16000
+sr: 48000
 
 # Log training runs to MLflow
-logging: mlflow
+logging: wandb
 output_dir: "./efficientnet_48khz"
 distributed: true
 
 training_params:
-  train_epochs: 10
+  train_epochs: 50
   lr: 0.0001
-  batch_size: 2
-  optimizer: adamw          # common default for AudioMAE
-  weight_decay: 0.01        # mild regularisation
-  amp: false
+  batch_size: 256
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
   amp_dtype: bf16
 
 # Learning rate scheduler configuration
 scheduler:
   name: cosine
-  warmup_steps: 1000
+  warmup_steps: 4000
   min_lr: 1e-6
 
 augmentations:
   # Add background noise at random SNRs
   - noise:
       noise_dirs:
-        - "gs://foundation-model-data/audio_16k/noise/demand_10s"
-        - "gs://foundation-model-data/audio_16k/noise/idmt"
-        - "gs://foundation-model-data/audio_16k/noise/tut2016_10s"
-        - "gs://foundation-model-data/audio_16k/noise/urbansound"
-        - "gs://foundation-model-data/audio_16k/noise/freesound_10s"
-        - "gs://foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
-        - "gs://foundation-model-data/audio_16k/noise/deepship_10s"
-        - "gs://foundation-model-data/audio_16k/noise/shipsear_10s"
-        - "gs://foundation-model-data/audio_16k/noise/wham_noise"
-        - "gs://foundation-model-data/audio_16k/noise/audioset"
-        - "gs://foundation-model-data/audio_16k/noise/ssw-detection"
-      snr_db_range: [-5, 20]  # mix noise between 5 dB and 20 dB SNR
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/\
+          orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+        # - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+        #   foundation-model-storage/foundation-model-data/audio_16k/noise/\
+        #   ssw-detection"
+      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
       augmentation_prob: 0.5
+    # Mixup augmentation for audio samples
+  # - mixup:
+  #     alpha: 0.4  # Controls the Beta distribution shape
+  #     n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+  #     augmentation_prob: 0.5  # Probability of applying mixup to a batch
 
 # Cross entropy loss for classification
 loss_function: cross_entropy
@@ -74,7 +92,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 2
+num_workers: 10
 
 run_name: efficientnet_base
 
