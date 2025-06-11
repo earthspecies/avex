@@ -24,7 +24,7 @@ jupyter-core==5.8.1
 matplotlib-inline==0.1.7
 nest-asyncio==1.6.0
 nodeenv==1.9.1
-packaging==24.2
+packaging==25.0
 parso==0.8.4
 pathspec==0.12.1
 pexpect==4.9.0 ; sys_platform != 'emscripten' and sys_platform != 'win32'

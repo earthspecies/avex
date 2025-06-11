@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.parallel as parallel
+from esp_data.io.paths import GSPath, R2Path, anypath  # type: ignore
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -39,6 +40,9 @@ from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger(__name__)
+
+
+CloudPathT = GSPath | R2Path  # type: ignore[misc]
 
 
 # --------------------------------------------------------------------------- #
@@ -135,8 +139,14 @@ class Trainer:
         self.model = model
         self.train_dataloader = train_dl
         self.eval_dataloader = eval_dl
-        self.model_dir = Path(model_dir)
-        self.model_dir.mkdir(parents=True, exist_ok=True)
+        self.model_dir = anypath(model_dir)
+
+        # Ensure directory exists (for local; cloudpathlib handles remote lazily)
+        try:
+            self.model_dir.mkdir(parents=True, exist_ok=True)
+        except AttributeError:
+            # Some CloudPath objects don't implement mkdir but create dirs on write
+            pass
         self.is_clip_mode = is_clip_mode
         self.is_eat_ssl = is_eat_ssl
         self.checkpoint_freq = checkpoint_freq
@@ -619,13 +629,22 @@ class Trainer:
         # Forward pass
         outputs = self.model(audio, padding_mask=padding_mask)
 
-        # If we're in multi-label mode but the dataset still returns integer
-        # class indices, convert them to one-hot vectors so the BCE loss has
-        # matching dimensions.
-        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss) and target.dim() == 1:
-            target = torch.nn.functional.one_hot(
-                target.long(), num_classes=outputs.size(1)
-            ).float()
+        # ------------------------------------------------------------------
+        #  Match target format to criterion expectations
+        # ------------------------------------------------------------------
+        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
+            # BCE expects float multi-hot targets (shape [B, C]).  If the
+            # dataset provides integer class indices, convert them to one-hot.
+            if target.dim() == 1:
+                target = torch.nn.functional.one_hot(
+                    target.long(), num_classes=outputs.size(1)
+                ).float()
+        elif isinstance(self.criterion, torch.nn.CrossEntropyLoss):
+            # Cross-entropy expects class indices (shape [B]).  If the dataset
+            # (Collater) already produced one-hot vectors (shape [B, C]),
+            # collapse to indices.
+            if target.dim() > 1:
+                target = target.argmax(dim=1)
 
         loss = self.criterion(outputs, target)
 
@@ -634,15 +653,15 @@ class Trainer:
         # --------------------------------------------------
         with torch.no_grad():
             if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
-                # Multi-label: compute exact match accuracy as all labels must
-                # match after thresholding at 0.5 (sigmoid).
+                # Multi-label: exact-match accuracy after thresholding.
                 prob = torch.sigmoid(outputs)
                 pred = (prob > 0.5).float()
                 if target.dtype != torch.float32:
                     target = target.float()
                 correct = (pred.eq(target).all(dim=1)).sum().item()
-            else:
+            else:  # Cross-entropy (single-label)
                 _, predicted = outputs.max(1)
+                # target is guaranteed to be indices after the conversion above
                 correct = (predicted == target).sum().item()
 
         return loss, correct, target.size(0)
@@ -811,15 +830,34 @@ class Trainer:
         else:
             return  # Don't save if not periodic, best, or final
 
-        # Save inside the experiment-specific folder to avoid collisions
-        if self.log is not None and hasattr(self.log, "log_dir"):
+        # Decide where to place the checkpoint:
+        #   • If user provided a cloud path → always use that.
+        #   • Otherwise fall back to ExperimentLogger.log_dir when available.
+        if isinstance(self.model_dir, CloudPathT):  # type: ignore[arg-type]
+            ckpt_dir = self.model_dir
+        elif self.log is not None and hasattr(self.log, "log_dir"):
             ckpt_dir = Path(self.log.log_dir)
         else:
             ckpt_dir = Path(self.model_dir)
-        ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+        # Make sure directory exists (local) or is implicitly handled (cloud).
+        try:
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+        except AttributeError:
+            pass  # Cloud paths may not implement mkdir
+
         ckpt_path = ckpt_dir / filename
-        torch.save(checkpoint, ckpt_path)
-        logger.info(f"Saved checkpoint to {ckpt_path}")
+
+        # torch.save requires a writable file-like object or a local path. To
+        # support cloud paths we use the .open('wb') API when dealing with
+        # cloudpathlib objects.
+        if isinstance(ckpt_path, CloudPathT):  # type: ignore[arg-type]
+            with ckpt_path.open("wb") as f:
+                torch.save(checkpoint, f)
+        else:
+            torch.save(checkpoint, ckpt_path)
+
+        logger.info("Saved checkpoint → %s", ckpt_path)
 
     def _load_checkpoint(self, checkpoint_path: str) -> None:
         """Load model, optimizer, scheduler, and scaler state from a checkpoint.

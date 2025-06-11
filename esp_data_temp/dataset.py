@@ -195,6 +195,8 @@ def to_list(value: Union[str, float]) -> list[str]:
     if pd.isna(value):
         return []
     elif isinstance(value, str):
+        if value.lower() == "none":
+            return []
         return [item.strip() for item in value.split(",")]
     else:
         raise ValueError(

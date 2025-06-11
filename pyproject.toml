@@ -90,7 +90,6 @@ indent-width = 4
 exclude = [
     "fix_paths.py",
     "representation_learning/models/eat.py",
-    "representation_learning/models/beats/",
 ]
 
 [tool.ruff.lint]
@@ -115,8 +114,3 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "*.csv"
-
-[tool.isort]
-profile = "black"
-line_length = 80
-filter_files = true

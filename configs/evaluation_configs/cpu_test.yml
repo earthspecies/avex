@@ -48,7 +48,7 @@ experiments:
   #   layers: audio_projection
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   checkpoint_path: runs/clip_baseline_19_05/checkpoints/checkpoint_epoch_018.pt
-    
+
 
   # - run_name: clap_linear_probe_beans
   #   run_config: configs/run_configs/clip_base_beans.yml

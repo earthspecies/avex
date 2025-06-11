@@ -13,6 +13,7 @@ from sklearn.metrics import (
     f1_score,
     precision_score,
     recall_score,
+    roc_auc_score,
 )
 
 
@@ -26,10 +27,15 @@ class Accuracy:
 
         Args:
             logits: Model output logits of shape (N, C)
-            y: Ground truth labels of shape (N,)
+            y: Ground truth labels of shape (N,) or (N, C) for one-hot encoded labels
         """
         y_pred = logits.argmax(dim=1).cpu().numpy()
         y_true = y.cpu().numpy()
+
+        # Handle one-hot encoded labels by converting to class indices
+        if y_true.ndim == 2:
+            y_true = y_true.argmax(axis=1)
+
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
 
@@ -69,6 +75,12 @@ class BinaryF1Score:
         y_pred = logits.argmax(dim=1).cpu().numpy()
         y_true = y.cpu().numpy()
         y_scores = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()
+
+        # Handle one-hot (or soft) encoded labels by converting to class
+        # indices for *metric* computation.  We deliberately keep the raw
+        # scores as probabilities to compute AUC/AP later on.
+        if y_true.ndim == 2:
+            y_true = y_true.argmax(axis=1)
 
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
@@ -248,10 +260,15 @@ class BalancedAccuracy:
 
         Args:
             logits: Model output logits of shape (N, C)
-            y: Ground truth labels of shape (N,)
+            y: Ground truth labels of shape (N,) or (N, C) for one-hot encoded labels
         """
         y_pred = logits.argmax(dim=1).cpu().numpy()
         y_true = y.cpu().numpy()
+
+        # Handle one-hot encoded labels by converting to class indices
+        if y_true.ndim == 2:
+            y_true = y_true.argmax(axis=1)
+
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
 
@@ -316,7 +333,6 @@ class ROCAUC:
         Dict[str, float]
             ``{"roc_auc": value}``
         """
-        from sklearn.metrics import roc_auc_score
 
         if not self.y_true:
             return {"roc_auc": 0.0}
