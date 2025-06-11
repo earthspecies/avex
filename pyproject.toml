@@ -33,7 +33,7 @@ dependencies = [
   "psutil>=7.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
-  "esp-data",
+  #"esp-data",
   "tensorflow>=2.19.0",
   "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
@@ -90,7 +90,6 @@ indent-width = 4
 exclude = [
     "fix_paths.py",
     "representation_learning/models/eat.py",
-    "representation_learning/models/beats/",
 ]
 
 [tool.ruff.lint]
@@ -115,8 +114,3 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "*.csv"
-
-[tool.isort]
-profile = "black"
-line_length = 80
-filter_files = true
