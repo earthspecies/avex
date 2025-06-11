@@ -14,21 +14,21 @@ training_params:
 # Which experiments to evaluate
 # TODO: all checkpoints to be gs paths and uploaded during train
 experiments:
-  # - run_name: efficientnet_beans
-  #   run_config: configs/run_configs/efficientnet_base_beans.yml
-  #   ### which layers to probe for embeddings
-  #   layers: model.avgpool
-  #   ### whether to use pretrained model or the one we train on bioacoustic data
-  #   pretrained: false
-  #   checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
-
-  - run_name: efficientnet_48khz_e6
-    run_config: configs/run_configs/efficientnet_48khz.yml
+  - run_name: efficientnet_beans
+    run_config: configs/run_configs/efficientnet_base_beans.yml
     ### which layers to probe for embeddings
     layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    checkpoint_path: efficientnet_48khz/checkpoints/checkpoint_epoch_006.pt
+    checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
+
+  # - run_name: efficientnet_48khz_e6
+  #   run_config: configs/run_configs/efficientnet_48khz.yml
+  #   ### which layers to probe for embeddings
+  #   layers: model.avgpool
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: false
+  #   checkpoint_path: efficientnet_48khz/checkpoints/checkpoint_epoch_006.pt
 
   # - run_name: eat_pretrain
   #   # run_config: configs/run_configs/eat_pretrain.yml
@@ -100,7 +100,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
 
 overwrite_embeddings: true

@@ -101,7 +101,7 @@ class MultiLabelFromFeatures:
             if row_labels:
                 return sorted(row_labels)
             else:
-                return None
+                return []
 
         df[self.output_feature] = df[self.features].apply(_row_to_ids, axis="columns")
 

@@ -31,7 +31,7 @@ sr: 48000
 
 # Log training runs to MLflow
 logging: wandb
-output_dir: "./efficientnet_48khz"
+output_dir: "gs://representation-learning/runs/efficientnet_48khz"
 distributed: true
 
 training_params:
