@@ -180,7 +180,7 @@ class RunConfig(BaseModel):
     # optional / misc
     preprocessing: Optional[str] = None
     sr: int = 16000
-    logging: Literal["mlflow", "wandb"] = "mlflow"
+    logging: Literal["mlflow", "wandb", "none"] = "mlflow"
     label_type: Literal["supervised", "text", "self_supervised"] = Field(
         "supervised",
         description=(

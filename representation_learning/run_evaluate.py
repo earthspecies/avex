@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import pandas as pd
 import torch
 from cloudpathlib import GSPath
 
@@ -42,6 +43,11 @@ from representation_learning.evaluation.finetune import (
 from representation_learning.evaluation.retrieval import eval_retrieval
 from representation_learning.models.get_model import get_model
 from representation_learning.utils import ExperimentLogger
+from representation_learning.utils.experiment_tracking import (
+    get_or_create_experiment_metadata,
+    load_experiment_metadata,
+    save_evaluation_metadata,
+)
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -363,6 +369,34 @@ def run_experiment(
     exp_logger.log_metrics(retrieval_metrics, step=0, split="test_retrieval")
     exp_logger.finalize()
 
+    # Get or create training metadata
+    training_metadata = pd.DataFrame()
+    if experiment_cfg.checkpoint_path:
+        checkpoint_dir = Path(experiment_cfg.checkpoint_path).parent
+        checkpoint_name = Path(experiment_cfg.checkpoint_path).name
+        training_metadata = get_or_create_experiment_metadata(
+            output_dir=checkpoint_dir,
+            config=run_cfg,
+            checkpoint_name=checkpoint_name,
+        )
+
+    # Save evaluation metadata
+    save_evaluation_metadata(
+        output_dir=save_dir,
+        dataset_name=dataset_name,
+        experiment_name=experiment_name,
+        checkpoint_name=Path(experiment_cfg.checkpoint_path).name
+        if experiment_cfg.checkpoint_path
+        else "none",
+        train_metrics=train_metrics,
+        val_metrics=val_metrics,
+        probe_test_metrics=probe_test_metrics,
+        retrieval_metrics=retrieval_metrics,
+        eval_config=eval_cfg.model_dump(mode="json"),
+        training_metadata=training_metadata,
+        run_config=run_cfg.model_dump(mode="json"),  # Always include run config
+    )
+
     return ExperimentResult(
         dataset_name=dataset_name,
         experiment_name=experiment_name,
@@ -424,6 +458,45 @@ def main() -> None:
             f.write("-" * 60 + "\n")
 
     logger.info("Saved summary to %s", summary_path)
+
+    # 5. Create and save summary DataFrame
+    summary_data = []
+    for r in all_results:
+        # Get training metadata if available
+        training_metadata = pd.DataFrame()
+        for exp_cfg in eval_cfg.experiments:
+            if exp_cfg.run_name == r.experiment_name:
+                if exp_cfg.checkpoint_path:
+                    checkpoint_dir = Path(exp_cfg.checkpoint_path).parent
+                    training_metadata = load_experiment_metadata(checkpoint_dir)
+                break
+
+        # Create summary entry
+        summary_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "dataset_name": r.dataset_name,
+            "experiment_name": r.experiment_name,
+            **r.train_metrics,
+            **{f"val_{k}": v for k, v in r.val_metrics.items()},
+            **{f"test_{k}": v for k, v in r.probe_test_metrics.items()},
+            **{f"retrieval_{k}": v for k, v in r.retrieval_metrics.items()},
+        }
+
+        # Add training metadata if available
+        if not training_metadata.empty:
+            # Get the most recent training entry
+            latest_training = training_metadata.iloc[-1]
+            for col in training_metadata.columns:
+                if col not in summary_entry:
+                    summary_entry[f"training_{col}"] = latest_training[col]
+
+        summary_data.append(summary_entry)
+
+    # Create and save DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    summary_df_path = save_dir / f"summary_{datetime.now()}.csv"
+    summary_df.to_csv(summary_df_path, index=False)
+    logger.info("Saved summary DataFrame to %s", summary_df_path)
 
 
 if __name__ == "__main__":

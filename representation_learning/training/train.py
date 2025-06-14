@@ -38,6 +38,7 @@ from representation_learning.training.distributed import (
 from representation_learning.training.losses import ClipLoss, build_criterion
 from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger
+from representation_learning.utils.experiment_tracking import save_experiment_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -834,19 +835,19 @@ class Trainer:
         #   • If user provided a cloud path → always use that.
         #   • Otherwise fall back to ExperimentLogger.log_dir when available.
         if isinstance(self.model_dir, CloudPathT):  # type: ignore[arg-type]
-            ckpt_dir = self.model_dir
+            base_dir = self.model_dir
         elif self.log is not None and hasattr(self.log, "log_dir"):
-            ckpt_dir = Path(self.log.log_dir)
+            base_dir = Path(self.log.log_dir)
         else:
-            ckpt_dir = Path(self.model_dir)
+            base_dir = Path(self.model_dir)
 
         # Make sure directory exists (local) or is implicitly handled (cloud).
         try:
-            ckpt_dir.mkdir(parents=True, exist_ok=True)
+            base_dir.mkdir(parents=True, exist_ok=True)
         except AttributeError:
             pass  # Cloud paths may not implement mkdir
 
-        ckpt_path = ckpt_dir / filename
+        ckpt_path = base_dir / filename
 
         # torch.save requires a writable file-like object or a local path. To
         # support cloud paths we use the .open('wb') API when dealing with
@@ -856,6 +857,18 @@ class Trainer:
                 torch.save(checkpoint, f)
         else:
             torch.save(checkpoint, ckpt_path)
+
+        logger.info("Saved checkpoint → %s", ckpt_path)
+
+        # Save metadata in the same directory as the checkpoint
+        save_experiment_metadata(
+            output_dir=base_dir,  # Use the checkpoint directory
+            config=self.run_config,
+            checkpoint_name=filename,
+            metrics=self.log.last_metrics if hasattr(self.log, "last_metrics") else {},
+            is_best=is_best,
+            is_final=final,
+        )
 
         logger.info("Saved checkpoint → %s", ckpt_path)
 

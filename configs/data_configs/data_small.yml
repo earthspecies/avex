@@ -1,0 +1,16 @@
+dataset_name: animalspeak
+dataset_version: 0.0
+balance: false
+balance_attribute: canonical_name   # balance data across via this attribute
+custom_balancing: false
+balancing_method: upsample
+subset_percentage: 1.0              # <1 to consider a subset of data
+audio_max_length_seconds: 10
+audio_path_col: path
+
+transformations:
+  - type: label_from_feature
+    feature: canonical_name
+  - type: uniform_sample
+    property: label
+    ratio: 0.00000001

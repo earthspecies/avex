@@ -1,0 +1,60 @@
+---
+# Model configuration
+model_spec:
+  name: efficientnet
+  pretrained: true
+  audio_config:
+    sample_rate: 16000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_small.yml
+
+# How to use the labels (supervised: use class indices, text: use text labels)
+label_type: supervised
+debug_mode: false
+
+# audio preprocessing (e.g. event detection)
+preprocessing: null
+
+# Target sample‑rate expected by the model
+sr: 16000
+
+# Log training runs to MLflow
+logging: none
+output_dir: "./runs/efficientnet_base_test"
+
+training_params:
+  train_epochs: 1
+  lr: 0.0001
+  batch_size: 20
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Learning rate scheduler configuration
+scheduler:
+  name: cosine
+  warmup_steps: 1
+  min_lr: 1e-6
+
+# Cross entropy loss for classification
+loss_function: cross_entropy
+
+device: cuda
+
+seed: 42
+
+num_workers: 10
+
+run_name: efficientnet_base_test
+
+wandb_project: representation_learning
