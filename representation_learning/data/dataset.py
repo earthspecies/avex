@@ -6,9 +6,10 @@ from typing import Any, Optional, Tuple
 import numpy as np
 import torch
 import torch.distributed as dist
+from esp_data import Dataset, dataset_from_config
+from esp_data.transforms import LabelFromFeatureConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
-from esp_data_temp.dataset import get_dataset_dummy
 from representation_learning.configs import (
     DatasetConfig,
     RunConfig,
@@ -21,6 +22,48 @@ from representation_learning.data.augmentations import (
     AugmentationProcessor,
     make_item_postprocessor,
 )
+
+
+class AudioDataset(torch.utils.data.Dataset):
+    """A wrapper around a Dataset instance for audio data.
+    Allows for post-processing of audio samples after retrieval.
+    """
+
+    def __init__(self, ds: Dataset, postprocessors: Optional[list[Any]] = None) -> None:
+        """Initialize the AudioDataset with a Dataset instance."""
+        self.ds = ds
+        self.postprocessors = postprocessors or []
+
+    def __len__(self) -> int:
+        """Return the number of samples in the dataset.
+
+        Returns
+        -------
+        int
+            The number of samples in the dataset.
+        """
+        return len(self.ds)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        """Get a specific sample from the dataset.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to retrieve.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary containing the audio data, text label, label, and path.
+        """
+        sample = self.ds[idx]
+
+        if self.postprocessors:
+            for postprocessor in self.postprocessors:
+                sample = postprocessor(sample)
+
+        return sample
 
 
 # --------------------------------------------------------------------------- #
@@ -193,11 +236,26 @@ def build_dataloaders(
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     """Create train/val/(optional) test :pyclass:`torch.utils.data.DataLoader`s.
 
+    Parameters
+    ----------
+    cfg : RunConfig
+        The run configuration containing dataset and model specifications.
+    data_config : DatasetConfig | None, optional
+        If provided, overrides the dataset configuration in `cfg`. If `None`, uses
+        the dataset configuration specified in `cfg.dataset_config`.
+    device : str, optional
+        The device to use for the DataLoader workers. Defaults to "cpu". If set to
+
     Returns
     -------
     tuple[DataLoader, DataLoader, DataLoader | None]
         ``(train_dl, val_dl, test_dl)`` where *test_dl* may be ``None`` if the
         dataset bundle does not include a test split.
+
+    Raises
+    ------
+    ValueError
+        If the dataset does not have more than one label for classification tasks.
     """
 
     # CUDA requires "spawn" start method; safe on CPU too
@@ -208,7 +266,17 @@ def build_dataloaders(
     # Dataset configuration
     # ------------------------------------------------------------------ #
     if data_config is None:
-        data_config = load_config(cfg.dataset_config, config_type="data")
+        train_data_config = load_config(cfg.dataset_config["train"], config_type="data")
+        val_data_config = load_config(cfg.dataset_config["valid"], config_type="data")
+        test_data_config = None
+        if "test" in cfg.dataset_config:
+            test_data_config = load_config(
+                cfg.dataset_config["test"], config_type="data"
+            )
+    else:
+        train_data_config = data_config
+        val_data_config = data_config
+        test_data_config = None
 
     # ------------------------------------------------------------------ #
     # Augmentations & post-processing
@@ -223,28 +291,34 @@ def build_dataloaders(
     # ------------------------------------------------------------------ #
     # Datasets
     # ------------------------------------------------------------------ #
-    ds_train = get_dataset_dummy(
-        data_config=data_config,
-        split="train",
-        preprocessor=None,
-        postprocessors=postprocessors if postprocessors else None,
-    )
-    ds_val = get_dataset_dummy(
-        data_config=data_config,
-        split="valid",
-        preprocessor=None,
-        postprocessors=None,
-    )
-    # Test set may not exist in every dataset bundle
-    try:
-        ds_test = get_dataset_dummy(
-            data_config=data_config,
-            split="test",
-            preprocessor=None,
+    ds_train, train_metadata = dataset_from_config(train_data_config)
+    ds_train = AudioDataset(ds_train, postprocessors=postprocessors)
+
+    ds_val, _ = dataset_from_config(val_data_config)
+
+    # Apply label_to_feature transform to validation set
+    if "label_from_feature" or "labels_from_features" in train_metadata:
+        label_map = train_metadata["label_from_feature"].get("label_map", {})
+        label_transform = LabelFromFeatureConfig(
+            feature=train_metadata["label_from_feature"]["label_feature"],
+            output_feature="label",
+            label_map=label_map,
         )
-    except Exception:
-        ds_test = None
-    num_labels = len(ds_train.metadata["label_map"])
+        ds_val.apply_transformations([label_transform])
+    ds_val = AudioDataset(ds_val, postprocessors=postprocessors)
+
+    # Test set may not exist in every dataset bundle
+    ds_test = None
+    if test_data_config is not None:
+        ds_test, _ = dataset_from_config(test_data_config)
+        ds_test.apply_transformations([label_transform])
+        ds_test = AudioDataset(ds_test, postprocessors=postprocessors)
+
+    num_labels = train_metadata["label_from_feature"].get("num_labels", 0)
+    if num_labels <= 1:
+        raise ValueError(
+            "Dataset must have more than one label for classification tasks."
+        )
 
     # Create samplers for distributed training
     train_sampler = None

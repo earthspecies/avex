@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import torch
-from cloudpathlib import GSPath
 from esp_data import DatasetConfig
+from esp_data.io import anypath
 
 from representation_learning.configs import (
     EvaluateConfig,
@@ -186,11 +186,7 @@ def run_experiment(
         base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
 
         if experiment_cfg.checkpoint_path:
-            ckpt_path = (
-                GSPath(experiment_cfg.checkpoint_path)
-                if experiment_cfg.checkpoint_path.startswith("gs://")
-                else Path(experiment_cfg.checkpoint_path).expanduser()
-            )
+            ckpt_path = anypath(experiment_cfg.checkpoint_path)
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
             with ckpt_path.open("rb") as f:
@@ -349,7 +345,7 @@ def main() -> None:
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
-        save_dir = GSPath(str(eval_cfg.save_dir))
+        save_dir = anypath(str(eval_cfg.save_dir))
         # For GCS paths we rely on cloudpathlib to create objects lazily when
         # data is written, so no mkdir is needed here.
     else:
