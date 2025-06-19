@@ -1,7 +1,26 @@
 data_path: benchmark
 
 datasets:
-
+  - dataset_name: egyptian_fruit_bats
+    type: classification
+    label_column: label
+    audio_path_col: path
+    multi_label: false
+    label_type: supervised
+    audio_max_length_seconds: 5
+    transformations:
+      - type: label_from_feature
+        feature: label
+        override: true
+        label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
+    # transformations:
+    #   - type: uniform_sample
+    #     property: label
+    #     ratio: 0.01
+    sample_rate: 16000
+    metrics:
+      - accuracy
+      - balanced_accuracy
   # - dataset_name: dogs
   #   type: classification
   #   label_column: label
@@ -36,21 +55,22 @@ datasets:
   #   sample_rate: 16000
   #   metrics:
   #     - multiclass_f1
-  - dataset_name: hiceas-detection
-    type: classification
-    label_column: answer
-    audio_path_col: path
-    multi_label: true
-    label_type: supervised
-    audio_max_length_seconds: 5
-    transformations:
-      - type: labels_from_features
-        features:
-          - answer
-        override: true
-    sample_rate: 16000
-    metrics:
-      - multiclass_f1
+  # - dataset_name: hiceas-detection
+  #   type: classification
+  #   label_column: answer
+  #   audio_path_col: path
+  #   multi_label: true
+  #   label_type: supervised
+  #   audio_max_length_seconds: 5
+  #   transformations:
+  #     - type: labels_from_features
+  #       features:
+  #         - answer
+  #       override: true
+  #       label_map: {"Minke Whale 'boing' call": 0, 'None': 1}
+  #   sample_rate: 16000
+  #   metrics:
+  #     - multiclass_f1
 
   # - dataset_name: esc-50
   #   type: classification

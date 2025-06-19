@@ -32,7 +32,7 @@ logging: none
 output_dir: "./runs/efficientnet_base_test"
 
 training_params:
-  train_epochs: 1
+  train_epochs: 10
   lr: 0.0001
   batch_size: 20
   optimizer: adamw

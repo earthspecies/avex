@@ -12,7 +12,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
-        label_map: {'111': 0, '210': 1, '211': 2, '215': 3, '216': 4, '220': 5, '226': 6, '228': 7, '230': 8, '231': 9}
+        label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
     # transformations:
     #   - type: uniform_sample
     #     property: label

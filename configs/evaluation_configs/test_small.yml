@@ -1,0 +1,47 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark_base.yml
+
+training_params:
+  train_epochs: 300
+  lr: 0.0003
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+
+# Which experiments to evaluate
+# TODO: all checkpoints to be gs paths and uploaded during train
+experiments:
+
+  - run_name: efficientnet_pretrained_test
+    run_config: configs/run_configs/efficientnet_base_beans.yml
+    ### which layers to probe for embeddings
+    layers: model.avgpool
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    checkpoint_path: runs/efficientnet_base_test/2025-06-16_07-08-36/checkpoints/final_model.pt
+
+  - run_name: efficientnet_frozen_test
+    run_config: configs/run_configs/efficientnet_base_beans.yml
+    ### which layers to probe for embeddings
+    layers: model.avgpool
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: true
+
+# Where to save the evaluation results
+save_dir: evaluation_results/debug
+
+device: cuda
+
+seed: 42
+
+num_workers: 8  # Enable workers for better memory management
+
+# Evaluation phases
+eval_modes:
+  - linear_probe
+  - retrieval
+
+overwrite_embeddings: true
