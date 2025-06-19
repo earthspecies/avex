@@ -1,5 +1,5 @@
 import logging
-from typing import Literal
+from typing import Literal, Union
 
 import pandas as pd
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ logger = logging.Logger("esp_data")
 class LabelFromFeatureConfig(BaseModel):
     type: Literal["label_from_feature"]
     feature: str
-    label_map: dict[str, int] | None = None
+    label_map: dict[Union[str, int], int] | None = None
     output_feature: str = "label"
     override: bool = False
 
@@ -22,7 +22,7 @@ class LabelFromFeature:
         self,
         *,
         feature: str,
-        label_map: dict[str, int] | None = None,
+        label_map: dict[Union[str, int], int] | None = None,
         output_feature: str = "label",
         override: bool = False,
     ) -> None:
