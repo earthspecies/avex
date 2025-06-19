@@ -136,7 +136,7 @@ def run_experiment(
     run_cfg: RunConfig = load_config(experiment_cfg.run_config)
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
-    run_cfg.model_spec.device = device
+    run_cfg.model_spec.device = str(device)
     run_cfg.augmentations = []  # disable training-time noise / mix-up
 
     dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
