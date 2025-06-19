@@ -141,6 +141,7 @@ class Trainer:
         self.train_dataloader = train_dl
         self.eval_dataloader = eval_dl
         self.model_dir = anypath(model_dir)
+        self.run_config = run_config  # Store run_config as instance variable
 
         # Ensure directory exists (for local; cloudpathlib handles remote lazily)
         try:
@@ -870,7 +871,7 @@ class Trainer:
             is_final=final,
         )
 
-        logger.info("Saved checkpoint → %s", ckpt_path)
+        logger.info("Saved metadata → %s", ckpt_path)
 
     def _load_checkpoint(self, checkpoint_path: str) -> None:
         """Load model, optimizer, scheduler, and scaler state from a checkpoint.
