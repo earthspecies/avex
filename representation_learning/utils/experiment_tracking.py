@@ -4,6 +4,7 @@ Utilities for experiment tracking using pandas DataFrames.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -51,7 +52,7 @@ def save_experiment_metadata(
         "checkpoint_name": checkpoint_name,
         "is_best": is_best,
         "is_final": is_final,
-        **config_dict,  # Include all config parameters
+        "config": json.dumps(config_dict),  # Store config as JSON string
     }
 
     # Add metrics if provided
@@ -144,32 +145,60 @@ def save_evaluation_metadata(
     metadata_dir = output_dir / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create metadata entry
+    # Define all possible metrics to ensure consistent columns
+    all_possible_train_metrics = {"loss", "acc"}
+    all_possible_val_metrics = {"loss", "acc"}
+    all_possible_test_metrics = {
+        "accuracy",
+        "balanced_accuracy",
+        "multiclass_f1",
+        "map",
+        "roc_auc",
+    }
+    all_possible_retrieval_metrics = {"retrieval_roc_auc", "retrieval_precision_at_1"}
+
+    # Create metadata entry with all possible metrics, using None for missing ones
     metadata = {
         "timestamp": datetime.now().isoformat(),
         "dataset_name": dataset_name,
         "experiment_name": experiment_name,
         "checkpoint_name": checkpoint_name,
-        **train_metrics,
-        **{f"val_{k}": v for k, v in val_metrics.items()},
-        **{f"test_{k}": v for k, v in probe_test_metrics.items()},
-        **{f"retrieval_{k}": v for k, v in retrieval_metrics.items()},
-        **eval_config,  # Include all evaluation config parameters
     }
+
+    # Add train metrics with None for missing ones
+    for metric in all_possible_train_metrics:
+        metadata[metric] = train_metrics.get(metric, None)
+
+    # Add validation metrics with None for missing ones
+    for metric in all_possible_val_metrics:
+        metadata[f"val_{metric}"] = val_metrics.get(metric, None)
+
+    # Add test metrics with None for missing ones
+    for metric in all_possible_test_metrics:
+        metadata[f"test_{metric}"] = probe_test_metrics.get(metric, None)
+
+    # Add retrieval metrics with None for missing ones
+    for metric in all_possible_retrieval_metrics:
+        # Remove the "retrieval_" prefix if it's already there to avoid double-prefixing
+        metric_name = metric.replace("retrieval_", "")
+        metadata[f"retrieval_{metric_name}"] = retrieval_metrics.get(metric, None)
+
+    metadata["eval_config"] = json.dumps(
+        eval_config
+    )  # Store eval config as JSON string
 
     # Add training metadata if available
     if training_metadata is not None and not training_metadata.empty:
-        # Get the most recent training entry
-        latest_training = training_metadata.iloc[-1]
-        for col in training_metadata.columns:
-            if col not in metadata:
-                metadata[f"training_{col}"] = latest_training[col]
+        # Get the most recent training entry and convert to dict
+        latest_training = training_metadata.iloc[-1].to_dict()
+
+        # Store training metadata as JSON string
+        metadata["training_params"] = json.dumps(latest_training)
 
     # Add run config if available (for pre-trained models)
     if run_config is not None:
-        for k, v in run_config.items():
-            if k not in metadata:
-                metadata[f"run_config_{k}"] = v
+        # Store run config as JSON string
+        metadata["run_config_params"] = json.dumps(run_config)
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])
@@ -203,6 +232,140 @@ def load_evaluation_metadata(output_dir: Path) -> pd.DataFrame:
     return pd.read_csv(metadata_file)
 
 
+def parse_config_string(config_str: str) -> Dict[str, Any]:
+    """Parse a config string back to a dictionary.
+
+    Parameters
+    ----------
+    config_str : str
+        JSON string representation of config
+
+    Returns
+    -------
+    Dict[str, Any]
+        Parsed config dictionary
+    """
+    try:
+        return json.loads(config_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def parse_training_params_string(training_params_str: str) -> Dict[str, Any]:
+    """Parse training parameters string back to a dictionary.
+
+    Parameters
+    ----------
+    training_params_str : str
+        JSON string representation of training parameters
+
+    Returns
+    -------
+    Dict[str, Any]
+        Parsed training parameters dictionary
+    """
+    try:
+        return json.loads(training_params_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def parse_run_config_params_string(run_config_params_str: str) -> Dict[str, Any]:
+    """Parse run config parameters string back to a dictionary.
+
+    Parameters
+    ----------
+    run_config_params_str : str
+        JSON string representation of run config parameters
+
+    Returns
+    -------
+    Dict[str, Any]
+        Parsed run config parameters dictionary
+    """
+    try:
+        return json.loads(run_config_params_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def get_config_from_metadata(
+    metadata_df: pd.DataFrame, config_column: str = "config"
+) -> Optional[Dict[str, Any]]:
+    """Extract config from metadata DataFrame.
+
+    Parameters
+    ----------
+    metadata_df : pd.DataFrame
+        DataFrame containing metadata
+    config_column : str, optional
+        Name of the config column, by default "config"
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Parsed config dictionary if available, None otherwise
+    """
+    if config_column not in metadata_df.columns or metadata_df.empty:
+        return None
+
+    config_str = metadata_df[config_column].iloc[-1]
+    if pd.isna(config_str):
+        return None
+
+    return parse_config_string(config_str)
+
+
+def get_training_params_from_metadata(
+    metadata_df: pd.DataFrame,
+) -> Optional[Dict[str, Any]]:
+    """Extract training parameters from metadata DataFrame.
+
+    Parameters
+    ----------
+    metadata_df : pd.DataFrame
+        DataFrame containing metadata
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Parsed training parameters dictionary if available, None otherwise
+    """
+    if "training_params" not in metadata_df.columns or metadata_df.empty:
+        return None
+
+    training_params_str = metadata_df["training_params"].iloc[-1]
+    if pd.isna(training_params_str):
+        return None
+
+    return parse_training_params_string(training_params_str)
+
+
+def get_run_config_params_from_metadata(
+    metadata_df: pd.DataFrame,
+) -> Optional[Dict[str, Any]]:
+    """Extract run config parameters from metadata DataFrame.
+
+    Parameters
+    ----------
+    metadata_df : pd.DataFrame
+        DataFrame containing metadata
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        Parsed run config parameters dictionary if available, None otherwise
+    """
+    if "run_config_params" not in metadata_df.columns or metadata_df.empty:
+        return None
+
+    run_config_params_str = metadata_df["run_config_params"].iloc[-1]
+    if pd.isna(run_config_params_str):
+        return None
+
+    return parse_run_config_params_string(run_config_params_str)
+
+
 def create_initial_experiment_metadata(
     output_dir: Path,
     config: RunConfig,
@@ -230,7 +393,9 @@ def create_initial_experiment_metadata(
         "checkpoint_name": checkpoint_name,
         "is_best": True,
         "is_final": True,
-        **config.model_dump(mode="json"),  # Include all config parameters
+        "config": json.dumps(
+            config.model_dump(mode="json")
+        ),  # Store config as JSON string
     }
 
     # Convert to DataFrame
