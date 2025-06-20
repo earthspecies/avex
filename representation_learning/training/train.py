@@ -29,7 +29,9 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from esp_data_temp.config import DatasetConfig
 from representation_learning.configs import EvaluateConfig, RunConfig
+from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.training.distributed import (
     cleanup_distributed,
     get_local_device_index,
@@ -765,10 +767,10 @@ class Trainer:
         }
 
         # Add additional EAT metrics that are already computed
-        if "masked_pct" in out:
+        if "masked_pct" in out and not type(out["masked_pct"]) == float:
             self._last_batch_ssl_metrics["masked_pct"] = out["masked_pct"].item()
 
-        if "target_var" in out:
+        if "target_var" in out and not type(out["target_var"]) == float:
             self._last_batch_ssl_metrics["target_var"] = out["target_var"].item()
 
         # Add prediction variance metrics (there can be multiple pred_var_i)
@@ -982,6 +984,8 @@ class FineTuneTrainer:
         device: torch.device,
         cfg: EvaluateConfig,
         exp_logger: ExperimentLogger,
+        dataset_cfg: DatasetConfig,
+        num_classes: int,
         multi_label: bool = False,
     ) -> None:
         self.model = model
@@ -992,6 +996,12 @@ class FineTuneTrainer:
         self.cfg = cfg
         self.log = exp_logger
         self.multi_label = multi_label
+        self.dataset_cfg = dataset_cfg
+        self.num_classes = num_classes
+        
+        # Initialize metric configuration from dataset config
+        self.metric_names = dataset_cfg.metrics
+        self.primary_metric_name = self.metric_names[0]  # Use first metric as primary
 
         # Set up loss function
         if self.multi_label:
@@ -1009,10 +1019,10 @@ class FineTuneTrainer:
             }
         )
 
-        self.best_val_acc = 0.0
+        self.best_val_metric = 0.0
         # Track best epoch metrics for return value
-        self.best_train_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
-        self.best_val_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
+        self.best_train_metrics: dict[str, float] = {"loss": float("inf")}
+        self.best_val_metrics: dict[str, float] = {"loss": float("inf")}
 
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
         """
@@ -1024,37 +1034,45 @@ class FineTuneTrainer:
             A tuple of (best_train_metrics, best_val_metrics) collected across epochs.
         """
         for epoch in range(1, num_epochs + 1):
-            train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
-            val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
+            train_loss, train_metrics = self._run_epoch(train=True, epoch=epoch)
+            val_loss, val_metrics = self._run_epoch(train=False, epoch=epoch)
 
+            # Get primary metric values
+            train_primary = train_metrics[self.primary_metric_name]
+            val_primary = val_metrics[self.primary_metric_name]
+
+            # Log epoch progress
             logger.info(
                 f"[Epoch {epoch:03d}] "
-                f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
-                f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                f"train_loss={train_loss:.4f}  train_{self.primary_metric_name}={train_primary:.4f} | "
+                f"val_loss={val_loss:.4f}  val_{self.primary_metric_name}={val_primary:.4f}"
             )
 
             # Log epoch-level metrics
-            self.log.log_metrics(
-                {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
-            )
-            self.log.log_metrics(
-                {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
-            )
+            train_log_metrics = {"loss": train_loss}
+            train_log_metrics.update(train_metrics)
+            val_log_metrics = {"loss": val_loss}
+            val_log_metrics.update(val_metrics)
+            
+            self.log.log_metrics(train_log_metrics, step=epoch, split="train")
+            self.log.log_metrics(val_log_metrics, step=epoch, split="val")
 
-            # Save best model
-            if val_acc > self.best_val_acc:
-                self.best_val_acc = val_acc
+            # Save best model based on primary metric
+            if val_primary > self.best_val_metric:
+                self.best_val_metric = val_primary
                 self._save_checkpoint("best.pt")
                 # Update best metrics
-                self.best_train_metrics = {"loss": train_loss, "acc": train_acc}
-                self.best_val_metrics = {"loss": val_loss, "acc": val_acc}
+                self.best_train_metrics = {"loss": train_loss}
+                self.best_train_metrics.update(train_metrics)
+                self.best_val_metrics = {"loss": val_loss}
+                self.best_val_metrics.update(val_metrics)
 
         # Load the best model after training is complete
         self._load_best_checkpoint()
 
         return self.best_train_metrics, self.best_val_metrics
 
-    def _run_epoch(self, train: bool, epoch: int) -> tuple[float, float]:
+    def _run_epoch(self, train: bool, epoch: int) -> tuple[float, dict[str, float]]:
         """Run one epoch of training or validation.
 
         Parameters
@@ -1066,14 +1084,22 @@ class FineTuneTrainer:
 
         Returns
         -------
-        tuple[float, float]
-            A tuple ``(loss, accuracy)`` computed over the entire epoch.
+        tuple[float, dict[str, float]]
+            A tuple ``(loss, metrics_dict)`` computed over the entire epoch.
         """
         loader = self.train_loader if train else self.val_loader
+        
+        # Create fresh metric instances for this epoch
+        metrics = [get_metric_class(m, self.num_classes) for m in self.metric_names]
 
         total_loss = 0.0
-        total_correct = 0
         total_samples = 0
+
+        # Set model mode
+        if train:
+            self.model.train()
+        else:
+            self.model.eval()
 
         for batch in tqdm(
             loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
@@ -1103,22 +1129,21 @@ class FineTuneTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            # Calculate accuracy
-            if self.multi_label:
-                pred = (torch.sigmoid(logits) > 0.5).float()
-                correct = (pred == y).all(dim=1).sum().item()
-            else:
-                pred = logits.argmax(dim=1)
-                # Convert one-hot labels back to class indices for comparison
-                y_indices = y.argmax(dim=1)
-                correct = (pred == y_indices).sum().item()
+            # Update metrics with current batch
+            for metric in metrics:
+                metric.update(logits, y)
 
-            # Update metrics
+            # Update loss tracking
             total_loss += loss.item() * y.size(0)
-            total_correct += correct
             total_samples += y.size(0)
 
-        return total_loss / total_samples, total_correct / total_samples
+        # Compute final metrics for this epoch
+        epoch_metrics = {
+            name: metric.get_primary_metric()
+            for name, metric in zip(self.metric_names, metrics, strict=False)
+        }
+
+        return total_loss / total_samples, epoch_metrics
 
     def _save_checkpoint(self, name: str) -> None:
         """Save model checkpoint."""
@@ -1134,7 +1159,7 @@ class FineTuneTrainer:
             {
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
-                "best_val_acc": self.best_val_acc,
+                "best_val_metric": self.best_val_metric,
             },
             ckpt_path,
         )
@@ -1159,5 +1184,5 @@ class FineTuneTrainer:
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         logger.info(
-            f"Restored best model from {ckpt_path} (val_acc: {self.best_val_acc:.4f})"
+            f"Restored best model from {ckpt_path} (val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
         )

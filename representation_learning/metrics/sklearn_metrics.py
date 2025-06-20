@@ -76,12 +76,6 @@ class BinaryF1Score:
         y_true = y.cpu().numpy()
         y_scores = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()
 
-        # Handle one-hot (or soft) encoded labels by converting to class
-        # indices for *metric* computation.  We deliberately keep the raw
-        # scores as probabilities to compute AUC/AP later on.
-        if y_true.ndim == 2:
-            y_true = y_true.argmax(axis=1)
-
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
         self.y_scores.extend(y_scores)
@@ -230,7 +224,8 @@ class MeanAveragePrecision:
             target: Ground truth labels of shape (N, K)
             weight: Optional sample weights of shape (N,)
         """
-        self.ap.update(output, target, weight)
+        with torch.no_grad():
+            self.ap.update(output, target, weight)
 
     def get_metric(self) -> Dict[str, float]:
         """Get the current metric value.

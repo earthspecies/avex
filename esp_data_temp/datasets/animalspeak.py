@@ -37,8 +37,8 @@ class AnimalSpeak(Dataset):
         name="animalspeak",
         owner="david; marius; masato",
         split_paths={
-            "train": "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv",
-            "validation": "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv",
+            "train": "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_48khz_local.csv",
+            "validation": "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_48khz_local.csv",
         },
         version="0.1.0",
         description="AnimalSpeak dataset",

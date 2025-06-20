@@ -287,6 +287,7 @@ class Model(ModelBase):
 
         # 3) Add channel dimension expected by ImageEncoder
         spec = spec.unsqueeze(1)  # (B, 1, T, F)
+        
 
         # 4) Backbone
         if self.pretraining_mode:

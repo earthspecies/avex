@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
+from esp_data_temp.config import DatasetConfig
 from representation_learning.configs import EvaluateConfig
 from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.models.linear_probe import LinearProbe
@@ -31,6 +32,7 @@ def train_and_eval_linear_probe(
     device: torch.device,
     exp_logger: ExperimentLogger,
     multi_label: bool,
+    dataset_cfg: DatasetConfig,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a linear probe and evaluate it on *cached* test embeddings.
 
@@ -80,6 +82,8 @@ def train_and_eval_linear_probe(
         device=device,
         cfg=eval_cfg,
         exp_logger=exp_logger,
+        dataset_cfg=dataset_cfg,
+        num_classes=num_labels,
         multi_label=multi_label,
     )
 
@@ -94,8 +98,7 @@ def train_and_eval_linear_probe(
         shuffle=False,
     )
 
-    # Metric selection (fallback to accuracy)
-    metric_names = getattr(test_embed_ds, "metadata", {}).get("metrics", ["accuracy"])
+    metric_names = dataset_cfg.metrics
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
     probe.eval()  # feature_mode stays True (inputs are embeddings)
@@ -129,6 +132,7 @@ def train_and_eval_full_fine_tune(
     device: torch.device,
     exp_logger: ExperimentLogger,
     multi_label: bool,
+    dataset_cfg: DatasetConfig,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a model by fine-tuning on raw waveforms.
 
@@ -179,6 +183,8 @@ def train_and_eval_full_fine_tune(
         device=device,
         cfg=eval_cfg,
         exp_logger=exp_logger,
+        dataset_cfg=dataset_cfg,
+        num_classes=num_labels,
         multi_label=multi_label,
     )
 
@@ -191,8 +197,8 @@ def train_and_eval_full_fine_tune(
     base_model.eval()
     test_metrics = {}
 
-    # Get metric class based on task type
-    metric_names = ["accuracy"] if not multi_label else ["f1"]
+    # Get metric names from dataset config
+    metric_names = dataset_cfg.metrics
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
     with torch.no_grad():

@@ -11,6 +11,7 @@ model_spec:
   name: eat
   pretrained: false              # start from scratch
   handle_padding: false          # Enable patch-level padding masks (set to true to enable)
+  target_length: 1024
   # Device and audio processing settings
   device: cuda                   # override on CPU if needed
   audio_config:
@@ -31,6 +32,7 @@ model_spec:
   # ---------------------------------------------------------------------------
   eat_cfg:
     ema_decay: 0.9998
+    ema_same_dtype: true
     ema_end_decay: 0.99999
     ema_anneal_end_step: 100000
     instance_norm_target_layer: true
@@ -87,12 +89,12 @@ sr: 16000
 
 debug_mode: false
 logging: mlflow
-output_dir: "./runs/eat_pretrain_bf16_25_05_nopad"
+output_dir: "gs://representation-learning/runs/eat_pretrain_16khs"
 resume_from_checkpoint: null
 
 # -----------------------------------------------------------------------------
 training_params:
-  train_epochs: 20
+  train_epochs: 30
   lr: 5.0e-4
   batch_size: 48
   optimizer: adamw

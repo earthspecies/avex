@@ -158,12 +158,13 @@ class EATHFModel(ModelBase):
             model_name, trust_remote_code=True
         ).to(self.device)
         # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        load_fairseq_weights(
-            self.backbone,
-            # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
-            # "checkpoint_22_920000.pt"
-            "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt",
-        )
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
+        #     # "checkpoint_22_920000.pt"
+        #     # "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt",
+        #     "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/checkpoint_last.pt"
+        # )
         # load_fairseq_weights(
         #     self.backbone,
         #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"

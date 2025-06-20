@@ -10,9 +10,9 @@ from representation_learning.metrics.sklearn_metrics import (
     BalancedAccuracy,
     BinaryF1Score,
     MeanAveragePrecision,
-    MulticlassBinaryF1Score,
 )
 
+from representation_learning.metrics.beans_metrics import MulticlassBinaryF1Score
 
 def get_metric_class(
     metric_name: str, num_classes: Optional[int] = None
@@ -33,7 +33,8 @@ def get_metric_class(
         "accuracy": Accuracy,
         "balanced_accuracy": BalancedAccuracy,
         "binary_f1": BinaryF1Score,
-        "multiclass_f1": lambda: MulticlassBinaryF1Score(num_classes),
+        # "multiclass_f1": lambda: MulticlassBinaryF1Score(num_classes),
+        "multiclass_binary_f1": lambda: MulticlassBinaryF1Score(num_classes),
         "map": MeanAveragePrecision,
         "roc_auc": ROCAUC,
     }

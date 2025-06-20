@@ -18,8 +18,10 @@ from sklearn.model_selection import train_test_split
 from .config import DatasetConfig
 from .transforms import transform_from_config
 
-ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
-ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
+# ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
+# ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
+ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_48khz_local.csv" 
+ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_48khz_local.csv"
 
 DATA_ROOT = (
     "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
@@ -28,6 +30,8 @@ DATA_ROOT = (
 FM_DATASETS_PATH = DATA_ROOT + "audio/"
 
 ESC50_PATH = "gs://esc50_dataset"
+
+
 
 
 @lru_cache(maxsize=1)
@@ -53,6 +57,36 @@ class GSPath(cloudpathlib.GSPath):
             client = _get_client()
         super().__init__(client_path, client=client)
 
+
+
+import soundfile as sf
+import numpy as np
+import random
+
+def load_random_window(f, sample_rate: int, window_duration: float = 10.0) -> tuple[np.ndarray, int]:
+    """
+    Load a random window of audio from the file stream.
+
+    Args:
+        f: File-like object to read from.
+        sample_rate: Target sample rate for window duration calculation.
+        window_duration: Duration of the window in seconds.
+
+    Returns:
+        Tuple of (audio segment, sample rate)
+    """
+    with sf.SoundFile(f) as sf_desc:
+        total_frames = len(sf_desc)
+        sr = sf_desc.samplerate
+        win_frames = int(window_duration * sr)
+        if total_frames <= win_frames:
+            sf_desc.seek(0)
+            audio = sf_desc.read(dtype='float32')
+        else:
+            start = random.randint(0, total_frames - win_frames)
+            sf_desc.seek(start)
+            audio = sf_desc.read(frames=win_frames, dtype='float32')
+        return audio, sr
 
 class AudioDataset:
     """
@@ -85,6 +119,8 @@ class AudioDataset:
         self.audio_path_col = data_config.audio_path_col
 
         self.metadata = metadata
+        if "label_map" in self.metadata:
+            self.index_to_label = {v: k for k, v in self.metadata["label_map"].items()}
 
         self.postprocessors = postprocessors or []
 
@@ -131,7 +167,10 @@ class AudioDataset:
         # Open the audio file. Using the .open('rb') method works for both local and
         # GSPath objects.
         with audio_path.open("rb") as f:
-            audio, sr = sf.read(f)
+            if self.data_config.sample_rate == 48000:
+                audio, sr = load_random_window(f, sample_rate=self.data_config.sample_rate)
+            else:
+                audio, sr = sf.read(f)
         if audio.ndim == 2:  # stereo → mono
             audio = audio.mean(axis=1)
 
@@ -146,11 +185,11 @@ class AudioDataset:
             )
             sr = target_sr
 
+        text_value = row["label_feature"] if "label_feature" in row else row["label"]
+
         item = {
             "raw_wav": audio.astype(np.float32),
-            "text_label": row["label_feature"]
-            if "label_feature" in row
-            else row["label"],
+            "text_label": text_value,
             "label": row.label,
             "path": str(audio_path),
         }
@@ -227,6 +266,7 @@ def _get_dataset_from_name(
 
         csv_text = csv_path.read_text(encoding="utf-8")
         df = pd.read_csv(StringIO(csv_text))
+        # df = df.dropna(subset=["canonical_name"])
 
         # AnimalSpeak has some columns that are list[str] but they're stored as
         # comma-separated strings. We convert them to actual lists here:
@@ -234,13 +274,29 @@ def _get_dataset_from_name(
         df.background_species_common = df.background_species_common.apply(to_list)
 
         # TODO (milad) what's the point of this column?
-        df["path"] = df["local_path"].apply(
-            # lambda x: "gs://" + x
-            lambda x: (
-                "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
-                "foundation-model-data/audio_16k/" + x
-            )
-        )  # AnimalSpeak missing gs path
+        # df["path"] = df["local_path"].apply(
+        #     # lambda x: "gs://" + x
+        #     lambda x: (
+        #         "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+        #         "foundation-model-data/audio_16k/" + x
+        #     )
+        # )  # AnimalSpeak missing gs path
+        if "48khz_path" in df:
+            df["path"] = df["48khz_path"]
+        else:
+            df["path"] = df["local_path"].apply(
+                    # lambda x: "gs://" + x
+                    lambda x: (
+                        "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
+                        "foundation-model-data/audio_16k/" + x
+                    )
+            )  # AnimalSpeak missing gs path
+        
+        if "48khz_path" in df:
+            save_path = f"animalspeak_{split}_48khz.csv"
+        else:
+            save_path = f"animalspeak_{split}_16khz.csv"
+        df.to_csv(save_path)
 
         return df
 

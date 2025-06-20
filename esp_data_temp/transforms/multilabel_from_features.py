@@ -84,8 +84,12 @@ class MultiLabelFromFeatures:
                 uniques |= set(df[f].explode().dropna().unique())
 
             label_map = {lbl: idx for idx, lbl in enumerate(sorted(uniques))}
+            print(f"[DEBUG] MultiLabelFromFeatures: Created NEW label_map with {len(label_map)} classes")
+            print(f"[DEBUG] First 5 classes: {dict(list(label_map.items())[:5])}")
         else:
             label_map = self.label_map
+            print(f"[DEBUG] MultiLabelFromFeatures: Using EXISTING label_map with {len(label_map)} classes")
+            print(f"[DEBUG] First 5 classes: {dict(list(label_map.items())[:5])}")
 
         def _row_to_ids(row: pd.Series) -> list | None:
             row_labels = []
@@ -103,7 +107,22 @@ class MultiLabelFromFeatures:
             else:
                 return []
 
+
         df[self.output_feature] = df[self.features].apply(_row_to_ids, axis="columns")
+
+        def _row_to_strs(row: pd.Series) -> list[str]:
+            row_strs: list[str] = []
+            for f in self.features:
+                if isinstance(row[f], list):
+                    v = row[f]
+                elif pd.isna(row[f]):
+                    continue
+                else:
+                    v = [row[f]]
+                row_strs.extend(x for x in v if pd.notna(x))
+            return row_strs
+
+        df["label_feature"] = df[self.features].apply(_row_to_strs, axis="columns")
 
         df_clean = df.dropna(subset=self.output_feature)
 

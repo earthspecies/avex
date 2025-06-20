@@ -326,6 +326,7 @@ def run_experiment(
                 device,
                 exp_logger,
                 dataset_cfg.multi_label,
+                dataset_cfg,
             )
         else:
             # For fine-tuning, use raw dataloaders
@@ -344,6 +345,7 @@ def run_experiment(
                 device,
                 exp_logger,
                 dataset_cfg.multi_label,
+                dataset_cfg,
             )
     else:
         logger.info("Linear probe not run because not in eval_modes")

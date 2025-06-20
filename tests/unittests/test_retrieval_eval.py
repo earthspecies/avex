@@ -336,3 +336,35 @@ def test_none_class_skipping_comparison() -> None:
     print(f"Precision with skipping: {precision_with_skip}")
     print(f"Precision without skipping: {precision_no_skip}")
     print("✓ None class skipping is working correctly!")
+
+
+def test_multilabel_auc_only() -> None:  # noqa: D401
+    """Ensure evaluate_auc_roc handles genuine multi-label (multi-hot) data correctly.
+
+    We replicate a small 4-sample, 3-class scenario where each sample's
+    embedding is its label vector.  Cosine similarity therefore encodes
+    label overlap perfectly.  Every query has at least one *other* item
+    that shares ≥1 label, so the expected ROC-AUC is 1.0.
+    """
+    import numpy as np
+    from numpy.typing import NDArray
+
+    from representation_learning.evaluation.retrieval import evaluate_auc_roc
+
+    # Multi-hot label matrix (rows correspond to samples) --------------------
+    labels: NDArray[np.int64] = np.array(
+        [
+            [1, 0, 0],  # sample 0 – class 0
+            [1, 1, 0],  # sample 1 – classes 0 & 1
+            [0, 1, 1],  # sample 2 – classes 1 & 2
+            [0, 0, 1],  # sample 3 – class 2
+        ],
+        dtype=np.int64,
+    )
+
+    # Embeddings identical to labels so cosine = Jaccard proxy --------------
+    embeddings: NDArray[np.float64] = labels.astype(np.float64)
+
+    auc = evaluate_auc_roc(embeddings, labels)
+
+    assert np.isclose(auc, 1.0), f"Unexpected ROC-AUC for multi-label toy set: {auc}"

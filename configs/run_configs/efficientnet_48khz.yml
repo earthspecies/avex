@@ -16,7 +16,7 @@ model_spec:
     window_selection: random
 
 # Where to find the (now‑completed) dataset config created earlier
-dataset_config: configs/data_configs/data_base.yml
+dataset_config: configs/data_configs/data_base_48khz.yml
 
 # How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised
@@ -31,7 +31,7 @@ sr: 48000
 
 # Log training runs to MLflow
 logging: wandb
-output_dir: "gs://representation-learning/runs/efficientnet_48khz"
+output_dir: "./runs/efficientnet_48khz_mixup"
 distributed: true
 
 training_params:
@@ -80,10 +80,10 @@ augmentations:
       snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
       augmentation_prob: 0.5
     # Mixup augmentation for audio samples
-  # - mixup:
-  #     alpha: 0.4  # Controls the Beta distribution shape
-  #     n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
-  #     augmentation_prob: 0.5  # Probability of applying mixup to a batch
+  - mixup:
+      alpha: 0.4  # Controls the Beta distribution shape
+      n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+      augmentation_prob: 0.5  # Probability of applying mixup to a batch
 
 # Cross entropy loss for classification
 loss_function: cross_entropy

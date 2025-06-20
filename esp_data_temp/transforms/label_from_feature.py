@@ -56,6 +56,11 @@ class LabelFromFeature:
 
         df_clean[self.output_feature] = df_clean[self.feature].map(label_map)
 
+
+        df_clean["label_feature"] = df_clean[self.feature].apply(
+            lambda x: [x] if not isinstance(x, list) else x
+        )
+
         metadata = {
             "label_feature": self.feature,
             "label_map": label_map,

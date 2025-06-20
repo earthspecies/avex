@@ -24,12 +24,12 @@ sr: 16000
 
 # Training parameters (for evaluation fine-tuning)
 training_params:
-  train_epochs: 100
+  train_epochs: 10
   lr: 0.0003
-  batch_size: 16
-  optimizer: adamw
+  batch_size: 64
+  optimizer: adamw8bit
   weight_decay: 0.01
-  amp: false
+  amp: true
   amp_dtype: bf16
 
 # Required fields for RunConfig schema

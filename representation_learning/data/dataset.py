@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import random
 from typing import Any, Optional, Tuple
 
 import numpy as np
@@ -37,7 +38,6 @@ class Collater:
         audio_max_length_seconds: int,
         sr: int,
         window_selection: str = "random",
-        keep_text: bool = False,
         preprocessor: Optional[str] = None,
         device: str = "cpu",
         batch_aug_processor: Optional[AugmentationProcessor] = None,
@@ -45,7 +45,6 @@ class Collater:
     ) -> None:
         self.audio_max_length_seconds = audio_max_length_seconds
         self.window_selection = window_selection
-        self.keep_text = keep_text
         self.preprocessor = preprocessor
         self.sr = sr
         self.device = device
@@ -65,8 +64,11 @@ class Collater:
             audios.append(wav)
             masks.append(pad_mask)
             labels.append(item["label"])
-            if self.keep_text:
-                text_labels.append(item["text_label"])
+
+            txt_lbl = item["text_label"]
+            if isinstance(txt_lbl, list) and len(txt_lbl) > 0:
+                txt_lbl = random.choice(txt_lbl)
+            text_labels.append(txt_lbl)
 
         # Apply batch-level mixup AFTER all audios are same length
         if self.batch_aug_processor is not None and audios:
@@ -75,12 +77,12 @@ class Collater:
                 {
                     "raw_wav": wav,
                     "label": lbl,
-                    "text_label": txt if self.keep_text else None,
+                    "text_label": txt
                 }
                 for wav, lbl, txt in zip(
                     audios,
                     labels,
-                    text_labels if self.keep_text else [None] * len(audios),
+                    text_labels,
                     strict=False,
                 )
             ]
@@ -89,8 +91,13 @@ class Collater:
             # Extract back to separate lists
             audios = [item["raw_wav"] for item in mixed_batch]
             labels = [item["label"] for item in mixed_batch]
-            if self.keep_text:
-                text_labels = [item["text_label"] for item in mixed_batch]
+            text_labels = []
+
+            for mb in mixed_batch:
+                lbl = mb["text_label"]
+                if isinstance(lbl, list):
+                    lbl = random.choice(lbl)
+                text_labels.append(lbl)
 
         # ------------------------------------
         # Stack into tensors (audio + mask)
@@ -243,7 +250,6 @@ def build_dataloaders(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
-        keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=aug_processor,
         num_labels=num_labels,
@@ -252,7 +258,6 @@ def build_dataloaders(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
-        keep_text=(cfg.label_type == "text"),
         device=device,
         batch_aug_processor=None,  # no augmentation during eval
         num_labels=num_labels,
