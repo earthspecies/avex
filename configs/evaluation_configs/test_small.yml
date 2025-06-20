@@ -2,9 +2,9 @@
 dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 300
+  train_epochs: 30
   lr: 0.0003
-  batch_size: 32
+  batch_size: 64
   optimizer: adamw
   weight_decay: 0.01
   amp: false
@@ -44,4 +44,4 @@ eval_modes:
   - linear_probe
   - retrieval
 
-overwrite_embeddings: true
+overwrite_embeddings: false

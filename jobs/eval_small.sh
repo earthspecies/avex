@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-eval"
-#SBATCH --cpus-per-gpu=10
+#SBATCH --cpus-per-gpu=6
 
 cd ~/representation-learning
 uv sync
