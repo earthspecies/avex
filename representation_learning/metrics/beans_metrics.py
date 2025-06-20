@@ -96,14 +96,24 @@ class MulticlassBinaryF1Score:
             logits: Model output logits of shape (N, C)
             y: Ground truth labels of shape (N, C) for one-hot encoded labels
         """
-        probs = torch.sigmoid(logits)
         # Convert one-hot labels back to class indices
         y_indices = y.argmax(dim=1)
+
+        # For each class, create a binary classification problem
         for i in range(self.num_classes):
-            binary_logits = torch.stack((1 - probs[:, i], probs[:, i]), dim=1)
+            # Create binary logits for this class
+            # We use the logit for this class vs the max of other classes
+            class_logit = logits[:, i]
+            other_logits = torch.cat([logits[:, :i], logits[:, i + 1 :]], dim=1)
+            max_other_logit = torch.max(other_logits, dim=1)[0]
+
+            # Binary logits: [not_class_i, class_i]
+            binary_logits = torch.stack([max_other_logit, class_logit], dim=1)
+
             # Create binary labels for this class
-            # (1 if this class is present, 0 otherwise)
+            # (1 if this class is the true class, 0 otherwise)
             binary_y = (y_indices == i).long()
+
             self.metrics[i].update(binary_logits, binary_y)
 
     def get_metric(self) -> dict[str, float]:

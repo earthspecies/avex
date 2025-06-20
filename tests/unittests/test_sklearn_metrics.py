@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from sklearn.metrics import f1_score, precision_score, recall_score
 
 from representation_learning.metrics.sklearn_metrics import (
     Accuracy,
@@ -248,3 +249,85 @@ def test_gpu_tensors() -> None:
         metric.update(logits, y)
         metrics = metric.get_metric()
         assert metrics["f1"] == 1.0
+
+
+def test_multiclass_binary_f1_perfect_case() -> None:
+    """Verify the perfect F1 case."""
+    print("=== Perfect F1 Case ===")
+
+    # Test data
+    logits = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    y = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+
+    # Convert to class indices
+    y_pred = logits.argmax(dim=1).cpu().numpy()
+    y_true = y.argmax(dim=1).cpu().numpy()
+
+    print(f"Predictions: {y_pred}")
+    print(f"True labels: {y_true}")
+
+    # Calculate metrics manually
+    macro_prec = precision_score(y_true, y_pred, average="macro", zero_division=0)
+    macro_rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
+
+    print("Manual calculation:")
+    print(f"  macro_prec: {macro_prec}")
+    print(f"  macro_rec: {macro_rec}")
+    print(f"  macro_f1: {macro_f1}")
+
+    # Test with our metric
+    metric = MulticlassBinaryF1Score(num_classes=3)
+    metric.update(logits, y)
+    metrics = metric.get_metric()
+
+    print("Our metric:")
+    print(f"  macro_prec: {metrics['macro_prec']}")
+    print(f"  macro_rec: {metrics['macro_rec']}")
+    print(f"  macro_f1: {metrics['macro_f1']}")
+
+    assert metrics["macro_prec"] == 1.0
+    assert metrics["macro_rec"] == 1.0
+    assert metrics["macro_f1"] == 1.0
+    print("✓ Perfect case verified!")
+
+
+def test_multiclass_binary_f1_partial_case() -> None:
+    """Verify the partial F1 case."""
+    print("\n=== Partial F1 Case ===")
+
+    # Test data
+    logits = torch.tensor([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    y = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+
+    # Convert to class indices
+    y_pred = logits.argmax(dim=1).cpu().numpy()
+    y_true = y.argmax(dim=1).cpu().numpy()
+
+    print(f"Predictions: {y_pred}")
+    print(f"True labels: {y_true}")
+
+    # Calculate metrics manually
+    macro_prec = precision_score(y_true, y_pred, average="macro", zero_division=0)
+    macro_rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
+
+    print("Manual calculation:")
+    print(f"  macro_prec: {macro_prec}")
+    print(f"  macro_rec: {macro_rec}")
+    print(f"  macro_f1: {macro_f1}")
+
+    # Test with our metric
+    metric = MulticlassBinaryF1Score(num_classes=3)
+    metric.update(logits, y)
+    metrics = metric.get_metric()
+
+    print("Our metric:")
+    print(f"  macro_prec: {metrics['macro_prec']}")
+    print(f"  macro_rec: {metrics['macro_rec']}")
+    print(f"  macro_f1: {metrics['macro_f1']}")
+
+    assert metrics["macro_prec"] < 1.0
+    assert metrics["macro_rec"] < 1.0
+    assert metrics["macro_f1"] < 1.0
+    print("✓ Partial case verified!")
