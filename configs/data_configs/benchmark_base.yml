@@ -12,7 +12,7 @@ datasets:
       - type: label_from_feature
         feature: label
         override: true
-        label_map: {'111': 0, '210': 1, '211': 2, '215': 3, '216': 4, '220': 5, '226': 6, '228': 7, '230': 8, '231': 9}
+        label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
     # transformations:
     #   - type: uniform_sample
     #     property: label
@@ -126,22 +126,22 @@ datasets:
       - accuracy
       - balanced_accuracy
 
-  - dataset_name: enabirds-detection
-    type: detection
-    label_column: answer
-    audio_path_col: path
-    multi_label: true
-    label_type: supervised
-    audio_max_length_seconds: 5
-    transformations:
-      - type: labels_from_features
-        features:
-          - answer
-        override: true
-        label_map: {'American Crow': 0, 'American Goldfinch': 1, 'American Redstart': 2, 'American Robin': 3, 'Black-and-white Warbler': 4, 'Black-capped Chickadee': 5, 'Black-throated Blue Warbler': 6, 'Black-throated Green Warbler': 7, 'Blue Jay': 8, 'Blue-gray Gnatcatcher': 9, 'Blue-headed Vireo': 10, 'Brown-headed Cowbird': 11, 'Carolina Wren': 12, 'Common Yellowthroat': 13, 'Eastern Towhee': 14, 'Hermit Thrush': 15, 'Hooded Warbler': 16, "Kirtland's Warbler": 17, 'Louisiana Waterthrush': 18, 'None': 19, 'Northern Cardinal': 20, 'Northern Flicker': 21, 'Other Bird': 22, 'Ovenbird': 23, 'Red-bellied Woodpecker': 24, 'Red-eyed Vireo': 25, 'Rose-breasted Grosbeak': 26, 'Ruby-crowned Kinglet': 27, 'Scarlet Tanager': 28, "Swainson's Thrush": 29, 'Tufted Titmouse': 30, 'White-breasted Nuthatch': 31, 'Wild Turkey': 32, 'Wood Thrush': 33, 'Yellow-billed Cuckoo': 34}
-    sample_rate: 16000
-    metrics:
-      - multiclass_f1
+  # - dataset_name: enabirds-detection
+  #   type: detection
+  #   label_column: answer
+  #   audio_path_col: path
+  #   multi_label: true
+  #   label_type: supervised
+  #   audio_max_length_seconds: 5
+  #   transformations:
+  #     - type: labels_from_features
+  #       features:
+  #         - answer
+  #       override: true
+  #       label_map: {'American Crow': 0, 'American Goldfinch': 1, 'American Redstart': 2, 'American Robin': 3, 'Black-and-white Warbler': 4, 'Black-capped Chickadee': 5, 'Black-throated Blue Warbler': 6, 'Black-throated Green Warbler': 7, 'Blue Jay': 8, 'Blue-gray Gnatcatcher': 9, 'Blue-headed Vireo': 10, 'Brown-headed Cowbird': 11, 'Carolina Wren': 12, 'Common Yellowthroat': 13, 'Eastern Towhee': 14, 'Hermit Thrush': 15, 'Hooded Warbler': 16, "Kirtland's Warbler": 17, 'Louisiana Waterthrush': 18, 'None': 19, 'Northern Cardinal': 20, 'Northern Flicker': 21, 'Other Bird': 22, 'Ovenbird': 23, 'Red-bellied Woodpecker': 24, 'Red-eyed Vireo': 25, 'Rose-breasted Grosbeak': 26, 'Ruby-crowned Kinglet': 27, 'Scarlet Tanager': 28, "Swainson's Thrush": 29, 'Tufted Titmouse': 30, 'White-breasted Nuthatch': 31, 'Wild Turkey': 32, 'Wood Thrush': 33, 'Yellow-billed Cuckoo': 34}
+  #   sample_rate: 16000
+  #   metrics:
+  #     - multiclass_f1
 
   - dataset_name: rfcx-detection
     type: detection

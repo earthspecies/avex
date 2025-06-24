@@ -118,6 +118,32 @@ class AudioConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator(
+        "sample_rate",
+        "n_fft",
+        "hop_length",
+        "win_length",
+        "n_mels",
+        "target_length_seconds",
+    )
+    @classmethod
+    def validate_positive_int(cls, v: Optional[int]) -> Optional[int]:
+        """Validate that integer fields are positive.
+
+        Returns
+        -------
+        Optional[int]
+            The validated integer value if positive, or None if the input was None.
+
+        Raises
+        ------
+        ValueError
+            If the value is not None and is less than or equal to 0.
+        """
+        if v is not None and v <= 0:
+            raise ValueError(f"Value must be positive, got {v}")
+        return v
+
 
 class ModelSpec(BaseModel):
     """All parameters required to *instantiate* the network."""
@@ -145,6 +171,74 @@ class ModelSpec(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("eat_cfg")
+    @classmethod
+    def validate_eat_cfg(cls, v: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        """Validate that eat_cfg contains only serializable values.
+
+        Returns
+        -------
+        Optional[dict[str, Any]]
+            The validated configuration dictionary if all values are serializable,
+            or None if the input was None.
+        """
+        if v is None:
+            return v
+
+        def is_serializable(obj: object) -> bool:
+            """Check if an object is JSON serializable.
+
+            Returns
+            -------
+            bool
+                True if the object is JSON serializable, False otherwise.
+            """
+            try:
+                import json
+
+                json.dumps(obj)
+                return True
+            except (TypeError, ValueError):
+                return False
+
+        def check_dict(d: dict) -> None:
+            """Recursively check if all values in a dict are serializable.
+
+            Raises
+            ------
+            ValueError
+                If any value in the dictionary is not JSON serializable.
+            """
+            for key, value in d.items():
+                if isinstance(value, dict):
+                    check_dict(value)
+                elif not is_serializable(value):
+                    raise ValueError(
+                        f"Non-serializable value found in eat_cfg: {key}={value}"
+                    )
+
+        check_dict(v)
+        return v
+
+    @field_validator("device")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        """Validate that device is a valid torch device string.
+
+        Returns
+        -------
+        str
+            The validated device string.
+
+        Raises
+        ------
+        ValueError
+            If the device string is not one of the allowed values ('cpu', 'cuda').
+        """
+        if v not in ["cpu", "cuda"]:
+            raise ValueError(f"Invalid device: {v}. Must be one of: cpu, cuda")
+        return v
 
 
 # --------------------------------------------------------------------------- #
@@ -180,7 +274,7 @@ class RunConfig(BaseModel):
     # optional / misc
     preprocessing: Optional[str] = None
     sr: int = 16000
-    logging: Literal["mlflow", "wandb"] = "mlflow"
+    logging: Literal["mlflow", "wandb", "none"] = "mlflow"
     label_type: Literal["supervised", "text", "self_supervised"] = Field(
         "supervised",
         description=(

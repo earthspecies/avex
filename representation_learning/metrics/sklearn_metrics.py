@@ -114,7 +114,7 @@ class MulticlassBinaryF1Score:
     def __init__(self, num_classes: int) -> None:
         self.num_classes = num_classes
         self.y_true = []
-        self.y_scores = []
+        self.y_pred = []
 
     def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
         """Update the metric with new predictions and ground truth.
@@ -139,8 +139,7 @@ class MulticlassBinaryF1Score:
             return {"macro_prec": 0.0, "macro_rec": 0.0, "macro_f1": 0.0}
 
         y_true = np.array(self.y_true)
-        y_scores = np.array(self.y_scores)
-        y_pred = (y_scores > 0.5).astype(int)
+        y_pred = np.array(self.y_pred)
 
         macro_prec = precision_score(y_true, y_pred, average="macro", zero_division=0)
         macro_rec = recall_score(y_true, y_pred, average="macro", zero_division=0)

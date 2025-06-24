@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import pandas as pd
 import torch
 from cloudpathlib import GSPath
 
@@ -42,6 +43,11 @@ from representation_learning.evaluation.finetune import (
 from representation_learning.evaluation.retrieval import eval_retrieval
 from representation_learning.models.get_model import get_model
 from representation_learning.utils import ExperimentLogger
+from representation_learning.utils.experiment_tracking import (
+    get_or_create_experiment_metadata,
+    load_experiment_metadata,
+    save_evaluation_metadata,
+)
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -130,7 +136,7 @@ def run_experiment(
     run_cfg: RunConfig = load_config(experiment_cfg.run_config)
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
-    run_cfg.model_spec.device = device
+    run_cfg.model_spec.device = str(device)
     run_cfg.augmentations = []  # disable training-time noise / mix-up
 
     dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
@@ -326,6 +332,7 @@ def run_experiment(
                 device,
                 exp_logger,
                 dataset_cfg.multi_label,
+                dataset_metrics=getattr(dataset_cfg, "metrics", None),
             )
         else:
             # For fine-tuning, use raw dataloaders
@@ -344,6 +351,7 @@ def run_experiment(
                 device,
                 exp_logger,
                 dataset_cfg.multi_label,
+                dataset_metrics=getattr(dataset_cfg, "metrics", None),
             )
     else:
         logger.info("Linear probe not run because not in eval_modes")
@@ -362,6 +370,34 @@ def run_experiment(
     exp_logger.log_metrics(probe_test_metrics, step=0, split="test_probe")
     exp_logger.log_metrics(retrieval_metrics, step=0, split="test_retrieval")
     exp_logger.finalize()
+
+    # Get or create training metadata
+    training_metadata = pd.DataFrame()
+    if experiment_cfg.checkpoint_path:
+        checkpoint_dir = Path(experiment_cfg.checkpoint_path).parent
+        checkpoint_name = Path(experiment_cfg.checkpoint_path).name
+        training_metadata = get_or_create_experiment_metadata(
+            output_dir=checkpoint_dir,
+            config=run_cfg,
+            checkpoint_name=checkpoint_name,
+        )
+
+    # Save evaluation metadata
+    save_evaluation_metadata(
+        output_dir=save_dir,
+        dataset_name=dataset_name,
+        experiment_name=experiment_name,
+        checkpoint_name=Path(experiment_cfg.checkpoint_path).name
+        if experiment_cfg.checkpoint_path
+        else "None",
+        train_metrics=train_metrics,
+        val_metrics=val_metrics,
+        probe_test_metrics=probe_test_metrics,
+        retrieval_metrics=retrieval_metrics,
+        eval_config=eval_cfg.model_dump(mode="json"),
+        training_metadata=training_metadata,
+        run_config=run_cfg.model_dump(mode="json"),  # Always include run config
+    )
 
     return ExperimentResult(
         dataset_name=dataset_name,
@@ -424,6 +460,90 @@ def main() -> None:
             f.write("-" * 60 + "\n")
 
     logger.info("Saved summary to %s", summary_path)
+
+    # 5. Create and save summary DataFrame
+    # First, collect all possible metrics from all datasets to ensure consistent columns
+    all_possible_metrics = set()
+    all_possible_val_metrics = set()
+    all_possible_test_metrics = set()
+    all_possible_retrieval_metrics = set()
+
+    # Collect metrics from all results
+    for r in all_results:
+        all_possible_metrics.update(r.train_metrics.keys())
+        all_possible_val_metrics.update(r.val_metrics.keys())
+        all_possible_test_metrics.update(r.probe_test_metrics.keys())
+        all_possible_retrieval_metrics.update(r.retrieval_metrics.keys())
+
+    # Also collect metrics from dataset configurations
+    for ds_cfg in benchmark_cfg.datasets:
+        if hasattr(ds_cfg, "metrics") and ds_cfg.metrics:
+            all_possible_test_metrics.update(ds_cfg.metrics)
+
+    # Add standard retrieval metrics that are always computed when retrieval is enabled
+    if "retrieval" in eval_cfg.eval_modes:
+        all_possible_retrieval_metrics.update(
+            ["retrieval_roc_auc", "retrieval_precision_at_1"]
+        )
+
+    # Add standard training/validation metrics that are always computed
+    all_possible_metrics.update(["loss", "acc"])
+    all_possible_val_metrics.update(["loss", "acc"])
+
+    summary_data = []
+    for r in all_results:
+        # Get training metadata if available
+        training_metadata = pd.DataFrame()
+        for exp_cfg in eval_cfg.experiments:
+            if exp_cfg.run_name == r.experiment_name:
+                if exp_cfg.checkpoint_path:
+                    checkpoint_dir = Path(exp_cfg.checkpoint_path).parent
+                    training_metadata = load_experiment_metadata(checkpoint_dir)
+                break
+
+        # Create summary entry with all possible metrics, using None for missing ones
+        summary_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "dataset_name": r.dataset_name,
+            "experiment_name": r.experiment_name,
+        }
+
+        # Add train metrics with None for missing ones
+        for metric in all_possible_metrics:
+            summary_entry[metric] = r.train_metrics.get(metric, None)
+
+        # Add validation metrics with None for missing ones
+        for metric in all_possible_val_metrics:
+            summary_entry[f"val_{metric}"] = r.val_metrics.get(metric, None)
+
+        # Add test metrics with None for missing ones
+        for metric in all_possible_test_metrics:
+            summary_entry[f"test_{metric}"] = r.probe_test_metrics.get(metric, None)
+
+        # Add retrieval metrics with None for missing ones
+        for metric in all_possible_retrieval_metrics:
+            # Remove the "retrieval_" prefix if it's already there to avoid
+            # double-prefixing
+            metric_name = metric.replace("retrieval_", "")
+            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(
+                metric, None
+            )
+
+        # Add training metadata if available
+        if not training_metadata.empty:
+            # Get the most recent training entry
+            latest_training = training_metadata.iloc[-1]
+            for col in training_metadata.columns:
+                if col not in summary_entry:
+                    summary_entry[f"training_{col}"] = latest_training[col]
+
+        summary_data.append(summary_entry)
+
+    # Create and save DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    summary_df_path = save_dir / f"summary_{datetime.now()}.csv"
+    summary_df.to_csv(summary_df_path, index=False)
+    logger.info("Saved summary DataFrame to %s", summary_df_path)
 
 
 if __name__ == "__main__":
