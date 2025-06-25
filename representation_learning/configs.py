@@ -104,7 +104,7 @@ Augment = Union[NoiseAugment, MixupAugment]
 
 
 class AudioConfig(BaseModel):
-    sample_rate: int = 16000
+    sample_rate: int
     n_fft: int = 2048
     hop_length: Optional[int] = None
     win_length: Optional[int] = None

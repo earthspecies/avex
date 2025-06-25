@@ -133,7 +133,11 @@ def run_experiment(
     run_cfg.model_spec.device = device
     run_cfg.augmentations = []  # disable training-time noise / mix-up
 
-    dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
+    print(f"run_cfg.model_spec.audio_config.sample_rate: {run_cfg.model_spec.audio_config.sample_rate}")  
+    print(f"dataset_cfg.sample_rate: {dataset_cfg.sample_rate}")
+
+    assert run_cfg.model_spec.audio_config.sample_rate == dataset_cfg.sample_rate # FixMe: why two
+
 
     # Embedding paths
     emb_base_dir = save_dir / experiment_name / dataset_name

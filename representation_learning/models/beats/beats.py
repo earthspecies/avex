@@ -169,7 +169,7 @@ class BEATs(nn.Module):
         return padding_mask
 
     def preprocess(
-        self,
+    self,
         source: torch.Tensor,
         fbank_mean: float = 15.41663,
         fbank_std: float = 6.55582,
@@ -258,6 +258,7 @@ class BEATs(nn.Module):
                 )
             else:
                 logits = logits.mean(dim=1)
+            
 
             return logits, padding_mask
 
@@ -276,4 +277,4 @@ class BEATs(nn.Module):
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
                 Model output (features or predictions)
         """
-        return self.extract_features(source, padding_mask)
+        return self.extract_features(source, padding_mask, feature_only=True)

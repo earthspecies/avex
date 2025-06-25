@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from torch.nn import LayerNorm, Parameter
 
-from representation_learning.models.beats.beats import BEATsConfig
+# from representation_learning.models.beats.beats import BEATsConfig
 
 from .modules import (
     GLU_Linear,
@@ -30,7 +30,7 @@ from .modules import (
 class TransformerEncoder(nn.Module):
     """Transformer encoder for BEATs model."""
 
-    def __init__(self, args: BEATsConfig) -> None:
+    def __init__(self, args) -> None:
         """Initialize TransformerEncoder.
 
         Args:

@@ -141,11 +141,11 @@ class EATHFModel(ModelBase):
         self.pooling = pooling
         self.return_features_only = return_features_only or num_classes == 0
 
-        # -------------------------------------------------------------- #
-        #  Audio pre-processing – Mel FBanks identical to EAT reference  #
-        # -------------------------------------------------------------- #
+
+        sr = audio_config.sample_rate  # type: ignore[attr-defined]
+
         self.audio_processor = EATAudioProcessor(
-            sample_rate=16_000,
+            sample_rate=sr,
             target_length=target_length,
             n_mels=128,
         )
@@ -158,13 +158,14 @@ class EATHFModel(ModelBase):
             model_name, trust_remote_code=True
         ).to(self.device)
         # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
-        #     # "checkpoint_22_920000.pt"
-        #     # "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt",
-        #     "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/checkpoint_last.pt"
-        # )
+        load_fairseq_weights(
+            self.backbone,
+            # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
+            # "checkpoint_22_920000.pt"
+            # "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt",
+            # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/checkpoint_last.pt"
+            "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint_10_220000.pt"
+        )
         # load_fairseq_weights(
         #     self.backbone,
         #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"

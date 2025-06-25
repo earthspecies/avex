@@ -18,10 +18,10 @@ from sklearn.model_selection import train_test_split
 from .config import DatasetConfig
 from .transforms import transform_from_config
 
-# ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
-# ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
-ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_48khz_local.csv" 
-ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_48khz_local.csv"
+ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_cluster.csv"
+ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_cluster.csv"
+# ANIMALSPEAK_PATH = "gs://animalspeak2/splits/v1/animalspeak_train_v1.3_48khz_local.csv" 
+# ANIMALSPEAK_PATH_EVAL = "gs://animalspeak2/splits/v1/animalspeak_eval_v1.3_48khz_local.csv"
 
 DATA_ROOT = (
     "/home/milad_earthspecies_org/data-migration/marius-highmem/mnt/"
@@ -296,7 +296,7 @@ def _get_dataset_from_name(
             save_path = f"animalspeak_{split}_48khz.csv"
         else:
             save_path = f"animalspeak_{split}_16khz.csv"
-        df.to_csv(save_path)
+        # df.to_csv(save_path)
 
         return df
 
