@@ -1352,6 +1352,20 @@ wheels = [
 ]
 
 [[package]]
+name = "mir-eval"
+version = "0.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "decorator" },
+    { name = "numpy" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/db/3bf39fc9ab0fb757f297f9a0da7207e823688291f9e61bb67b44fa17bc2f/mir_eval-0.8.2.tar.gz", hash = "sha256:141a3e1193276889fc32e911547e73dcb3e829ee8cfea60f7bbcd633c0792569", size = 117649 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/5a/69ce896a32ebc8c75deae00b1fba9837567405fa6ef37b377f2e85b856ae/mir_eval-0.8.2-py3-none-any.whl", hash = "sha256:114cda33d8e17408c170598e0b36ed0d71ff4a2fee8eaf9e165b58ecf1c87170", size = 102794 },
+]
+
+[[package]]
 name = "ml-dtypes"
 version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2391,6 +2405,7 @@ dependencies = [
     { name = "h5py" },
     { name = "joblib" },
     { name = "librosa" },
+    { name = "mir-eval" },
     { name = "mlflow" },
     { name = "numpy" },
     { name = "omegaconf" },
@@ -2435,6 +2450,7 @@ requires-dist = [
     { name = "h5py", specifier = ">=3.13.0" },
     { name = "joblib", specifier = ">=1.4.2" },
     { name = "librosa", specifier = ">=0.11.0" },
+    { name = "mir-eval", specifier = ">=0.8.2" },
     { name = "mlflow", specifier = ">=2.22.0" },
     { name = "numpy", specifier = "==1.26.4" },
     { name = "omegaconf", specifier = ">=2.3.0" },

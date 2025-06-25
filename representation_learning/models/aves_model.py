@@ -121,9 +121,13 @@ class Model(ModelBase):
         *,
         padding_mask: torch.Tensor | None = None,  # noqa: ANN401
         masked_mean: bool = False,
+        framewise_embeddings: bool = False,
     ) -> torch.Tensor:
         if isinstance(x, dict):
             sequence_embeddings = self.forward(x["raw_wav"], padding_mask)
         else:
             sequence_embeddings = self.forward(x, padding_mask)
-        return sequence_embeddings.mean(dim=1)  # (B, C)
+        if framewise_embeddings:
+            return sequence_embeddings
+        else:
+            return sequence_embeddings.mean(dim=1)  # (B, C)

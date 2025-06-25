@@ -38,6 +38,7 @@ dependencies = [
   "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
+  "mir-eval>=0.8.2",
 ]
 
 [dependency-groups]

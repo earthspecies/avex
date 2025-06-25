@@ -90,6 +90,7 @@ class ModelBase(nn.Module):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
+        framewise_embeddings: bool = False,
     ) -> torch.Tensor:
         """
         Extract embeddings from specified layers of the model.
@@ -98,6 +99,8 @@ class ModelBase(nn.Module):
             x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
             layers: List of layer names to extract embeddings from
             padding_mask: Optional padding mask tensor
+            framewise_embeddings: Whether to return frame-level embeddings or not.
+            Note, some layers and models will already yield frame-level embeddings.
 
         Returns
         -------
