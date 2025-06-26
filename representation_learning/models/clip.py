@@ -7,13 +7,13 @@ import torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
 
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.efficientnetb0 import (
-    Model as EfficientNetB0,
+from representation_learning.models.efficientnet import (
+    Model as EfficientNet,
 )
 
 
 class CLIPModel(ModelBase):
-    """CLIP-like model combining EfficientNetB0 for audio and RoBERTa for text."""
+    """CLIP-like model combining EfficientNet for audio and RoBERTa for text."""
 
     def __init__(
         self,
@@ -22,30 +22,36 @@ class CLIPModel(ModelBase):
         text_model_name: str = "roberta-base",
         projection_dim: int = 512,
         temperature: float = 0.07,
+        efficientnet_variant: str = "b0",
     ) -> None:
         super().__init__(device, audio_config)
 
-        # Initialize audio encoder (EfficientNetB0)
-        self.audio_encoder = EfficientNetB0(
+        self.audio_encoder = EfficientNet(
             device=device,
             audio_config=audio_config,
             return_features_only=True,  # Get features before classifier
+            efficientnet_variant=efficientnet_variant,
         )
 
-        # Initialize text encoder (RoBERTa)
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
 
-        # Projection layers
-        # EfficientNetB0 feature dimension before classifier is 1280
-        audio_feature_dim = 1280
-        self.audio_projection = nn.Linear(audio_feature_dim, projection_dim)
-        self.text_projection = nn.Linear(
-            self.text_encoder.config.hidden_size, projection_dim
+        # Projection heads: two-layer MLP (Linear → ReLU → Linear)
+        # EfficientNet B0 has 1280 features, B1 has 1280 features too
+        audio_feature_dim = 1280  # Both B0 and B1 have the same feature dimension
+        hidden_dim = projection_dim
+        self.audio_projection = nn.Sequential(
+            nn.Linear(audio_feature_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, projection_dim),
+        )
+        text_feature_dim = self.text_encoder.config.hidden_size
+        self.text_projection = nn.Sequential(
+            nn.Linear(text_feature_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, projection_dim),
         )
 
-        # Learnable log-logit scale parameter as in original CLIP implementation
-        # Start from log(1/temperature) so that exp(logit_scale) == 1/temperature.
         init_value = torch.log(torch.tensor(1.0 / temperature))
         self.logit_scale = torch.nn.Parameter(init_value)
 
@@ -55,10 +61,18 @@ class CLIPModel(ModelBase):
         self.audio_projection.to(device)
         self.text_projection.to(device)
 
+    def enable_gradient_checkpointing(self) -> None:
+        """Enable gradient checkpointing for both audio and text encoders."""
+        # Enable checkpointing for audio encoder (EfficientNet)
+        self.audio_encoder.enable_gradient_checkpointing()
+
+        # Enable checkpointing for text encoder (HuggingFace transformer)
+        self.text_encoder.gradient_checkpointing_enable()
+
     def encode_audio(
         self, audio: torch.Tensor, padding_mask: torch.Tensor
     ) -> torch.Tensor:
-        """Encode audio input using EfficientNetB0.
+        """Encode audio input using EfficientNet.
 
         Parameters
         ----------
@@ -86,13 +100,11 @@ class CLIPModel(ModelBase):
         torch.Tensor
             Normalized text embeddings
         """
-        # Move token tensors to *current* device of the module (safe for DDP)
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, max_length=50, return_tensors="pt"
+            text, padding=True, truncation=True, max_length=40, return_tensors="pt"
         ).to(current_device)
 
-        # Get text embeddings
         outputs = self.text_encoder(**tokens)
         features = outputs.last_hidden_state[:, 0, :]  # Use [CLS] token
         return F.normalize(self.text_projection(features), dim=-1)
@@ -114,10 +126,8 @@ class CLIPModel(ModelBase):
         audio_embeddings = self.encode_audio(audio, padding_mask)
         text_embeddings = self.encode_text(text)
 
-        # Clamp temperature as in the original CLIP paper (<= log(100) ≈ 4.605).
         LOGIT_SCALE_MAX = math.log(1.0 / 0.01)  # log(100)
         with torch.no_grad():
             self.logit_scale.clamp_(max=LOGIT_SCALE_MAX)
 
-        # Return embeddings and *scalar* positive logit scale so the loss can
         return audio_embeddings, text_embeddings, self.logit_scale.exp()

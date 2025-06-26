@@ -9,6 +9,7 @@
 
 import math
 import warnings
+from typing import Callable, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -16,42 +17,113 @@ from torch import nn
 
 
 class GradMultiply(torch.autograd.Function):
+    """Gradient scaling function for layer-wise gradient decay."""
+
     @staticmethod
-    def forward(ctx, x, scale):
+    def forward(
+        ctx: torch.autograd.function.FunctionCtx,
+        x: torch.Tensor,
+        scale: float,
+    ) -> torch.Tensor:
+        """Forward pass that passes input unchanged while storing scale factor.
+
+        Args:
+            ctx: Context object to store information for backward pass
+            x: Input tensor
+            scale: Scale factor for gradients
+
+        Returns:
+            torch.Tensor: The input tensor unchanged
+        """
         ctx.scale = scale
         res = x.new(x)
         return res
 
     @staticmethod
-    def backward(ctx, grad):
+    def backward(
+        ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor
+    ) -> Tuple[torch.Tensor, None]:
+        """Backward pass that scales gradients by stored factor.
+
+        Args:
+            ctx: Context object containing stored scale factor
+            grad: Gradient tensor
+
+        Returns:
+            Tuple[torch.Tensor, None]: Scaled gradient and None for scale parameter
+        """
         return grad * ctx.scale, None
 
 
 class SamePad(nn.Module):
-    def __init__(self, kernel_size, causal=False) -> None:
+    """Padding module that ensures same output size for convolutions."""
+
+    def __init__(self, kernel_size: int, causal: bool = False) -> None:
+        """Initialize SamePad module.
+
+        Args:
+            kernel_size: Size of the convolution kernel
+            causal: Whether to use causal padding (removes from end)
+        """
         super().__init__()
         if causal:
             self.remove = kernel_size - 1
         else:
             self.remove = 1 if kernel_size % 2 == 0 else 0
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply padding removal to maintain same size.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            torch.Tensor: Tensor with padding removed
+        """
         if self.remove > 0:
             x = x[:, :, : -self.remove]
         return x
 
 
 class Swish(nn.Module):
-    def __init__(self):
+    """Swish activation function: x * sigmoid(x)."""
+
+    def __init__(self) -> None:
+        """Initialize Swish activation."""
         super(Swish, self).__init__()
         self.act = torch.nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply Swish activation.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            torch.Tensor: Swish-activated tensor
+        """
         return x * self.act(x)
 
 
 class GLU_Linear(nn.Module):
-    def __init__(self, input_dim, output_dim, glu_type="sigmoid", bias_in_glu=True):
+    """Gated Linear Unit (GLU) implementation."""
+
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        glu_type: str = "sigmoid",
+        bias_in_glu: bool = True,
+    ) -> None:
+        """Initialize GLU_Linear module.
+
+        Args:
+            input_dim: Input dimension
+            output_dim: Output dimension
+            glu_type: Type of gating function ("sigmoid", "swish", "relu", "gelu",
+                "bilinear")
+            bias_in_glu: Whether to use bias in the linear layer
+        """
         super(GLU_Linear, self).__init__()
 
         self.glu_type = glu_type
@@ -71,8 +143,18 @@ class GLU_Linear(nn.Module):
         else:
             self.linear = nn.Linear(input_dim, output_dim * 2, False)
 
-    def forward(self, x):
-        # to be consistent with GLU_Linear, we assume the input always has the #channel (#dim) in the last dimension of the tensor, so need to switch the dimension first for 1D-Conv case
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply GLU transformation.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            torch.Tensor: GLU-transformed tensor
+        """
+        # to be consistent with GLU_Linear, we assume the input always has the
+        # #channel (#dim) in the last dimension of the tensor, so need to switch
+        # the dimension first for 1D-Conv case
         x = self.linear(x)
 
         if self.glu_type == "bilinear":
@@ -88,7 +170,15 @@ class GLU_Linear(nn.Module):
         return x
 
 
-def gelu_accurate(x):
+def gelu_accurate(x: torch.Tensor) -> torch.Tensor:
+    """Accurate GELU activation function implementation.
+
+    Args:
+        x: Input tensor
+
+    Returns:
+        torch.Tensor: GELU-activated tensor
+    """
     if not hasattr(gelu_accurate, "_a"):
         gelu_accurate._a = math.sqrt(2 / math.pi)
     return (
@@ -97,18 +187,38 @@ def gelu_accurate(x):
 
 
 def gelu(x: torch.Tensor) -> torch.Tensor:
+    """Standard GELU activation function.
+
+    Args:
+        x: Input tensor
+
+    Returns:
+        torch.Tensor: GELU-activated tensor
+    """
     return torch.nn.functional.gelu(x.float()).type_as(x)
 
 
-def get_activation_fn(activation: str):
-    """Returns the activation function corresponding to `activation`"""
+def get_activation_fn(activation: str) -> Callable[[torch.Tensor], torch.Tensor]:
+    """Get activation function by name.
+
+    Args:
+        activation: Name of the activation function
+
+    Returns:
+        Callable[[torch.Tensor], torch.Tensor]: The activation function
+
+    Raises:
+        RuntimeError: If activation function is not supported
+    """
 
     if activation == "relu":
         return F.relu
     elif activation == "gelu":
         return gelu
     elif activation == "gelu_fast":
-        warnings.warn("--activation-fn=gelu_fast has been renamed to gelu_accurate")
+        warnings.warn(
+            "--activation-fn=gelu_fast has been renamed to gelu_accurate", stacklevel=2
+        )
         return gelu_accurate
     elif activation == "gelu_accurate":
         return gelu_accurate
@@ -122,16 +232,23 @@ def get_activation_fn(activation: str):
         raise RuntimeError("--activation-fn {} not supported".format(activation))
 
 
-def quant_noise(module, p, block_size):
-    """
+def quant_noise(
+    module: Union[nn.Linear, nn.Embedding, nn.Conv2d], p: float, block_size: int
+) -> Union[nn.Linear, nn.Embedding, nn.Conv2d]:
+    """Apply quantization noise to module weights.
+
     Wraps modules and applies quantization noise to the weights for
     subsequent quantization with Iterative Product Quantization as
     described in "Training with Quantization Noise for Extreme Model Compression"
 
     Args:
-        - module: nn.Module
-        - p: amount of Quantization Noise
-        - block_size: size of the blocks for subsequent quantization with iPQ
+        module: PyTorch module (Linear, Embedding, or Conv2d)
+        p: Amount of quantization noise (probability)
+        block_size: Size of the blocks for subsequent quantization with iPQ
+
+    Returns:
+        Union[nn.Linear, nn.Embedding, nn.Conv2d]: The module with quantization
+            noise applied
 
     Remarks:
         - Module weights must have the right sizes wrt the block size
@@ -170,7 +287,13 @@ def quant_noise(module, p, block_size):
             k = module.kernel_size[0] * module.kernel_size[1]
             assert k % block_size == 0, "Kernel size must be a multiple of block size"
 
-    def _forward_pre_hook(mod, input):
+    def _forward_pre_hook(mod: nn.Module, input: Tuple[torch.Tensor, ...]) -> None:
+        """Pre-forward hook to apply quantization noise during training.
+
+        Args:
+            mod: The module
+            input: The input to the module
+        """
         # no noise for evaluation
         if mod.training:
             if not is_conv:
@@ -195,22 +318,21 @@ def quant_noise(module, p, block_size):
                 # split weight matrix into blocks and randomly drop selected blocks
                 if mod.kernel_size == (1, 1):
                     mask = torch.zeros(
-                        int(in_channels // block_size * out_channels),
+                        in_channels // block_size * out_channels, device=weight.device
+                    )
+                    mask.bernoulli_(p)
+                    mask = mask.repeat_interleave(block_size, -1).view(
+                        out_channels, in_channels
+                    )
+                else:
+                    mask = torch.zeros(
+                        weight.size(0) * weight.size(1) * weight.size(2) // block_size,
                         device=weight.device,
                     )
                     mask.bernoulli_(p)
-                    mask = mask.repeat_interleave(block_size, -1).view(-1, in_channels)
-                else:
-                    mask = torch.zeros(
-                        weight.size(0), weight.size(1), device=weight.device
+                    mask = mask.repeat_interleave(block_size, -1).view(
+                        weight.size(0), weight.size(1), weight.size(2)
                     )
-                    mask.bernoulli_(p)
-                    mask = (
-                        mask.unsqueeze(2)
-                        .unsqueeze(3)
-                        .repeat(1, 1, mod.kernel_size[0], mod.kernel_size[1])
-                    )
-
             # scale weights and apply mask
             mask = mask.to(
                 torch.bool

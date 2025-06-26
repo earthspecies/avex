@@ -45,11 +45,23 @@ class TrainingParams(BaseModel):
         0.0, ge=0, description="Weight decay for regularisation"
     )
 
+    # Optional override for Adam/AdamW beta parameters (β₁, β₂).  If omitted
+    # we fall back to the libraries' defaults (0.9, 0.999).
+    adam_betas: Optional[Tuple[float, float]] = Field(
+        default=None,
+        description="Override the (beta1, beta2) coefficients for Adam-type optimisers",
+    )
+
     amp: bool = False
     amp_dtype: Literal["bf16", "fp16"] = "bf16"
 
     # Frequency (in *iterations*) of logging benchmarking stats & progress
     log_steps: int = Field(100, ge=1, description="Log interval in training steps")
+
+    # Gradient checkpointing for memory optimization
+    gradient_checkpointing: bool = Field(
+        False, description="Enable gradient checkpointing to save memory"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -64,6 +76,12 @@ class NoiseAugment(BaseModel):
     noise_dirs: List[str]
     snr_db_range: Tuple[int, int] = Field(..., min_length=2, max_length=2)
     augmentation_prob: float = Field(..., ge=0, le=1)
+    mask_signal_prob: float = Field(
+        0.0,
+        ge=0,
+        le=1,
+        description="Probability of masking the original signal and using only noise",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -96,8 +114,35 @@ class AudioConfig(BaseModel):
     normalize: bool = True
     target_length_seconds: Optional[int] = None
     window_selection: Literal["random", "center"] = "random"
+    center: bool = True
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator(
+        "sample_rate",
+        "n_fft",
+        "hop_length",
+        "win_length",
+        "n_mels",
+        "target_length_seconds",
+    )
+    @classmethod
+    def validate_positive_int(cls, v: Optional[int]) -> Optional[int]:
+        """Validate that integer fields are positive.
+
+        Returns
+        -------
+        Optional[int]
+            The validated integer value if positive, or None if the input was None.
+
+        Raises
+        ------
+        ValueError
+            If the value is not None and is less than or equal to 0.
+        """
+        if v is not None and v <= 0:
+            raise ValueError(f"Value must be positive, got {v}")
+        return v
 
 
 class ModelSpec(BaseModel):
@@ -118,8 +163,82 @@ class ModelSpec(BaseModel):
 
     # When true the EAT model is instantiated for self-supervised pre-training.
     pretraining_mode: Optional[bool] = None
+    handle_padding: Optional[bool] = None
+
+    # EfficientNet variant configuration
+    efficientnet_variant: Literal["b0", "b1"] = Field(
+        "b0", description="EfficientNet variant to use (b0 or b1)"
+    )
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("eat_cfg")
+    @classmethod
+    def validate_eat_cfg(cls, v: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        """Validate that eat_cfg contains only serializable values.
+
+        Returns
+        -------
+        Optional[dict[str, Any]]
+            The validated configuration dictionary if all values are serializable,
+            or None if the input was None.
+        """
+        if v is None:
+            return v
+
+        def is_serializable(obj: object) -> bool:
+            """Check if an object is JSON serializable.
+
+            Returns
+            -------
+            bool
+                True if the object is JSON serializable, False otherwise.
+            """
+            try:
+                import json
+
+                json.dumps(obj)
+                return True
+            except (TypeError, ValueError):
+                return False
+
+        def check_dict(d: dict) -> None:
+            """Recursively check if all values in a dict are serializable.
+
+            Raises
+            ------
+            ValueError
+                If any value in the dictionary is not JSON serializable.
+            """
+            for key, value in d.items():
+                if isinstance(value, dict):
+                    check_dict(value)
+                elif not is_serializable(value):
+                    raise ValueError(
+                        f"Non-serializable value found in eat_cfg: {key}={value}"
+                    )
+
+        check_dict(v)
+        return v
+
+    @field_validator("device")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        """Validate that device is a valid torch device string.
+
+        Returns
+        -------
+        str
+            The validated device string.
+
+        Raises
+        ------
+        ValueError
+            If the device string is not one of the allowed values ('cpu', 'cuda').
+        """
+        if v not in ["cpu", "cuda"]:
+            raise ValueError(f"Invalid device: {v}. Must be one of: cpu, cuda")
+        return v
 
 
 # --------------------------------------------------------------------------- #
@@ -155,7 +274,7 @@ class RunConfig(BaseModel):
     # optional / misc
     preprocessing: Optional[str] = None
     sr: int = 16000
-    logging: Literal["mlflow", "wandb"] = "mlflow"
+    logging: Literal["mlflow", "wandb", "none"] = "mlflow"
     # TODO : make default uri localhost ?
     logging_uri: str = "http://127.0.0.1:5000/"
     label_type: Literal["supervised", "text", "self_supervised"] = Field(
@@ -191,6 +310,7 @@ class RunConfig(BaseModel):
         "binary_cross_entropy",
         "contrastive",
         "clip",
+        "focal",
     ]
 
     # Enable multi-label classification
@@ -272,10 +392,11 @@ class RunConfig(BaseModel):
         if v == "binary_cross_entropy":
             v = "bce"
 
-        # Check if multilabel is True but loss function isn't BCE
-        if data.get("multilabel", False) and v != "bce":
+        # Check if multilabel is True but loss function isn't BCE/Focal
+        if data.get("multilabel", False) and v not in {"bce", "focal"}:
             raise ValueError(
-                f"When multilabel=True, loss_function must be 'bce' (got '{v}' instead)"
+                "When multilabel=True, loss_function must be 'bce' or 'focal' "
+                f"(got '{v}' instead)"
             )
 
         # For self-supervised runs we don't impose any loss-type restrictions

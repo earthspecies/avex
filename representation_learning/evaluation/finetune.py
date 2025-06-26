@@ -31,6 +31,7 @@ def train_and_eval_linear_probe(
     device: torch.device,
     exp_logger: ExperimentLogger,
     multi_label: bool,
+    dataset_metrics: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a linear probe and evaluate it on *cached* test embeddings.
 
@@ -94,8 +95,14 @@ def train_and_eval_linear_probe(
         shuffle=False,
     )
 
-    # Metric selection (fallback to accuracy)
-    metric_names = getattr(test_embed_ds, "metadata", {}).get("metrics", ["accuracy"])
+    # Metric selection (use dataset metrics if provided, otherwise fallback to accuracy)
+    if dataset_metrics is not None:
+        metric_names = dataset_metrics
+    else:
+        metric_names = getattr(test_embed_ds, "metadata", {}).get(
+            "metrics", ["accuracy"]
+        )
+
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
     probe.eval()  # feature_mode stays True (inputs are embeddings)
@@ -129,6 +136,7 @@ def train_and_eval_full_fine_tune(
     device: torch.device,
     exp_logger: ExperimentLogger,
     multi_label: bool,
+    dataset_metrics: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a model by fine-tuning on raw waveforms.
 
@@ -154,6 +162,8 @@ def train_and_eval_full_fine_tune(
         Logger for experiment metrics
     multi_label : bool
         Whether this is a multi-label classification task
+    dataset_metrics : Optional[List[str]]
+        List of metrics to compute for this dataset
 
     Returns
     -------
@@ -191,8 +201,12 @@ def train_and_eval_full_fine_tune(
     base_model.eval()
     test_metrics = {}
 
-    # Get metric class based on task type
-    metric_names = ["accuracy"] if not multi_label else ["f1"]
+    # Get metric class based on task type and dataset metrics
+    if dataset_metrics is not None:
+        metric_names = dataset_metrics
+    else:
+        metric_names = ["accuracy"] if not multi_label else ["f1"]
+
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
     with torch.no_grad():

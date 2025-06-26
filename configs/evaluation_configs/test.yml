@@ -2,7 +2,7 @@
 dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 100
+  train_epochs: 300
   lr: 0.0003
   batch_size: 32
   optimizer: adamw
@@ -12,41 +12,94 @@ training_params:
 
 
 # Which experiments to evaluate
-#TODO: all checkpoints to be gs paths and uploaded during train
+# TODO: all checkpoints to be gs paths and uploaded during train
 experiments:
-  # - run_name: efficientnet_base_loaded
-  #   run_config: configs/run_configs/efficientnet_base.yml
+
+  - run_name: efficientnet_beans
+    run_config: configs/run_configs/efficientnet_base_beans.yml
+    ### which layers to probe for embeddings
+    layers: model.avgpool
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
+
+  # - run_name: efficientnet_48khz_e6
+  #   run_config: configs/run_configs/efficientnet_48khz.yml
   #   ### which layers to probe for embeddings
   #   layers: model.avgpool
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   pretrained: false
-  #   checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_024.pt
+  #   checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
+
+  - run_name: efficientnet_48khz_e6
+    run_config: configs/run_configs/efficientnet_48khz.yml
+    ### which layers to probe for embeddings
+    layers: model.avgpool
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    checkpoint_path: efficientnet_48khz/checkpoints/checkpoint_epoch_006.pt
 
   # - run_name: eat_pretrain
+  #   # run_config: configs/run_configs/eat_pretrain.yml
   #   run_config: configs/run_configs/eat_pretrain.yml
   #   ### which layers to probe for embeddings
   #   layers: last_layer
   #   ### whether to use pretrained model or the one we train on bioacoustic data
-  #   checkpoint_path: runs/efficientnet_base_no_mixup/checkpoints/checkpoint_epoch_024.pt
+  #   checkpoint_path: runs/eat_pretrain_bf16_25_05_nopad/checkpoints/final_model.pt
+  #   # checkpoint_path: runs/eat_pretrain_handle_padding_v1.1/checkpoints/checkpoint_epoch_003.pt
+  #   # checkpoint_path: runs/eat_pretrain_all_optimized/checkpoints/checkpoint_epoch_005.pt
+  #   # checkpoint_path: runs/eat_pretrain_handle_padding_opt/checkpoints/checkpoint_epoch_002.pt
+  #   pretrained: false
+
+  # - run_name: atst_frame
+  #   run_config: configs/run_configs/atst_base.yml
+  #   ### which layers to probe for embeddings (ignored by ATST but required by schema)
+  #   layers: features
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: true
+  #   frozen: true
+
   # - run_name: clap
-  #   run_config: configs/run_configs/clip_base.yml
+  #   run_config: configs/run_configs/clip_base_beans.yml
   #   ### which layers to probe for embeddings
   #   layers: audio_projection
   #   ### whether to use pretrained model or the one we train on bioacoustic data
   #   # checkpoint_path: runs/clip_baseline/checkpoints/checkpoint_epoch_059.pt
-  #   checkpoint_path: runs/clip_baseline_full/checkpoints/checkpoint_epoch_014.pt
+  #   checkpoint_path: runs/clip_baseline_01_06/checkpoints/checkpoint_epoch_014.pt
 
-  - run_name: clap_linear_probe
-    run_config: configs/run_configs/clip_base.yml
-    ### which layers to probe for embeddings
-    layers: audio_projection
-    ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: false
-    checkpoint_path: ~/representation-learning/runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
-    frozen: true
+  # - run_name: clap_linear_probe_beans
+  #   run_config: configs/run_configs/clip_base_beans.yml
+  #   ### which layers to probe for embeddings
+  #   layers: audio_projection
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: false
+  #   checkpoint_path: ~/representation-learning/runs/clip_baseline_13_05/checkpoints/checkpoint_epoch_050.pt
+
+  # - run_name: beats
+  #   run_config: configs/run_configs/beats_base.yml
+  #   ### which layers to probe for embeddings
+  #   layers: backbone
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: true
+  #   # checkpoint_path: beats_baseline_full/checkpoints/checkpoint_epoch_005.pt
+
+  # - run_name: bird_aves_bio
+  #   run_config: configs/run_configs/aves_base.yml
+  #   ### which layers to probe for embeddings
+  #   layers: last_layer
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: false
+  #   frozen: true
+
+  # - run_name: eat_hf
+  #   run_config: configs/run_configs/eat_baseline.yml
+  #   ### which layers to probe for embeddings
+  #   layers: backbone
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: true
 
 # Where to save the evaluation results
-save_dir: evaluation_results
+save_dir: evaluation_results/debug
 
 device: cuda
 
@@ -56,5 +109,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval
+
+overwrite_embeddings: true

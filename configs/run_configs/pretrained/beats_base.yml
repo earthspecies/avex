@@ -7,6 +7,9 @@ model_spec:
   audio_config:  # Still define for completeness; BEATs does its own Fbank conversion
     sample_rate: 16000
     representation: raw  # BEATs expects raw waveform
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
 
 # Dataset configuration (path to a valid dataset config)
 dataset_config: configs/data_configs/data_base.yml
@@ -30,9 +33,9 @@ logging: mlflow
 resume_from_checkpoint: null
 
 training_params:
-  train_epochs: 60
+  train_epochs: 20
   lr: 0.0001
-  batch_size: 256
+  batch_size: 64
   optimizer: adamw
   weight_decay: 0.01
   amp: true
@@ -50,7 +53,6 @@ augmentations: []
 loss_function: cross_entropy
 
 # General settings
-device: cuda
 seed: 42
 num_workers: 10
 

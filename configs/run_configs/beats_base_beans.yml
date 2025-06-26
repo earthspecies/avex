@@ -1,0 +1,69 @@
+---
+# BEATs backbone (masked-pooling) for classification on BEANS-dataset settings
+model_spec:
+  name: beats
+  pretrained: false        # set true when you have BEATs weights
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw    # BEATs consumes waveform directly
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+# Dataset & label handling (same as EfficientNet-beans recipe)
+dataset_config: configs/data_configs/data_base.yml
+label_type: supervised
+multilabel: false
+
+debug_mode: false
+preprocessing: null
+sr: 16000
+
+# Logging / outputs
+logging: mlflow
+output_dir: "./runs/beats_base_beans"
+
+# Training hyper-parameters (copied from efficientnet_base_beans.yml)
+training_params:
+  train_epochs: 30
+  lr: 0.0001
+  batch_size: 256
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true            # BEATs is transformer ‑ fp16/bf16 helpful
+  amp_dtype: bf16
+
+scheduler:
+  name: cosine
+  warmup_steps: 4000
+  min_lr: 1e-6
+
+augmentations:
+  - noise:
+      noise_dirs:
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+      snr_db_range: [-5, 20]
+      augmentation_prob: 0.5
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 0.5
+
+loss_function: cross_entropy
+
+# General settings
+device: cuda
+seed: 42
+num_workers: 10
+run_name: beats_base_beans
+wandb_project: representation_learning

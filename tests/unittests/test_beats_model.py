@@ -7,7 +7,7 @@ from representation_learning.models.beats_model import Model as BeatsModel
 # ---------------------------------------------------------------------------
 
 
-def test_beats_model_forward():
+def test_beats_model_forward() -> None:
     """Simple smoke-test for the BEATs wrapper on CPU."""
 
     batch_size = 2

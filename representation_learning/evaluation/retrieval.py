@@ -35,6 +35,74 @@ def eval_retrieval(
     }
 
 
+# ------------------------------------------------------------------------- #
+#  Helpers
+# ------------------------------------------------------------------------- #
+
+
+def _convert_labels_to_int(labels: np.ndarray) -> np.ndarray:
+    """Convert labels to integer indices when they are one-hot encoded.
+
+    If *labels* is a 2-D array and **every** row contains exactly one ``1``
+    (i.e. traditional one-hot vectors for single-label classification), the
+    function reduces it to a 1-D vector of class indices.  Otherwise the input
+    is returned unchanged so that down-stream code can treat it as multi-label
+    data (multi-hot encoding).
+
+    Returns
+    -------
+    np.ndarray
+        Either the original labels array or a 1-D array of class indices.
+    """
+
+    if labels.ndim == 2 and labels.dtype in (
+        np.float32,
+        np.float64,
+        np.int32,
+        np.int64,
+    ):
+        row_sums = labels.sum(axis=1)
+        if np.all(row_sums == 1):
+            return labels.argmax(axis=1)
+    return labels
+
+
+def _binary_relevance_matrix(labels: np.ndarray, i: int) -> np.ndarray:
+    """Return binary relevance vector for query *i* against *labels*.
+
+    The function supports three situations:
+
+    1. ``labels`` is 1-D (integers): positives are items whose label equals
+       ``labels[i]``.
+    2. ``labels`` is 2-D and one-hot (each sample has exactly one class): this
+       is reduced to case (1) via :func:`_convert_labels_to_int`.
+    3. ``labels`` is 2-D **multi-hot** (genuine multi-label data): positives are
+       items that share at least one active class with the query, i.e.
+       ``(labels & labels[i]).any(axis=1)``.
+
+    Returns
+    -------
+    np.ndarray
+        Binary relevance vector where 1 indicates relevant items for query i.
+    """
+
+    if labels.ndim == 1:
+        return (labels == labels[i]).astype(int)
+
+    # At this point labels is 2-D.  Try collapsing one-hot situation first.
+    collapsed = _convert_labels_to_int(labels)
+    if collapsed.ndim == 1:
+        return (collapsed == collapsed[i]).astype(int)
+
+    # Genuine multi-label: treat items as positive if **any** label overlaps.
+    return np.logical_and(labels, labels[i]).any(axis=1).astype(int)
+
+
+# ------------------------------------------------------------------------- #
+#  AUC-ROC
+# ------------------------------------------------------------------------- #
+
+
 def evaluate_auc_roc(
     embeddings: np.ndarray, labels: Sequence[int] | np.ndarray
 ) -> float:
@@ -45,6 +113,9 @@ def evaluate_auc_roc(
     share the same class label as *q*.  The final score is the mean AUC over
     all queries for which at least one positive and one negative sample exist;
     queries without a positive counterpart are skipped.
+
+    In the case of multi-label classification, we treat an item as positive
+    if it shares at least one class label with the query.
 
     Parameters
     ----------
@@ -77,19 +148,23 @@ def evaluate_auc_roc(
     n = embeddings.shape[0]
     aucs: list[float] = []
     for i in range(n):
-        y_true = (labels == labels[i]).astype(int)
-        if y_true.sum() <= 1:  # Need at least one positive besides query itself
+        y_true = _binary_relevance_matrix(labels, i)
+
+        # Skip queries without at least one positive *other* than itself.
+        if y_true.sum() <= 1:
             continue
+
         y_score = sim[i]
+
         # Remove self-match
         mask = np.ones(n, dtype=bool)
         mask[i] = False
+
         try:
             auc = roc_auc_score(y_true[mask], y_score[mask])
             aucs.append(float(auc))
-        except ValueError:
-            # Happens when only one class present after masking (shouldn't) but be safe
-            logger.warning("Only one class present after masking for query %d", i)
+        except ValueError as v:  # pragma: no cover – extremely rare but safe-guard
+            logger.warning("ROC-AUC computation failed for query %d (reason: %s)", i, v)
             continue
 
     return float(np.mean(aucs)) if aucs else 0.0
@@ -153,7 +228,15 @@ def evaluate_precision(
 
     precisions: list[float] = []
     for i in range(n):
-        # Indices of top-k most similar items (highest cosine similarity)
+        y_true = _binary_relevance_matrix(labels, i)
+
+        # Skip queries without at least one positive *other* than itself
+        # includes "None" class.
+        if y_true.sum() <= 1:
+            continue
+
+        # Identify indices of the top-k most similar items (self-match already
+        # excluded via -inf on the diagonal).
         if k == 1:
             # Fast path for k=1 using argmax
             topk_idx = [int(np.argmax(sim[i]))]
@@ -161,8 +244,8 @@ def evaluate_precision(
             # Use argpartition for efficiency when k>1
             topk_idx = np.argpartition(-sim[i], k)[:k]
 
-        # Precision@k: fraction of top-k items that share the same label
-        precision_i = np.mean(labels[topk_idx] == labels[i])
-        precisions.append(float(precision_i))
+        # Precision is the fraction of relevant items among the retrieved top-k.
+        precision_i = float(np.mean(y_true[topk_idx]))
+        precisions.append(precision_i)
 
     return float(np.mean(precisions)) if precisions else 0.0

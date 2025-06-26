@@ -24,21 +24,26 @@ from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.parallel as parallel
+from esp_data.io.paths import GSPath, R2Path, anypath  # type: ignore
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, RunConfig
-from representation_learning.data.augmentations import print_profiling_summary
 from representation_learning.training.distributed import (
     cleanup_distributed,
+    get_local_device_index,
     is_main_process,
 )
-from representation_learning.training.losses import ClipLoss, _build_criterion
+from representation_learning.training.losses import ClipLoss, build_criterion
 from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger
+from representation_learning.utils.experiment_tracking import save_experiment_metadata
 
 logger = logging.getLogger(__name__)
+
+
+CloudPathT = GSPath | R2Path  # type: ignore[misc]
 
 
 # --------------------------------------------------------------------------- #
@@ -98,6 +103,8 @@ class Trainer:
         Whether distributed training is enabled
     log_steps : int, optional
         Frequency of logging benchmarking results, by default 100
+    gradient_checkpointing : bool, optional
+        Whether to enable gradient checkpointing, by default False
     """
 
     # ----------------------------- initialisation -------------------------- #
@@ -128,12 +135,20 @@ class Trainer:
         resume_from_checkpoint: Optional[str] = None,
         run_config: Optional[RunConfig] = None,
         log_steps: int = 1,
+        gradient_checkpointing: bool = False,
     ) -> None:
         self.model = model
         self.train_dataloader = train_dl
         self.eval_dataloader = eval_dl
-        self.model_dir = Path(model_dir)
-        self.model_dir.mkdir(parents=True, exist_ok=True)
+        self.model_dir = anypath(model_dir)
+        self.run_config = run_config  # Store run_config as instance variable
+
+        # Ensure directory exists (for local; cloudpathlib handles remote lazily)
+        try:
+            self.model_dir.mkdir(parents=True, exist_ok=True)
+        except AttributeError:
+            # Some CloudPath objects don't implement mkdir but create dirs on write
+            pass
         self.is_clip_mode = is_clip_mode
         self.is_eat_ssl = is_eat_ssl
         self.checkpoint_freq = checkpoint_freq
@@ -159,6 +174,15 @@ class Trainer:
             self.device = torch.device(device)
         self.model.to(self.device)
 
+        # Enable gradient checkpointing if requested
+        if gradient_checkpointing:
+            logger.info("Enabling gradient checkpointing for memory optimization")
+            try:
+                self.model.enable_gradient_checkpointing()
+            except NotImplementedError as e:
+                logger.warning(f"Could not enable gradient checkpointing: {e}")
+            logger.info("gradient checkpointing enabled successfully")
+
         # Distributed setup - parameters are now passed in
         self.local_rank = local_rank
         self.world_size = world_size
@@ -167,19 +191,32 @@ class Trainer:
         if self.is_distributed:
             logger.info(f"Wrapping model with DDP on rank {self.local_rank}")
 
-            self.model = parallel.DistributedDataParallel(
-                self.model,
-                device_ids=[self.local_rank],
-                output_device=self.local_rank,
-                find_unused_parameters=True,
-            )
+            # Get the actual device index that the model is on
+            model_device = self.device
+            if model_device.type == "cuda":
+                # Use SLURM-aware device index to handle GPU allocation properly
+                device_index = get_local_device_index()
+                logger.info(f"Using CUDA device index {device_index} for DDP")
+                self.model = parallel.DistributedDataParallel(
+                    self.model,
+                    device_ids=[device_index],
+                    output_device=device_index,
+                    find_unused_parameters=True,
+                )
+            else:
+                # For CPU or when device index is None, let DDP auto-detect
+                logger.info("Using CPU or auto-detect for DDP")
+                self.model = parallel.DistributedDataParallel(
+                    self.model,
+                    find_unused_parameters=True,
+                )
             self.model_unwrapped = self.model.module
         else:
             self.model_unwrapped = self.model
 
         # Optimizer, Criterion, Scheduler
         self.optimizer = optimizer
-        self.criterion = _build_criterion(criterion)
+        self.criterion = build_criterion(criterion)
         self.scheduler = (
             build_scheduler(
                 self.optimizer,
@@ -207,6 +244,11 @@ class Trainer:
         if is_main_process() and resume_from_checkpoint:
             self._load_checkpoint(resume_from_checkpoint)
 
+        # Broadcast critical state from main process to all processes in
+        # distributed training
+        if self.is_distributed:
+            self._broadcast_training_state()
+
         # Log static hyper‑parameters once (only on master process)
         if is_main_process() and self.log:
             try:
@@ -227,6 +269,7 @@ class Trainer:
                     "amp_dtype": amp_dtype,
                     "distributed": self.is_distributed,
                     "world_size": self.world_size,
+                    "gradient_checkpointing": gradient_checkpointing,
                     "scheduler": scheduler_config.get("name", "none")
                     if scheduler_config
                     else "none",
@@ -408,14 +451,11 @@ class Trainer:
                     target_model = (
                         self.model_unwrapped if self.is_distributed else self.model
                     )
-                    if self.is_eat_ssl and hasattr(target_model, "backbone"):
+                    if self.is_eat_ssl:
                         backbone = target_model.backbone
-                        if hasattr(backbone, "set_num_updates"):
-                            backbone.set_num_updates(self._global_updates)
+                        backbone.set_num_updates(self._global_updates)
 
-                    # Scheduler (after optimiser update)
-                    if self.scheduler is not None:
-                        self.scheduler.step()
+                    self.scheduler.step()
 
                 # ------------------------------------
                 # Accumulate statistics
@@ -513,10 +553,6 @@ class Trainer:
         else:
             avg_acc = total_correct / total_samples if total_samples else 0.0
 
-        # Print profiling summary at the end of each epoch if we're training
-        if train and is_main_process():
-            print_profiling_summary()
-
         return avg_loss, avg_acc
 
     def _forward(
@@ -595,13 +631,22 @@ class Trainer:
         # Forward pass
         outputs = self.model(audio, padding_mask=padding_mask)
 
-        # If we're in multi-label mode but the dataset still returns integer
-        # class indices, convert them to one-hot vectors so the BCE loss has
-        # matching dimensions.
-        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss) and target.dim() == 1:
-            target = torch.nn.functional.one_hot(
-                target.long(), num_classes=outputs.size(1)
-            ).float()
+        # ------------------------------------------------------------------
+        #  Match target format to criterion expectations
+        # ------------------------------------------------------------------
+        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
+            # BCE expects float multi-hot targets (shape [B, C]).  If the
+            # dataset provides integer class indices, convert them to one-hot.
+            if target.dim() == 1:
+                target = torch.nn.functional.one_hot(
+                    target.long(), num_classes=outputs.size(1)
+                ).float()
+        elif isinstance(self.criterion, torch.nn.CrossEntropyLoss):
+            # Cross-entropy expects class indices (shape [B]).  If the dataset
+            # (Collater) already produced one-hot vectors (shape [B, C]),
+            # collapse to indices.
+            if target.dim() > 1:
+                target = target.argmax(dim=1)
 
         loss = self.criterion(outputs, target)
 
@@ -610,17 +655,15 @@ class Trainer:
         # --------------------------------------------------
         with torch.no_grad():
             if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
-                # Multi-label: compute exact match accuracy as all labels must
-                # match after thresholding at 0.5 (sigmoid).
+                # Multi-label: exact-match accuracy after thresholding.
                 prob = torch.sigmoid(outputs)
                 pred = (prob > 0.5).float()
                 if target.dtype != torch.float32:
                     target = target.float()
                 correct = (pred.eq(target).all(dim=1)).sum().item()
-            else:
+            else:  # Cross-entropy (single-label)
                 _, predicted = outputs.max(1)
-                if predicted.ndim == 1:
-                    predicted = predicted.view(-1, 1)  # Ensure shape matches target
+                # target is guaranteed to be indices after the conversion above
                 correct = (predicted == target).sum().item()
 
         return loss, correct, target.size(0)
@@ -723,6 +766,18 @@ class Trainer:
             for k, v in out["losses"].items()
         }
 
+        # Add additional EAT metrics that are already computed
+        if "masked_pct" in out:
+            self._last_batch_ssl_metrics["masked_pct"] = out["masked_pct"].item()
+
+        if "target_var" in out:
+            self._last_batch_ssl_metrics["target_var"] = out["target_var"].item()
+
+        # Add prediction variance metrics (there can be multiple pred_var_i)
+        for key, value in out.items():
+            if key.startswith("pred_var_"):
+                self._last_batch_ssl_metrics[key] = value.item()
+
         total_loss = sum(v.sum() for v in out["losses"].values())
         sample_size = out.get("sample_size", audio.size(0)).clamp(min=1).float()
         loss = total_loss / sample_size
@@ -777,15 +832,46 @@ class Trainer:
         else:
             return  # Don't save if not periodic, best, or final
 
-        # Save inside the experiment-specific folder to avoid collisions
-        if self.log is not None and hasattr(self.log, "log_dir"):
-            ckpt_dir = Path(self.log.log_dir)
+        # Decide where to place the checkpoint:
+        #   • If user provided a cloud path → always use that.
+        #   • Otherwise fall back to ExperimentLogger.log_dir when available.
+        if isinstance(self.model_dir, CloudPathT):  # type: ignore[arg-type]
+            base_dir = self.model_dir
+        elif self.log is not None and hasattr(self.log, "log_dir"):
+            base_dir = Path(self.log.log_dir)
         else:
-            ckpt_dir = Path(self.model_dir)
-        ckpt_dir.mkdir(parents=True, exist_ok=True)
-        ckpt_path = ckpt_dir / filename
-        torch.save(checkpoint, ckpt_path)
-        logger.info(f"Saved checkpoint to {ckpt_path}")
+            base_dir = Path(self.model_dir)
+
+        # Make sure directory exists (local) or is implicitly handled (cloud).
+        try:
+            base_dir.mkdir(parents=True, exist_ok=True)
+        except AttributeError:
+            pass  # Cloud paths may not implement mkdir
+
+        ckpt_path = base_dir / filename
+
+        # torch.save requires a writable file-like object or a local path. To
+        # support cloud paths we use the .open('wb') API when dealing with
+        # cloudpathlib objects.
+        if isinstance(ckpt_path, CloudPathT):  # type: ignore[arg-type]
+            with ckpt_path.open("wb") as f:
+                torch.save(checkpoint, f)
+        else:
+            torch.save(checkpoint, ckpt_path)
+
+        logger.info("Saved checkpoint → %s", ckpt_path)
+
+        # Save metadata in the same directory as the checkpoint
+        save_experiment_metadata(
+            output_dir=base_dir,  # Use the checkpoint directory
+            config=self.run_config,
+            checkpoint_name=filename,
+            metrics=self.log.last_metrics if hasattr(self.log, "last_metrics") else {},
+            is_best=is_best,
+            is_final=final,
+        )
+
+        logger.info("Saved metadata → %s", ckpt_path)
 
     def _load_checkpoint(self, checkpoint_path: str) -> None:
         """Load model, optimizer, scheduler, and scaler state from a checkpoint.
@@ -868,6 +954,36 @@ class Trainer:
             f"Resuming training from epoch {self.start_epoch} with best validation "
             f"accuracy {self.best_val_acc:.4f}"
         )
+
+    def _broadcast_training_state(self) -> None:
+        """Broadcast critical training state from main process to all processes."""
+        if not self.is_distributed:
+            return
+
+        import torch.distributed as dist
+
+        # Create tensors for the state we need to broadcast
+        # Using float tensors since dist.broadcast requires tensors
+        state_tensor = torch.tensor(
+            [
+                float(self.start_epoch),
+                self.best_val_acc,
+            ],
+            dtype=torch.float32,
+            device=self.device,
+        )
+
+        # Broadcast from rank 0 to all other ranks
+        dist.broadcast(state_tensor, src=0)
+
+        # Update state on non-main processes
+        if not is_main_process():
+            self.start_epoch = int(state_tensor[0].item())
+            self.best_val_acc = state_tensor[1].item()
+            logger.info(
+                f"Rank {dist.get_rank()}: Synchronized training state - "
+                f"start_epoch={self.start_epoch}, best_val_acc={self.best_val_acc:.4f}"
+            )
 
 
 class FineTuneTrainer:

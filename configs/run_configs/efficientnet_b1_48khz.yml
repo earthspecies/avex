@@ -1,57 +1,53 @@
 ---
 # Model configuration
 model_spec:
-  name: clip
+  name: efficientnet
   pretrained: true
+  efficientnet_variant: b1
   audio_config:
-    sample_rate: 16000
-    n_fft: 800
-    hop_length: 160
-    win_length: 800
+    sample_rate: 48000
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
     window: hann
     n_mels: 128
     representation: mel_spectrogram
     normalize: false
     target_length_seconds: 10
     window_selection: random
-  text_model_name: roberta-base
-  projection_dim: 512
-  temperature: 0.07
 
 # Where to find the (now‑completed) dataset config created earlier
 dataset_config: configs/data_configs/data_base.yml
 
 # How to use the labels (supervised: use class indices, text: use text labels)
-label_type: text
+label_type: supervised
+debug_mode: false
 
-# audio preprocessing
+# Optional waveform preprocessing step; keep as null / None if you handle it
+# inside the dataloader or model
 preprocessing: null
 
 # Target sample‑rate expected by the model
-sr: 16000
-debug_mode: false
+sr: 48000
 
 # Log training runs to MLflow
-logging: mlflow
-output_dir: "./runs/clip_baseline_19_05"
-
-# Path to checkpoint to resume from (set to null or a path)
-# resume_from_checkpoint: null
+logging: wandb
+output_dir: "./efficientnet_b1_48khz"
+distributed: true
 
 training_params:
-  train_epochs: 45
+  train_epochs: 50
   lr: 0.0001
-  batch_size: 512
-  optimizer: adamw8bit
+  batch_size: 256
+  optimizer: adamw
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
-  log_steps: 100
 
 # Learning rate scheduler configuration
 scheduler:
   name: cosine
-  warmup_steps: 500
+  warmup_steps: 4000
   min_lr: 1e-6
 
 augmentations:
@@ -90,15 +86,15 @@ augmentations:
   #     n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
   #     augmentation_prob: 0.5  # Probability of applying mixup to a batch
 
-# Contrastive loss for CLIP training
-loss_function: contrastive
+# Cross entropy loss for classification
+loss_function: cross_entropy
 
 device: cuda
 
-seed: 43
+seed: 42
 
-num_workers: 8
+num_workers: 10
 
-run_name: clip_base
+run_name: efficientnet_base
 
 wandb_project: representation_learning

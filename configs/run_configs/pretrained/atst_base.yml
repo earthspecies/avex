@@ -1,0 +1,33 @@
+---
+# ATST Frame model configuration for evaluation / fine-tuning
+model_spec:
+  name: atst
+  pretrained: true
+  device: cuda
+  # atst_model_path will use default: pretrained/atst_as2M.pt
+  audio_config:
+    sample_rate: 16000
+    representation: raw  # ATST does its own audio preprocessing
+    normalize: true
+    target_length_seconds: 10
+    window_selection: center
+
+# Required fields for RunConfig validation
+dataset_config: configs/data_configs/benchmark_small.yml
+output_dir: ./runs/atst_base
+loss_function: cross_entropy
+
+training_params:
+  train_epochs: 10
+  lr: 0.001
+  batch_size: 16
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+device: cuda
+seed: 42
+num_workers: 4
+
+augmentations: []

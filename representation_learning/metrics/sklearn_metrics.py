@@ -13,6 +13,7 @@ from sklearn.metrics import (
     f1_score,
     precision_score,
     recall_score,
+    roc_auc_score,
 )
 
 
@@ -26,10 +27,15 @@ class Accuracy:
 
         Args:
             logits: Model output logits of shape (N, C)
-            y: Ground truth labels of shape (N,)
+            y: Ground truth labels of shape (N,) or (N, C) for one-hot encoded labels
         """
         y_pred = logits.argmax(dim=1).cpu().numpy()
         y_true = y.cpu().numpy()
+
+        # Handle one-hot encoded labels by converting to class indices
+        if y_true.ndim == 2:
+            y_true = y_true.argmax(axis=1)
+
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
 
@@ -70,6 +76,12 @@ class BinaryF1Score:
         y_true = y.cpu().numpy()
         y_scores = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()
 
+        # Handle one-hot (or soft) encoded labels by converting to class
+        # indices for *metric* computation.  We deliberately keep the raw
+        # scores as probabilities to compute AUC/AP later on.
+        if y_true.ndim == 2:
+            y_true = y_true.argmax(axis=1)
+
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
         self.y_scores.extend(y_scores)
@@ -102,7 +114,7 @@ class MulticlassBinaryF1Score:
     def __init__(self, num_classes: int) -> None:
         self.num_classes = num_classes
         self.y_true = []
-        self.y_scores = []
+        self.y_pred = []
 
     def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
         """Update the metric with new predictions and ground truth.
@@ -127,8 +139,7 @@ class MulticlassBinaryF1Score:
             return {"macro_prec": 0.0, "macro_rec": 0.0, "macro_f1": 0.0}
 
         y_true = np.array(self.y_true)
-        y_scores = np.array(self.y_scores)
-        y_pred = (y_scores > 0.5).astype(int)
+        y_pred = np.array(self.y_pred)
 
         macro_prec = precision_score(y_true, y_pred, average="macro", zero_division=0)
         macro_rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
@@ -248,10 +259,15 @@ class BalancedAccuracy:
 
         Args:
             logits: Model output logits of shape (N, C)
-            y: Ground truth labels of shape (N,)
+            y: Ground truth labels of shape (N,) or (N, C) for one-hot encoded labels
         """
         y_pred = logits.argmax(dim=1).cpu().numpy()
         y_true = y.cpu().numpy()
+
+        # Handle one-hot encoded labels by converting to class indices
+        if y_true.ndim == 2:
+            y_true = y_true.argmax(axis=1)
+
         self.y_true.extend(y_true)
         self.y_pred.extend(y_pred)
 
@@ -316,7 +332,6 @@ class ROCAUC:
         Dict[str, float]
             ``{"roc_auc": value}``
         """
-        from sklearn.metrics import roc_auc_score
 
         if not self.y_true:
             return {"roc_auc": 0.0}

@@ -1,0 +1,32 @@
+---
+# Perch model run-config (CPU variant) for evaluation / quick experiments
+model_spec:
+  name: perch
+  pretrained: true
+  device: cpu  # <— run entirely on CPU
+  audio_config:
+    sample_rate: 32000
+    representation: raw  # waveform – Perch does its own preprocessing
+    normalize: true
+    target_length_seconds: 5
+    window_selection: center
+
+# Required fields for RunConfig validation
+dataset_config: configs/data_configs/benchmark_small.yml
+output_dir: ./runs/perch_base_cpu
+loss_function: cross_entropy
+
+training_params:
+  # Dummy params (ignored for pure inference / evaluation)
+  train_epochs: 1
+  lr: 0.0001
+  batch_size: 4
+  optimizer: adamw
+  weight_decay: 0.0
+  amp: false
+
+device: cpu
+seed: 42
+num_workers: 0
+
+augmentations: []

@@ -14,9 +14,11 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import pandas as pd
 import torch
 from esp_data import DatasetConfig
 from esp_data.io import anypath
@@ -41,6 +43,11 @@ from representation_learning.evaluation.finetune import (
 from representation_learning.evaluation.retrieval import eval_retrieval
 from representation_learning.models.get_model import get_model
 from representation_learning.utils import ExperimentLogger
+from representation_learning.utils.experiment_tracking import (
+    get_or_create_experiment_metadata,
+    load_experiment_metadata,
+    save_evaluation_metadata,
+)
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -77,6 +84,31 @@ def _parse_args() -> argparse.Namespace:
 
 
 # -------------------------------------------------------------------- #
+#  Checkpoint sanitiser helper                                         #
+# -------------------------------------------------------------------- #
+
+
+def _process_state_dict(state_dict: dict) -> dict:
+    """Remove classifier layers when loading backbone checkpoints.
+
+    Returns
+    -------
+    dict
+        Processed state dictionary with classifier layers removed.
+    """
+    if "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+
+    # Safely drop common classifier parameter names (different wrappers)
+    state_dict.pop("classifier.weight", None)
+    state_dict.pop("classifier.bias", None)
+    state_dict.pop("model.classifier.1.weight", None)
+    state_dict.pop("model.classifier.1.bias", None)
+
+    return state_dict
+
+
+# -------------------------------------------------------------------- #
 #  Core routine for one (dataset, experiment) pair
 # -------------------------------------------------------------------- #
 def run_experiment(
@@ -86,6 +118,7 @@ def run_experiment(
     device: torch.device,
     save_dir: Path,
 ) -> ExperimentResult:
+    logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
     frozen = experiment_cfg.frozen
@@ -103,7 +136,7 @@ def run_experiment(
     run_cfg: RunConfig = load_config(experiment_cfg.run_config)
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
-    run_cfg.model_spec.device = device
+    run_cfg.model_spec.device = str(device)
     run_cfg.augmentations = []  # disable training-time noise / mix-up
 
     dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
@@ -192,7 +225,8 @@ def run_experiment(
             with ckpt_path.open("rb") as f:
                 state = torch.load(f, map_location=device)
             if "model_state_dict" in state:
-                base_model.load_state_dict(state["model_state_dict"], strict=False)
+                state = _process_state_dict(state)
+                base_model.load_state_dict(state, strict=False)
             else:
                 base_model.load_state_dict(state, strict=False)
             logger.info("Loaded checkpoint from %s", ckpt_path)
@@ -243,11 +277,16 @@ def run_experiment(
 
         train_ds = EmbeddingDataset(train_embeds, train_labels)
         val_ds = EmbeddingDataset(val_embeds, val_labels)
+        num_labels = len(train_labels.unique()) if num_labels is None else num_labels
 
     # ------------------- embeddings for retrieval ---------------------- #
-    if need_retrieval or (need_probe and frozen):
-        if not need_recompute_embeddings_test:
-            test_embeds, test_labels, num_labels = load_embeddings_arrays(test_path)
+    if need_retrieval or need_probe:
+        test_path = emb_base_dir / "embedding_test.h5"
+        logger.info(test_path)
+
+        if (not overwrite) and test_path.exists():
+            test_embeds, test_labels, _ = load_embeddings_arrays(test_path)
+            print(test_embeds.shape, test_labels[0])
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
@@ -255,6 +294,8 @@ def run_experiment(
                 base_model, test_dl_raw, layer_names, device
             )
             save_embeddings_arrays(test_embeds, test_labels, test_path, num_labels)
+
+        num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 
     # ------------------------------------------------------------------ #
     #  Experiment logger
@@ -287,6 +328,7 @@ def run_experiment(
                 device,
                 exp_logger,
                 dataset_cfg.multi_label,
+                dataset_metrics=getattr(dataset_cfg, "metrics", None),
             )
         else:
             # For fine-tuning, use raw dataloaders
@@ -305,6 +347,7 @@ def run_experiment(
                 device,
                 exp_logger,
                 dataset_cfg.multi_label,
+                dataset_metrics=getattr(dataset_cfg, "metrics", None),
             )
     else:
         logger.info("Linear probe not run because not in eval_modes")
@@ -315,6 +358,7 @@ def run_experiment(
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
         retrieval_metrics = eval_retrieval(test_embeds, test_labels)
+        # logger.info("retrieval metrics", retrieval_metrics)
 
     # Log & finish
     exp_logger.log_metrics(train_metrics, step=0, split="train_final")
@@ -322,6 +366,34 @@ def run_experiment(
     exp_logger.log_metrics(probe_test_metrics, step=0, split="test_probe")
     exp_logger.log_metrics(retrieval_metrics, step=0, split="test_retrieval")
     exp_logger.finalize()
+
+    # Get or create training metadata
+    training_metadata = pd.DataFrame()
+    if experiment_cfg.checkpoint_path:
+        checkpoint_dir = Path(experiment_cfg.checkpoint_path).parent
+        checkpoint_name = Path(experiment_cfg.checkpoint_path).name
+        training_metadata = get_or_create_experiment_metadata(
+            output_dir=checkpoint_dir,
+            config=run_cfg,
+            checkpoint_name=checkpoint_name,
+        )
+
+    # Save evaluation metadata
+    save_evaluation_metadata(
+        output_dir=save_dir,
+        dataset_name=dataset_name,
+        experiment_name=experiment_name,
+        checkpoint_name=Path(experiment_cfg.checkpoint_path).name
+        if experiment_cfg.checkpoint_path
+        else "None",
+        train_metrics=train_metrics,
+        val_metrics=val_metrics,
+        probe_test_metrics=probe_test_metrics,
+        retrieval_metrics=retrieval_metrics,
+        eval_config=eval_cfg.model_dump(mode="json"),
+        training_metadata=training_metadata,
+        run_config=run_cfg.model_dump(mode="json"),  # Always include run config
+    )
 
     return ExperimentResult(
         dataset_name=dataset_name,
@@ -342,6 +414,7 @@ def main() -> None:
     # 1. Load configs
     eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
     benchmark_cfg = load_config(eval_cfg.dataset_config, config_type="benchmark")
+    # logger.info("eval cfg", eval_cfg)
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
@@ -370,7 +443,7 @@ def main() -> None:
             )
 
     # 4. Write summary
-    summary_path = save_dir / "summary.txt"
+    summary_path = save_dir / f"summary_{datetime.now()}.txt"
     with summary_path.open("w") as f:
         f.write("Experiment Summary\n==================\n\n")
         for r in all_results:
@@ -383,6 +456,90 @@ def main() -> None:
             f.write("-" * 60 + "\n")
 
     logger.info("Saved summary to %s", summary_path)
+
+    # 5. Create and save summary DataFrame
+    # First, collect all possible metrics from all datasets to ensure consistent columns
+    all_possible_metrics = set()
+    all_possible_val_metrics = set()
+    all_possible_test_metrics = set()
+    all_possible_retrieval_metrics = set()
+
+    # Collect metrics from all results
+    for r in all_results:
+        all_possible_metrics.update(r.train_metrics.keys())
+        all_possible_val_metrics.update(r.val_metrics.keys())
+        all_possible_test_metrics.update(r.probe_test_metrics.keys())
+        all_possible_retrieval_metrics.update(r.retrieval_metrics.keys())
+
+    # Also collect metrics from dataset configurations
+    for ds_cfg in benchmark_cfg.datasets:
+        if hasattr(ds_cfg, "metrics") and ds_cfg.metrics:
+            all_possible_test_metrics.update(ds_cfg.metrics)
+
+    # Add standard retrieval metrics that are always computed when retrieval is enabled
+    if "retrieval" in eval_cfg.eval_modes:
+        all_possible_retrieval_metrics.update(
+            ["retrieval_roc_auc", "retrieval_precision_at_1"]
+        )
+
+    # Add standard training/validation metrics that are always computed
+    all_possible_metrics.update(["loss", "acc"])
+    all_possible_val_metrics.update(["loss", "acc"])
+
+    summary_data = []
+    for r in all_results:
+        # Get training metadata if available
+        training_metadata = pd.DataFrame()
+        for exp_cfg in eval_cfg.experiments:
+            if exp_cfg.run_name == r.experiment_name:
+                if exp_cfg.checkpoint_path:
+                    checkpoint_dir = Path(exp_cfg.checkpoint_path).parent
+                    training_metadata = load_experiment_metadata(checkpoint_dir)
+                break
+
+        # Create summary entry with all possible metrics, using None for missing ones
+        summary_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "dataset_name": r.dataset_name,
+            "experiment_name": r.experiment_name,
+        }
+
+        # Add train metrics with None for missing ones
+        for metric in all_possible_metrics:
+            summary_entry[metric] = r.train_metrics.get(metric, None)
+
+        # Add validation metrics with None for missing ones
+        for metric in all_possible_val_metrics:
+            summary_entry[f"val_{metric}"] = r.val_metrics.get(metric, None)
+
+        # Add test metrics with None for missing ones
+        for metric in all_possible_test_metrics:
+            summary_entry[f"test_{metric}"] = r.probe_test_metrics.get(metric, None)
+
+        # Add retrieval metrics with None for missing ones
+        for metric in all_possible_retrieval_metrics:
+            # Remove the "retrieval_" prefix if it's already there to avoid
+            # double-prefixing
+            metric_name = metric.replace("retrieval_", "")
+            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(
+                metric, None
+            )
+
+        # Add training metadata if available
+        if not training_metadata.empty:
+            # Get the most recent training entry
+            latest_training = training_metadata.iloc[-1]
+            for col in training_metadata.columns:
+                if col not in summary_entry:
+                    summary_entry[f"training_{col}"] = latest_training[col]
+
+        summary_data.append(summary_entry)
+
+    # Create and save DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    summary_df_path = save_dir / f"summary_{datetime.now()}.csv"
+    summary_df.to_csv(summary_df_path, index=False)
+    logger.info("Saved summary DataFrame to %s", summary_df_path)
 
 
 if __name__ == "__main__":

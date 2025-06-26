@@ -14,7 +14,7 @@ representation_learning/models/get_model.py.
 - Add augmentations
 - Add preprocessors that help select audio windows (e.g. activity detection)
 - Pick and add first SSL model
-- Verify EfficientNetB0 training run
+- Verify EfficientNet training run
 - Add evaluation
 - See if the tests run
 - Test the wandb and mlflow backends
