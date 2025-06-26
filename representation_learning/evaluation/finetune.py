@@ -24,7 +24,6 @@ def train_and_eval_linear_probe(
     train_ds: torch.utils.data.Dataset,
     val_ds: torch.utils.data.Dataset,
     test_embed_ds: torch.utils.data.Dataset,
-    base_model: Optional[torch.nn.Module],
     num_labels: int,
     layer_names: List[str],
     eval_cfg: EvaluateConfig,
@@ -58,10 +57,7 @@ def train_and_eval_linear_probe(
     logger.info(
         "Linear probe → %d parameters", sum(p.numel() for p in probe.parameters())
     )
-
-    if base_model is not None:
-        for p in base_model.parameters():
-            p.requires_grad = False
+    probe.train()
 
     optim = get_optimizer(probe.parameters(), eval_cfg.training_params)
 
@@ -177,12 +173,26 @@ def train_and_eval_full_fine_tune(
     for p in base_model.parameters():
         p.requires_grad = True
 
+    sft_model = LinearProbe(
+        base_model=base_model,
+        layers=layer_names,
+        num_classes=num_labels,
+        device=device,
+        feature_mode=False,
+        input_dim=None,
+    )
+    logger.info(
+        "Fully fine-tuned model → %d parameters",
+        sum(p.numel() for p in sft_model.parameters()),
+    )
+    sft_model.train()
+
     # Create optimizer
-    optim = get_optimizer(base_model.parameters(), eval_cfg.training_params)
+    optim = get_optimizer(sft_model.parameters(), eval_cfg.training_params)
 
     # Create trainer
     trainer = FineTuneTrainer(
-        model=base_model,
+        model=sft_model,
         optimizer=optim,
         train_loader=train_dl_raw,
         val_loader=val_dl_raw,
