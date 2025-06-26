@@ -598,7 +598,7 @@ wheels = [
 
 [[package]]
 name = "esp-data"
-version = "1.1.0"
+version = "1.1.1"
 source = { registry = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" }
 dependencies = [
     { name = "cloudpathlib", extra = ["all"] },
@@ -613,9 +613,9 @@ dependencies = [
     { name = "semver" },
     { name = "soundfile" },
 ]
-sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.0.tar.gz", hash = "sha256:d7da3bad86a2c4536992018ea48511e67875c6ff8a4094b34530d1eea1c8b3d2" }
+sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.1.tar.gz", hash = "sha256:1bab15fed334dc677b020155bda1978fa10c4a9f587183adcb2a87f84a3f9b6d" }
 wheels = [
-    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.0-py3-none-any.whl", hash = "sha256:b672d1cd117d932709143e1299d0724b3e29d05276dc699196250b6b67d0597f" },
+    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.1-py3-none-any.whl", hash = "sha256:1b93c46bdc19710c1a2db7135e3c02fd279399630fa235cad783ced4e20a88ea" },
 ]
 
 [[package]]
@@ -2478,7 +2478,7 @@ gpu = [
 [package.metadata]
 requires-dist = [
     { name = "cloudpathlib", specifier = ">=0.21.0" },
-    { name = "esp-data", specifier = ">=1.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", specifier = ">=1.1.1", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "google-cloud-storage", specifier = ">=3.1.0" },
     { name = "h5py", specifier = ">=3.13.0" },
     { name = "joblib", specifier = ">=1.4.2" },

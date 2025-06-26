@@ -33,7 +33,7 @@ dependencies = [
   "psutil>=7.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
-  "esp-data>=1.1.0",
+  "esp-data>=1.1.1",
 ]
 
 [dependency-groups]
