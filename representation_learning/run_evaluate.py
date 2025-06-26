@@ -153,10 +153,10 @@ def run_experiment(
 
     overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
     need_recompute_embeddings_train = overwrite or (
-        need_probe and not (train_path.exists() and val_path.exists())
+        need_probe and frozen and not (train_path.exists() and val_path.exists())
     )
     need_recompute_embeddings_test = overwrite or (
-        (need_retrieval or need_probe) and not test_path.exists()
+        (need_retrieval or (need_probe and frozen)) and not test_path.exists()
     )
     logger.info(
         "Need to recompute embeddings for train: %s and test: %s",
@@ -284,13 +284,12 @@ def run_experiment(
         num_labels = len(train_labels.unique()) if num_labels is None else num_labels
 
     # ------------------- embeddings for retrieval ---------------------- #
-    if need_retrieval or need_probe:
+    if need_retrieval or (need_probe and frozen):
         test_path = emb_base_dir / "embedding_test.h5"
         logger.info(test_path)
 
         if (not overwrite) and test_path.exists():
             test_embeds, test_labels, _ = load_embeddings_arrays(test_path)
-            print(test_embeds.shape, test_labels[0])
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
@@ -325,7 +324,6 @@ def run_experiment(
                 train_ds,
                 val_ds,
                 EmbeddingDataset(test_embeds, test_labels),
-                base_model,
                 num_labels,
                 layer_names,
                 eval_cfg,
