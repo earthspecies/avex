@@ -43,7 +43,7 @@ def test_extract_embeddings_basic() -> None:
 
     # Extract embeddings from both layers
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers)
+    embeddings = model.extract_embeddings(x, layers=layers)
 
     # Check output shape
     expected_shape = (batch_size, 20 + 30)  # Concatenated embeddings from both layers
@@ -67,7 +67,7 @@ def test_extract_embeddings_dict_input() -> None:
 
     # Extract embeddings from both layers
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers)
+    embeddings = model.extract_embeddings(x, layers=layers)
 
     # Check output shape
     expected_shape = (batch_size, 20 + 30)  # Concatenated embeddings from both layers
@@ -86,7 +86,7 @@ def test_extract_embeddings_invalid_layers() -> None:
 
     # Try to extract embeddings from non-existent layer
     with pytest.raises(ValueError, match="No layers found matching"):
-        model.extract_embeddings(x, ["nonexistent_layer"])
+        model.extract_embeddings(x, layers=["nonexistent_layer"])
 
 
 def test_extract_embeddings_gradient_propagation() -> None:
@@ -101,7 +101,7 @@ def test_extract_embeddings_gradient_propagation() -> None:
 
     # Extract embeddings
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers)
+    embeddings = model.extract_embeddings(x, layers=layers)
 
     # Compute loss and backpropagate
     loss = embeddings.sum()
@@ -125,7 +125,7 @@ def test_extract_embeddings_main() -> None:
 
     # Extract embeddings from both layers
     layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers)
+    embeddings = model.extract_embeddings(x, layers=layers)
 
     print("\nExtract Embeddings Test Results:")
     print(f"Input shape: {x.shape}")
