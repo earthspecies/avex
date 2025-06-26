@@ -619,6 +619,8 @@ class Trainer:
                 correct = (pred.eq(target).all(dim=1)).sum().item()
             else:
                 _, predicted = outputs.max(1)
+                if predicted.ndim == 1:
+                    predicted = predicted.view(-1, 1)  # Ensure shape matches target
                 correct = (predicted == target).sum().item()
 
         return loss, correct, target.size(0)

@@ -66,7 +66,7 @@ class AudioDataset(torch.utils.data.Dataset):
             A dictionary containing the audio data, text label, label, and path.
         """
         sample = self.ds[idx]
-        breakpoint()
+
         if self.postprocessors:
             for postprocessor in self.postprocessors:
                 sample = postprocessor(sample)
