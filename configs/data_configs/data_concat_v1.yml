@@ -1,0 +1,45 @@
+train_datasets:
+  - dataset_name: animalspeak
+    split: validation
+    output_take_and_give:
+      audio: raw_wav
+      label: label
+    data_root: gs://foundation-model-data/audio_16k/
+    sample_rate: 16000
+
+  - dataset_name: insectset_459
+    split: train
+    output_take_and_give:
+      audio: raw_wav
+      label: label
+    data_root: gs://esp-ml-datasets/insectset_459/v0.1.0/raw/
+    sample_rate: 16000
+
+
+val_datasets:
+  - dataset_name: animalspeak
+    split: validation
+    output_take_and_give:
+      audio: raw_wav
+      label: label
+    data_root: gs://foundation-model-data/audio_16k/
+    sample_rate: 16000
+
+concatenate_train: true
+concatenate_val: false
+concatenate_test: false
+concatenate_method: soft
+
+transformations:
+
+  - type: deduplicate
+    subset: null
+
+  - type: filter
+    mode: include
+    property: order
+    values: [Passeriformes, Hemiptera, Artiodactyla]
+
+  - type: label_from_feature
+    feature: species_scientific
+    output_feature: label

@@ -43,10 +43,11 @@ class ExperimentLogger:
     @classmethod
     def from_config(cls, cfg: RunConfig) -> "ExperimentLogger":
         backend = str(getattr(cfg, "logging", "none")).lower()
+        logging_uri = getattr(cfg, "logging_uri", None)
         run_name = getattr(cfg, "run_name", None)
 
         if backend == "mlflow":
-            return cls._build_mlflow(run_name)
+            return cls._build_mlflow(run_name, logging_uri=logging_uri)
 
         if backend in {"wandb", "wb"}:
             project = getattr(cfg, "wandb_project", "audio‑experiments")
@@ -56,14 +57,16 @@ class ExperimentLogger:
         return cls._build_none()
 
     @classmethod
-    def _build_mlflow(cls, run_name: Optional[str]) -> "ExperimentLogger":
+    def _build_mlflow(
+        cls, run_name: Optional[str], logging_uri: Optional[str]
+    ) -> "ExperimentLogger":
         try:
             mlflow = importlib.import_module("mlflow")
         except ModuleNotFoundError:
             logger.warning("mlflow not installed – logging disabled.")
             return cls(backend="none")
 
-        mlflow.set_tracking_uri(uri="http://100.89.114.62:8080")
+        mlflow.set_tracking_uri(uri=logging_uri or "http://localhost:5000")
         mlflow.start_run(run_name=run_name)
         logger.info("MLflow run started (%s).", run_name)
         return cls(backend="mlflow", handle=mlflow)

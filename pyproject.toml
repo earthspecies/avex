@@ -33,11 +33,11 @@ dependencies = [
   "psutil>=7.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
-  "esp-data>=1.0.0",
+  "esp-data>=1.1.0",
 ]
 
 [dependency-groups]
-gpu = ["bitsandbytes>=0.45.5"]
+gpu = ["bitsandbytes>=0.45.5; sys_platform != 'darwin'"]
 dev = [
   "pre-commit<=4.2.0",
   "pytest<=7.4.0",
