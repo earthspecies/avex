@@ -12,6 +12,9 @@ from representation_learning.metrics.sklearn_metrics import (
     MeanAveragePrecision,
     MulticlassBinaryF1Score,
 )
+from representation_learning.metrics.strong_detection.framewise_detection_metrics import (
+    StrongDetectionF1Tensor,
+)
 
 
 def get_metric_class(
@@ -36,6 +39,7 @@ def get_metric_class(
         "multiclass_f1": lambda: MulticlassBinaryF1Score(num_classes),
         "map": MeanAveragePrecision,
         "roc_auc": ROCAUC,
+        "f1_strong": StrongDetectionF1Tensor,
     }
 
     if metric_name not in metric_map:

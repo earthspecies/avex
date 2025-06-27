@@ -19,6 +19,7 @@ class DatasetConfig(BaseModel):
     audio_path_col: str | None = None
     output_take_and_give: dict[str, str] | None = None
     split: str = "train"
+    strong_detection: bool = False  # TODO: TEMP - where to store this?
 
     @field_validator("transformations", mode="before")
     @classmethod

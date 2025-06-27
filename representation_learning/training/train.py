@@ -204,10 +204,10 @@ class Trainer:
             else:
                 # For CPU or when device index is None, let DDP auto-detect
                 logger.info("Using CPU or auto-detect for DDP")
-                self.model = parallel.DistributedDataParallel(
-                    self.model,
+            self.model = parallel.DistributedDataParallel(
+                self.model,
                     find_unused_parameters=True,
-                )
+            )
             self.model_unwrapped = self.model.module
         else:
             self.model_unwrapped = self.model
@@ -347,9 +347,9 @@ class Trainer:
 
                         self.log.log_metrics(
                             train_metrics,
-                            step=epoch,
-                            split="train",
-                        )
+                        step=epoch,
+                        split="train",
+                    )
 
                         val_metrics = {"loss": val_loss, "acc": val_acc}
                         if self.is_clip_mode and hasattr(
@@ -417,9 +417,9 @@ class Trainer:
         with context_mgr:
             for i, batch in enumerate(
                 tqdm(
-                    loader,
-                    desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
-                    leave=False,
+            loader,
+            desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+            leave=False,
                 )
             ):
                 # ------------------------------------------------------
@@ -1087,15 +1087,37 @@ class FineTuneTrainer:
                 mask = batch.get("padding_mask")
                 if mask is not None:
                     mask = mask.to(self.device)
-                y = batch["label"].to(self.device)
 
+                # ------------------------------------------------------------------
+                # Support both clip-level and frame-level targets
+                # ------------------------------------------------------------------
+                if "frame_targets" in batch:  # Shape: (B, T, C)
+                    y = batch["frame_targets"].to(self.device)
+                else:
+                    y = batch["label"].to(self.device)
+
+                # Forward – pass padding_mask when available
                 logits = (
                     self.model(x, padding_mask=mask)
                     if mask is not None
                     else self.model(x)
                 )
 
-            loss = self.criterion(logits, y)
+            # ----------------------------------------------------------------------
+            # Loss – handle optional padding for frame-level supervision
+            # ----------------------------------------------------------------------
+            if self.multi_label and logits.ndim == 3:  # (B, T, C)
+                # BCE per frame × class. Exclude padded frames if mask provided.
+                if mask is not None:
+                    valid_mask = (~mask.unsqueeze(-1)).expand_as(logits)  # (B, T, C)
+                    loss = self.criterion(logits[valid_mask], y.float()[valid_mask])
+                    elems_in_batch = valid_mask.sum().item()
+                else:
+                    loss = self.criterion(logits, y.float())
+                    elems_in_batch = y.numel()
+            else:
+                loss = self.criterion(logits, y.float() if self.multi_label else y)
+                elems_in_batch = y.size(0)
 
             # Backward pass if training
             if train:
@@ -1103,22 +1125,34 @@ class FineTuneTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            # Calculate accuracy
+            # ----------------------------------------------------------------------
+            # Accuracy (rough proxy) – supports frame-level & clip-level
+            # ----------------------------------------------------------------------
             if self.multi_label:
                 pred = (torch.sigmoid(logits) > 0.5).float()
-                correct = (pred == y).all(dim=1).sum().item()
+                if logits.ndim == 3:  # Frame-level
+                    if mask is not None:
+                        valid_mask = (~mask.unsqueeze(-1)).expand_as(pred)
+                        correct = (pred[valid_mask] == y[valid_mask]).sum().item()
+                        total_samples += valid_mask.sum().item()
+                    else:
+                        correct = (pred == y).sum().item()
+                        total_samples += y.numel()
+                else:  # Clip-level
+                    correct = (pred == y).all(dim=1).sum().item()
+                    total_samples += y.size(0)
             else:
                 pred = logits.argmax(dim=1)
-                # Convert one-hot labels back to class indices for comparison
                 y_indices = y.argmax(dim=1)
                 correct = (pred == y_indices).sum().item()
+                total_samples += y.size(0)
 
-            # Update metrics
-            total_loss += loss.item() * y.size(0)
+            total_loss += loss.item() * elems_in_batch
             total_correct += correct
-            total_samples += y.size(0)
 
-        return total_loss / total_samples, total_correct / total_samples
+        # Normalise loss per element (frame × class) for frame-level tasks
+        denom = total_samples if total_samples > 0 else 1
+        return total_loss / denom, total_correct / denom
 
     def _save_checkpoint(self, name: str) -> None:
         """Save model checkpoint."""

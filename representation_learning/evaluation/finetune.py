@@ -2,13 +2,16 @@ import logging
 from typing import Dict, List, Optional, Tuple
 
 import torch
+import numpy as np
 
 from representation_learning.configs import EvaluateConfig
 from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.models.linear_probe import LinearProbe
+from representation_learning.models.framewise_linear_probe import FramewiseLinearProbe
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import FineTuneTrainer
 from representation_learning.utils import ExperimentLogger
+from representation_learning.metrics.strong_detection.detection_metric_helpers import _frames_to_events
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -112,6 +115,146 @@ def train_and_eval_linear_probe(
         name: met.get_primary_metric()
         for name, met in zip(metric_names, metrics, strict=False)
     }
+    return train_metrics, val_metrics, probe_test_metrics
+
+
+# -------------------------------------------------------------------- #
+#  Framewise linear probe helper for strong detection
+# -------------------------------------------------------------------- #
+def train_and_eval_framewise_probe(
+    train_dl_raw: torch.utils.data.DataLoader,
+    val_dl_raw: torch.utils.data.DataLoader,
+    test_dl_raw: torch.utils.data.DataLoader,
+    base_model: torch.nn.Module,
+    num_labels: int,
+    layer_names: List[str],
+    eval_cfg: EvaluateConfig,
+    device: torch.device,
+    exp_logger: ExperimentLogger,
+    metric_names: List[str],
+    fps: float = 50.0,
+) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    """Train a framewise linear probe for strong detection evaluation.
+
+    Parameters
+    ----------
+    train_dl_raw : torch.utils.data.DataLoader
+        Training dataloader with raw waveforms and frame-level targets
+    val_dl_raw : torch.utils.data.DataLoader
+        Validation dataloader with raw waveforms and frame-level targets
+    test_dl_raw : torch.utils.data.DataLoader
+        Test dataloader with raw waveforms and frame-level targets
+    base_model : torch.nn.Module
+        Frozen backbone network
+    num_labels : int
+        Number of output classes
+    layer_names : List[str]
+        Names of layers to extract features from
+    eval_cfg : EvaluateConfig
+        Evaluation configuration
+    device : torch.device
+        Device to train on
+    exp_logger : ExperimentLogger
+        Logger for experiment metrics
+    metric_names : List[str]
+        Names of metrics to compute
+
+    Returns
+    -------
+    Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]
+        • **train_metrics** – aggregated over training split
+        • **val_metrics**   – aggregated over validation split
+        • **probe_test_metrics** – metrics on test split
+    """
+    
+    # Create framewise linear probe
+    probe = FramewiseLinearProbe(
+        base_model=base_model,
+        layers=layer_names,
+        num_classes=num_labels,
+        device=device,
+        feature_mode=False,  # We'll extract embeddings inside the probe
+    )
+    
+    logger.info(
+        "Framewise probe → %d parameters", sum(p.numel() for p in probe.parameters())
+    )
+
+    # Freeze the base model (probe backbone)
+    for p in base_model.parameters():
+        p.requires_grad = False
+
+    # ------------------------------------------------------------------
+    # 1. Training & Validation via FineTuneTrainer
+    # ------------------------------------------------------------------
+    optim = get_optimizer(probe.classifier.parameters(), eval_cfg.training_params)
+
+    trainer = FineTuneTrainer(
+        model=probe,
+        optimizer=optim,
+        train_loader=train_dl_raw,
+        val_loader=val_dl_raw,
+        device=device,
+        cfg=eval_cfg,
+        exp_logger=exp_logger,
+        multi_label=True,  # Frame-wise strong detection is multi-label
+    )
+
+    train_metrics, val_metrics = trainer.train(
+        num_epochs=eval_cfg.training_params.train_epochs
+    )
+
+    # ------------------------------------------------------------------
+    # 2. Test-set evaluation – strong detection metrics
+    # ------------------------------------------------------------------
+    probe.eval()
+    metrics = [get_metric_class(m, num_labels) for m in metric_names]
+
+    # Propagate fps to metrics that rely on it (e.g. StrongDetectionF1Tensor)
+    for name, met in zip(metric_names, metrics, strict=False):
+        if name == "f1_strong" and hasattr(met, "fps"):
+            met.fps = fps
+
+    with torch.no_grad():
+        for batch in test_dl_raw:
+            wav = batch["raw_wav"].to(device)
+            targets = batch["frame_targets"].to(device)  # (B, T, C)
+
+            padding_mask = batch.get("padding_mask")
+            if padding_mask is not None:
+                padding_mask = padding_mask.to(device)
+
+            # Forward pass → (B, T, C)
+            logits = probe(wav, padding_mask)
+
+            # ----------------------------------------------------------
+            # Convert reference frames → event lists per sample × class
+            # ----------------------------------------------------------
+            targets_events: list[list[np.ndarray]] = []  # type: ignore[name-defined]
+            for b in range(targets.shape[0]):
+                valid_mask = (~padding_mask[b]).cpu().numpy() if padding_mask is not None else None
+
+                batch_events: list[np.ndarray] = []  # type: ignore[name-defined]
+                for c in range(targets.shape[2]):
+                    frames_np = targets[b, :, c].cpu().numpy()
+                    if valid_mask is not None:
+                        frames_np = frames_np[valid_mask]
+                    batch_events.append(_frames_to_events(frames_np, fps))
+                targets_events.append(batch_events)
+
+            # Update strong-detection metric(s)
+            for name, met in zip(metric_names, metrics, strict=False):
+                if name == "f1_strong":
+                    met.update(logits, targets_events, padding_mask)
+                else:
+                    # Fallback: average over time → clip-level
+                    met.update(logits.mean(dim=1), targets.mean(dim=1))
+
+    probe_test_metrics = {
+        name: met.get_primary_metric()
+        for name, met in zip(metric_names, metrics, strict=False)
+    }
+
     return train_metrics, val_metrics, probe_test_metrics
 
 
