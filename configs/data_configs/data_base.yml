@@ -1,13 +1,37 @@
-dataset_name: animalspeak
-dataset_version: 0.0
-balance: false
-balance_attribute: canonical_name   # balance data across via this attribute
-custom_balancing: false
-balancing_method: upsample
-subset_percentage: 1.0              # <1 to consider a subset of data
-audio_max_length_seconds: 10
-audio_path_col: path
+train_datasets:
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    balance: false
+    balance_attribute: canonical_name   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    data_root: gs://foundation-model-data/audio_16k/
+    transformations:
+      - type: label_from_feature
+        feature: canonical_name
+        override: true
 
-transformations:
-  - type: label_from_feature
-    feature: canonical_name
+
+val_datasets:
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    balance: false
+    balance_attribute: canonical_name   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    transformations:
+      - type: label_from_feature
+        feature: canonical_name
+        override: true
+    # data_root: gs://foundation-model-data/audio_16k/
+    data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/animalspeak2/16khz/
+
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft

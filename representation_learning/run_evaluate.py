@@ -24,6 +24,7 @@ from esp_data import DatasetConfig
 from esp_data.io import anypath
 
 from representation_learning.configs import (
+    DatasetCollectionConfig,
     EvaluateConfig,
     ExperimentConfig,
     RunConfig,
@@ -139,6 +140,7 @@ def run_experiment(
     run_cfg.model_spec.device = str(device)
     run_cfg.augmentations = []  # disable training-time noise / mix-up
 
+    # Set sample rate on the dataset config
     dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
 
     # Embedding paths
@@ -187,8 +189,14 @@ def run_experiment(
     num_labels = None
 
     if need_raw_dataloaders:
+        # Create a DatasetCollectionConfig from the individual DatasetConfig
+        data_collection_cfg = DatasetCollectionConfig(
+            train_datasets=[dataset_cfg],
+            val_datasets=[dataset_cfg],
+            test_datasets=[dataset_cfg],
+        )
         train_dl_raw, val_dl_raw, test_dl_raw = build_dataloaders(
-            run_cfg, dataset_cfg, device
+            run_cfg, data_collection_cfg, device
         )
         logger.info(
             "Raw dataloaders ready: %d/%d/%d raw batches",

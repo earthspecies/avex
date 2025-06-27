@@ -1,28 +1,30 @@
 data_path: benchmark
 
 datasets:
-  - dataset_name: egyptian_fruit_bats
-    type: classification
-    label_column: label
-    audio_path_col: path
-    multi_label: false
-    label_type: supervised
-    audio_max_length_seconds: 5
-    transformations:
-      - type: label_from_feature
-        feature: label
-        override: true
-        label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
-    # transformations:
-    #   - type: uniform_sample
-    #     property: label
-    #     ratio: 0.01
-    sample_rate: 16000
-    metrics:
-      - accuracy
-      - balanced_accuracy
+  # - dataset_name: beans
+  #   split: egyptian_fruit_bats_test
+  #   type: classification
+  #   label_column: label
+  #   audio_path_col: local_path
+  #   multi_label: false
+  #   label_type: supervised
+  #   audio_max_length_seconds: 5
+  #   transformations:
+  #     - type: label_from_feature
+  #       feature: label
+  #       override: true
+  #       label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
+  #   # transformations:
+  #   #   - type: uniform_sample
+  #   #     property: label
+  #   #     ratio: 0.01
+  #   sample_rate: 16000
+  #   metrics:
+  #     - accuracy
+  #     - balanced_accuracy
 
-  - dataset_name: dogs
+  - dataset_name: beans
+    split: dogs_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -63,7 +65,8 @@ datasets:
     #   - accuracy
     #   - balanced_accuracy
 
-  - dataset_name: HumBugDB
+  - dataset_name: beans
+    split: humbugdb_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -84,7 +87,8 @@ datasets:
       - accuracy
       - balanced_accuracy
 
-  - dataset_name: cbi
+  - dataset_name: beans
+    split: cbi_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -105,7 +109,8 @@ datasets:
       - accuracy
       - balanced_accuracy
 
-  - dataset_name: watkins
+  - dataset_name: beans
+    split: watkins_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -143,7 +148,8 @@ datasets:
   #   metrics:
   #     - multiclass_f1
 
-  - dataset_name: rfcx-detection
+  - dataset_name: beans
+    split: rfcx_test
     type: detection
     label_column: answer
     audio_path_col: path
@@ -160,7 +166,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: hiceas-detection
+  - dataset_name: beans
+    split: hiceas_test
     type: detection
     label_column: answer
     audio_path_col: path
@@ -177,7 +184,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: hainan-gibbons-detection
+  - dataset_name: beans
+    split: hainan_gibbons_test
     type: detection
     label_column: answer
     audio_path_col: path
@@ -194,7 +202,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: dcase-detection
+  - dataset_name: beans
+    split: dcase_test
     type: detection
     label_column: answer
     audio_path_col: path
@@ -211,7 +220,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: birdset-POW
+  - dataset_name: BirdSet
+    split: POW-test
     type: detection
     label_column: label
     audio_path_col: path
@@ -228,7 +238,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: birdset-PER
+  - dataset_name: BirdSet
+    split: PER-test
     type: detection
     label_column: label
     audio_path_col: path
@@ -245,7 +256,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: birdset-NES
+  - dataset_name: BirdSet
+    split: NES-test
     type: detection
     label_column: label
     audio_path_col: path
@@ -262,7 +274,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: birdset-NBP
+  - dataset_name: BirdSet
+    split: NBP-test
     type: detection
     label_column: label
     audio_path_col: path
@@ -279,7 +292,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: birdset-HSN
+  - dataset_name: BirdSet
+    split: HSN-test
     type: detection
     label_column: label
     audio_path_col: path

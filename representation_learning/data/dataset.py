@@ -168,18 +168,31 @@ def _build_datasets(
         cfg.test_datasets, cfg.concatenate_test, cfg.concatenate_method
     )
 
+    # Initialize defaults for label_map and num_classes
+    label_map = {}
+    num_classes = 0
+
     # Apply label_to_feature transform to validation set
     if "label_from_feature" in train_metadata:
         label_map = train_metadata["label_from_feature"].get("label_map", {})
         num_classes = train_metadata["label_from_feature"].get(
             "num_classes", len(label_map)
         )
+
+        # Get the feature name used for labeling
+        label_feature = train_metadata["label_from_feature"]["label_feature"]
+
+        # Always set override=True when applying transformations to val/test datasets
+        # since we know we want to replace any existing label features
         label_transform = LabelFromFeatureConfig(
             type="label_from_feature",
-            feature=train_metadata["label_from_feature"]["label_feature"],
+            feature=label_feature,
             output_feature="label",
             label_map=label_map,
+            override=True,
         )
+
+        # Apply label transform to val/test datasets
         if val_ds:
             val_ds.apply_transformations([label_transform])
         if test_ds:
@@ -190,11 +203,20 @@ def _build_datasets(
         num_classes = train_metadata["labels_from_features"].get(
             "num_classes", len(label_map)
         )
+
+        # Get the feature name(s) used for labeling
+        label_features = train_metadata["labels_from_features"]["label_feature"]
+
+        # Always set override=True when applying transformations to val/test datasets
+        # since we know we want to replace any existing label features
         label_transform = LabelFromFeatureConfig(
-            feature=train_metadata["labels_from_features"]["label_feature"],
+            feature=label_features,
             output_feature="label",
             label_map=label_map,
+            override=True,
         )
+
+        # Apply label transform to val/test datasets
         if val_ds:
             val_ds.apply_transformations([label_transform])
         if test_ds:
@@ -220,7 +242,14 @@ def _build_datasets(
         )
 
     if test_ds:
-        test_ds = AudioDataset(test_ds, postprocessors=postprocessors)
+        test_ds = AudioDataset(
+            test_ds,
+            postprocessors=postprocessors,
+            metadata={
+                "label_map": train_metadata.get("label_map", {}),
+                "num_labels": num_classes,
+            },
+        )
 
     return train_ds, val_ds, test_ds
 
@@ -260,7 +289,10 @@ class Collater:
         audios, masks, labels, text_labels = [], [], [], []
 
         for item in batch:
-            wav = torch.as_tensor(item["raw_wav"])  # (T,)
+            # Use "audio" key which is the standard in esp_data,
+            # fallback to "raw_wav" for compatibility
+            audio_key = "audio" if "audio" in item else "raw_wav"
+            wav = torch.as_tensor(item[audio_key])  # (T,)
             wav, pad_mask = pad_or_window(
                 wav, self.audio_max_length_seconds * self.sr, self.window_selection
             )
@@ -275,7 +307,7 @@ class Collater:
             # Create temporary batch of uniform-length samples
             temp_batch = [
                 {
-                    "raw_wav": wav,
+                    "audio": wav,  # Use standard "audio" key
                     "label": lbl,
                     "text_label": txt if self.keep_text else None,
                 }
@@ -289,7 +321,7 @@ class Collater:
             # Now mixup can safely operate on same-sized tensors
             mixed_batch = self.batch_aug_processor.apply_batch_augmentations(temp_batch)
             # Extract back to separate lists
-            audios = [item["raw_wav"] for item in mixed_batch]
+            audios = [item["audio"] for item in mixed_batch]  # Use standard "audio" key
             labels = [item["label"] for item in mixed_batch]
             if self.keep_text:
                 text_labels = [item["text_label"] for item in mixed_batch]
@@ -319,6 +351,7 @@ class Collater:
             label_tensor = torch.stack(label_tensors)
 
         return {
+            # Keep raw_wav for backward compatibility with models
             "raw_wav": audio_tensor,
             "padding_mask": mask_tensor,
             "label": label_tensor,
