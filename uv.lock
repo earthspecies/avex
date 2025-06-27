@@ -621,7 +621,7 @@ wheels = [
 
 [[package]]
 name = "esp-data"
-version = "1.0.2"
+version = "1.1.1"
 source = { registry = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" }
 dependencies = [
     { name = "cloudpathlib", extra = ["all"] },
@@ -636,9 +636,9 @@ dependencies = [
     { name = "semver" },
     { name = "soundfile" },
 ]
-sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.0.2.tar.gz", hash = "sha256:19da5d67ff43a4eb4f310859305e63a246566b8f218d650b77f5e353f734540a" }
+sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.1.tar.gz", hash = "sha256:1bab15fed334dc677b020155bda1978fa10c4a9f587183adcb2a87f84a3f9b6d" }
 wheels = [
-    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.0.2-py3-none-any.whl", hash = "sha256:9ec1503e17914c519fb253f5693677866ae6adf15255a986c6d94b2febdef9ce" },
+    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.1-py3-none-any.whl", hash = "sha256:1b93c46bdc19710c1a2db7135e3c02fd279399630fa235cad783ced4e20a88ea" },
 ]
 
 [[package]]
@@ -2888,14 +2888,14 @@ dev = [
     { name = "yamllint" },
 ]
 gpu = [
-    { name = "bitsandbytes" },
+    { name = "bitsandbytes", marker = "sys_platform != 'darwin'" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cloudpathlib", specifier = ">=0.21.0" },
     { name = "einops", specifier = ">=0.8.1" },
-    { name = "esp-data", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", specifier = ">=1.1.1", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "google-cloud-storage", specifier = ">=3.1.0" },
     { name = "gradio", specifier = ">=4.0.0" },
     { name = "gradio-leaderboard", specifier = ">=0.0.13" },
@@ -2934,7 +2934,7 @@ dev = [
     { name = "ruff", specifier = "<=0.11.2" },
     { name = "yamllint", specifier = "<=1.35.1" },
 ]
-gpu = [{ name = "bitsandbytes", specifier = ">=0.45.5" }]
+gpu = [{ name = "bitsandbytes", marker = "sys_platform != 'darwin'", specifier = ">=0.45.5" }]
 
 [[package]]
 name = "requests"

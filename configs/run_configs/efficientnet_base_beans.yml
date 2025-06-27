@@ -28,7 +28,7 @@ preprocessing: null
 sr: 16000
 
 # Log training runs to MLflow
-logging: mlflow
+logging: wandb
 output_dir: "./runs/efficientnet_single_26_05"
 
 training_params:

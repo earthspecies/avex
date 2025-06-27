@@ -1,6 +1,7 @@
 """Distributed training setup utilities."""
 
 import builtins
+import contextlib
 import logging
 import os
 from typing import Tuple
@@ -11,18 +12,34 @@ logger = logging.getLogger(__name__)
 
 
 # Disable printing when not in master process
-def suppress_non_master_prints(is_master: bool) -> None:
-    """
-    This function disables printing when not in master process
-    """
-    builtin_print = builtins.print
+# def suppress_non_master_prints(is_master: bool) -> None:
+#     """
+#     This function disables printing when not in master process
+#     """
+#     builtin_print = builtins.print
 
-    def print(*args: object, **kwargs: object) -> None:
-        force = kwargs.pop("force", False)
-        if is_master or force:
-            builtin_print(*args, **kwargs)
+#     def print(*args: object, **kwargs: object) -> None:
+#         force = kwargs.pop("force", False)
+#         if is_master or force:
+#             builtin_print(*args, **kwargs)
 
-    builtins.print = print
+#     builtins.print = print
+
+
+@contextlib.contextmanager
+def suppress_non_master_prints(is_master: bool):  # noqa: ANN201
+    """
+    Context manager to temporarily suppress prints for non-master processes
+    """
+    if is_master:
+        yield
+    else:
+        original_print = builtins.print
+        builtins.print = lambda *args, **kwargs: None
+        try:
+            yield
+        finally:
+            builtins.print = original_print
 
 
 def get_slurm_env() -> Tuple[int, int, int, int, str]:

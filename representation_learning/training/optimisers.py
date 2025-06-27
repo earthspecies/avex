@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import Iterable
 
-import bitsandbytes as bnb
 import torch
 from torch.optim import Optimizer
 
@@ -99,6 +98,8 @@ def get_optimizer(
     elif opt_name == "adam":
         optimiser_cls = torch.optim.Adam  # type: ignore[assignment]
     elif opt_name == "adamw8bit":
+        import bitsandbytes as bnb
+
         optimiser_cls = bnb.optim.PagedAdamW8bit  # type: ignore[assignment]
     else:
         raise ValueError(

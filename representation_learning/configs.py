@@ -16,16 +16,16 @@ Usage
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Self, Tuple, Union
 
 import yaml
+from esp_data import DatasetConfig
+from esp_data.transforms import RegisteredTransformConfigs
 
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from esp_data_temp.config import DatasetConfig
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -275,6 +275,8 @@ class RunConfig(BaseModel):
     preprocessing: Optional[str] = None
     sr: int = 16000
     logging: Literal["mlflow", "wandb", "none"] = "mlflow"
+    # TODO : make default uri localhost ?
+    logging_uri: str = "http://127.0.0.1:5000/"
     label_type: Literal["supervised", "text", "self_supervised"] = Field(
         "supervised",
         description=(
@@ -500,13 +502,97 @@ class BenchmarkConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DatasetCollectionConfig(BaseModel):
+    """Configuration for a collection of datasets.
+
+    This is used to define a set of datasets that can be used in training or evaluation.
+    It allows specifying multiple datasets with their configurations.
+
+    Attributes
+    ----------
+    datasets : List[DatasetConfig]
+        List of dataset configurations
+
+    concatenate : bool
+        If True, concatenate all datasets into a single dataset.
+        If False, treat each dataset separately.
+
+    concatenate_method : Literal["hard", "overlap", "soft"]
+        Method to use when concatenating datasets:
+        'hard' for strict concatenation (all columns must match),
+        'overlap' for overlapping columns only,
+        'soft' to allow any columns to be present in any dataset.
+    """
+
+    train_datasets: Optional[List[DatasetConfig]] = Field(
+        None, description="Optional List of training dataset configurations"
+    )
+    val_datasets: Optional[List[DatasetConfig]] = Field(
+        None,
+        description="Optional list of validation dataset configurations",
+    )
+    test_datasets: Optional[List[DatasetConfig]] = Field(
+        None,
+        description="Optional list of test dataset configurations",
+    )
+    concatenate_train: bool = Field(
+        True,
+        description=(
+            "If True, concatenate all datasets into a single dataset. "
+            "If False, treat each dataset separately."
+        ),
+    )
+    concatenate_val: bool = Field(
+        True,
+        description=(
+            "If True, concatenate all evaluation datasets into a single dataset. "
+            "If False, treat each evaluation dataset separately."
+        ),
+    )
+    concatenate_test: bool = Field(
+        True,
+        description=(
+            "If True, concatenate all test datasets into a single dataset. "
+            "If False, treat each test dataset separately."
+        ),
+    )
+    concatenate_method: Literal["hard", "overlap", "soft"] = Field(
+        "soft",
+        description=(
+            "Method to use when concatenating datasets:"
+            "'hard' for strict concatenation (all columns must match),"
+            "'overlap' for overlapping columns only,"
+            "'soft' to allow any columns to be present in any dataset"
+        ),
+    )
+    transformations: list[RegisteredTransformConfigs] | None = Field(
+        None,
+        description=(
+            "Optional list of transformations to apply to the concatenated dataset. "
+            "These transformations are applied before concatenation."
+        ),
+    )
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def check_nonempty_datasets(self) -> Self:
+        # Check that not all of train, val and test are empty
+        # one of them has to be provided
+        if not (self.train_datasets or self.val_datasets or self.test_datasets):
+            raise ValueError(
+                "At least one of train_datasets, val_datasets,"
+                "or test_datasets must be provided."
+            )
+        return self
+
+
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
 def load_config(
     path: str | Path,
     config_type: Literal["run", "data", "evaluate", "benchmark"] = "run",
-) -> RunConfig | DatasetConfig | EvaluateConfig | BenchmarkConfig:
+) -> RunConfig | DatasetCollectionConfig | EvaluateConfig | BenchmarkConfig:
     """Read YAML at *path*, validate, and return a **RunConfig** instance.
 
     Parameters
@@ -539,7 +625,7 @@ def load_config(
     if config_type == "run":
         return RunConfig.model_validate(raw)
     elif config_type == "data":
-        return DatasetConfig.model_validate(raw)
+        return DatasetCollectionConfig.model_validate(raw)
     elif config_type == "evaluate":
         return EvaluateConfig.model_validate(raw)
     elif config_type == "benchmark":

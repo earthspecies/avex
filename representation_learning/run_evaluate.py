@@ -20,10 +20,11 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 import torch
-from cloudpathlib import GSPath
+from esp_data import DatasetConfig
+from esp_data.io import anypath
 
-from esp_data_temp.config import DatasetConfig
 from representation_learning.configs import (
+    DatasetCollectionConfig,
     EvaluateConfig,
     ExperimentConfig,
     RunConfig,
@@ -139,6 +140,7 @@ def run_experiment(
     run_cfg.model_spec.device = str(device)
     run_cfg.augmentations = []  # disable training-time noise / mix-up
 
+    # Set sample rate on the dataset config
     dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
 
     # Embedding paths
@@ -187,8 +189,14 @@ def run_experiment(
     num_labels = None
 
     if need_raw_dataloaders:
+        # Create a DatasetCollectionConfig from the individual DatasetConfig
+        data_collection_cfg = DatasetCollectionConfig(
+            train_datasets=[dataset_cfg],
+            val_datasets=[dataset_cfg],
+            test_datasets=[dataset_cfg],
+        )
         train_dl_raw, val_dl_raw, test_dl_raw = build_dataloaders(
-            run_cfg, dataset_cfg, device
+            run_cfg, data_collection_cfg, device
         )
         logger.info(
             "Raw dataloaders ready: %d/%d/%d raw batches",
@@ -219,11 +227,7 @@ def run_experiment(
         base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
 
         if experiment_cfg.checkpoint_path:
-            ckpt_path = (
-                GSPath(experiment_cfg.checkpoint_path)
-                if experiment_cfg.checkpoint_path.startswith("gs://")
-                else Path(experiment_cfg.checkpoint_path).expanduser()
-            )
+            ckpt_path = anypath(experiment_cfg.checkpoint_path)
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
             with ckpt_path.open("rb") as f:
@@ -420,7 +424,7 @@ def main() -> None:
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
-        save_dir = GSPath(str(eval_cfg.save_dir))
+        save_dir = anypath(str(eval_cfg.save_dir))
         # For GCS paths we rely on cloudpathlib to create objects lazily when
         # data is written, so no mkdir is needed here.
     else:

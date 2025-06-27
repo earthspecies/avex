@@ -1,13 +1,31 @@
-dataset_name: animalspeak
-dataset_version: 0.0
-balance: false
-balance_attribute: canonical_name   # balance data across via this attribute
-custom_balancing: false
-balancing_method: upsample
-subset_percentage: 1.0              # <1 to consider a subset of data
-audio_max_length_seconds: 10
-audio_path_col: path
+train_datasets:
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    balance: false
+    balance_attribute: canonical_name   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    transformations:
+      - type: label_from_feature
+        feature: caption
 
-transformations:
-  - type: label_from_feature
-    feature: caption
+val_datasets:
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    balance: false
+    balance_attribute: canonical_name   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    transformations:
+      - type: label_from_feature
+        feature: caption
+
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft

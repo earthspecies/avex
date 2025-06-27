@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from esp_data import Dataset
 
-from esp_data_temp.dataset import AudioDataset
 from representation_learning.configs import (
     AudioConfig,
     RunConfig,
@@ -154,7 +154,7 @@ def test_get_dataset_dummy(tmp_path: Path) -> None:
     )
 
     # Check dataset properties
-    assert isinstance(dataset, AudioDataset)
+    assert isinstance(dataset, Dataset)
     assert len(dataset) == 10  # All samples should be included
     assert set(dataset.metadata["source"]) == {"xeno-canto", "iNaturalist"}
     assert set(dataset.metadata["canonical_name"]) == {"bird", "mammal"}

@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 import multiprocessing
-from typing import Any, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.distributed as dist
+from esp_data import (
+    Dataset,
+    DatasetConfig,
+    concatenate_datasets,
+    dataset_from_config,
+)
+from esp_data.transforms import LabelFromFeatureConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
-from esp_data_temp.dataset import get_dataset_dummy
 from representation_learning.configs import (
-    DatasetConfig,
+    DatasetCollectionConfig,
     RunConfig,
     load_config,
 )
@@ -21,6 +27,231 @@ from representation_learning.data.augmentations import (
     AugmentationProcessor,
     make_item_postprocessor,
 )
+
+
+class AudioDataset(torch.utils.data.Dataset):
+    """A wrapper around a Dataset instance for audio data.
+    Allows for post-processing of audio samples after retrieval.
+    """
+
+    def __init__(
+        self, ds: Dataset, metadata: dict, postprocessors: Optional[list[Any]] = None
+    ) -> None:
+        """Initialize the AudioDataset with a Dataset instance."""
+        self.ds = ds
+        self.metadata = metadata
+        self.postprocessors = postprocessors or []
+
+    def __len__(self) -> int:
+        """Return the number of samples in the dataset.
+
+        Returns
+        -------
+        int
+            The number of samples in the dataset.
+        """
+        return len(self.ds)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        """Get a specific sample from the dataset.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to retrieve.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary containing the audio data, text label, label, and path.
+        """
+        sample = self.ds[idx]
+
+        if self.postprocessors:
+            for postprocessor in self.postprocessors:
+                sample = postprocessor(sample)
+
+        return sample
+
+
+def _build_one_dataset_split(
+    cfg_list: list[DatasetConfig],
+    concatenate: bool = False,
+    concatenate_method: str = "soft",
+) -> tuple[Dataset | None, dict[str, Any] | None]:
+    """Build a single dataset split from a list of DatasetConfig objects.
+
+    Parameters
+    ----------
+    cfg_list : list[DatasetConfig]
+        List of dataset configurations to build.
+
+    concatenate : bool, optional
+        If True, concatenate all datasets in the list into a single dataset.
+        Defaults to False.
+    concatenate_method : str, optional
+        Method to use for concatenation. Options are "soft", "overlap", "hard".
+        Defaults to "soft".
+
+    Returns
+    -------
+    tuple[Dataset, dict[str, Any]] | None
+        A tuple containing the concatenated dataset and metadata if
+        `concatenate` is True,
+        or a single dataset and its metadata if `concatenate` is False.
+        Returns None if `cfg_list` is empty.
+
+    Raises
+    ------
+    ValueError
+        If the dataset loading fails, e.g., due to invalid configurations.
+    """
+    if not cfg_list:
+        return None, None
+
+    try:
+        ds_list = []
+        for ds_cfg in cfg_list:
+            # applies any transformations defined in the dataset config
+            ds, metadata = dataset_from_config(ds_cfg)
+            ds_list.append((ds, metadata))
+
+        if concatenate and len(ds_list) > 1:
+            # Concatenate all training datasets into one
+            ds = concatenate_datasets(
+                [d[0] for d in ds_list], merge_level=concatenate_method
+            )
+            return ds, ds_list[0][1]  # return first metadata as representative
+
+        # TODO : Handle case where concatenate is False so you return a list of datasets
+        else:
+            return ds_list[0]
+    except Exception as e:
+        raise ValueError(
+            "Failed to load training datasets."
+            f"Error: {e}\n"
+            "Check your dataset configurations."
+        ) from e
+
+
+def _build_datasets(
+    cfg: DatasetCollectionConfig, postprocessors: list[Callable]
+) -> list[AudioDataset]:
+    """Build datasets from the provided configuration.
+    Parameters
+    ----------
+    cfg : DatasetCollectionConfig
+        The configuration containing dataset specifications.
+
+    postprocessors : list[Callable]
+        List of postprocessors to apply to the datasets.
+
+    Returns
+    -------
+    """
+    # Build train
+    train_ds, train_metadata = _build_one_dataset_split(
+        cfg.train_datasets, cfg.concatenate_train, cfg.concatenate_method
+    )
+
+    if cfg.transformations:
+        # Apply those on train
+        train_metadata = train_ds.apply_transformations(cfg.transformations)
+
+    # Build validation
+    val_ds, _ = _build_one_dataset_split(
+        cfg.val_datasets, cfg.concatenate_val, cfg.concatenate_method
+    )
+
+    # Build test
+    test_ds, _ = _build_one_dataset_split(
+        cfg.test_datasets, cfg.concatenate_test, cfg.concatenate_method
+    )
+
+    # Initialize defaults for label_map and num_classes
+    label_map = {}
+    num_classes = 0
+
+    # Apply label_to_feature transform to validation set
+    if "label_from_feature" in train_metadata:
+        label_map = train_metadata["label_from_feature"].get("label_map", {})
+        num_classes = train_metadata["label_from_feature"].get(
+            "num_classes", len(label_map)
+        )
+
+        # Get the feature name used for labeling
+        label_feature = train_metadata["label_from_feature"]["label_feature"]
+
+        # Always set override=True when applying transformations to val/test datasets
+        # since we know we want to replace any existing label features
+        label_transform = LabelFromFeatureConfig(
+            type="label_from_feature",
+            feature=label_feature,
+            output_feature="label",
+            label_map=label_map,
+            override=True,
+        )
+
+        # Apply label transform to val/test datasets
+        if val_ds:
+            val_ds.apply_transformations([label_transform])
+        if test_ds:
+            test_ds.apply_transformations([label_transform])
+
+    if "labels_from_features" in train_metadata:
+        label_map = train_metadata["labels_from_features"].get("label_map", {})
+        num_classes = train_metadata["labels_from_features"].get(
+            "num_classes", len(label_map)
+        )
+
+        # Get the feature name(s) used for labeling
+        label_features = train_metadata["labels_from_features"]["label_feature"]
+
+        # Always set override=True when applying transformations to val/test datasets
+        # since we know we want to replace any existing label features
+        label_transform = LabelFromFeatureConfig(
+            feature=label_features,
+            output_feature="label",
+            label_map=label_map,
+            override=True,
+        )
+
+        # Apply label transform to val/test datasets
+        if val_ds:
+            val_ds.apply_transformations([label_transform])
+        if test_ds:
+            test_ds.apply_transformations([label_transform])
+
+    train_ds = AudioDataset(
+        train_ds,
+        metadata={
+            "label_map": label_map,
+            "num_labels": num_classes,
+        },
+        postprocessors=postprocessors,
+    )
+
+    if val_ds:
+        val_ds = AudioDataset(
+            val_ds,
+            postprocessors=postprocessors,
+            metadata={
+                "label_map": train_metadata.get("label_map", {}),
+                "num_labels": num_classes,
+            },
+        )
+
+    if test_ds:
+        test_ds = AudioDataset(
+            test_ds,
+            postprocessors=postprocessors,
+            metadata={
+                "label_map": train_metadata.get("label_map", {}),
+                "num_labels": num_classes,
+            },
+        )
+
+    return train_ds, val_ds, test_ds
 
 
 # --------------------------------------------------------------------------- #
@@ -58,7 +289,10 @@ class Collater:
         audios, masks, labels, text_labels = [], [], [], []
 
         for item in batch:
-            wav = torch.as_tensor(item["raw_wav"])  # (T,)
+            # Use "audio" key which is the standard in esp_data,
+            # fallback to "raw_wav" for compatibility
+            audio_key = "audio" if "audio" in item else "raw_wav"
+            wav = torch.as_tensor(item[audio_key])  # (T,)
             wav, pad_mask = pad_or_window(
                 wav, self.audio_max_length_seconds * self.sr, self.window_selection
             )
@@ -73,7 +307,7 @@ class Collater:
             # Create temporary batch of uniform-length samples
             temp_batch = [
                 {
-                    "raw_wav": wav,
+                    "audio": wav,  # Use standard "audio" key
                     "label": lbl,
                     "text_label": txt if self.keep_text else None,
                 }
@@ -87,7 +321,7 @@ class Collater:
             # Now mixup can safely operate on same-sized tensors
             mixed_batch = self.batch_aug_processor.apply_batch_augmentations(temp_batch)
             # Extract back to separate lists
-            audios = [item["raw_wav"] for item in mixed_batch]
+            audios = [item["audio"] for item in mixed_batch]  # Use standard "audio" key
             labels = [item["label"] for item in mixed_batch]
             if self.keep_text:
                 text_labels = [item["text_label"] for item in mixed_batch]
@@ -117,6 +351,7 @@ class Collater:
             label_tensor = torch.stack(label_tensors)
 
         return {
+            # Keep raw_wav for backward compatibility with models
             "raw_wav": audio_tensor,
             "padding_mask": mask_tensor,
             "label": label_tensor,
@@ -171,31 +406,37 @@ _worker_init_data: dict[str, Any] = {}
 # --------------------------------------------------------------------------- #
 def build_dataloaders(
     cfg: RunConfig,
-    data_config: DatasetConfig | None = None,
+    data_config: DatasetCollectionConfig | None = None,
     device: str = "cpu",
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     """Create train/val/(optional) test :pyclass:`torch.utils.data.DataLoader`s.
+
+    Parameters
+    ----------
+    cfg : RunConfig
+        The run configuration containing dataset and model specifications.
+    data_config : DatasetConfig | None, optional
+        If provided, overrides the dataset configuration in `cfg`. If `None`, uses
+        the dataset configuration specified in `cfg.dataset_config`.
+    device : str, optional
+        The device to use for the DataLoader workers. Defaults to "cpu". If set to
 
     Returns
     -------
     tuple[DataLoader, DataLoader, DataLoader | None]
         ``(train_dl, val_dl, test_dl)`` where *test_dl* may be ``None`` if the
         dataset bundle does not include a test split.
+
+    Raises
+    ------
+    ValueError
+        If the dataset does not have more than one label for classification tasks.
     """
 
     # CUDA requires "spawn" start method; safe on CPU too
     if device != "cpu":
         multiprocessing.set_start_method("spawn", force=True)
 
-    # ------------------------------------------------------------------ #
-    # Dataset configuration
-    # ------------------------------------------------------------------ #
-    if data_config is None:
-        data_config = load_config(cfg.dataset_config, config_type="data")
-
-    # ------------------------------------------------------------------ #
-    # Augmentations & post-processing
-    # ------------------------------------------------------------------ #
     postprocessors: list[Any] = []
     aug_processor: Optional[AugmentationProcessor] = None
     if cfg.augmentations:
@@ -203,31 +444,24 @@ def build_dataloaders(
         aug_processor = AugmentationProcessor(cfg.augmentations, cfg.sr, aug_device)
         postprocessors.append(make_item_postprocessor(aug_processor))
 
-    # ------------------------------------------------------------------ #
-    # Datasets
-    # ------------------------------------------------------------------ #
-    ds_train = get_dataset_dummy(
-        data_config=data_config,
-        split="train",
-        preprocessor=None,
-        postprocessors=postprocessors if postprocessors else None,
+    # Build datasets from the configuration
+    if data_config is None:
+        data_config = load_config(cfg.dataset_config, config_type="data")
+
+    ds_train, ds_val, ds_test = _build_datasets(
+        data_config, postprocessors=postprocessors
     )
-    ds_val = get_dataset_dummy(
-        data_config=data_config,
-        split="valid",
-        preprocessor=None,
-        postprocessors=None,
-    )
-    # Test set may not exist in every dataset bundle
-    try:
-        ds_test = get_dataset_dummy(
-            data_config=data_config,
-            split="test",
-            preprocessor=None,
+
+    num_labels = ds_train.metadata.get("num_labels", 0)
+    if num_labels <= 1:
+        raise ValueError(
+            "Dataset must have more than one label for classification tasks."
         )
-    except Exception:
-        ds_test = None
-    num_labels = len(ds_train.metadata["label_map"])
+
+    # logger.info(f"Train data size : {len(ds_train)} samples")
+    # logger.info(f"Validation data size : {len(ds_val)} samples")
+    # if ds_test is not None:
+    #     logger.info(f"Test data size : {len(ds_test)} samples")
 
     # Create samplers for distributed training
     train_sampler = None

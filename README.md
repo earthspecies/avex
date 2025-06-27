@@ -1,7 +1,8 @@
 # A repo for representation learning in bioacoustics
 
 #  To run:
-- uv sync
+- `uv sync`
+
 - uv run python representation_learning/run_train.py --config configs/run_configs/efficientnet_base.yml
 
 #  To extend:

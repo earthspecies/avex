@@ -1,6 +1,5 @@
 import pandas as pd
-
-from esp_data_temp.transforms import Subsample, SubsampleConfig
+from esp_data.transforms import Subsample, SubsampleConfig
 
 # TODO (milad) add tests for returned metadata
 

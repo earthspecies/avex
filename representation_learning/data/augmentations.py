@@ -18,8 +18,8 @@ import numpy as np
 import soundfile as sf
 import torch
 import torchaudio
+from esp_data.io import GSPath
 
-from esp_data_temp.dataset import GSPath
 from representation_learning.data.data_utils import combine_text_labels
 
 if TYPE_CHECKING:
@@ -341,8 +341,10 @@ class AugmentationProcessor:
 
         """
         aug_item = item_dict.copy()
-        wav: torch.Tensor = item_dict["raw_wav"].to(self.device)
-        aug_item["raw_wav"] = self._apply_noise(wav)
+        # Use "audio" key if available, fallback to "raw_wav" for compatibility
+        audio_key = "audio" if "audio" in item_dict else "raw_wav"
+        wav: torch.Tensor = item_dict[audio_key].to(self.device)
+        aug_item[audio_key] = self._apply_noise(wav)
         return aug_item
 
     # ------------------------------------------------------------------
@@ -384,12 +386,14 @@ class AugmentationProcessor:
 
             pairs = self._select_random_pairs(len(aug_batch), n_pairs)
             for i, j in pairs:
+                # Use "audio" key if available, fallback to "raw_wav" for compatibility
+                audio_key = "audio" if "audio" in aug_batch[i] else "raw_wav"
                 mixed_wav, lam = mixup(
-                    aug_batch[i]["raw_wav"],
-                    aug_batch[j]["raw_wav"],
+                    aug_batch[i][audio_key],
+                    aug_batch[j][audio_key],
                     alpha=cfg.alpha,
                 )
-                aug_batch[i]["raw_wav"] = mixed_wav
+                aug_batch[i][audio_key] = mixed_wav
                 aug_batch[i]["mixup_lambda"] = lam
                 aug_batch[i]["mixup_partner_idx"] = j
 
@@ -478,11 +482,13 @@ class ItemPostprocessor:
             Processed data item with augmentations applied.
 
         """
-        if not isinstance(item["raw_wav"], torch.Tensor):
-            item["raw_wav"] = torch.from_numpy(item["raw_wav"])
+        # Use "audio" key if available, fallback to "raw_wav" for compatibility
+        audio_key = "audio" if "audio" in item else "raw_wav"
+        if not isinstance(item[audio_key], torch.Tensor):
+            item[audio_key] = torch.from_numpy(item[audio_key])
         item = self.aug_processor.apply_augmentations(item)
-        if isinstance(item["raw_wav"], torch.Tensor):
-            item["raw_wav"] = item["raw_wav"].cpu().numpy()
+        if isinstance(item[audio_key], torch.Tensor):
+            item[audio_key] = item[audio_key].cpu().numpy()
         return item
 
 

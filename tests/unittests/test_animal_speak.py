@@ -1,9 +1,8 @@
 """Test suite for the AnimalSpeak dataset."""
 
 import pytest
-
-from esp_data_temp.config import DatasetConfig
-from esp_data_temp.datasets import AnimalSpeak, Dataset
+from esp_data import Dataset, DatasetConfig
+from esp_data.datasets import AnimalSpeak
 
 
 @pytest.fixture

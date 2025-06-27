@@ -1,7 +1,8 @@
 data_path: benchmark
 
 datasets:
-  - dataset_name: egyptian_fruit_bats
+  - dataset_name: beans
+    split: egyptian_fruit_bats_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -22,7 +23,8 @@ datasets:
       - accuracy
       - balanced_accuracy
 
-  - dataset_name: dogs
+  - dataset_name: beans
+    split: dogs_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -63,7 +65,8 @@ datasets:
     #   - accuracy
     #   - balanced_accuracy
 
-  - dataset_name: HumBugDB
+  - dataset_name: beans
+    split: humbugdb_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -84,7 +87,8 @@ datasets:
       - accuracy
       - balanced_accuracy
 
-  - dataset_name: cbi
+  - dataset_name: beans
+    split: cbi_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -105,7 +109,8 @@ datasets:
       - accuracy
       - balanced_accuracy
 
-  - dataset_name: watkins
+  - dataset_name: beans
+    split: watkins_test
     type: classification
     label_column: label
     audio_path_col: path
@@ -143,7 +148,8 @@ datasets:
   #   metrics:
   #     - multiclass_f1
 
-  - dataset_name: rfcx-detection
+  - dataset_name: beans
+    split: rfcx_test
     type: detection
     label_column: answer
     audio_path_col: path
@@ -160,7 +166,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: hiceas-detection
+  - dataset_name: beans
+    split: hiceas_test
     type: detection
     label_column: answer
     audio_path_col: path
@@ -177,7 +184,8 @@ datasets:
     metrics:
       - multiclass_f1
 
-  - dataset_name: hainan-gibbons-detection
+  - dataset_name: beans
+    split: hainan_gibbons_test
     type: detection
     label_column: answer
     audio_path_col: path
