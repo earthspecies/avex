@@ -128,9 +128,15 @@ class Model(ModelBase):
         else:
             return self.classifier(pooled)
 
-    def extract_embeddings(self, x: torch.Tensor, layers: List[str]) -> torch.Tensor:
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
+        layers: List[str],
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         self._return_features_only = True
         if isinstance(x, dict):
             return self.forward(x["raw_wav"], x["padding_mask"])
         else:
-            return self.forward(x)
+            return self.forward(x, padding_mask)

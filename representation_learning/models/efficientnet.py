@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
@@ -122,21 +122,27 @@ class Model(ModelBase):
             return logits
 
     def extract_embeddings(
-        self, x: torch.Tensor, padding_mask: torch.Tensor
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
+        layers: List[str],
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Extract embeddings from the model.
 
         Parameters
         ----------
-        x : torch.Tensor
-            Input audio tensor
-        padding_mask : torch.Tensor
-            Padding mask for the input
+        x : torch.Tensor | dict[str, torch.Tensor]
+            Input audio tensor or dictionary containing 'raw_wav'
+        layers : List[str]
+            List of layer names (ignored for EfficientNet)
+        padding_mask : Optional[torch.Tensor]
+            Padding mask for the input (ignored for EfficientNet)
 
         Returns
         -------
         torch.Tensor
-            Model output (logits or features based on init flag)
+            Model embeddings
         """
         # Extract features
         if isinstance(x, dict):

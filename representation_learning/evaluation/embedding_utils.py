@@ -40,10 +40,10 @@ def extract_embeddings_for_split(
             if mask is not None:
                 mask = mask.to(device)
             if mask is None:
-                emb = model.extract_embeddings(wav, layer_names)
+                emb = model.extract_embeddings(wav, layers=layer_names)
             else:
                 inp = {"raw_wav": wav, "padding_mask": mask}
-                emb = model.extract_embeddings(inp, layer_names)
+                emb = model.extract_embeddings(inp, layers=layer_names)
             embeds.append(emb.cpu())
             labels.append(batch["label"].cpu())
 
@@ -107,7 +107,7 @@ def save_embeddings_to_disk(
     with h5py.File(h5_path, "w", libver="latest") as h5f:
         # Get first batch to determine shapes
         first_batch = next(iter(dataloader))
-        sample_embeddings = model.extract_embeddings(first_batch[0], layer_names)
+        sample_embeddings = model.extract_embeddings(first_batch[0], layers=layer_names)
         embedding_dim = sample_embeddings.shape[1]
         total_samples = len(dataloader.dataset)
 
@@ -154,7 +154,7 @@ def save_embeddings_to_disk(
                 if batch_idx % 10 == 0:
                     logger.info(f"Processing batch {batch_idx}/{len(dataloader)}")
 
-                embeddings = model.extract_embeddings(x, layer_names)
+                embeddings = model.extract_embeddings(x, layers=layer_names)
                 batch_size = len(embeddings)
                 # Write to HDF5
                 embeddings_dset[start_idx : start_idx + batch_size] = (

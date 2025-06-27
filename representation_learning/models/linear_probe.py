@@ -55,7 +55,9 @@ class LinearProbe(torch.nn.Module):
                         * base_model.audio_processor.sr
                     )
                     dummy = torch.randn(1, target_length, device=device)
-                    inferred_dim = base_model.extract_embeddings(dummy, layers).shape[1]
+                    inferred_dim = base_model.extract_embeddings(
+                        dummy, layers=layers
+                    ).shape[1]
         else:
             # We will compute embeddings inside forward – need base_model.
             if base_model is None:
@@ -66,7 +68,9 @@ class LinearProbe(torch.nn.Module):
                     * base_model.audio_processor.sr
                 )
                 dummy = torch.randn(1, target_length, device=device)
-                inferred_dim = base_model.extract_embeddings(dummy, layers).shape[1]
+                inferred_dim = base_model.extract_embeddings(
+                    dummy, layers=layers
+                ).shape[1]
 
         self.classifier = torch.nn.Linear(inferred_dim, num_classes).to(device)
 
@@ -90,6 +94,8 @@ class LinearProbe(torch.nn.Module):
         else:
             if self.base_model is None:
                 raise ValueError("base_model must be provided when not in feature mode")
-            embeddings = self.base_model.extract_embeddings(x, self.layers)
+            embeddings = self.base_model.extract_embeddings(
+                x, self.layers, padding_mask=padding_mask
+            )
 
         return self.classifier(embeddings)
