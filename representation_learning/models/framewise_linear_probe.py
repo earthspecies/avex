@@ -1,7 +1,8 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
+
 from representation_learning.models.base_model import ModelBase
 
 
@@ -121,8 +122,10 @@ class FramewiseLinearProbe(nn.Module):
         else:
             if self.base_model is None:
                 raise ValueError("base_model must be provided when not in feature mode")
-            embeddings = self.base_model.extract_embeddings(x, self.layers, average_over_time=False, framewise_embeddings=True)
-            
+            embeddings = self.base_model.extract_embeddings(
+                x, self.layers, average_over_time=False, framewise_embeddings=True
+            )
+
             # Handle case where extract_embeddings returns a list of tensors
             if isinstance(embeddings, list):
                 if len(embeddings) == 1:

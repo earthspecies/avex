@@ -28,7 +28,9 @@ def test_perch_model_forward_with_stub(monkeypatch: pytest.MonkeyPatch) -> None:
     # 2) Stub `_tf_forward` so it returns zeros with the expected embedding dim.
     EMB_DIM = 1280
 
-    def _dummy_tf_forward(self: perch_module.PerchModel, audio: torch.Tensor) -> torch.Tensor:  # noqa: D401,E501
+    def _dummy_tf_forward(
+        self: perch_module.PerchModel, audio: torch.Tensor
+    ) -> torch.Tensor:  # noqa: D401,E501
         batch = audio.shape[0]
         return torch.zeros(batch, EMB_DIM)
 

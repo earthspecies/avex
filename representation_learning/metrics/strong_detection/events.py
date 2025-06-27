@@ -33,7 +33,10 @@ class Event:
     # ---------------------------------------------------------------------
     def __post_init__(self) -> None:  # noqa: D401
         if self.offset <= self.onset:
-            raise ValueError("Event offset must be > onset (got %.3f ≤ %.3f)" % (self.offset, self.onset))
+            raise ValueError(
+                "Event offset must be > onset (got %.3f ≤ %.3f)"
+                % (self.offset, self.onset)
+            )
 
     # Convenient tuple-like representation for metrics
     def as_interval(self) -> Tuple[float, float]:
@@ -44,6 +47,7 @@ class Event:
 # -------------------------------------------------------------------------
 # Helper: events -> frame-level multi-hot matrix
 # -------------------------------------------------------------------------
+
 
 def events_to_frame_labels(
     events: Sequence[Event],
@@ -121,4 +125,4 @@ def events_to_frame_labels(
 
         frame_labels[start_idx:end_idx, col] = 1
 
-    return frame_labels, label_list 
+    return frame_labels, label_list

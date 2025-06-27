@@ -1,17 +1,19 @@
 import logging
 from typing import Dict, List, Optional, Tuple
 
-import torch
 import numpy as np
+import torch
 
 from representation_learning.configs import EvaluateConfig
 from representation_learning.metrics.metric_factory import get_metric_class
-from representation_learning.models.linear_probe import LinearProbe
+from representation_learning.metrics.strong_detection.detection_metric_helpers import (
+    _frames_to_events,
+)
 from representation_learning.models.framewise_linear_probe import FramewiseLinearProbe
+from representation_learning.models.linear_probe import LinearProbe
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.train import FineTuneTrainer
 from representation_learning.utils import ExperimentLogger
-from representation_learning.metrics.strong_detection.detection_metric_helpers import _frames_to_events
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -166,7 +168,7 @@ def train_and_eval_framewise_probe(
         • **val_metrics**   – aggregated over validation split
         • **probe_test_metrics** – metrics on test split
     """
-    
+
     # Create framewise linear probe
     probe = FramewiseLinearProbe(
         base_model=base_model,
@@ -175,7 +177,7 @@ def train_and_eval_framewise_probe(
         device=device,
         feature_mode=False,  # We'll extract embeddings inside the probe
     )
-    
+
     logger.info(
         "Framewise probe → %d parameters", sum(p.numel() for p in probe.parameters())
     )
@@ -232,7 +234,11 @@ def train_and_eval_framewise_probe(
             # ----------------------------------------------------------
             targets_events: list[list[np.ndarray]] = []  # type: ignore[name-defined]
             for b in range(targets.shape[0]):
-                valid_mask = (~padding_mask[b]).cpu().numpy() if padding_mask is not None else None
+                valid_mask = (
+                    (~padding_mask[b]).cpu().numpy()
+                    if padding_mask is not None
+                    else None
+                )
 
                 batch_events: list[np.ndarray] = []  # type: ignore[name-defined]
                 for c in range(targets.shape[2]):

@@ -23,9 +23,13 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from representation_learning.metrics.strong_detection.detection_metric_helpers import match_events, _frames_to_events
+from representation_learning.metrics.strong_detection.detection_metric_helpers import (
+    _frames_to_events,
+    match_events,
+)
 
 __all__ = ["StrongDetectionF1Tensor"]
+
 
 class StrongDetectionF1Tensor:
     """Frame-level F1 metric for *strong* sound-event detection.
@@ -126,7 +130,9 @@ class StrongDetectionF1Tensor:
                 if true_events.size == 0 and pred_events.size == 0:
                     continue  # nothing to count/compare
 
-                matching = match_events(true_events, pred_events, self.iou, method="fast")
+                matching = match_events(
+                    true_events, pred_events, self.iou, method="fast"
+                )
                 tp = len(matching)
                 fp = pred_events.shape[1] - tp
                 fn = true_events.shape[1] - tp
@@ -155,4 +161,3 @@ class StrongDetectionF1Tensor:
 
     def get_primary_metric(self) -> float:
         return self.get_metric()["f1"]
-

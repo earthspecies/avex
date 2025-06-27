@@ -36,9 +36,9 @@ from representation_learning.evaluation.embedding_utils import (
     save_embeddings_arrays,
 )
 from representation_learning.evaluation.finetune import (
+    train_and_eval_framewise_probe,
     train_and_eval_full_fine_tune,
     train_and_eval_linear_probe,
-    train_and_eval_framewise_probe,
 )
 from representation_learning.evaluation.retrieval import eval_retrieval
 from representation_learning.models.get_model import get_model
@@ -313,7 +313,7 @@ def run_experiment(
     if "linear_probe" in eval_cfg.eval_modes:
         # Check if this is a strong detection dataset
         is_strong_detection = getattr(dataset_cfg, "strong_detection", False)
-        
+
         if is_strong_detection:
             # Use framewise probe for strong detection
             logger.info("Using framewise linear probe for strong detection")

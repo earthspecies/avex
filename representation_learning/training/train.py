@@ -206,7 +206,7 @@ class Trainer:
                 logger.info("Using CPU or auto-detect for DDP")
             self.model = parallel.DistributedDataParallel(
                 self.model,
-                    find_unused_parameters=True,
+                find_unused_parameters=True,
             )
             self.model_unwrapped = self.model.module
         else:
@@ -347,9 +347,9 @@ class Trainer:
 
                         self.log.log_metrics(
                             train_metrics,
-                        step=epoch,
-                        split="train",
-                    )
+                            step=epoch,
+                            split="train",
+                        )
 
                         val_metrics = {"loss": val_loss, "acc": val_acc}
                         if self.is_clip_mode and hasattr(
@@ -417,9 +417,9 @@ class Trainer:
         with context_mgr:
             for i, batch in enumerate(
                 tqdm(
-            loader,
-            desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
-            leave=False,
+                    loader,
+                    desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+                    leave=False,
                 )
             ):
                 # ------------------------------------------------------

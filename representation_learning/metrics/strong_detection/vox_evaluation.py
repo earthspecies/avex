@@ -12,7 +12,6 @@ import pandas as pd
 import torch
 import tqdm
 from scipy.signal import find_peaks, medfilt
-
 from voxaboxen.evaluation.conf_mats import (
     get_confusion_matrix,
     plot_confusion_matrix,

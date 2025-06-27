@@ -5,8 +5,12 @@ import numpy as np
 import pandas as pd
 import torch
 
-from representation_learning.metrics.strong_detection.vox_strong_metrics import StrongDetectionF1Metric
-from representation_learning.metrics.strong_detection.framewise_detection_metrics import StrongDetectionF1Tensor
+from representation_learning.metrics.strong_detection.framewise_detection_metrics import (
+    StrongDetectionF1Tensor,
+)
+from representation_learning.metrics.strong_detection.vox_strong_metrics import (
+    StrongDetectionF1Metric,
+)
 
 
 def _write_selection_table(path: Path, events: list[tuple[float, float, str]]) -> None:
@@ -47,16 +51,20 @@ def test_strong_f1_tensor_matches_file_metric_binary():
         # CSV wrappers expected by StrongDetectionF1Metric
         ref_csv = tmp_path / "ref.csv"
         pred_csv = tmp_path / "pred.csv"
-        pd.DataFrame({
-            "fn": ["clip1"],
-            "audio_fp": [np.nan],
-            "selection_table_fp": [ref_sel.name],
-        }).to_csv(ref_csv, index=False)
-        pd.DataFrame({
-            "fn": ["clip1"],
-            "audio_fp": [np.nan],
-            "selection_table_fp": [pred_sel.name],
-        }).to_csv(pred_csv, index=False)
+        pd.DataFrame(
+            {
+                "fn": ["clip1"],
+                "audio_fp": [np.nan],
+                "selection_table_fp": [ref_sel.name],
+            }
+        ).to_csv(ref_csv, index=False)
+        pd.DataFrame(
+            {
+                "fn": ["clip1"],
+                "audio_fp": [np.nan],
+                "selection_table_fp": [pred_sel.name],
+            }
+        ).to_csv(pred_csv, index=False)
 
         # ---------- original file-based metric ---------------------
         metric_file = StrongDetectionF1Metric(
@@ -81,7 +89,10 @@ def test_strong_f1_tensor_matches_file_metric_binary():
         logits = torch.from_numpy(pred_frames[None, :, None]).float() * 10  # (1,T,1)
 
         # Build event annotations list [[[events_class0]]]
-        from representation_learning.metrics.strong_detection.framewise_detection_metrics import _frames_to_events
+        from representation_learning.metrics.strong_detection.framewise_detection_metrics import (
+            _frames_to_events,
+        )
+
         true_events = _frames_to_events(gt_frames, fps)
         targets_events = [[true_events]]  # B=1, C=1
 
@@ -115,16 +126,20 @@ def test_strong_f1_tensor_multi_class():
 
         ref_csv = tmp_path / "ref2.csv"
         pred_csv = tmp_path / "pred2.csv"
-        pd.DataFrame({
-            "fn": ["clip2"],
-            "audio_fp": [np.nan],
-            "selection_table_fp": [ref_sel.name],
-        }).to_csv(ref_csv, index=False)
-        pd.DataFrame({
-            "fn": ["clip2"],
-            "audio_fp": [np.nan],
-            "selection_table_fp": [pred_sel.name],
-        }).to_csv(pred_csv, index=False)
+        pd.DataFrame(
+            {
+                "fn": ["clip2"],
+                "audio_fp": [np.nan],
+                "selection_table_fp": [ref_sel.name],
+            }
+        ).to_csv(ref_csv, index=False)
+        pd.DataFrame(
+            {
+                "fn": ["clip2"],
+                "audio_fp": [np.nan],
+                "selection_table_fp": [pred_sel.name],
+            }
+        ).to_csv(pred_csv, index=False)
 
         label_set = ["cat", "dog"]
         metric_file = StrongDetectionF1Metric(
@@ -155,7 +170,10 @@ def test_strong_f1_tensor_multi_class():
         logits = torch.from_numpy(pred_frames[None]).float() * 10  # (1, T, C)
 
         # Build event annotations list [[[events_class0]]]
-        from representation_learning.metrics.strong_detection.framewise_detection_metrics import _frames_to_events
+        from representation_learning.metrics.strong_detection.framewise_detection_metrics import (
+            _frames_to_events,
+        )
+
         true_events_cat = _frames_to_events(gt_frames[:, 0], fps)
         true_events_dog = _frames_to_events(gt_frames[:, 1], fps)
         targets_events = [[true_events_cat, true_events_dog]]
@@ -166,4 +184,4 @@ def test_strong_f1_tensor_multi_class():
         metric_tensor.update(logits, targets_events)
         f1_tensor = metric_tensor.get_metric()["f1"]
 
-        assert abs(f1_tensor - f1_file) < 1e-6 
+        assert abs(f1_tensor - f1_file) < 1e-6
