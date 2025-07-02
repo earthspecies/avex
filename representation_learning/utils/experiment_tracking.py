@@ -110,6 +110,7 @@ def save_evaluation_metadata(
     val_metrics: Dict[str, float],
     probe_test_metrics: Dict[str, float],
     retrieval_metrics: Dict[str, float],
+    clustering_metrics: Dict[str, float],
     eval_config: Dict[str, Any],
     training_metadata: Optional[pd.DataFrame] = None,
     run_config: Optional[Dict[str, Any]] = None,
@@ -134,6 +135,8 @@ def save_evaluation_metadata(
         Test metrics from linear probe
     retrieval_metrics : Dict[str, float]
         Retrieval metrics
+    clustering_metrics : Dict[str, float]
+        Clustering metrics
     eval_config : Dict[str, Any]
         Evaluation configuration
     training_metadata : Optional[pd.DataFrame]
@@ -156,6 +159,17 @@ def save_evaluation_metadata(
         "roc_auc",
     }
     all_possible_retrieval_metrics = {"retrieval_roc_auc", "retrieval_precision_at_1"}
+    all_possible_clustering_metrics = {
+        "clustering_ari",
+        "clustering_nmi",
+        "clustering_v_measure",
+        "clustering_silhouette",
+        "clustering_best_k",
+        "clustering_ari_best",
+        "clustering_nmi_best",
+        "clustering_v_measure_best",
+        "clustering_silhouette_best",
+    }
 
     # Create metadata entry with all possible metrics, using None for missing ones
     metadata = {
@@ -182,6 +196,12 @@ def save_evaluation_metadata(
         # Remove the "retrieval_" prefix if it's already there to avoid double-prefixing
         metric_name = metric.replace("retrieval_", "")
         metadata[f"retrieval_{metric_name}"] = retrieval_metrics.get(metric, None)
+
+    # Add clustering metrics with None for missing ones
+    for metric in all_possible_clustering_metrics:
+        # Remove the "clustering_" prefix if it's already there to avoid double-prefixing
+        metric_name = metric.replace("clustering_", "")
+        metadata[f"clustering_{metric_name}"] = clustering_metrics.get(metric, None)
 
     metadata["eval_config"] = json.dumps(
         eval_config

@@ -29,6 +29,13 @@ def extract_embeddings_for_split(
     Tuple[torch.Tensor, torch.Tensor]
         (embeddings, labels) stacked on CPU.
     """
+    # Handle empty dataloader case
+    if len(dataloader) == 0:
+        logger.warning("Dataloader is empty, returning empty tensors")
+        # Return empty tensors with appropriate shapes
+        # We can't determine the embedding dimension without data, so return placeholder shapes
+        return torch.empty(0, 1), torch.empty(0, dtype=torch.long)
+
     embeds: list[torch.Tensor] = []
     labels: list[torch.Tensor] = []
     model.eval()
@@ -46,6 +53,11 @@ def extract_embeddings_for_split(
                 emb = model.extract_embeddings(inp, layers=layer_names)
             embeds.append(emb.cpu())
             labels.append(batch["label"].cpu())
+
+    # Handle case where no batches were processed
+    if not embeds:
+        logger.warning("No embeddings extracted, returning empty tensors")
+        return torch.empty(0, 1), torch.empty(0, dtype=torch.long)
 
     return torch.cat(embeds), torch.cat(labels)
 

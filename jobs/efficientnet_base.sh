@@ -6,7 +6,8 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-effnet"
 #SBATCH --cpus-per-gpu=12
+#SBATCH --mem=128GB
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/efficientnet_base_beans.yml
+srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/efficientnet_animalspeak_audioset.yml

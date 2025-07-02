@@ -9,4 +9,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/test.yml
+srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/beats_finetuned.yml

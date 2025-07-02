@@ -153,10 +153,9 @@ class AveragePrecision:
     ) -> None:
         """
         Args:
-            output (Tensor): NxK tensor that for each of the N examples
-                indicates the probability of the example belonging to each of
-                the K classes, according to the model. The probabilities should
-                sum to one over all classes
+            output (Tensor): NxK tensor of raw logits from the model for each of
+                the N examples and K classes. These will be converted to probabilities
+                using sigmoid for mAP computation.
             target (Tensor): binary NxK tensort that encodes which of the K
                 classes are associated with the N-th input
                     (eg: a row [0, 1, 0, 1] indicates that the example is
@@ -168,6 +167,9 @@ class AveragePrecision:
             output = torch.from_numpy(output)
         if not torch.is_tensor(target):
             target = torch.from_numpy(target)
+
+        # Convert logits to probabilities using sigmoid for mAP computation
+        output = torch.sigmoid(output)
 
         if weight is not None:
             if not torch.is_tensor(weight):

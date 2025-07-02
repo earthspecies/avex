@@ -170,6 +170,11 @@ class ModelSpec(BaseModel):
         "b0", description="EfficientNet variant to use (b0 or b1)"
     )
 
+    # BEATs-specific configuration
+    use_naturelm: Optional[bool] = Field(
+        None, description="Whether to use NatureLM for BEATs model"
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("eat_cfg")
@@ -473,7 +478,7 @@ class EvaluateConfig(BaseModel):
     num_workers: int = Field(..., description="Number of workers for evaluation")
 
     # Which evaluation phases to run
-    eval_modes: List[Literal["linear_probe", "retrieval"]] = Field(
+    eval_modes: List[Literal["linear_probe", "retrieval", "clustering"]] = Field(
         default_factory=lambda: ["linear_probe"],
         description="Which evaluation types to execute during run_evaluate.py",
     )
@@ -488,15 +493,14 @@ class EvaluateConfig(BaseModel):
         ),
     )
 
-    model_config = ConfigDict(extra="forbid")
-
-
-class BenchmarkConfig(BaseModel):
-    """Configuration for the entire benchmark suite containing multiple datasets."""
-
-    data_path: str = Field(..., description="Base path for all benchmark datasets")
-    datasets: List[DatasetConfig] = Field(
-        ..., description="List of benchmark datasets to evaluate"
+    # Optional path to append all results to a single CSV file
+    results_csv_path: Optional[str] = Field(
+        None,
+        description=(
+            "Optional path to a CSV file where all evaluation results will be appended. "
+            "If provided, results from each experiment will be written to this file "
+            "with appropriate metadata for tracking across multiple runs."
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -586,25 +590,158 @@ class DatasetCollectionConfig(BaseModel):
         return self
 
 
+class EvaluationSet(BaseModel):
+    """Configuration for a single evaluation set (train/val/test triplet) within a benchmark."""
+
+    name: str = Field(
+        ..., description="Name of this evaluation set (e.g., 'dog_classification')"
+    )
+    train: DatasetConfig = Field(..., description="Training dataset configuration")
+    validation: DatasetConfig = Field(
+        ..., description="Validation dataset configuration"
+    )
+    test: DatasetConfig = Field(..., description="Test dataset configuration")
+    metrics: List[str] = Field(
+        default_factory=lambda: ["accuracy"],
+        description="List of metrics to compute for this evaluation set",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    def to_dataset_collection_config(self) -> DatasetCollectionConfig:
+        """Convert this evaluation set to a DatasetCollectionConfig for esp-data loading.
+
+        Returns
+        -------
+        DatasetCollectionConfig
+            A config that can be used with esp-data's dataset loading functionality
+        """
+        return DatasetCollectionConfig(
+            train_datasets=[self.train],
+            val_datasets=[self.validation],
+            test_datasets=[self.test],
+            concatenate_train=True,
+            concatenate_val=True,
+            concatenate_test=True,
+            concatenate_method="soft",
+        )
+
+
+class BenchmarkEvaluationConfig(BaseModel):
+    """Configuration for benchmark evaluation with explicit train/val/test relationships.
+
+    This provides a clean, evaluation-first structure while maintaining compatibility
+    with esp-data's DatasetCollectionConfig for actual data loading.
+
+    Example
+    -------
+    ```yaml
+    benchmark_name: "bioacoustic_benchmark_v1"
+    evaluation_sets:
+      - name: "dog_classification"
+        train:
+          dataset_name: beans
+          split: dogs_train
+          type: classification
+          # ... other config
+        validation:
+          dataset_name: beans
+          split: dogs_validation
+          type: classification
+          # ... other config
+        test:
+          dataset_name: beans
+          split: dogs_test
+          type: classification
+          # ... other config
+        metrics: [accuracy, balanced_accuracy]
+    ```
+    """
+
+    benchmark_name: str = Field(..., description="Name of this benchmark")
+    evaluation_sets: List[EvaluationSet] = Field(
+        ...,
+        description="List of evaluation sets (train/val/test triplets) in this benchmark",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    def get_evaluation_set(self, name: str) -> EvaluationSet:
+        """Get a specific evaluation set by name.
+
+        Parameters
+        ----------
+        name : str
+            Name of the evaluation set to retrieve
+
+        Returns
+        -------
+        EvaluationSet
+            The requested evaluation set
+
+        Raises
+        ------
+        ValueError
+            If no evaluation set with the given name is found
+        """
+        for eval_set in self.evaluation_sets:
+            if eval_set.name == name:
+                return eval_set
+        raise ValueError(
+            f"No evaluation set named '{name}' found in benchmark '{self.benchmark_name}'"
+        )
+
+    def get_all_evaluation_sets(self) -> List[Tuple[str, DatasetCollectionConfig]]:
+        """Get all evaluation sets as (name, DatasetCollectionConfig) pairs.
+
+        This is the main interface for evaluation loops - it provides each evaluation
+        set converted to the format needed by esp-data for actual data loading.
+
+        Returns
+        -------
+        List[Tuple[str, DatasetCollectionConfig]]
+            List of (evaluation_set_name, dataset_collection_config) pairs
+        """
+        return [
+            (eval_set.name, eval_set.to_dataset_collection_config())
+            for eval_set in self.evaluation_sets
+        ]
+
+    def get_metrics_for_evaluation_set(self, name: str) -> List[str]:
+        """Get the metrics list for a specific evaluation set.
+
+        Parameters
+        ----------
+        name : str
+            Name of the evaluation set
+
+        Returns
+        -------
+        List[str]
+            List of metric names for this evaluation set
+        """
+        return self.get_evaluation_set(name).metrics
+
+
 # --------------------------------------------------------------------------- #
 #  Convenience loader
 # --------------------------------------------------------------------------- #
 def load_config(
     path: str | Path,
-    config_type: Literal["run", "data", "evaluate", "benchmark"] = "run",
-) -> RunConfig | DatasetCollectionConfig | EvaluateConfig | BenchmarkConfig:
-    """Read YAML at *path*, validate, and return a **RunConfig** instance.
+    config_type: Literal["run", "data", "evaluate", "benchmark_evaluation"] = "run",
+) -> RunConfig | DatasetCollectionConfig | EvaluateConfig | BenchmarkEvaluationConfig:
+    """Read YAML at *path*, validate, and return a configuration instance.
 
     Parameters
     ----------
     path : str | Path
         Path to the YAML configuration file
-    config_type : Literal["run", "data", "evaluate", "benchmark"]
+    config_type : Literal["run", "data", "evaluate", "benchmark_evaluation"]
         Type of configuration to load
 
     Returns
     -------
-    RunConfig | DatasetConfig | EvaluateConfig | BenchmarkConfig
+    RunConfig | DatasetCollectionConfig | EvaluateConfig | BenchmarkEvaluationConfig
         Validated configuration object
 
     Raises
@@ -628,7 +765,7 @@ def load_config(
         return DatasetCollectionConfig.model_validate(raw)
     elif config_type == "evaluate":
         return EvaluateConfig.model_validate(raw)
-    elif config_type == "benchmark":
-        return BenchmarkConfig.model_validate(raw)
+    elif config_type == "benchmark_evaluation":
+        return BenchmarkEvaluationConfig.model_validate(raw)
     else:
-        raise NotImplementedError("Can only load from run config or data config.")
+        raise NotImplementedError(f"Unknown config type: {config_type}")

@@ -1,0 +1,60 @@
+# Configuration that concatenates AnimalSpeak with AudioSet during training
+# - Training: AnimalSpeak + AudioSet (concatenated)
+# - Validation: AnimalSpeak only
+# - Both use 16kHz sample rate and unified column mappings
+
+train_datasets:
+  # AnimalSpeak dataset for training (convert to multi-label format)
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    split: train
+    balance: false
+    balance_attribute: canonical_name
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
+    sample_rate: 16000
+    transformations:
+      - type: labels_from_features
+        features: [canonical_name]
+        output_feature: label
+        override: true
+
+  # AudioSet dataset for training (already multi-label)
+  - dataset_name: audioset
+    split: train
+    sample_rate: 16000
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: labels_from_features
+        features: [labels]
+        output_feature: label
+        override: true
+
+val_datasets:
+  # Only use AnimalSpeak for validation (convert to multi-label format for consistency)
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    split: validation
+    balance: false
+    balance_attribute: canonical_name
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
+    sample_rate: 16000
+    transformations:
+      - type: labels_from_features
+        features: [canonical_name]
+        output_feature: label
+        override: true
+
+# Concatenation settings
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft 

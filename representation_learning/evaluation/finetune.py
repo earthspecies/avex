@@ -77,7 +77,9 @@ def train_and_eval_linear_probe(
         device=device,
         cfg=eval_cfg,
         exp_logger=exp_logger,
+        num_labels=num_labels,
         multi_label=multi_label,
+        dataset_metrics=dataset_metrics,
     )
 
     train_metrics, val_metrics = trainer.train(
@@ -91,12 +93,15 @@ def train_and_eval_linear_probe(
         shuffle=False,
     )
 
-    # Metric selection (use dataset metrics if provided, otherwise fallback to accuracy)
-    if dataset_metrics is not None:
+    # Metric selection - require explicit metrics, no fallbacks
+    if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
-        metric_names = getattr(test_embed_ds, "metadata", {}).get(
-            "metrics", ["accuracy"]
+        raise ValueError(
+            "No dataset metrics provided to train_and_eval_linear_probe. "
+            "Expected metrics to be specified in the evaluation configuration. "
+            "This indicates a configuration error - metrics should be explicitly defined "
+            "for each evaluation set to avoid silent bugs."
         )
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
@@ -199,7 +204,9 @@ def train_and_eval_full_fine_tune(
         device=device,
         cfg=eval_cfg,
         exp_logger=exp_logger,
+        num_labels=num_labels,
         multi_label=multi_label,
+        dataset_metrics=dataset_metrics,
     )
 
     # Train
@@ -211,11 +218,16 @@ def train_and_eval_full_fine_tune(
     base_model.eval()
     test_metrics = {}
 
-    # Get metric class based on task type and dataset metrics
-    if dataset_metrics is not None:
+    # Get metric class based on task type and dataset metrics - require explicit metrics, no fallbacks
+    if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
-        metric_names = ["accuracy"] if not multi_label else ["f1"]
+        raise ValueError(
+            "No dataset metrics provided to train_and_eval_full_fine_tune. "
+            "Expected metrics to be specified in the evaluation configuration. "
+            "This indicates a configuration error - metrics should be explicitly defined "
+            "for each evaluation set to avoid silent bugs."
+        )
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 

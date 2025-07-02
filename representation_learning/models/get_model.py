@@ -2,6 +2,7 @@ from representation_learning.configs import ModelSpec
 from representation_learning.models.aves_model import Model as AVESModel
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.clip import CLIPModel
+from representation_learning.models.dummy_model import Model as DummyModel
 from representation_learning.models.efficientnet import (
     Model as EfficientNet,
 )
@@ -130,11 +131,14 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             Model as BeatsModel,
         )
 
+        use_naturelm = getattr(model_config, "use_naturelm", False)
+
         return BeatsModel(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
+            use_naturelm=use_naturelm,
         )
     elif model_name == "eat_hf":
         from representation_learning.models.eat_hf import (
@@ -160,11 +164,23 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             pooling=pooling,
             return_features_only=return_features_only,
         )
+    elif model_name == "dummy_model":
+        embedding_dim = getattr(model_config, "embedding_dim", 768)
+        return_features_only = getattr(model_config, "return_features_only", False)
+
+        return DummyModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            embedding_dim=embedding_dim,
+            return_features_only=return_features_only,
+        )
     else:
         # Fallback
         supported = (
             "'efficientnet', 'clip', 'perch', 'atst', 'eat', 'eat_hf', 'resnet18', "
-            "'resnet50', 'resnet152', 'beats'"
+            "'resnet50', 'resnet152', 'beats', 'dummy_model'"
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"

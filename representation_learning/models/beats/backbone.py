@@ -8,15 +8,13 @@
 # --------------------------------------------------------
 
 import math
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 from torch.nn import LayerNorm, Parameter
-
-from representation_learning.models.beats.beats import BEATsConfig
 
 from .modules import (
     GLU_Linear,
@@ -30,7 +28,7 @@ from .modules import (
 class TransformerEncoder(nn.Module):
     """Transformer encoder for BEATs model."""
 
-    def __init__(self, args: BEATsConfig) -> None:
+    def __init__(self, args: Any) -> None:
         """Initialize TransformerEncoder.
 
         Args:
