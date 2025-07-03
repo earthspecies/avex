@@ -57,4 +57,4 @@ val_datasets:
 # Concatenation settings
 concatenate_train: true
 concatenate_val: true
-concatenate_method: soft 
+concatenate_method: soft

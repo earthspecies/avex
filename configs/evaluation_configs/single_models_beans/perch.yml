@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_base.yml
+dataset_config: configs/data_configs/benchmark_debug.yml
 
 training_params:
   train_epochs: 300
@@ -12,16 +12,16 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: beats_ft
-    run_config: configs/run_configs/pretrained/beats_base.yml
+  - run_name: perch
+    run_config: configs/run_configs/pretrained/perch_bacpipe_base.yml
     ### which layers to probe for embeddings
-    layers: backbone
+    layers: last_layer
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    checkpoint_path: runs/beats_ft/2025-06-30_17-21-39/checkpoints/checkpoint_epoch_015.pt
+    frozen: true
 
 # Where to save the evaluation results
-save_dir: evaluation_results/beats
+save_dir: evaluation_results/bird_aves_bio
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv

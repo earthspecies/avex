@@ -205,7 +205,9 @@ def eval_clustering_multiple_k(
         if k >= embeds_np.shape[0]:
             break
 
-        metrics = eval_clustering(embeds, labels, n_clusters=k, random_state=random_state)
+        metrics = eval_clustering(
+            embeds, labels, n_clusters=k, random_state=random_state
+        )
 
         if metrics["clustering_silhouette"] > best_silhouette:
             best_silhouette = metrics["clustering_silhouette"]

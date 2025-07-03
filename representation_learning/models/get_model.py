@@ -7,7 +7,9 @@ from representation_learning.models.efficientnet import (
     Model as EfficientNet,
 )
 from representation_learning.models.perch import Model as PerchModel
-from representation_learning.models.perch_bacpipe import Model as PerchTensorFlowHubModel
+from representation_learning.models.perch_bacpipe import (
+    Model as PerchTensorFlowHubModel,
+)
 from representation_learning.models.resnet import Model as ResNetModel
 
 

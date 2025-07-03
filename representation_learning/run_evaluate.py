@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -102,7 +101,6 @@ def _patch_esp_data() -> None:
 # Apply patches immediately
 _patch_esp_data()
 
-# Import esp_data after patches are applied
 from esp_data import DatasetConfig  # noqa: E402
 from esp_data.io import anypath  # noqa: E402
 
@@ -133,8 +131,8 @@ from representation_learning.evaluation.retrieval import eval_retrieval  # noqa:
 from representation_learning.models.get_model import get_model  # noqa: E402
 from representation_learning.utils import ExperimentLogger  # noqa: E402
 from representation_learning.utils.experiment_tracking import (  # noqa: E402
+    create_experiment_summary_csvs,
     get_or_create_experiment_metadata,
-    load_experiment_metadata,
     save_evaluation_metadata,
 )
 
@@ -239,9 +237,7 @@ def run_experiment(
     device: torch.device,
     save_dir: Path,
     evaluation_dataset_name: Optional[str] = None,
-    evaluation_set_metrics: Optional[
-        List[str]
-    ] = None,  # NEW: explicit metrics parameter
+    evaluation_set_metrics: Optional[List[str]] = None,
 ) -> ExperimentResult:
     logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
@@ -281,7 +277,6 @@ def run_experiment(
         if dataset_list:
             for ds_cfg in dataset_list:
                 ds_cfg.sample_rate = target_sample_rate
-
 
     embedding_dir_name = evaluation_dataset_name or dataset_name
     emb_base_dir = save_dir / experiment_name / embedding_dir_name
@@ -501,8 +496,6 @@ def run_experiment(
     val_metrics: Dict[str, float] = {}
     probe_test_metrics: Dict[str, float] = {}
 
-
-
     if "linear_probe" in eval_cfg.eval_modes:
         # Determine dataset metrics in priority order:
         # 1. evaluation_set_metrics (from benchmark config evaluation set)
@@ -667,7 +660,6 @@ def main() -> None:
 
     if "evaluation_sets" in raw_config:
         # BenchmarkEvaluationConfig format
-        config_type = "benchmark_evaluation"
         benchmark_eval_cfg = load_config(
             eval_cfg.dataset_config, config_type="benchmark_evaluation"
         )
@@ -678,8 +670,7 @@ def main() -> None:
         )
     else:
         # Structured dataset collection config
-        config_type = "data"
-        data_collection_cfg = load_config(eval_cfg.dataset_config, config_type="data")
+        load_config(eval_cfg.dataset_config, config_type="data")
         logger.info(
             f"Loading dataset config '{eval_cfg.dataset_config}' as 'data' format"
         )
@@ -687,8 +678,6 @@ def main() -> None:
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
         save_dir = anypath(str(eval_cfg.save_dir))
-        # For GCS paths we rely on cloudpathlib to create objects lazily when
-        # data is written, so no mkdir is needed here.
     else:
         save_dir = Path(str(eval_cfg.save_dir)).expanduser()
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -698,332 +687,65 @@ def main() -> None:
     # 3. Run experiments
     all_results: List[ExperimentResult] = []
 
-    if config_type == "benchmark_evaluation":
-        # New BenchmarkEvaluationConfig format - iterate through evaluation sets
-        if not evaluation_sets:
-            logger.warning(
-                "No evaluation sets found in BenchmarkEvaluationConfig. "
-                "Nothing to evaluate."
-            )
-            return
+    if not evaluation_sets:
+        logger.warning(
+            "No evaluation sets found in BenchmarkEvaluationConfig. "
+            "Nothing to evaluate."
+        )
+        return
 
-        for eval_set_name, eval_set_data_cfg in evaluation_sets:
-            logger.info(f"Evaluating benchmark set: {eval_set_name}")
+    for eval_set_name, eval_set_data_cfg in evaluation_sets:
+        logger.info(f"Evaluating benchmark set: {eval_set_name}")
 
-            # Extract the test dataset from the evaluation set
-            test_datasets = eval_set_data_cfg.test_datasets or []
-            if not test_datasets:
-                logger.warning(
-                    f"No test datasets in evaluation set '{eval_set_name}'. Skipping."
-                )
-                continue
-
-            # For benchmark evaluation sets, we expect exactly one test dataset per set
-            test_ds_cfg = test_datasets[0]
-
-            # Get metrics from the benchmark evaluation config
-            eval_set_metrics = benchmark_eval_cfg.get_metrics_for_evaluation_set(
-                eval_set_name
-            )
-
-            for exp_cfg in eval_cfg.experiments:
-                res = run_experiment(
-                    eval_cfg,
-                    test_ds_cfg,
-                    exp_cfg,
-                    eval_set_data_cfg,
-                    device,
-                    save_dir,
-                    eval_set_name,
-                    eval_set_metrics,
-                )
-                all_results.append(res)
-
-                logger.info(
-                    "[%s | %s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
-                    eval_set_name,
-                    res.dataset_name,
-                    res.experiment_name,
-                    res.probe_test_metrics,
-                    res.retrieval_metrics or "n/a",
-                    res.clustering_metrics or "n/a",
-                )
-    else:
-        # DatasetCollectionConfig format - get test datasets to evaluate
-        test_datasets = data_collection_cfg.test_datasets or []
-
+        # Extract the test dataset from the evaluation set
+        test_datasets = eval_set_data_cfg.test_datasets or []
         if not test_datasets:
             logger.warning(
-                "No test datasets found in configuration. Nothing to evaluate."
+                f"No test datasets in evaluation set '{eval_set_name}'. Skipping."
             )
-            return
+            continue
 
-        # Run evaluation for each test dataset
-        date_and_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        for i, test_ds_cfg in enumerate(test_datasets):
-            logger.info(
-                f"Evaluating dataset {i + 1}/{len(test_datasets)}: "
-                f"{test_ds_cfg.dataset_name}"
-            )
+        # For benchmark evaluation sets, we expect exactly one test dataset per set
+        test_ds_cfg = test_datasets[0]
 
-            # Create a dataset collection config for this specific dataset triplet
-            # This ensures train/val/test datasets are properly aligned
-            dataset_triplet_cfg = DatasetCollectionConfig(
-                train_datasets=[data_collection_cfg.train_datasets[i]]
-                if data_collection_cfg.train_datasets
-                and i < len(data_collection_cfg.train_datasets)
-                else None,
-                val_datasets=[data_collection_cfg.val_datasets[i]]
-                if data_collection_cfg.val_datasets
-                and i < len(data_collection_cfg.val_datasets)
-                else None,
-                test_datasets=[test_ds_cfg],
-                concatenate_train=True,
-                concatenate_val=True,
-                concatenate_test=True,
-                concatenate_method="soft",
-            )
-
-            for exp_cfg in eval_cfg.experiments:
-                res = run_experiment(
-                    eval_cfg,
-                    test_ds_cfg,
-                    exp_cfg,
-                    dataset_triplet_cfg,
-                    device,
-                    save_dir,
-                    None,
-                    None,
-                )
-                all_results.append(res)
-
-                logger.info(
-                    "[%s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
-                    res.dataset_name,
-                    res.experiment_name,
-                    res.probe_test_metrics,
-                    res.retrieval_metrics or "n/a",
-                    res.clustering_metrics or "n/a",
-                )
-
-        # 4. Write summary
-        summary_path = save_dir / f"summary_{date_and_time}.txt"
-        with summary_path.open("w") as f:
-            f.write("Experiment Summary\n==================\n\n")
-            for r in all_results:
-                f.write(f"Dataset: {r.dataset_name}\n")
-                f.write(f"Experiment: {r.experiment_name}\n")
-                f.write(f"Train metrics: {r.train_metrics}\n")
-                f.write(f"Validation metrics: {r.val_metrics}\n")
-                f.write(f"Probe test metrics: {r.probe_test_metrics}\n")
-                f.write(f"Retrieval metrics: {r.retrieval_metrics}\n")
-                f.write(f"Clustering metrics: {r.clustering_metrics}\n")
-                f.write("-" * 60 + "\n")
-
-        logger.info("Saved summary to %s", summary_path)
-
-    # 5. Create and save summary DataFrame
-    # First, collect all possible metrics from all datasets to ensure consistent columns
-    all_possible_metrics = set()
-    all_possible_val_metrics = set()
-    all_possible_test_metrics = set()
-    all_possible_retrieval_metrics = set()
-    all_possible_clustering_metrics = set()
-
-    # Collect metrics from all results
-    for r in all_results:
-        all_possible_metrics.update(r.train_metrics.keys())
-        all_possible_val_metrics.update(r.val_metrics.keys())
-        all_possible_test_metrics.update(r.probe_test_metrics.keys())
-        all_possible_retrieval_metrics.update(r.retrieval_metrics.keys())
-        all_possible_clustering_metrics.update(r.clustering_metrics.keys())
-
-    # Also collect metrics from dataset configurations
-    if config_type == "benchmark_evaluation":
-        # For BenchmarkEvaluationConfig, get metrics from evaluation sets
-        for eval_set_name, _eval_set_data_cfg in evaluation_sets:
-            eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
-            all_possible_test_metrics.update(eval_set.metrics)
-    else:
-        # For DatasetCollectionConfig, check dataset configs
-        test_datasets = data_collection_cfg.test_datasets or []
-        for ds_cfg in test_datasets:
-            if hasattr(ds_cfg, "metrics") and ds_cfg.metrics:
-                all_possible_test_metrics.update(ds_cfg.metrics)
-
-    # Add standard retrieval metrics that are always computed when retrieval is enabled
-    if "retrieval" in eval_cfg.eval_modes:
-        all_possible_retrieval_metrics.update(
-            ["retrieval_roc_auc", "retrieval_precision_at_1"]
+        # Get metrics from the benchmark evaluation config
+        eval_set_metrics = benchmark_eval_cfg.get_metrics_for_evaluation_set(
+            eval_set_name
         )
 
-    # Add standard clustering metrics that are always computed when clustering is enabled
-    if "clustering" in eval_cfg.eval_modes:
-        all_possible_clustering_metrics.update(
-            [
-                "clustering_ari",
-                "clustering_nmi",
-                "clustering_v_measure",
-                "clustering_silhouette",
-                "clustering_best_k",
-                "clustering_ari_best",
-                "clustering_nmi_best",
-                "clustering_v_measure_best",
-                "clustering_silhouette_best",
-            ]
-        )
-
-    # Add standard training/validation metrics that are always computed
-    all_possible_metrics.update(["loss", "acc"])
-    all_possible_val_metrics.update(["loss", "acc"])
-
-    summary_data = []
-    for r in all_results:
-        # Get training metadata if available
-        training_metadata = pd.DataFrame()
         for exp_cfg in eval_cfg.experiments:
-            if exp_cfg.run_name == r.experiment_name:
-                if exp_cfg.checkpoint_path:
-                    checkpoint_dir = Path(exp_cfg.checkpoint_path).parent
-                    training_metadata = load_experiment_metadata(checkpoint_dir)
-                break
+            res = run_experiment(
+                eval_cfg,
+                test_ds_cfg,
+                exp_cfg,
+                eval_set_data_cfg,
+                device,
+                save_dir,
+                eval_set_name,
+                eval_set_metrics,
+            )
+            all_results.append(res)
 
-        # Create summary entry with all possible metrics, using None for missing ones
-        summary_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "dataset_name": r.dataset_name,
-            "experiment_name": r.experiment_name,
-            "evaluation_dataset_name": r.evaluation_dataset_name,
-        }
-
-        # Add train metrics with None for missing ones
-        for metric in all_possible_metrics:
-            summary_entry[metric] = r.train_metrics.get(metric, None)
-
-        # Add validation metrics with None for missing ones
-        for metric in all_possible_val_metrics:
-            summary_entry[f"val_{metric}"] = r.val_metrics.get(metric, None)
-
-        # Add test metrics with None for missing ones
-        for metric in all_possible_test_metrics:
-            summary_entry[f"test_{metric}"] = r.probe_test_metrics.get(metric, None)
-
-        # Add retrieval metrics with None for missing ones
-        for metric in all_possible_retrieval_metrics:
-            # Remove the "retrieval_" prefix if it's already there to avoid
-            # double-prefixing
-            metric_name = metric.replace("retrieval_", "")
-            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(
-                metric, None
+            logger.info(
+                "[%s | %s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
+                eval_set_name,
+                res.dataset_name,
+                res.experiment_name,
+                res.probe_test_metrics,
+                res.retrieval_metrics or "n/a",
+                res.clustering_metrics or "n/a",
             )
 
-        # Add clustering metrics with None for missing ones
-        for metric in all_possible_clustering_metrics:
-            # Remove the "clustering_" prefix if it's already there to avoid
-            # double-prefixing
-            metric_name = metric.replace("clustering_", "")
-            summary_entry[f"clustering_{metric_name}"] = r.clustering_metrics.get(
-                metric, None
-            )
-
-        # Add training metadata if available
-        if not training_metadata.empty:
-            # Get the most recent training entry
-            latest_training = training_metadata.iloc[-1]
-            for col in training_metadata.columns:
-                if col not in summary_entry:
-                    summary_entry[f"training_{col}"] = latest_training[col]
-
-        summary_data.append(summary_entry)
-
-    # Create and save DataFrame
-    summary_df = pd.DataFrame(summary_data)
-    summary_df_path = save_dir / f"summary_{datetime.now()}.csv"
-    # quoting=1 is QUOTE_ALL for proper CSV escaping
-    summary_df.to_csv(summary_df_path, index=False, quoting=1, escapechar="\\")
-    logger.info("Saved summary DataFrame to %s", summary_df_path)
-
-    # Append to global results CSV if specified
-    if eval_cfg.results_csv_path:
-        results_csv_path = Path(eval_cfg.results_csv_path).expanduser()
-
-        # Add some additional metadata for the global CSV
-        global_summary_data = []
-        for entry in summary_data:
-            global_entry = entry.copy()
-            global_entry["config_file"] = str(args.config)
-            global_entry["save_dir"] = str(save_dir)
-            global_summary_data.append(global_entry)
-
-        global_summary_df = pd.DataFrame(global_summary_data)
-
-        # Check if the file exists to determine if we need headers
-        file_exists = results_csv_path.exists()
-
-        # Create parent directory if it doesn't exist
-        results_csv_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Append to the file (or create it with headers if it doesn't exist)
-        global_summary_df.to_csv(
-            results_csv_path,
-            mode="a" if file_exists else "w",
-            header=not file_exists,
-            index=False,
-            quoting=1,  # QUOTE_ALL to properly escape JSON and other special content
-            escapechar="\\",
-        )
-
-        logger.info("Appended results to global CSV: %s", results_csv_path)
-
-    # Create simple CSV with just model name, date, dataset, and test metrics
-    if eval_cfg.results_csv_path:
-        # Derive simple CSV name from all_results CSV name
-        results_path = Path(eval_cfg.results_csv_path).expanduser()
-        simple_csv_path = results_path.parent / (
-            results_path.stem + "_simple" + results_path.suffix
-        )
-    else:
-        # Use a default name in the save_dir
-        simple_csv_path = (
-            save_dir / f"simple_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        )
-
-    # Create simple summary data
-    simple_summary_data = []
-    for entry in summary_data:
-        simple_entry = {
-            "model_name": entry["experiment_name"],
-            "date": entry["timestamp"],
-            "dataset": entry.get("evaluation_dataset_name") or entry["dataset_name"],
-        }
-
-        # Add all test metrics (those that start with "test_")
-        for key, value in entry.items():
-            if key.startswith("test_") and value is not None:
-                simple_entry[key] = value
-
-        simple_summary_data.append(simple_entry)
-
-    # Create and save simple DataFrame
-    simple_summary_df = pd.DataFrame(simple_summary_data)
-
-    # Check if the simple file exists to determine if we need headers
-    simple_file_exists = simple_csv_path.exists()
-
-    # Create parent directory if it doesn't exist
-    simple_csv_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Append to the simple file (or create it with headers if it doesn't exist)
-    simple_summary_df.to_csv(
-        simple_csv_path,
-        mode="a" if simple_file_exists else "w",
-        header=not simple_file_exists,
-        index=False,
-        quoting=1,  # QUOTE_ALL
-        escapechar="\\",
+    # 5. Create and save summary CSV files
+    create_experiment_summary_csvs(
+        all_results=all_results,
+        eval_cfg=eval_cfg,
+        save_dir=save_dir,
+        config_file_path=str(args.config),
+        benchmark_eval_cfg=benchmark_eval_cfg,
+        evaluation_sets=evaluation_sets,
+        experiments=eval_cfg.experiments,
     )
-
-    logger.info("Saved simple results CSV: %s", simple_csv_path)
 
 
 if __name__ == "__main__":
