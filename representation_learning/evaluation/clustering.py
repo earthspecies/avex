@@ -213,7 +213,7 @@ def eval_clustering_multiple_k(
             best_silhouette = metrics["clustering_silhouette"]
             best_k = k
             best_metrics = {
-                "clustering_best_k": float(k),
+                "clustering_best_k": float(best_k),
                 "clustering_ari_best": metrics["clustering_ari"],
                 "clustering_nmi_best": metrics["clustering_nmi"],
                 "clustering_v_measure_best": metrics["clustering_v_measure"],
@@ -224,7 +224,13 @@ def eval_clustering_multiple_k(
 
 
 def _get_empty_clustering_metrics() -> Dict[str, float]:
-    """Return empty clustering metrics dictionary."""
+    """Return empty clustering metrics dictionary.
+
+    Returns
+    -------
+    Dict[str, float]
+        Dictionary with clustering metric keys set to 0.0
+    """
     return {
         "clustering_ari": 0.0,
         "clustering_nmi": 0.0,
@@ -234,7 +240,13 @@ def _get_empty_clustering_metrics() -> Dict[str, float]:
 
 
 def _get_empty_clustering_best_metrics() -> Dict[str, float]:
-    """Return empty best clustering metrics dictionary."""
+    """Return empty best clustering metrics dictionary.
+
+    Returns
+    -------
+    Dict[str, float]
+        Dictionary with best clustering metric keys set to 0.0
+    """
     return {
         "clustering_best_k": 0.0,
         "clustering_ari_best": 0.0,

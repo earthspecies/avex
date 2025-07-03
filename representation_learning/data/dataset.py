@@ -30,7 +30,9 @@ from representation_learning.data.augmentations import (
     make_item_postprocessor,
 )
 
-# from representation_learning.preprocessing.activity_detector import load_activity_detector
+# from representation_learning.preprocessing.activity_detector import (
+#     load_activity_detector
+# )
 
 logger = logging.getLogger(__name__)
 
@@ -80,89 +82,6 @@ class AudioDataset(torch.utils.data.Dataset):
         return sample
 
 
-def _apply_manual_transforms(
-    ds: Dataset, transforms_config: list
-) -> tuple[Dataset, dict]:
-    """
-    Apply transforms manually, including custom transforms that can't be registered with esp_data.
-
-    Parameters
-    ----------
-    ds : Dataset
-        The dataset to apply transforms to
-    transforms_config : list
-        List of transform configurations
-
-    Returns
-    -------
-    tuple[Dataset, dict]
-        The transformed dataset and metadata
-    """
-    from esp_data.transforms import transform_from_config
-
-    from representation_learning.data.transforms import (
-        FilterNoneLabels,
-        FilterNoneLabelsConfig,
-    )
-
-    combined_metadata = {}
-    current_data = ds._data.copy()
-
-    for transform_cfg in transforms_config:
-        # Handle both dict configs and Pydantic config objects
-        if hasattr(transform_cfg, "type"):  # Pydantic object
-            transform_type = transform_cfg.type
-            transform_dict = transform_cfg.model_dump()
-        elif isinstance(transform_cfg, dict):  # Dictionary
-            transform_type = transform_cfg.get("type")
-            transform_dict = transform_cfg
-        else:
-            raise ValueError(
-                f"Unsupported transform config type: {type(transform_cfg)}"
-            )
-
-        if transform_type == "filter_none_labels":
-            # Apply custom FilterNoneLabels transform manually
-            config = FilterNoneLabelsConfig(**transform_dict)
-            transform = FilterNoneLabels.from_config(config)
-            current_data, metadata = transform(current_data)
-            combined_metadata.update(metadata)
-            logger.info(f"Applied manual filter_none_labels transform: {metadata}")
-
-        else:
-            # Apply standard esp_data transforms
-            transform = transform_from_config(transform_cfg)
-            current_data, metadata = transform(current_data)
-            if metadata:
-                combined_metadata.update(metadata)
-
-    # Update the dataset with transformed data
-    ds._data = current_data
-    return ds, combined_metadata
-
-
-def _preprocess_comma_separated_labels(ds: Dataset, ds_cfg: DatasetConfig) -> Dataset:
-    """Legacy function for preprocessing comma-separated strings.
-
-    This function is now deprecated since datasets use the 'labels_as_list'
-    column which already contains properly formatted lists.
-
-    Parameters
-    ----------
-    ds : Dataset
-        The dataset to preprocess
-    ds_cfg : DatasetConfig
-        The dataset configuration
-
-    Returns
-    -------
-    Dataset
-        The dataset (unchanged)
-    """
-    # No longer needed - datasets now use labels_as_list column
-    return ds
-
-
 def _build_one_dataset_split(
     cfg_list: list[DatasetConfig],
     concatenate: bool = False,
@@ -201,49 +120,7 @@ def _build_one_dataset_split(
     try:
         ds_list = []
         for ds_cfg in cfg_list:
-            # Load dataset without transforms first to check for labels_as_list column
-            ds_cfg_copy = ds_cfg.model_copy()
-            original_transforms = ds_cfg_copy.transformations or []
-            ds_cfg_copy.transformations = []  # Remove transforms for initial loading
-
-            ds, metadata = dataset_from_config(ds_cfg_copy)
-
-            # Check if this is explicitly configured as a multilabel dataset
-            is_multilabel = getattr(ds_cfg, "multi_label", False)
-
-            if (
-                is_multilabel
-                and hasattr(ds, "_data")
-                and "labels_as_list" in ds._data.columns
-            ):
-                # Always apply filter_none_labels for multilabel datasets
-                filter_config = [
-                    {
-                        "type": "filter_none_labels",
-                        "input_feature": "labels_as_list",
-                        "override": True,
-                    }
-                ]
-                ds, filter_metadata = _apply_manual_transforms(ds, filter_config)
-
-                # Merge filter metadata
-                if filter_metadata:
-                    metadata = metadata or {}
-                    metadata.update(filter_metadata)
-
-                # Now apply the original transforms
-                if original_transforms:
-                    ds, transform_metadata = _apply_manual_transforms(
-                        ds, original_transforms
-                    )
-                    if transform_metadata:
-                        metadata = metadata or {}
-                        metadata.update(transform_metadata)
-            else:
-                # For non-multilabel datasets, apply transforms normally
-                if original_transforms:
-                    ds_cfg_copy.transformations = original_transforms
-                    ds, metadata = dataset_from_config(ds_cfg_copy)
+            ds, metadata = dataset_from_config(ds_cfg)
 
             ds_list.append((ds, metadata))
 
@@ -361,7 +238,8 @@ def _build_datasets(
         if test_ds:
             test_ds.apply_transformations([label_transform])
 
-    # Handle legacy multi-label case - check if label_feature is a list (indicates multi-label)
+    # Handle legacy multi-label case - check if label_feature is a list
+    # (indicates multi-label)
     elif "label_feature" in train_metadata and isinstance(
         train_metadata["label_feature"], list
     ):
@@ -433,7 +311,8 @@ class Collater:
     length (`audio_max_length`) by truncating or zero-padding as needed.
 
     Supports two-step processing:
-    1. First truncate to dataset_audio_max_length_seconds (benchmark constraint) if specified
+    1. First truncate to dataset_audio_max_length_seconds (benchmark constraint)
+       if specified
     2. Then pad/truncate to audio_max_length_seconds (model requirement)
     """
 
@@ -472,7 +351,8 @@ class Collater:
             if self.dataset_audio_max_length_seconds is not None:
                 dataset_max_samples = self.dataset_audio_max_length_seconds * self.sr
                 if wav.size(-1) > dataset_max_samples:
-                    # Apply dataset constraint truncation with same window selection strategy
+                    # Apply dataset constraint truncation with same window
+                    # selection strategy
                     wav, _ = pad_or_window(
                         wav, dataset_max_samples, self.window_selection
                     )
@@ -668,9 +548,11 @@ def build_dataloaders(
 
     num_labels = ds_train.metadata.get("num_labels", 0)
 
-    # Allow single-class datasets for detection tasks, but require multiple classes for classification
+    # Allow single-class datasets for detection tasks, but require multiple
+    # classes for classification
     if task_type == "detection":
-        # For detection tasks, we need at least 1 class (binary detection: present/absent)
+        # For detection tasks, we need at least 1 class
+        # (binary detection: present/absent)
         if num_labels < 1:
             raise ValueError("Detection tasks must have at least one label.")
     else:

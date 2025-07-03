@@ -7,9 +7,6 @@ from representation_learning.models.efficientnet import (
     Model as EfficientNet,
 )
 from representation_learning.models.perch import Model as PerchModel
-from representation_learning.models.perch_bacpipe import (
-    Model as PerchTensorFlowHubModel,
-)
 from representation_learning.models.resnet import Model as ResNetModel
 
 
@@ -23,7 +20,6 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     - 'efficientnet': Audio classification model
     - 'clip': CLIP-like model for audio-text contrastive learning
     - 'perch': Google's Perch bird audio classification model
-    - 'perch_bacpipe': Google's Perch model via TensorFlow Hub
     - 'atst': ATST Frame model for timestamp embeddings
 
     Args:
@@ -73,12 +69,6 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         )
     elif model_name == "perch":
         return PerchModel(
-            num_classes=num_classes,
-            device=model_config.device,
-            audio_config=model_config.audio_config,
-        )
-    elif model_name == "perch_bacpipe":
-        return PerchTensorFlowHubModel(
             num_classes=num_classes,
             device=model_config.device,
             audio_config=model_config.audio_config,
@@ -190,8 +180,8 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     else:
         # Fallback
         supported = (
-            "'efficientnet', 'clip', 'perch', 'perch_bacpipe', 'atst', 'eat', 'eat_hf', 'resnet18', "
-            "'resnet50', 'resnet152', 'beats', 'dummy_model'"
+            "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
+            "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', 'dummy_model'"
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"

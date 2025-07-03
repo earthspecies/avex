@@ -199,7 +199,8 @@ def save_evaluation_metadata(
 
     # Add clustering metrics with None for missing ones
     for metric in all_possible_clustering_metrics:
-        # Remove the "clustering_" prefix if it's already there to avoid double-prefixing
+        # Remove the "clustering_" prefix if it's already there to avoid
+        # double-prefixing
         metric_name = metric.replace("clustering_", "")
         metadata[f"clustering_{metric_name}"] = clustering_metrics.get(metric, None)
 
@@ -254,10 +255,10 @@ def load_evaluation_metadata(output_dir: Path) -> pd.DataFrame:
 
 def create_experiment_summary_csvs(
     all_results: List[Any],  # ExperimentResult from run_evaluate.py
-    eval_cfg: Any,  # EvaluateConfig
+    eval_cfg: Any,  # EvaluateConfig  # noqa: ANN401
     save_dir: Path,
     config_file_path: str,
-    benchmark_eval_cfg: Any,
+    benchmark_eval_cfg: Any,  # noqa: ANN401
     evaluation_sets: List[tuple],
     experiments: List[Any],
 ) -> None:
@@ -317,7 +318,8 @@ def create_experiment_summary_csvs(
             ["retrieval_roc_auc", "retrieval_precision_at_1"]
         )
 
-    # Add standard clustering metrics that are always computed when clustering is enabled
+    # Add standard clustering metrics that are always computed when clustering
+    # is enabled
     if "clustering" in eval_cfg.eval_modes:
         all_possible_clustering_metrics.update(
             [
@@ -438,7 +440,6 @@ def create_experiment_summary_csvs(
 
         # Also save as JSONL
         results_jsonl_path = results_csv_path.with_suffix(".jsonl")
-        jsonl_file_exists = results_jsonl_path.exists()
 
         # For JSONL, we always append (no headers needed)
         with open(results_jsonl_path, "a") as f:

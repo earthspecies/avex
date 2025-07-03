@@ -319,8 +319,10 @@ class Trainer:
 
                     logger_line = (
                         f"[Epoch {epoch:03d}] "
-                        f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
-                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f} | "
+                        f"train_loss={train_loss:.4f}  "
+                        f"train_{self.primary_metric_name}={train_acc:.4f} | "
+                        f"val_loss={val_loss:.4f}  "
+                        f"val_{self.primary_metric_name}={val_acc:.4f} | "
                         f"lr={current_lr:.2e}"
                     )
 
@@ -1102,8 +1104,10 @@ class FineTuneTrainer:
 
             logger.info(
                 f"[Epoch {epoch:03d}] "
-                f"train_loss={train_loss:.4f}  train_{self.primary_metric_name}={train_metric:.4f} | "
-                f"val_loss={val_loss:.4f}  val_{self.primary_metric_name}={val_metric:.4f}"
+                f"train_loss={train_loss:.4f}  "
+                f"train_{self.primary_metric_name}={train_metric:.4f} | "
+                f"val_loss={val_loss:.4f}  "
+                f"val_{self.primary_metric_name}={val_metric:.4f}"
             )
 
             # Log epoch-level metrics
@@ -1151,6 +1155,11 @@ class FineTuneTrainer:
         -------
         tuple[float, float]
             A tuple ``(loss, metric_value)`` computed over the entire epoch.
+
+        Raises
+        ------
+        RuntimeError
+            If metric initialization fails due to configuration issues
         """
         loader = self.train_loader if train else self.val_loader
 
@@ -1163,8 +1172,10 @@ class FineTuneTrainer:
             )
         except Exception as e:
             raise RuntimeError(
-                f"Failed to initialize metric '{self.primary_metric_name}' for {self.num_labels} classes. "
-                f"Error: {e}. This indicates a configuration issue - ensure the metric name is valid "
+                f"Failed to initialize metric '{self.primary_metric_name}' "
+                f"for {self.num_labels} classes. "
+                f"Error: {e}. This indicates a configuration issue - ensure "
+                f"the metric name is valid "
                 f"and properly supported by the metric factory."
             ) from e
 
@@ -1254,5 +1265,6 @@ class FineTuneTrainer:
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         logger.info(
-            f"Restored best model from {ckpt_path} (val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
+            f"Restored best model from {ckpt_path} "
+            f"(val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
         )

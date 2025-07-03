@@ -28,7 +28,7 @@ from .modules import (
 class TransformerEncoder(nn.Module):
     """Transformer encoder for BEATs model."""
 
-    def __init__(self, args: Any) -> None:
+    def __init__(self, args: Any) -> None:  # noqa: ANN401
         """Initialize TransformerEncoder.
 
         Args:

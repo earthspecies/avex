@@ -33,7 +33,8 @@ def extract_embeddings_for_split(
     if len(dataloader) == 0:
         logger.warning("Dataloader is empty, returning empty tensors")
         # Return empty tensors with appropriate shapes
-        # We can't determine the embedding dimension without data, so return placeholder shapes
+        # We can't determine the embedding dimension without data,
+        # so return placeholder shapes
         return torch.empty(0, 1), torch.empty(0, dtype=torch.long)
 
     embeds: list[torch.Tensor] = []

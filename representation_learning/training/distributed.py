@@ -12,21 +12,6 @@ import torch.distributed as dist
 logger = logging.getLogger(__name__)
 
 
-# Disable printing when not in master process
-# def suppress_non_master_prints(is_master: bool) -> None:
-#     """
-#     This function disables printing when not in master process
-#     """
-#     builtin_print = builtins.print
-
-#     def print(*args: object, **kwargs: object) -> None:
-#         force = kwargs.pop("force", False)
-#         if is_master or force:
-#             builtin_print(*args, **kwargs)
-
-#     builtins.print = print
-
-
 @contextlib.contextmanager
 def suppress_non_master_prints(is_master: bool):  # noqa: ANN201
     """
@@ -300,7 +285,13 @@ def is_main_process() -> bool:
 
 
 def synchronize_tensor(tensor: torch.Tensor) -> torch.Tensor:
-    """Synchronize a scalar tensor across all ranks by summing and averaging."""
+    """Synchronize a scalar tensor across all ranks by summing and averaging.
+
+    Returns
+    -------
+    torch.Tensor
+        The synchronized tensor averaged across all ranks
+    """
     if not dist.is_available() or not dist.is_initialized():
         return tensor
 
@@ -319,7 +310,13 @@ def synchronize_tensor(tensor: torch.Tensor) -> torch.Tensor:
 
 
 def synchronize_scalar(value: float, device: torch.device) -> float:
-    """Synchronize a scalar value across all ranks."""
+    """Synchronize a scalar value across all ranks.
+
+    Returns
+    -------
+    float
+        The synchronized scalar value averaged across all ranks
+    """
     import torch
 
     tensor = torch.tensor(value, dtype=torch.float32, device=device)
@@ -336,7 +333,13 @@ def gather_metrics_from_all_ranks(
     total_correct_a2t: int = 0,
     total_correct_t2a: int = 0,
 ) -> Tuple[float, float]:
-    """Gather and synchronize metrics from all ranks."""
+    """Gather and synchronize metrics from all ranks.
+
+    Returns
+    -------
+    Tuple[float, float]
+        A tuple of (average_loss, average_accuracy) synchronized across all ranks
+    """
     if not dist.is_available() or not dist.is_initialized():
         if is_clip_mode:
             avg_acc = (

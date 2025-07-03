@@ -209,6 +209,12 @@ def _filter_classification_metrics(metrics: Optional[List[str]]) -> Optional[Lis
 
     Clustering metrics are handled separately in the clustering evaluation phase,
     not during linear probe training/evaluation.
+
+    Returns
+    -------
+    Optional[List[str]]
+        List of classification metrics with clustering metrics removed,
+        or None if input was None
     """
     if not metrics:
         return metrics
@@ -340,7 +346,8 @@ def run_experiment(
         if dataset_audio_max_length is not None:
             logger.info(
                 f"Dataset audio constraint: {dataset_audio_max_length}s, "
-                f"Model target length: {run_cfg.model_spec.audio_config.target_length_seconds}s"
+                f"Model target length: "
+                f"{run_cfg.model_spec.audio_config.target_length_seconds}s"
             )
 
         # For BirdSet datasets, augment during eval
@@ -505,7 +512,8 @@ def run_experiment(
             dataset_cfg, "metrics", None
         )
 
-        # Filter out clustering metrics - they are handled separately in clustering evaluation
+        # Filter out clustering metrics - they are handled separately in
+        # clustering evaluation
         classification_metrics = _filter_classification_metrics(dataset_metrics)
 
         if dataset_metrics and classification_metrics != dataset_metrics:
@@ -516,7 +524,8 @@ def run_experiment(
                 f"Filtered out clustering metrics for linear probe: {filtered_out}"
             )
             logger.info(
-                f"Using classification metrics for linear probe: {classification_metrics}"
+                f"Using classification metrics for linear probe: "
+                f"{classification_metrics}"
             )
 
         if frozen:
@@ -608,8 +617,8 @@ def run_experiment(
             checkpoint_name=checkpoint_name,
         )
 
-    # Save evaluation metadata - Use evaluation_dataset_name to avoid metadata collisions
-    # between different evaluation sets that use the same underlying ESP dataset
+    # Save evaluation metadata - Use evaluation_dataset_name to avoid
+    # metadata collisions
     metadata_dataset_name = evaluation_dataset_name or dataset_name
     save_evaluation_metadata(
         output_dir=save_dir,

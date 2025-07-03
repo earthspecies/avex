@@ -162,7 +162,8 @@ class EATHFModel(ModelBase):
         #     self.backbone,
         #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
         #     # "checkpoint_22_920000.pt"
-        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt",
+        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/
+        #     checkpoint_last.pt",
         # )
         # load_fairseq_weights(
         #     self.backbone,

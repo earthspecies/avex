@@ -171,6 +171,7 @@ class ModelSpec(BaseModel):
     )
 
     # BEATs-specific configuration
+    # TODO: general approach for model-specific configs
     use_naturelm: Optional[bool] = Field(
         None, description="Whether to use NatureLM for BEATs model"
     )
@@ -497,9 +498,9 @@ class EvaluateConfig(BaseModel):
     results_csv_path: Optional[str] = Field(
         None,
         description=(
-            "Optional path to a CSV file where all evaluation results will be appended. "
-            "If provided, results from each experiment will be written to this file "
-            "with appropriate metadata for tracking across multiple runs."
+            "Optional path to a CSV file where all evaluation results will be "
+            "appended. If provided, results from each experiment will be written "
+            "to this file with appropriate metadata for tracking across multiple runs."
         ),
     )
 
@@ -591,7 +592,7 @@ class DatasetCollectionConfig(BaseModel):
 
 
 class EvaluationSet(BaseModel):
-    """Configuration for a single evaluation set (train/val/test triplet) within a benchmark."""
+    """Configuration for a single evaluation set (train/val/test triplet)."""
 
     name: str = Field(
         ..., description="Name of this evaluation set (e.g., 'dog_classification')"
@@ -609,7 +610,7 @@ class EvaluationSet(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     def to_dataset_collection_config(self) -> DatasetCollectionConfig:
-        """Convert this evaluation set to a DatasetCollectionConfig for esp-data loading.
+        """Convert this evaluation set to a DatasetCollectionConfig.
 
         Returns
         -------
@@ -628,10 +629,8 @@ class EvaluationSet(BaseModel):
 
 
 class BenchmarkEvaluationConfig(BaseModel):
-    """Configuration for benchmark evaluation with explicit train/val/test relationships.
-
-    This provides a clean, evaluation-first structure while maintaining compatibility
-    with esp-data's DatasetCollectionConfig for actual data loading.
+    """Configuration for benchmark evaluation wrapping
+    esp-data's DatasetCollectionConfig for actual data loading.
 
     Example
     -------
@@ -661,7 +660,9 @@ class BenchmarkEvaluationConfig(BaseModel):
     benchmark_name: str = Field(..., description="Name of this benchmark")
     evaluation_sets: List[EvaluationSet] = Field(
         ...,
-        description="List of evaluation sets (train/val/test triplets) in this benchmark",
+        description=(
+            "List of evaluation sets (train/val/test triplets) in this benchmark"
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -688,7 +689,8 @@ class BenchmarkEvaluationConfig(BaseModel):
             if eval_set.name == name:
                 return eval_set
         raise ValueError(
-            f"No evaluation set named '{name}' found in benchmark '{self.benchmark_name}'"
+            f"No evaluation set named '{name}' found in benchmark "
+            f"'{self.benchmark_name}'"
         )
 
     def get_all_evaluation_sets(self) -> List[Tuple[str, DatasetCollectionConfig]]:
