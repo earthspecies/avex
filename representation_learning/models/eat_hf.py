@@ -168,6 +168,10 @@ class EATHFModel(ModelBase):
         #     self.backbone,
         #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"
         # )
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint30.pt"
+        # ) # 48khz
 
         embed_dim = getattr(self.backbone.config, "hidden_size", 768)
 

@@ -7,6 +7,7 @@ from representation_learning.models.efficientnet import (
     Model as EfficientNet,
 )
 from representation_learning.models.perch import Model as PerchModel
+from representation_learning.models.perch_bacpipe import Model as PerchTensorFlowHubModel
 from representation_learning.models.resnet import Model as ResNetModel
 
 
@@ -20,6 +21,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     - 'efficientnet': Audio classification model
     - 'clip': CLIP-like model for audio-text contrastive learning
     - 'perch': Google's Perch bird audio classification model
+    - 'perch_bacpipe': Google's Perch model via TensorFlow Hub
     - 'atst': ATST Frame model for timestamp embeddings
 
     Args:
@@ -73,16 +75,23 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
+    elif model_name == "perch_bacpipe":
+        return PerchTensorFlowHubModel(
+            num_classes=num_classes,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
     elif model_name == "atst":
         from representation_learning.models.atst_frame.atst_encoder import (
             Model as ATSTModel,
         )
 
         # ATST requires model path
-        atst_model_path = getattr(
-            model_config, "atst_model_path", "pretrained/atst_as2M.pt"
-        )
+        # atst_model_path = getattr(
+        #     model_config, "atst_model_path", "pretrained/atst_as2M.pt"
+        # )
         # atst_model_path = "pretrained/atst_frame_base.pt"
+        atst_model_path = "pretrained/atst_as2M.pt"
         return ATSTModel(
             atst_model_path=atst_model_path,
             num_classes=num_classes,
@@ -179,7 +188,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     else:
         # Fallback
         supported = (
-            "'efficientnet', 'clip', 'perch', 'atst', 'eat', 'eat_hf', 'resnet18', "
+            "'efficientnet', 'clip', 'perch', 'perch_bacpipe', 'atst', 'eat', 'eat_hf', 'resnet18', "
             "'resnet50', 'resnet152', 'beats', 'dummy_model'"
         )
         raise NotImplementedError(

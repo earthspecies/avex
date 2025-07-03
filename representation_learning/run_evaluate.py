@@ -262,7 +262,7 @@ def run_experiment(
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
     run_cfg.model_spec.device = str(device)
-    run_cfg.augmentations = []  # disable training-time noise / mix-up
+    run_cfg.augmentations = []  # disable training-time augs during (most) eval
 
     if run_cfg.model_spec.audio_config.sample_rate is not None:
         dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
@@ -271,6 +271,7 @@ def run_experiment(
         logger.info(f"Using benchmark sample rate: {dataset_cfg.sample_rate} Hz")
 
     # Also update all datasets in the data collection config to use the same sample rate
+    # TODO: delete me
     target_sample_rate = dataset_cfg.sample_rate
     for dataset_list in [
         data_collection_cfg.train_datasets,
@@ -281,8 +282,9 @@ def run_experiment(
             for ds_cfg in dataset_list:
                 ds_cfg.sample_rate = target_sample_rate
 
-    # Embedding paths
-    emb_base_dir = save_dir / experiment_name / dataset_name
+
+    embedding_dir_name = evaluation_dataset_name or dataset_name
+    emb_base_dir = save_dir / experiment_name / embedding_dir_name
     train_path = emb_base_dir / "embedding_train.h5"
     val_path = emb_base_dir / "embedding_val.h5"
     test_path = emb_base_dir / "embedding_test.h5"
@@ -328,8 +330,6 @@ def run_experiment(
     num_labels = None
 
     if need_raw_dataloaders:
-        # Use the collection config that has proper train/val/test splits
-        # For single-dataset evaluation, we might need to create splits from test data
         eval_data_collection_cfg = DatasetCollectionConfig(
             train_datasets=data_collection_cfg.train_datasets
             or ([dataset_cfg] if "linear_probe" in eval_cfg.eval_modes else None),
@@ -348,10 +348,7 @@ def run_experiment(
                 f"Model target length: {run_cfg.model_spec.audio_config.target_length_seconds}s"
             )
 
-        # Check if this is a BirdSet dataset - enable eval augmentations for BirdSet
-        # For BirdSet datasets, augmentations during evaluation are important for
-        # linear probing performance, unlike most other benchmarks where we disable
-        # augmentations during evaluation.
+        # For BirdSet datasets, augment during eval
         is_birdset = (
             hasattr(dataset_cfg, "train")
             and hasattr(dataset_cfg.train, "dataset_name")
@@ -394,20 +391,6 @@ def run_experiment(
                 num_labels = test_metadata["num_labels"]
             else:
                 num_labels = len(test_metadata["label_map"])
-        elif train_dl_raw and hasattr(train_dl_raw.dataset, "metadata"):
-            train_metadata = train_dl_raw.dataset.metadata
-            # Prioritize num_labels when available and > 0, fallback to len(label_map)
-            if "num_labels" in train_metadata and train_metadata["num_labels"] > 0:
-                num_labels = train_metadata["num_labels"]
-            else:
-                num_labels = len(train_metadata["label_map"])
-        elif val_dl_raw and hasattr(val_dl_raw.dataset, "metadata"):
-            val_metadata = val_dl_raw.dataset.metadata
-            # Prioritize num_labels when available and > 0, fallback to len(label_map)
-            if "num_labels" in val_metadata and val_metadata["num_labels"] > 0:
-                num_labels = val_metadata["num_labels"]
-            else:
-                num_labels = len(val_metadata["label_map"])
         else:
             num_labels = None
 
@@ -418,16 +401,10 @@ def run_experiment(
 
     if need_base_model:
         if num_labels is None:
-            # Try to get num_labels from existing embeddings
-            if train_path.exists():
-                _, _, num_labels = load_embeddings_arrays(train_path)
-            elif test_path.exists():
-                _, _, num_labels = load_embeddings_arrays(test_path)
-            if num_labels is None:
-                raise ValueError(
-                    "Could not determine number of labels from "
-                    "embeddings or raw dataloaders"
-                )
+            raise ValueError(
+                "Could not determine number of labels from "
+                "embeddings or raw dataloaders"
+            )
 
         base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
 
@@ -513,7 +490,8 @@ def run_experiment(
     #  Experiment logger
     # ------------------------------------------------------------------ #
     exp_logger = ExperimentLogger.from_config(experiment_cfg)
-    exp_logger.log_dir = save_dir / experiment_name / dataset_name
+    log_dir_name = evaluation_dataset_name or dataset_name
+    exp_logger.log_dir = save_dir / experiment_name / log_dir_name
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ #
@@ -522,6 +500,8 @@ def run_experiment(
     train_metrics: Dict[str, float] = {}
     val_metrics: Dict[str, float] = {}
     probe_test_metrics: Dict[str, float] = {}
+
+
 
     if "linear_probe" in eval_cfg.eval_modes:
         # Determine dataset metrics in priority order:
@@ -635,10 +615,12 @@ def run_experiment(
             checkpoint_name=checkpoint_name,
         )
 
-    # Save evaluation metadata
+    # Save evaluation metadata - Use evaluation_dataset_name to avoid metadata collisions
+    # between different evaluation sets that use the same underlying ESP dataset
+    metadata_dataset_name = evaluation_dataset_name or dataset_name
     save_evaluation_metadata(
         output_dir=save_dir,
-        dataset_name=dataset_name,
+        dataset_name=metadata_dataset_name,
         experiment_name=experiment_name,
         checkpoint_name=Path(experiment_cfg.checkpoint_path).name
         if experiment_cfg.checkpoint_path
