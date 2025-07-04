@@ -2,7 +2,6 @@ from representation_learning.configs import ModelSpec
 from representation_learning.models.aves_model import Model as AVESModel
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.clip import CLIPModel
-from representation_learning.models.dummy_model import Model as DummyModel
 from representation_learning.models.efficientnet import (
     Model as EfficientNet,
 )
@@ -79,11 +78,11 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         )
 
         # ATST requires model path
-        # atst_model_path = getattr(
-        #     model_config, "atst_model_path", "pretrained/atst_as2M.pt"
-        # )
+        atst_model_path = getattr(
+            model_config, "atst_model_path", "pretrained/atst_as2M.pt"
+        )
         # atst_model_path = "pretrained/atst_frame_base.pt"
-        atst_model_path = "pretrained/atst_as2M.pt"
+
         return ATSTModel(
             atst_model_path=atst_model_path,
             num_classes=num_classes,
@@ -163,18 +162,6 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
             target_length=target_length,
             pooling=pooling,
-            return_features_only=return_features_only,
-        )
-    elif model_name == "dummy_model":
-        embedding_dim = getattr(model_config, "embedding_dim", 768)
-        return_features_only = getattr(model_config, "return_features_only", False)
-
-        return DummyModel(
-            num_classes=num_classes,
-            pretrained=model_config.pretrained,
-            device=model_config.device,
-            audio_config=model_config.audio_config,
-            embedding_dim=embedding_dim,
             return_features_only=return_features_only,
         )
     else:

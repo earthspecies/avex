@@ -14,12 +14,9 @@ from esp_data import (
     concatenate_datasets,
     dataset_from_config,
 )
-from esp_data.transforms import MultiLabelFromFeaturesConfig
+from esp_data.transforms import LabelFromFeatureConfig, MultiLabelFromFeaturesConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
-from esp_data_reference.esp_data.transforms.label_from_feature import (
-    LabelFromFeatureConfig,
-)
 from representation_learning.configs import (
     DatasetCollectionConfig,
     RunConfig,
