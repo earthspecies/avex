@@ -31,7 +31,7 @@ dependencies = [
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
-  "transformers==4.51",
+  "transformers>=4.51",
   "h5py>=3.13.0",
   "semver>=3.0.4",
   "esp-data>=1.1.1",

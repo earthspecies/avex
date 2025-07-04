@@ -1,15 +1,37 @@
-"""Integration tests for clustering evaluation in the full evaluation pipeline."""
+"""Integration tests for clustering evaluation in the full evaluation pipeline.
+
+Copyright (c) 2024 Earth Species Project. All rights reserved.
+"""
+
+import json
+from dataclasses import dataclass
 
 import pytest
 import torch
 
-from representation_learning.evaluation.clustering import eval_clustering
+from representation_learning.evaluation.clustering import (
+    _get_empty_clustering_metrics,
+    eval_clustering,
+)
+
+# Constants to avoid magic numbers
+TOLERANCE = 1e-12
+MIN_METRIC_THRESHOLD = 0.5
+SILHOUETTE_THRESHOLD = 0.1
+EXPECTED_ARI_VALUE = 0.75
+
+
+@dataclass
+class MockEvalConfig:
+    """Mock evaluation configuration for testing."""
+
+    eval_modes: list[str]
 
 
 class TestClusteringIntegration:
     """Integration tests for clustering in the evaluation pipeline."""
 
-    def test_clustering_integration_with_mock_data(self):
+    def test_clustering_integration_with_mock_data(self) -> None:
         """Test that clustering integrates properly with the evaluation pipeline."""
         # Create mock embeddings and labels
         n_samples = 100
@@ -29,7 +51,9 @@ class TestClusteringIntegration:
                 torch.randn(n_samples // n_classes, embed_dim) * 0.5 + cluster_center
             )  # Tighter clusters
             class_labels = torch.full(
-                (n_samples // n_classes,), class_id, dtype=torch.long
+                (n_samples // n_classes,),
+                class_id,
+                dtype=torch.long,
             )
 
             embeds.append(class_embeds)
@@ -51,9 +75,9 @@ class TestClusteringIntegration:
         assert set(metrics.keys()) == expected_metrics
 
         # For well-separated clusters, metrics should be reasonably high
-        assert metrics["clustering_ari"] > 0.5
-        assert metrics["clustering_nmi"] > 0.5
-        assert metrics["clustering_silhouette"] > 0.1
+        assert metrics["clustering_ari"] > MIN_METRIC_THRESHOLD
+        assert metrics["clustering_nmi"] > MIN_METRIC_THRESHOLD
+        assert metrics["clustering_silhouette"] > SILHOUETTE_THRESHOLD
 
     @pytest.mark.parametrize(
         "eval_modes",
@@ -64,16 +88,12 @@ class TestClusteringIntegration:
             ["linear_probe", "retrieval", "clustering"],
         ],
     )
-    def test_eval_modes_with_clustering(self, eval_modes):
+    def test_eval_modes_with_clustering(self, eval_modes: list[str]) -> None:
         """Test that clustering works with various evaluation mode combinations."""
         # This test verifies that the clustering evaluation mode is properly
         # recognized and doesn't interfere with other evaluation modes.
 
         # Mock the evaluation config
-        class MockEvalConfig:
-            def __init__(self, eval_modes):
-                self.eval_modes = eval_modes
-
         eval_cfg = MockEvalConfig(eval_modes)
 
         # Test the logic from run_evaluate.py
@@ -92,7 +112,7 @@ class TestClusteringIntegration:
         )
         assert need_recompute_embeddings_test == expected_recompute
 
-    def test_clustering_metrics_serialization(self):
+    def test_clustering_metrics_serialization(self) -> None:
         """Test that clustering metrics can be properly serialized for saving."""
         # Create simple test data
         embeds = torch.randn(30, 8)
@@ -101,8 +121,6 @@ class TestClusteringIntegration:
         metrics = eval_clustering(embeds, labels)
 
         # Test that all metrics are JSON-serializable (floats)
-        import json
-
         # This should not raise an exception
         json_str = json.dumps(metrics)
         deserialized = json.loads(json_str)
@@ -110,28 +128,26 @@ class TestClusteringIntegration:
         # Check that deserialized metrics match original
         for key, value in metrics.items():
             assert isinstance(deserialized[key], float)
-            assert abs(deserialized[key] - value) < 1e-10
+            assert abs(deserialized[key] - value) < TOLERANCE
 
-    def test_clustering_with_experiment_result_dataclass(self):
+    def test_clustering_with_experiment_result_dataclass(self) -> None:
         """Test that clustering metrics integrate with ExperimentResult dataclass."""
-        # Create a minimal ExperimentResult dataclass just for testing
-        from dataclasses import dataclass
-        from typing import Dict
 
+        # Create a minimal ExperimentResult dataclass just for testing
         @dataclass
         class ExperimentResult:
             dataset_name: str
             experiment_name: str
             evaluation_dataset_name: str
-            train_metrics: Dict[str, float]
-            val_metrics: Dict[str, float]
-            probe_test_metrics: Dict[str, float]
-            retrieval_metrics: Dict[str, float]
-            clustering_metrics: Dict[str, float]
+            train_metrics: dict[str, float]
+            val_metrics: dict[str, float]
+            probe_test_metrics: dict[str, float]
+            retrieval_metrics: dict[str, float]
+            clustering_metrics: dict[str, float]
 
         # Create mock metrics
         clustering_metrics = {
-            "clustering_ari": 0.75,
+            "clustering_ari": EXPECTED_ARI_VALUE,
             "clustering_nmi": 0.82,
             "clustering_silhouette": 0.45,
         }
@@ -150,13 +166,14 @@ class TestClusteringIntegration:
 
         # Verify that clustering metrics are properly stored
         assert result.clustering_metrics == clustering_metrics
-        assert result.clustering_metrics["clustering_ari"] == 0.75
+        assert result.clustering_metrics["clustering_ari"] == EXPECTED_ARI_VALUE
 
-    def test_clustering_with_benchmark_config(self):
-        """Test that clustering can be used with benchmark configuration format."""
-        # This simulates how clustering would be used with the benchmark_id_repertoire.yml
-        # configuration format.
+    def test_clustering_with_benchmark_config(self) -> None:
+        """Test that clustering can be used with benchmark configuration format.
 
+        This simulates how clustering would be used with the
+        benchmark_id_repertoire.yml configuration format.
+        """
         # Mock dataset configuration (similar to what's in benchmark_id_repertoire.yml)
         mock_dataset_config = {
             "name": "zebra_finch_bird_id",
@@ -182,12 +199,8 @@ class TestClusteringIntegration:
         ]
         assert set(dataset_clustering_metrics) == set(expected_clustering_metrics)
 
-    def test_empty_clustering_metrics_handling(self):
+    def test_empty_clustering_metrics_handling(self) -> None:
         """Test handling of empty clustering metrics."""
-        from representation_learning.evaluation.clustering import (
-            _get_empty_clustering_metrics,
-        )
-
         empty_metrics = _get_empty_clustering_metrics()
 
         # Verify all metrics are 0.0
@@ -200,7 +213,7 @@ class TestClusteringIntegration:
         assert set(empty_metrics.keys()) == expected_keys
         assert all(v == 0.0 for v in empty_metrics.values())
 
-    def test_clustering_with_different_sample_sizes(self):
+    def test_clustering_with_different_sample_sizes(self) -> None:
         """Test clustering evaluation with various sample sizes."""
         embed_dim = 16
 
@@ -209,7 +222,8 @@ class TestClusteringIntegration:
 
         for n_samples in sample_sizes:
             n_classes = min(
-                5, n_samples // 3
+                5,
+                n_samples // 3,
             )  # Ensure reasonable number of samples per class
 
             # Create embeddings
@@ -224,7 +238,7 @@ class TestClusteringIntegration:
             assert isinstance(metrics["clustering_ari"], float)
             assert isinstance(metrics["clustering_silhouette"], float)
 
-    def test_clustering_deterministic_behavior(self):
+    def test_clustering_deterministic_behavior(self) -> None:
         """Test that clustering evaluation produces deterministic results."""
         # Set random seed for reproducibility
         torch.manual_seed(42)
@@ -239,9 +253,9 @@ class TestClusteringIntegration:
 
         # Results should be identical
         for key in metrics1:
-            assert abs(metrics1[key] - metrics2[key]) < 1e-12
+            assert abs(metrics1[key] - metrics2[key]) < TOLERANCE
 
-    def test_clustering_with_id_classification_scenario(self):
+    def test_clustering_with_id_classification_scenario(self) -> None:
         """Test clustering in the context of individual ID classification."""
         # This simulates the use case described in benchmark_id_repertoire.yml
         # where we have individual animal ID classification tasks.
@@ -263,7 +277,9 @@ class TestClusteringIntegration:
                 torch.randn(samples_per_individual, embed_dim) * 0.5 + individual_center
             )
             individual_labels = torch.full(
-                (samples_per_individual,), individual_id, dtype=torch.long
+                (samples_per_individual,),
+                individual_id,
+                dtype=torch.long,
             )
 
             embeds.append(individual_embeds)
@@ -279,5 +295,5 @@ class TestClusteringIntegration:
         assert metrics["clustering_ari"] >= 0.0  # Should be non-negative
         assert metrics["clustering_nmi"] >= 0.0  # Should be non-negative
 
-        # Metrics should be reasonable (not all zeros unless clustering completely failed)
+        # Metrics should be reasonable (not all zeros unless clustering failed)
         assert sum(metrics.values()) > 0
