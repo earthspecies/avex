@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 #  Utility: lazy TensorFlow import (keeps PyTorch-only envs light-weight)
 # --------------------------------------------------------------------------- #
-_TF_HUB_HANDLE = "https://tfhub.dev/google/bird-vocalization-classifier/8"
+_TF_HUB_HANDLE = "https://tfhub.dev/google/bird-vocalization-classifier/4"
 _tf_hub_model = None  # loaded on first use
 
 

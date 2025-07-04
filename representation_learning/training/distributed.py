@@ -179,9 +179,6 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
             is_distributed = True
             logger.info("Distributed training initialized successfully.")
 
-            # Apply print suppression after initialization
-            # Note: This is a context manager, so we need to use it differently
-            # For now, we'll rely on manual rank checking in the training code
         else:
             logger.info(
                 "Single GPU/task detected (world_size=1). "

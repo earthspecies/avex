@@ -73,7 +73,6 @@ class Model(ModelBase):
         # beats_ckpt_naturelm = beats_ckpt
         self.backbone = BEATs(beats_cfg)
         self.backbone.to(device)
-        # print(beats_ckpt_naturelm.keys())
         self.backbone.load_state_dict(beats_ckpt_naturelm)
 
         # ------------------------------------------------------------------
@@ -113,9 +112,6 @@ class Model(ModelBase):
         """
         # Optional audio pre-processing
         x = self.process_audio(x)
-
-        # print(x.shape)
-        # print(padding_mask.shape)
 
         features, frame_padding = self.backbone(x, padding_mask)
 

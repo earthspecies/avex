@@ -104,8 +104,6 @@ def train_and_eval_linear_probe(
     else:
         raise ValueError(
             "Expected metrics to be specified in the evaluation configuration. "
-            "This indicates a configuration error - metrics should be explicitly "
-            "defined for each evaluation set to avoid silent bugs."
         )
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
@@ -227,15 +225,12 @@ def train_and_eval_full_fine_tune(
     base_model.eval()
     test_metrics = {}
 
-    # Get metric class based on task type and dataset metrics - require explicit
-    # metrics, no fallbacks
+    # Get metric class based on task type and dataset metrics
     if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
         raise ValueError(
             "Expected metrics to be specified in the evaluation configuration. "
-            "This indicates a configuration error - metrics should be explicitly "
-            "defined for each evaluation set to avoid silent bugs."
         )
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]

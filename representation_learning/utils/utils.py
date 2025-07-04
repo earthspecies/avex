@@ -136,3 +136,28 @@ def universal_torch_load(
 
     with open(f, "rb") as opened_file:
         return torch.load(opened_file, **kwargs)
+
+
+# -------------------------------------------------------------------- #
+#  Checkpoint sanitiser helper                                         #
+# -------------------------------------------------------------------- #
+
+
+def _process_state_dict(state_dict: dict) -> dict:
+    """Remove classifier layers when loading backbone checkpoints.
+
+    Returns
+    -------
+    dict
+        Processed state dictionary with classifier layers removed.
+    """
+    if "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+
+    # Safely drop common classifier parameter names (different wrappers)
+    state_dict.pop("classifier.weight", None)
+    state_dict.pop("classifier.bias", None)
+    state_dict.pop("model.classifier.1.weight", None)
+    state_dict.pop("model.classifier.1.bias", None)
+
+    return state_dict

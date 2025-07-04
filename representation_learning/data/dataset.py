@@ -17,6 +17,9 @@ from esp_data import (
 from esp_data.transforms import MultiLabelFromFeaturesConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
+from esp_data_reference.esp_data.transforms.label_from_feature import (
+    LabelFromFeatureConfig,
+)
 from representation_learning.configs import (
     DatasetCollectionConfig,
     RunConfig,
@@ -197,13 +200,23 @@ def _build_datasets(
         else:
             num_classes = len(label_map)
 
-        # Get the feature name used for labeling (stored for potential future use)
-        _label_feature = label_transform_metadata.get("label_feature", "label")
+        label_feature = train_metadata["label_from_feature"]["label_feature"]
 
-        # Skip re-applying transforms to val/test datasets since they should already
-        # have the same transforms applied from their dataset configs
-        # The val/test datasets are built from the same base config as train,
-        # just with different splits
+        # Always set override=True when applying transformations to val/test datasets
+        # since we know we want to replace any existing label features
+        label_transform = LabelFromFeatureConfig(
+            type="label_from_feature",
+            feature=label_feature,
+            output_feature="label",
+            label_map=label_map,
+            override=True,
+        )
+
+        # Apply label transform to val/test datasets
+        if val_ds:
+            val_ds.apply_transformations([label_transform])
+        if test_ds:
+            test_ds.apply_transformations([label_transform])
 
     # Handle multi-label case - check for labels_from_features transform metadata
     elif "labels_from_features" in train_metadata:
