@@ -253,14 +253,7 @@ def run_experiment(
         )
 
         if test_dl_raw and hasattr(test_dl_raw.dataset, "metadata"):
-            test_metadata = test_dl_raw.dataset.metadata
-            # Prioritize num_labels when available and > 0, fallback to len(label_map)
-            if "num_labels" in test_metadata and test_metadata["num_labels"] > 0:
-                num_labels = test_metadata["num_labels"]
-            else:
-                num_labels = len(test_metadata["label_map"])
-        else:
-            num_labels = None
+            num_labels = test_dl_raw.dataset.metadata.get("num_labels", None)
 
     # ------------------------------------------------------------------ #
     #  Backbone (optionally load checkpoint)
