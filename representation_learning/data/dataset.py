@@ -6,6 +6,7 @@ import random
 from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
+
 import torch
 import torch.distributed as dist
 from esp_data import (
@@ -14,6 +15,12 @@ from esp_data import (
     concatenate_datasets,
     dataset_from_config,
 )
+
+# Import AudioSet patch to fix NaN issues
+from representation_learning.data.audioset_getitem_patch import apply_audioset_patches
+
+# Force application of AudioSet patches immediately
+apply_audioset_patches()
 from esp_data.transforms import LabelFromFeatureConfig, MultiLabelFromFeaturesConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
@@ -33,6 +40,7 @@ from representation_learning.data.augmentations import (
 # from representation_learning.preprocessing.activity_detector import (
 #     load_activity_detector
 # )
+
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +150,20 @@ def _build_one_dataset_split(
         ) from e
 
 
+# TODO: Remove this when esp-data is fixed
+from representation_learning.data.temp_label_fixes import (
+    fix_audioset_string_labels, 
+    create_unified_label_field
+)
+
+def _create_unified_label_field(ds: Dataset) -> None:
+    """Temporary wrapper for label field creation. Remove when esp-data is fixed."""
+    # First fix any AudioSet string formatting issues
+    # fix_audioset_string_labels(ds)
+    # Then create unified field if needed for concatenated datasets
+    create_unified_label_field(ds)
+
+
 def _build_datasets(
     cfg: DatasetCollectionConfig, postprocessors: list[Callable]
 ) -> list[AudioDataset]:
@@ -162,13 +184,18 @@ def _build_datasets(
         cfg.train_datasets, cfg.concatenate_train, cfg.concatenate_method
     )
 
+    # TODO: Remove when esp-data is fixed - apply label fixes to all datasets
+    _create_unified_label_field(train_ds)
+
     if cfg.transformations:
-        # Apply those on train and update metadata
         additional_metadata = train_ds.apply_transformations(cfg.transformations)
         if additional_metadata:
-            # Merge the additional metadata with existing metadata
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
+        
+        # Debug labels after transformation
+        from representation_learning.data.temp_label_fixes import debug_labels_after_transformation
+        debug_labels_after_transformation(train_ds)
 
     # Build validation
     val_ds, _ = _build_one_dataset_split(
@@ -180,46 +207,20 @@ def _build_datasets(
         cfg.test_datasets, cfg.concatenate_test, cfg.concatenate_method
     )
 
-    # Initialize defaults for label_map and num_classes
+    # Extract label information from transform metadata
     label_map = {}
     num_classes = 0
 
-    # Apply label_from_feature transform to validation/test sets
-    if "label_from_feature" in train_metadata:
-        label_transform_metadata = train_metadata["label_from_feature"]
-        label_map = label_transform_metadata.get("label_map", {})
-        # Prioritize num_classes when available and > 0, fallback to len(label_map)
-        if (
-            "num_classes" in label_transform_metadata
-            and label_transform_metadata["num_classes"] > 0
-        ):
-            num_classes = label_transform_metadata["num_classes"]
-        else:
-            num_classes = len(label_map)
-
-        label_feature = train_metadata["label_from_feature"]["label_feature"]
-
-        # Always set override=True when applying transformations to val/test datasets
-        # since we know we want to replace any existing label features
-        label_transform = LabelFromFeatureConfig(
-            type="label_from_feature",
-            feature=label_feature,
-            output_feature="label",
-            label_map=label_map,
-            override=True,
-        )
-
-        # Apply label transform to val/test datasets
-        if val_ds:
-            val_ds.apply_transformations([label_transform])
-        if test_ds:
-            test_ds.apply_transformations([label_transform])
+    # Apply label fixes to val/test datasets too (TODO: Remove when esp-data is fixed)
+    if val_ds:
+        _create_unified_label_field(val_ds)
+    if test_ds:
+        _create_unified_label_field(test_ds)
 
     # Handle multi-label case - check for labels_from_features transform metadata
-    elif "labels_from_features" in train_metadata:
+    if "labels_from_features" in train_metadata:
         label_transform_metadata = train_metadata["labels_from_features"]
         label_map = label_transform_metadata.get("label_map", {})
-        # Prioritize num_classes when available and > 0, fallback to len(label_map)
         if (
             "num_classes" in label_transform_metadata
             and label_transform_metadata["num_classes"] > 0
@@ -228,57 +229,31 @@ def _build_datasets(
         else:
             num_classes = len(label_map)
 
-        # Get the feature name(s) used for labeling
-        label_features = label_transform_metadata.get("label_feature", ["label"])
+        # Apply same transformations to val/test datasets to ensure consistency
+        if val_ds and cfg.transformations:
+            val_ds.apply_transformations(cfg.transformations)
+        if test_ds and cfg.transformations:
+            test_ds.apply_transformations(cfg.transformations)
 
-        # Always set override=True when applying transformations to val/test datasets
-        # since we know we want to replace any existing label features
-        # Use MultiLabelFromFeaturesConfig for multi-label datasets
-        label_transform = MultiLabelFromFeaturesConfig(
-            type="labels_from_features",
-            features=label_features,
-            output_feature="label",
-            label_map=label_map,
-            override=True,
-        )
-
-        # Apply label transform to val/test datasets
-        if val_ds:
-            val_ds.apply_transformations([label_transform])
-        if test_ds:
-            test_ds.apply_transformations([label_transform])
-
-    # Handle legacy multi-label case - check if label_feature is a list
-    # (indicates multi-label)
-    elif "label_feature" in train_metadata and isinstance(
-        train_metadata["label_feature"], list
-    ):
-        label_map = train_metadata.get("label_map", {})
-        # Prioritize num_classes when available and > 0, fallback to len(label_map)
-        if "num_classes" in train_metadata and train_metadata["num_classes"] > 0:
-            num_classes = train_metadata["num_classes"]
+    # Handle single-label case - check for label_from_feature transform metadata  
+    elif "label_from_feature" in train_metadata:
+        label_transform_metadata = train_metadata["label_from_feature"]
+        label_map = label_transform_metadata.get("label_map", {})
+        if (
+            "num_classes" in label_transform_metadata
+            and label_transform_metadata["num_classes"] > 0
+        ):
+            num_classes = label_transform_metadata["num_classes"]
         else:
             num_classes = len(label_map)
 
-        # Get the feature name(s) used for labeling
-        label_features = train_metadata["label_feature"]
+        # Apply same transformations to val/test datasets to ensure consistency
+        if val_ds and cfg.transformations:
+            val_ds.apply_transformations(cfg.transformations)
+        if test_ds and cfg.transformations:
+            test_ds.apply_transformations(cfg.transformations)
 
-        # Always set override=True when applying transformations to val/test datasets
-        # since we know we want to replace any existing label features
-        # Use MultiLabelFromFeaturesConfig for multi-label datasets
-        label_transform = MultiLabelFromFeaturesConfig(
-            type="labels_from_features",
-            features=label_features,
-            output_feature="label",
-            label_map=label_map,
-            override=True,
-        )
 
-        # Apply label transform to val/test datasets
-        if val_ds:
-            val_ds.apply_transformations([label_transform])
-        if test_ds:
-            test_ds.apply_transformations([label_transform])
 
     train_ds = AudioDataset(
         train_ds,
@@ -294,7 +269,7 @@ def _build_datasets(
             val_ds,
             postprocessors=postprocessors,
             metadata={
-                "label_map": train_metadata.get("label_map", {}),
+                "label_map": label_map,
                 "num_labels": num_classes,
             },
         )
@@ -304,7 +279,7 @@ def _build_datasets(
             test_ds,
             postprocessors=postprocessors,
             metadata={
-                "label_map": train_metadata.get("label_map", {}),
+                "label_map": label_map,
                 "num_labels": num_classes,
             },
         )
@@ -355,7 +330,16 @@ class Collater:
             # Use "audio" key which is the standard in esp_data,
             # fallback to "raw_wav" for compatibility
             audio_key = "audio" if "audio" in item else "raw_wav"
-            wav = torch.as_tensor(item[audio_key])  # (T,)
+            wav = torch.as_tensor(item[audio_key])  # (T,) or (C, T)
+            
+            # Handle corrupted audio with NaN values
+            if torch.isnan(wav).any() or torch.isinf(wav).any():
+                # logger.warning(f"Corrupted audio detected (NaN/Inf), replacing with zeros. Shape: {wav.shape}")
+                wav = torch.zeros_like(wav)
+            
+            # Handle multichannel audio by taking mean across channels
+            if wav.dim() == 2:  # (C, T) multichannel format
+                wav = wav.mean(dim=0)  # Convert to mono by averaging channels
 
             # Step 1: Apply dataset constraint (benchmark limit) if specified
             if self.dataset_audio_max_length_seconds is not None:
@@ -380,33 +364,6 @@ class Collater:
                     txt_lbl = random.choice(txt_lbl)
                 text_labels.append(txt_lbl)
 
-        # Apply batch-level mixup AFTER all audios are same length
-        if self.batch_aug_processor is not None and audios:
-            # Create temporary batch of uniform-length samples
-            temp_batch = [
-                {
-                    "audio": wav,  # Use standard "audio" key
-                    "label": lbl,
-                    "text_label": txt,
-                }
-                for wav, lbl, txt in zip(
-                    audios,
-                    labels,
-                    text_labels if text_labels else [None] * len(audios),
-                    strict=False,
-                )
-            ]
-            # Now mixup can safely operate on same-sized tensors
-            mixed_batch = self.batch_aug_processor.apply_batch_augmentations(temp_batch)
-            # Extract back to separate lists
-            audios = [item["audio"] for item in mixed_batch]  # Use standard "audio" key
-            labels = [item["label"] for item in mixed_batch]
-            for item in mixed_batch:
-                if "text_label" in item:
-                    text_labels.append(item["text_label"])
-                else:
-                    text_labels.append(None)
-
         # ------------------------------------
         # Stack into tensors (audio + mask)
         # ------------------------------------
@@ -426,10 +383,66 @@ class Collater:
                 # Create zero tensor of size num_labels
                 one_hot = torch.zeros(self.num_labels, dtype=torch.float32)
                 # Convert list of indices to tensor and set 1s at those indices
-                indices = torch.tensor(lbl, dtype=torch.long)
-                one_hot[indices] = 1.0
+                if isinstance(lbl, torch.Tensor):
+                    indices = lbl.clone().detach().long()
+                else:
+                    indices = torch.tensor(lbl, dtype=torch.long)
+                # Ensure indices are within valid range
+                valid_indices = indices[indices < self.num_labels]
+                if len(valid_indices) > 0:
+                    one_hot[valid_indices] = 1.0
+                # DEBUG: Check for invalid labels
+                if len(valid_indices) != len(indices):
+                    invalid_indices = indices[indices >= self.num_labels]
+                    logger.warning(f"Invalid label indices found: {invalid_indices.tolist()}, max valid: {self.num_labels-1}")
                 label_tensors.append(one_hot)
             label_tensor = torch.stack(label_tensors)
+
+        # DEBUG: Check for NaN in label tensor
+        if torch.isnan(label_tensor).any():
+            logger.warning(f"NaN detected in label tensor! Shape: {label_tensor.shape}")
+            logger.warning(f"Label tensor stats: min={label_tensor.min():.6f}, max={label_tensor.max():.6f}")
+            
+        # DEBUG: Check for NaN in audio tensor
+        if torch.isnan(audio_tensor).any():
+            logger.warning(f"NaN detected in audio tensor! Shape: {audio_tensor.shape}")
+            logger.warning(f"Audio tensor stats: min={audio_tensor.min():.6f}, max={audio_tensor.max():.6f}")
+            nan_count = torch.isnan(audio_tensor).sum().item()
+            logger.warning(f"Number of NaN values in audio: {nan_count}")
+            
+        # DEBUG: Check for extreme values in audio
+        if torch.isinf(audio_tensor).any():
+            logger.warning(f"Inf detected in audio tensor!")
+            inf_count = torch.isinf(audio_tensor).sum().item()
+            logger.warning(f"Number of Inf values in audio: {inf_count}")
+
+        # Apply batch-level mixup AFTER converting labels to consistent tensors
+        if self.batch_aug_processor is not None and audios:
+            # Create temporary batch with uniform-sized tensors
+            temp_batch = [
+                {
+                    "audio": audio_tensor[i],  # Use standard "audio" key
+                    "label": label_tensor[i],
+                    "text_label": text_labels[i] if text_labels else None,
+                }
+                for i in range(len(audios))
+            ]
+            # Now mixup can safely operate on same-sized tensors
+            mixed_batch = self.batch_aug_processor.apply_batch_augmentations(temp_batch)
+            # Extract back to tensors
+            audio_tensor = torch.stack([item["audio"] for item in mixed_batch])
+            label_tensor = torch.stack([item["label"] for item in mixed_batch])
+            text_labels = [item.get("text_label") for item in mixed_batch]
+            
+            # DEBUG: Check for NaN after mixup
+            if torch.isnan(audio_tensor).any():
+                logger.warning(f"NaN detected in audio tensor after mixup!")
+                nan_count = torch.isnan(audio_tensor).sum().item()
+                logger.warning(f"Number of NaN values in audio after mixup: {nan_count}")
+            if torch.isnan(label_tensor).any():
+                logger.warning(f"NaN detected in label tensor after mixup!")
+                nan_count = torch.isnan(label_tensor).sum().item()
+                logger.warning(f"Number of NaN values in labels after mixup: {nan_count}")
 
         return {
             # Keep raw_wav for backward compatibility with models

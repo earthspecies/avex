@@ -173,6 +173,10 @@ class EATHFModel(ModelBase):
         #     self.backbone,
         #     "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint30.pt"
         # ) # 48khz
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     "../EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint24.pt"
+        # ) # AudioSet
 
         embed_dim = getattr(self.backbone.config, "hidden_size", 768)
 

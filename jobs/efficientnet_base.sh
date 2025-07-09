@@ -5,9 +5,10 @@
 #SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-effnet"
-#SBATCH --cpus-per-gpu=12
-#SBATCH --mem=128GB
+#SBATCH --cpus-per-gpu=14
+#SBATCH --mem=256GB
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/efficientnet_animalspeak_audioset.yml
+# srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml
+srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml

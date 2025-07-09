@@ -26,7 +26,8 @@ from representation_learning.training.distributed import (
     init_distributed,
 )
 from representation_learning.training.optimisers import get_optimizer
-from representation_learning.training.train import Trainer
+from representation_learning.training.trainer_factory import TrainerFactory
+from representation_learning.training.training_utils import build_scheduler
 from representation_learning.utils import ExperimentLogger
 
 # Configure logging to ensure INFO level logs are visible
@@ -127,32 +128,34 @@ def main() -> None:
     # Create optimizer
     optim = get_optimizer(model.parameters(), config.training_params)
 
-    trainer = Trainer(
+    # Create scheduler
+    total_steps = len(train_dl) * config.training_params.train_epochs
+    scheduler = build_scheduler(optim, config, total_steps)
+
+    # Create scaler for mixed precision training
+    scaler = None
+    if config.training_params.amp:
+        from torch.cuda.amp import GradScaler
+        scaler = GradScaler()
+
+    # Keep the original config.output_dir which was already set correctly above
+
+    # Create trainer using the factory
+    trainer = TrainerFactory.create_trainer(
         model=model,
         optimizer=optim,
-        train_dl=train_dl,
-        eval_dl=val_dl,
-        model_dir=output_dir / "checkpoints",
+        scheduler=scheduler,
+        scaler=scaler,
+        train_dataloader=train_dl,
+        eval_dataloader=val_dl,
+        config=config,
         local_rank=local_device_index,
         world_size=world_size,
         is_distributed=is_distributed,
-        criterion=config.loss_function,
-        lr=config.training_params.lr,
-        weight_decay=config.training_params.weight_decay,
-        max_epochs=config.training_params.train_epochs,
-        amp=config.training_params.amp,
-        amp_dtype=config.training_params.amp_dtype,
-        scheduler_config=config.scheduler.model_dump(mode="json"),
-        is_clip_mode=(config.label_type == "text"),
-        is_eat_ssl=(config.label_type == "self_supervised"),
-        checkpoint_freq=getattr(config, "checkpoint_freq", 1),
-        exp_logger=exp_logger,
-        batch_size=config.training_params.batch_size,
         device=device,
+        exp_logger=exp_logger,
+        num_classes=num_labels,
         resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
-        run_config=config,
-        log_steps=config.training_params.log_steps,
-        gradient_checkpointing=config.training_params.gradient_checkpointing,
     )
 
     # Train

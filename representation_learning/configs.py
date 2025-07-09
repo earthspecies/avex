@@ -324,6 +324,12 @@ class RunConfig(BaseModel):
         False, description="Whether to use multi-label classification"
     )
 
+    # Metrics to compute during training
+    metrics: List[str] = Field(
+        default_factory=lambda: ["accuracy"],
+        description="List of metrics to compute during training",
+    )
+
     device: str = "cuda"
     seed: int = 42
     num_workers: int = 4

@@ -2,9 +2,10 @@
 # - Training: AnimalSpeak + AudioSet (concatenated)
 # - Validation: AnimalSpeak only
 # - Both use 16kHz sample rate and unified column mappings
+# - Option B: Global label transforms applied after concatenation to avoid collisions
 
 train_datasets:
-  # AnimalSpeak dataset for training (convert to multi-label format)
+  # AnimalSpeak dataset for training (keep original canonical_name field)
   - dataset_name: animalspeak
     dataset_version: 0.0
     split: train
@@ -17,25 +18,22 @@ train_datasets:
     audio_path_col: path
     data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
     sample_rate: 16000
-    transformations:
-      - type: labels_from_features
-        features: [canonical_name]
-        output_feature: label
-        override: true
+    # NO label transformations here - keep original canonical_name field
+    
+    # transformations:
+    # - type: deduplicate
+    #   subset: ['local_path']
 
-  # AudioSet dataset for training (already multi-label)
+  # AudioSet dataset for training (keep original labels field)
   - dataset_name: audioset
     split: train
     sample_rate: 16000
-    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
-    transformations:
-      - type: labels_from_features
-        features: [labels]
-        output_feature: label
-        override: true
+    # data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    data_root: ../esp-data/audioset/v0.1.0/raw/
+    # NO transformations here - keep original labels field
 
 val_datasets:
-  # Only use AnimalSpeak for validation (convert to multi-label format for consistency)
+  # Only use AnimalSpeak for validation (keep original canonical_name field)
   - dataset_name: animalspeak
     dataset_version: 0.0
     split: validation
@@ -48,13 +46,21 @@ val_datasets:
     audio_path_col: path
     data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
     sample_rate: 16000
-    transformations:
-      - type: labels_from_features
-        features: [canonical_name]
-        output_feature: label
-        override: true
+    # NO transformations here - keep original canonical_name field
 
 # Concatenation settings
 concatenate_train: true
 concatenate_val: true
 concatenate_method: soft
+
+# Global transformations applied AFTER concatenation
+# Our code will first create a unified 'unified_label' field from canonical_name and labels
+# Then this transform creates the final integer label mapping
+transformations:
+  - type: labels_from_features
+    features: [unified_label]
+    output_feature: label
+    override: true
+
+  - type: deduplicate
+    subset: ['local_path']

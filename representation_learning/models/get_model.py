@@ -150,8 +150,8 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         model_id = getattr(
             model_config,
             "model_id",
-            # "worstchan/EAT-base_epoch30_pretrain",
-            "worstchan/EAT-base_epoch30_finetune_AS2M",
+            "worstchan/EAT-base_epoch30_pretrain",
+            # "worstchan/EAT-base_epoch30_finetune_AS2M",
         )
         return_features_only = getattr(model_config, "return_features_only", True)
 

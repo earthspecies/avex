@@ -1,31 +1,31 @@
 benchmark_name: "bioacoustic_benchmark_base"
 
 evaluation_sets:
-  # - name: "rfcx_detection"
-  #   train: &rfcx_base
-  #     dataset_name: beans
-  #     split: rfcx_train
-  #     type: detection
-  #     label_column: labels_as_list
-  #     audio_path_col: path
-  #     multi_label: true
-  #     label_type: supervised
-  #     audio_max_length_seconds: 10
-  #     transformations:
-  #       # Convert list labels to multi-label format
-  #       - type: labels_from_features
-  #         features:
-  #           - labels_as_list
-  #         override: true
-  #         label_map: {'Bananaquit': 0, 'Black-whiskered vireo': 1, 'Bronze coqui': 2, 'Common coqui': 3, 'Cricket coqui': 4, 'Dwarf coqui': 5, 'Elfin woods warbler': 6, 'Grass coqui': 7, "Hedrick's coqui": 8, 'Locust coqui': 9, 'Melodius coqui': 10, 'Mountain Coqui': 11, 'Pearly-eyed thrasher': 12, 'Puerto Rican bullfinch': 13, 'Puerto Rican lizard cuckoo': 14, 'Puerto Rican owl': 15, 'Puerto Rican spindalis': 16, 'Puerto Rican tanager': 17, 'Puerto Rican tody': 18, 'Puerto Rican woodpecker': 19, 'Red-eyed coqui': 20, 'Red-legged thrush': 21, 'Scaly-naped pigeon': 22, 'White-lipped Frog': 23}
-  #     sample_rate: 16000
-  #   validation:
-  #     <<: *rfcx_base
-  #     split: rfcx_validation
-  #   test:
-  #     <<: *rfcx_base
-  #     split: rfcx_test
-  #   metrics: [mAP]
+  - name: "rfcx_detection"
+    train: &rfcx_base
+      dataset_name: beans
+      split: rfcx_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        # Convert list labels to multi-label format
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Bananaquit': 0, 'Black-whiskered vireo': 1, 'Bronze coqui': 2, 'Common coqui': 3, 'Cricket coqui': 4, 'Dwarf coqui': 5, 'Elfin woods warbler': 6, 'Grass coqui': 7, "Hedrick's coqui": 8, 'Locust coqui': 9, 'Melodius coqui': 10, 'Mountain Coqui': 11, 'Pearly-eyed thrasher': 12, 'Puerto Rican bullfinch': 13, 'Puerto Rican lizard cuckoo': 14, 'Puerto Rican owl': 15, 'Puerto Rican spindalis': 16, 'Puerto Rican tanager': 17, 'Puerto Rican tody': 18, 'Puerto Rican woodpecker': 19, 'Red-eyed coqui': 20, 'Red-legged thrush': 21, 'Scaly-naped pigeon': 22, 'White-lipped Frog': 23}
+      sample_rate: 16000
+    validation:
+      <<: *rfcx_base
+      split: rfcx_validation
+    test:
+      <<: *rfcx_base
+      split: rfcx_test
+    metrics: [mAP]
 
   - name: "enabirds_detection"
     train: &enabirds_base
@@ -52,57 +52,57 @@ evaluation_sets:
       split: enabirds_test
     metrics: [mAP]
 
-  # - name: "hiceas_detection"
-  #   train: &hiceas_base
-  #     dataset_name: beans
-  #     split: hiceas_train
-  #     type: detection
-  #     label_column: labels_as_list
-  #     audio_path_col: path
-  #     multi_label: true
-  #     label_type: supervised
-  #     audio_max_length_seconds: 10
-  #     transformations:
-  #       # Convert list labels to multi-label format
-  #       - type: labels_from_features
-  #         features:
-  #           - labels_as_list
-  #         override: true
-  #         label_map: {"Minke Whale": 0, "Minke Whale 'Boing' call": 0}
-  #     sample_rate: 16000
-  #   validation:
-  #     <<: *hiceas_base
-  #     split: hiceas_validation
-  #   test:
-  #     <<: *hiceas_base
-  #     split: hiceas_test
-  #   metrics: [mAP]
+  - name: "hiceas_detection"
+    train: &hiceas_base
+      dataset_name: beans
+      split: hiceas_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        # Convert list labels to multi-label format
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {"Minke whale": 0,}
+      sample_rate: 16000
+    validation:
+      <<: *hiceas_base
+      split: hiceas_validation
+    test:
+      <<: *hiceas_base
+      split: hiceas_test
+    metrics: [mAP]
 
-  # - name: "hainan_gibbons_detection"
-  #   train: &gibbons_base
-  #     dataset_name: beans
-  #     split: hainan_gibbons_train
-  #     type: detection
-  #     label_column: labels_as_list
-  #     audio_path_col: path
-  #     multi_label: true
-  #     label_type: supervised
-  #     audio_max_length_seconds: 5
-  #     transformations:
-  #       # Convert list labels to multi-label format
-  #       - type: labels_from_features
-  #         features:
-  #           - labels_as_list
-  #         override: true
-  #         label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'Single pulse gibbon call': 2}
-  #     sample_rate: 16000
-  #   validation:
-  #     <<: *gibbons_base
-  #     split: hainan_gibbons_validation
-  #   test:
-  #     <<: *gibbons_base
-  #     split: hainan_gibbons_test
-  #   metrics: [mAP]
+  - name: "hainan_gibbons_detection"
+    train: &gibbons_base
+      dataset_name: beans
+      split: hainan_gibbons_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        # Convert list labels to multi-label format
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'Single pulse gibbon call': 2}
+      sample_rate: 16000
+    validation:
+      <<: *gibbons_base
+      split: hainan_gibbons_validation
+    test:
+      <<: *gibbons_base
+      split: hainan_gibbons_test
+    metrics: [mAP]
 
   - name: "dcase_detection"
     train: &dcase_base
