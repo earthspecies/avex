@@ -14,7 +14,6 @@ from typing import Any, Dict, Tuple, Union
 
 import torch
 import torch.nn as nn
-from torch.cuda.amp import autocast
 
 from representation_learning.training.losses import ClipLoss
 
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TrainingResult:
     """Result of a single training step."""
+
     loss: torch.Tensor
     metrics_data: Union[int, Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]]
     batch_size: int
@@ -32,17 +32,17 @@ class TrainingResult:
 
 class TrainingStrategy(ABC):
     """Base class for training strategies."""
-    
+
     def __init__(self, criterion: nn.Module, device: torch.device):
         self.criterion = criterion
         self.device = device
         self.additional_metrics: Dict[str, float] = {}
-    
+
     @abstractmethod
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
         """Execute forward pass for this training strategy."""
         pass
-    
+
     @abstractmethod
     def get_expected_metrics_format(self) -> str:
         """Return the expected format for metrics computation."""
@@ -51,10 +51,10 @@ class TrainingStrategy(ABC):
 
 class SupervisedStrategy(TrainingStrategy):
     """Strategy for supervised learning."""
-    
+
     def get_expected_metrics_format(self) -> str:
         return "predictions_targets"
-    
+
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
         """Forward pass for supervised learning."""
         # Get the inputs
@@ -64,17 +64,19 @@ class SupervisedStrategy(TrainingStrategy):
 
         # Forward pass
         outputs = model(audio, padding_mask=padding_mask)
-        
+
         # DEBUG: Check for NaN in model outputs
         if torch.isnan(outputs).any():
             logger.warning(f"NaN detected in model outputs! Shape: {outputs.shape}")
-            logger.warning(f"Output stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}")
+            logger.warning(
+                f"Output stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}"
+            )
             nan_count = torch.isnan(outputs).sum().item()
             logger.warning(f"Number of NaN values in outputs: {nan_count}")
-            
+
         # DEBUG: Check for extreme values in model outputs
         if torch.isinf(outputs).any():
-            logger.warning(f"Inf detected in model outputs!")
+            logger.warning("Inf detected in model outputs!")
             inf_count = torch.isinf(outputs).sum().item()
             logger.warning(f"Number of Inf values in outputs: {inf_count}")
 
@@ -94,8 +96,12 @@ class SupervisedStrategy(TrainingStrategy):
 
         # DEBUG: Check for NaN loss
         if torch.isnan(loss).any():
-            logger.warning(f"NaN loss detected! outputs stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}")
-            logger.warning(f"Target stats: min={target.min():.6f}, max={target.max():.6f}, mean={target.mean():.6f}")
+            logger.warning(
+                f"NaN loss detected! outputs stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}"
+            )
+            logger.warning(
+                f"Target stats: min={target.min():.6f}, max={target.max():.6f}, mean={target.mean():.6f}"
+            )
             logger.warning(f"Loss value: {loss.item()}")
 
         # Return predictions and targets for metric computation
@@ -109,25 +115,27 @@ class SupervisedStrategy(TrainingStrategy):
                 predictions = outputs.detach()
                 if target.dim() == 1:
                     # Convert indices to one-hot for metric computation
-                    targets = torch.nn.functional.one_hot(
-                        target.long(), num_classes=outputs.size(1)
-                    ).float().detach()
+                    targets = (
+                        torch.nn.functional.one_hot(
+                            target.long(), num_classes=outputs.size(1)
+                        )
+                        .float()
+                        .detach()
+                    )
                 else:
                     targets = target.detach()
 
         return TrainingResult(
-            loss=loss,
-            metrics_data=(predictions, targets),
-            batch_size=target.size(0)
+            loss=loss, metrics_data=(predictions, targets), batch_size=target.size(0)
         )
 
 
 class CLIPStrategy(TrainingStrategy):
     """Strategy for CLIP training."""
-    
+
     def get_expected_metrics_format(self) -> str:
         return "clip_accuracy"
-    
+
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
         """Forward pass for CLIP training."""
         audio = batch["raw_wav"]
@@ -152,7 +160,7 @@ class CLIPStrategy(TrainingStrategy):
         # Compute accuracy metrics
         with torch.no_grad():
             local_bs = audio.size(0)
-            
+
             rank = 0
             if torch.distributed.is_initialized():
                 rank = torch.distributed.get_rank()
@@ -176,27 +184,29 @@ class CLIPStrategy(TrainingStrategy):
                 "acc_a2t": correct_a2t / local_bs,
                 "acc_t2a": correct_t2a / local_bs,
             }
-            
+
             # Add logit scale monitoring
-            if hasattr(model, 'logit_scale'):
+            if hasattr(model, "logit_scale"):
                 self.additional_metrics["logit_scale"] = model.logit_scale.exp().item()
-            elif hasattr(model, 'module') and hasattr(model.module, 'logit_scale'):
-                self.additional_metrics["logit_scale"] = model.module.logit_scale.exp().item()
+            elif hasattr(model, "module") and hasattr(model.module, "logit_scale"):
+                self.additional_metrics["logit_scale"] = (
+                    model.module.logit_scale.exp().item()
+                )
 
         return TrainingResult(
             loss=loss,
             metrics_data=(correct_a2t, correct_t2a),
             batch_size=local_bs,
-            additional_metrics=self.additional_metrics
+            additional_metrics=self.additional_metrics,
         )
 
 
 class EATSSLStrategy(TrainingStrategy):
     """Strategy for EAT self-supervised learning."""
-    
+
     def get_expected_metrics_format(self) -> str:
         return "ssl_dummy"
-    
+
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
         """Forward pass for EAT SSL training."""
         audio = batch["raw_wav"]
@@ -212,8 +222,7 @@ class EATSSLStrategy(TrainingStrategy):
         # Per-component averages for logging
         sample_size = out["sample_size"].clamp(min=1).item()
         component_metrics = {
-            k: v.sum().item() / sample_size
-            for k, v in out["losses"].items()
+            k: v.sum().item() / sample_size for k, v in out["losses"].items()
         }
 
         # Add additional EAT metrics
@@ -238,25 +247,23 @@ class EATSSLStrategy(TrainingStrategy):
             loss=loss,
             metrics_data=0,  # No accuracy for SSL
             batch_size=audio.size(0),
-            additional_metrics=component_metrics
+            additional_metrics=component_metrics,
         )
 
     def update_teacher(self, model: nn.Module, global_updates: int) -> None:
         """Update EAT SSL teacher model with global update count."""
         # Get unwrapped model if it's wrapped with DDP
-        unwrapped_model = model.module if hasattr(model, 'module') else model
-        if hasattr(unwrapped_model, 'backbone'):
+        unwrapped_model = model.module if hasattr(model, "module") else model
+        if hasattr(unwrapped_model, "backbone"):
             unwrapped_model.backbone.set_num_updates(global_updates)
 
 
 class StrategyFactory:
     """Factory for creating training strategies."""
-    
+
     @staticmethod
     def create_strategy(
-        mode: str, 
-        criterion: nn.Module, 
-        device: torch.device
+        mode: str, criterion: nn.Module, device: torch.device
     ) -> TrainingStrategy:
         """Create appropriate training strategy based on mode."""
         if mode == "supervised":
@@ -266,4 +273,4 @@ class StrategyFactory:
         elif mode == "eat_ssl":
             return EATSSLStrategy(criterion, device)
         else:
-            raise ValueError(f"Unknown training mode: {mode}") 
+            raise ValueError(f"Unknown training mode: {mode}")

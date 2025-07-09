@@ -136,6 +136,7 @@ def main() -> None:
     scaler = None
     if config.training_params.amp:
         from torch.cuda.amp import GradScaler
+
         scaler = GradScaler()
 
     # Keep the original config.output_dir which was already set correctly above

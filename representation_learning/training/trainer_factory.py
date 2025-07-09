@@ -15,11 +15,13 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from representation_learning.configs import RunConfig
-from representation_learning.training.training_strategies import StrategyFactory
 from representation_learning.training.checkpoint_manager import CheckpointManager
-from representation_learning.training.metrics_tracker import MetricsTracker
+
 # Remove distributed coordinator - using functions directly from distributed.py
 from representation_learning.training.losses import build_criterion
+from representation_learning.training.metrics_tracker import MetricsTracker
+from representation_learning.training.training_strategies import StrategyFactory
+
 # Import will be done in the method to avoid circular imports
 from representation_learning.utils import ExperimentLogger
 
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class TrainerFactory:
     """Factory for creating trainers."""
-    
+
     @staticmethod
     def create_trainer(
         model: nn.Module,
@@ -47,7 +49,7 @@ class TrainerFactory:
         resume_from_checkpoint: Optional[str] = None,
     ):
         """Create a trainer based on configuration.
-        
+
         Parameters
         ----------
         model : nn.Module
@@ -78,7 +80,7 @@ class TrainerFactory:
             Number of classes, by default 1000
         resume_from_checkpoint : Optional[str], optional
             Path to checkpoint to resume from, by default None
-            
+
         Returns
         -------
         ModularTrainer
@@ -86,30 +88,31 @@ class TrainerFactory:
         """
         # Import here to avoid circular imports
         from representation_learning.training.train import Trainer
+
         # Determine training mode
         training_mode = TrainerFactory._get_training_mode(config)
-        
+
         # Create components
         strategy = StrategyFactory.create_strategy(
             mode=training_mode,
             criterion=build_criterion(config.loss_function),
             device=device,
         )
-        
+
         checkpoint_manager = CheckpointManager(
             model_dir=config.output_dir,
-            checkpoint_freq=getattr(config, 'checkpoint_freq', 1),
+            checkpoint_freq=getattr(config, "checkpoint_freq", 1),
             experiment_logger=exp_logger,
             run_config=config,
         )
-        
+
         metrics_tracker = MetricsTracker(
             metrics=config.metrics,
             num_classes=num_classes,
             device=device,
             training_mode=training_mode,
         )
-        
+
         # Create trainer
         trainer = Trainer(
             model=model,
@@ -129,18 +132,18 @@ class TrainerFactory:
             exp_logger=exp_logger,
             resume_from_checkpoint=resume_from_checkpoint,
         )
-        
+
         return trainer
-    
+
     @staticmethod
     def _get_training_mode(config: RunConfig) -> str:
         """Determine training mode from configuration.
-        
+
         Parameters
         ----------
         config : RunConfig
             Training configuration
-            
+
         Returns
         -------
         str
@@ -151,4 +154,4 @@ class TrainerFactory:
         elif config.label_type == "self_supervised":
             return "eat_ssl"
         else:
-            return "supervised" 
+            return "supervised"

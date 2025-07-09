@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class MetricsTracker:
     """Tracks and computes metrics during training."""
-    
+
     def __init__(
         self,
         metrics: List[str],
@@ -32,7 +32,7 @@ class MetricsTracker:
         training_mode: str = "supervised",
     ):
         """Initialize metrics tracker.
-        
+
         Parameters
         ----------
         metrics : List[str]
@@ -49,17 +49,17 @@ class MetricsTracker:
         self.device = device
         self.training_mode = training_mode
         self.primary_metric_name = metrics[0] if metrics else "accuracy"
-        
+
         # Initialize metric calculators
         self.metric_calculators = {}
         if training_mode == "supervised":
             self.metric_calculators = {
                 name: get_metric_class(name, num_classes) for name in metrics
             }
-        
+
         # State tracking
         self.reset_epoch_state()
-    
+
     def reset_epoch_state(self) -> None:
         """Reset epoch-level state."""
         self.total_loss = 0.0
@@ -68,27 +68,22 @@ class MetricsTracker:
         self.total_correct_a2t = 0  # For CLIP
         self.total_correct_t2a = 0  # For CLIP
         self.component_totals = {}  # For EAT SSL
-        
+
         # Reset metric calculators
         if self.training_mode == "supervised":
             self.metric_calculators = {
-                name: get_metric_class(name, self.num_classes) 
-                for name in self.metrics
+                name: get_metric_class(name, self.num_classes) for name in self.metrics
             }
-    
+
     def update_batch_metrics(
         self,
         loss: torch.Tensor,
-        metrics_data: Union[
-            int, 
-            Tuple[int, int], 
-            Tuple[torch.Tensor, torch.Tensor]
-        ],
+        metrics_data: Union[int, Tuple[int, int], Tuple[torch.Tensor, torch.Tensor]],
         batch_size: int,
         additional_metrics: Optional[Dict[str, float]] = None,
     ) -> None:
         """Update metrics with batch results.
-        
+
         Parameters
         ----------
         loss : torch.Tensor
@@ -102,7 +97,7 @@ class MetricsTracker:
         """
         self.total_loss += loss.item() * batch_size
         self.total_samples += batch_size
-        
+
         if self.training_mode == "clip":
             # CLIP mode: metrics_data is Tuple[int, int]
             correct_a2t, correct_t2a = metrics_data
@@ -128,10 +123,10 @@ class MetricsTracker:
             else:
                 # Legacy format: int count
                 self.total_correct += metrics_data
-    
+
     def get_batch_metrics(self) -> Tuple[float, float]:
         """Get current batch-level metrics.
-        
+
         Returns
         -------
         Tuple[float, float]
@@ -146,10 +141,10 @@ class MetricsTracker:
             total_correct_a2t=self.total_correct_a2t,
             total_correct_t2a=self.total_correct_t2a,
         )
-    
+
     def get_component_metrics(self) -> Dict[str, float]:
         """Get component metrics (for EAT SSL).
-        
+
         Returns
         -------
         Dict[str, float]
@@ -157,15 +152,12 @@ class MetricsTracker:
         """
         if not self.component_totals or self.total_samples == 0:
             return {}
-        
-        return {
-            k: v / self.total_samples
-            for k, v in self.component_totals.items()
-        }
-    
+
+        return {k: v / self.total_samples for k, v in self.component_totals.items()}
+
     def get_epoch_metrics(self) -> Tuple[float, Dict[str, float]]:
         """Get final epoch metrics.
-        
+
         Returns
         -------
         Tuple[float, Dict[str, float]]
@@ -174,7 +166,7 @@ class MetricsTracker:
         # Synchronize final metrics across ranks
         if torch.distributed.is_available() and torch.distributed.is_initialized():
             torch.distributed.barrier()
-        
+
         avg_loss, avg_acc = gather_metrics_from_all_ranks(
             self.total_loss,
             self.total_correct,
@@ -184,7 +176,7 @@ class MetricsTracker:
             total_correct_a2t=self.total_correct_a2t,
             total_correct_t2a=self.total_correct_t2a,
         )
-        
+
         # Compute final metrics based on training mode
         if self.training_mode == "clip":
             # Calculate individual accuracy components
@@ -204,14 +196,16 @@ class MetricsTracker:
                 )
             else:
                 avg_acc_a2t = (
-                    self.total_correct_a2t / self.total_samples 
-                    if self.total_samples else 0.0
+                    self.total_correct_a2t / self.total_samples
+                    if self.total_samples
+                    else 0.0
                 )
                 avg_acc_t2a = (
-                    self.total_correct_t2a / self.total_samples 
-                    if self.total_samples else 0.0
+                    self.total_correct_t2a / self.total_samples
+                    if self.total_samples
+                    else 0.0
                 )
-            
+
             final_metrics = {
                 self.primary_metric_name: avg_acc,
                 "acc_a2t": avg_acc_a2t,
@@ -225,17 +219,17 @@ class MetricsTracker:
             final_metrics = {}
             for name, metric_calculator in self.metric_calculators.items():
                 final_metrics[name] = metric_calculator.get_primary_metric()
-        
+
         return avg_loss, final_metrics
-    
+
     def get_clip_additional_metrics(self, model: torch.nn.Module) -> Dict[str, float]:
         """Get additional CLIP metrics like logit scale.
-        
+
         Parameters
         ----------
         model : torch.nn.Module
             Model to extract metrics from
-            
+
         Returns
         -------
         Dict[str, float]
@@ -243,14 +237,14 @@ class MetricsTracker:
         """
         if self.training_mode != "clip":
             return {}
-        
+
         # Get logit scale from model
         current_scale = 1.0
-        if hasattr(model, 'logit_scale'):
+        if hasattr(model, "logit_scale"):
             current_scale = model.logit_scale.exp().item()
-        elif hasattr(model, 'module') and hasattr(model.module, 'logit_scale'):
+        elif hasattr(model, "module") and hasattr(model.module, "logit_scale"):
             current_scale = model.module.logit_scale.exp().item()
-        
+
         return {
             "logit_scale": current_scale,
-        } 
+        }

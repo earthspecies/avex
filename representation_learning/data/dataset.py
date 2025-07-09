@@ -6,7 +6,6 @@ import random
 from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
-
 import torch
 import torch.distributed as dist
 from esp_data import (
@@ -21,7 +20,6 @@ from representation_learning.data.audioset_getitem_patch import apply_audioset_p
 
 # Force application of AudioSet patches immediately
 apply_audioset_patches()
-from esp_data.transforms import LabelFromFeatureConfig, MultiLabelFromFeaturesConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
 from representation_learning.configs import (
@@ -151,10 +149,8 @@ def _build_one_dataset_split(
 
 
 # TODO: Remove this when esp-data is fixed
-from representation_learning.data.temp_label_fixes import (
-    fix_audioset_string_labels, 
-    create_unified_label_field
-)
+from representation_learning.data.temp_label_fixes import create_unified_label_field
+
 
 def _create_unified_label_field(ds: Dataset) -> None:
     """Temporary wrapper for label field creation. Remove when esp-data is fixed."""
@@ -192,9 +188,12 @@ def _build_datasets(
         if additional_metadata:
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
-        
+
         # Debug labels after transformation
-        from representation_learning.data.temp_label_fixes import debug_labels_after_transformation
+        from representation_learning.data.temp_label_fixes import (
+            debug_labels_after_transformation,
+        )
+
         debug_labels_after_transformation(train_ds)
 
     # Build validation
@@ -235,7 +234,7 @@ def _build_datasets(
         if test_ds and cfg.transformations:
             test_ds.apply_transformations(cfg.transformations)
 
-    # Handle single-label case - check for label_from_feature transform metadata  
+    # Handle single-label case - check for label_from_feature transform metadata
     elif "label_from_feature" in train_metadata:
         label_transform_metadata = train_metadata["label_from_feature"]
         label_map = label_transform_metadata.get("label_map", {})
@@ -252,8 +251,6 @@ def _build_datasets(
             val_ds.apply_transformations(cfg.transformations)
         if test_ds and cfg.transformations:
             test_ds.apply_transformations(cfg.transformations)
-
-
 
     train_ds = AudioDataset(
         train_ds,
@@ -331,12 +328,12 @@ class Collater:
             # fallback to "raw_wav" for compatibility
             audio_key = "audio" if "audio" in item else "raw_wav"
             wav = torch.as_tensor(item[audio_key])  # (T,) or (C, T)
-            
+
             # Handle corrupted audio with NaN values
             if torch.isnan(wav).any() or torch.isinf(wav).any():
                 # logger.warning(f"Corrupted audio detected (NaN/Inf), replacing with zeros. Shape: {wav.shape}")
                 wav = torch.zeros_like(wav)
-            
+
             # Handle multichannel audio by taking mean across channels
             if wav.dim() == 2:  # (C, T) multichannel format
                 wav = wav.mean(dim=0)  # Convert to mono by averaging channels
@@ -394,25 +391,31 @@ class Collater:
                 # DEBUG: Check for invalid labels
                 if len(valid_indices) != len(indices):
                     invalid_indices = indices[indices >= self.num_labels]
-                    logger.warning(f"Invalid label indices found: {invalid_indices.tolist()}, max valid: {self.num_labels-1}")
+                    logger.warning(
+                        f"Invalid label indices found: {invalid_indices.tolist()}, max valid: {self.num_labels - 1}"
+                    )
                 label_tensors.append(one_hot)
             label_tensor = torch.stack(label_tensors)
 
         # DEBUG: Check for NaN in label tensor
         if torch.isnan(label_tensor).any():
             logger.warning(f"NaN detected in label tensor! Shape: {label_tensor.shape}")
-            logger.warning(f"Label tensor stats: min={label_tensor.min():.6f}, max={label_tensor.max():.6f}")
-            
+            logger.warning(
+                f"Label tensor stats: min={label_tensor.min():.6f}, max={label_tensor.max():.6f}"
+            )
+
         # DEBUG: Check for NaN in audio tensor
         if torch.isnan(audio_tensor).any():
             logger.warning(f"NaN detected in audio tensor! Shape: {audio_tensor.shape}")
-            logger.warning(f"Audio tensor stats: min={audio_tensor.min():.6f}, max={audio_tensor.max():.6f}")
+            logger.warning(
+                f"Audio tensor stats: min={audio_tensor.min():.6f}, max={audio_tensor.max():.6f}"
+            )
             nan_count = torch.isnan(audio_tensor).sum().item()
             logger.warning(f"Number of NaN values in audio: {nan_count}")
-            
+
         # DEBUG: Check for extreme values in audio
         if torch.isinf(audio_tensor).any():
-            logger.warning(f"Inf detected in audio tensor!")
+            logger.warning("Inf detected in audio tensor!")
             inf_count = torch.isinf(audio_tensor).sum().item()
             logger.warning(f"Number of Inf values in audio: {inf_count}")
 
@@ -433,16 +436,20 @@ class Collater:
             audio_tensor = torch.stack([item["audio"] for item in mixed_batch])
             label_tensor = torch.stack([item["label"] for item in mixed_batch])
             text_labels = [item.get("text_label") for item in mixed_batch]
-            
+
             # DEBUG: Check for NaN after mixup
             if torch.isnan(audio_tensor).any():
-                logger.warning(f"NaN detected in audio tensor after mixup!")
+                logger.warning("NaN detected in audio tensor after mixup!")
                 nan_count = torch.isnan(audio_tensor).sum().item()
-                logger.warning(f"Number of NaN values in audio after mixup: {nan_count}")
+                logger.warning(
+                    f"Number of NaN values in audio after mixup: {nan_count}"
+                )
             if torch.isnan(label_tensor).any():
-                logger.warning(f"NaN detected in label tensor after mixup!")
+                logger.warning("NaN detected in label tensor after mixup!")
                 nan_count = torch.isnan(label_tensor).sum().item()
-                logger.warning(f"Number of NaN values in labels after mixup: {nan_count}")
+                logger.warning(
+                    f"Number of NaN values in labels after mixup: {nan_count}"
+                )
 
         return {
             # Keep raw_wav for backward compatibility with models

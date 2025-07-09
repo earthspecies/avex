@@ -19,7 +19,7 @@ train_datasets:
     data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
     sample_rate: 16000
     # NO label transformations here - keep original canonical_name field
-    
+
     # transformations:
     # - type: deduplicate
     #   subset: ['local_path']

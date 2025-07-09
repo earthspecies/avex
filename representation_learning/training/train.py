@@ -27,13 +27,16 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import RunConfig
-from representation_learning.training.training_strategies import TrainingStrategy, EATSSLStrategy
 from representation_learning.training.checkpoint_manager import CheckpointManager
-from representation_learning.training.metrics_tracker import MetricsTracker
 from representation_learning.training.distributed import (
-    is_main_process,
-    get_local_device_index,
     cleanup_distributed,
+    get_local_device_index,
+    is_main_process,
+)
+from representation_learning.training.metrics_tracker import MetricsTracker
+from representation_learning.training.training_strategies import (
+    EATSSLStrategy,
+    TrainingStrategy,
 )
 from representation_learning.utils import ExperimentLogger
 
@@ -46,7 +49,7 @@ logger = logging.getLogger(__name__)
 class Trainer:
     """
     Modular trainer using strategy pattern for different training modes.
-    
+
     This trainer delegates training logic to strategies and uses separate
     components for checkpointing and metrics tracking.
     """
@@ -77,24 +80,24 @@ class Trainer:
         self.scheduler = scheduler
         self.scaler = scaler
         self.train_dataloader = train_dataloader
-        self.eval_dataloader =  eval_dataloader
+        self.eval_dataloader = eval_dataloader
         self.device = device
         self.config = config
         self.exp_logger = exp_logger
-        
+
         # Distributed training info
         self.local_rank = local_rank
         self.world_size = world_size
         self.is_distributed = is_distributed
-        
+
         # Modular components
         self.strategy = strategy
         self.checkpoint_manager = checkpoint_manager
         self.metrics_tracker = metrics_tracker
-        
+
         # Setup model for training
         self.model.to(self.device)
-        
+
         # Enable gradient checkpointing if requested
         if config.training_params.gradient_checkpointing:
             logger.info("Enabling gradient checkpointing for memory optimization")
@@ -103,29 +106,28 @@ class Trainer:
             except NotImplementedError as e:
                 logger.warning(f"Could not enable gradient checkpointing: {e}")
             logger.info("gradient checkpointing enabled successfully")
-        
+
         # Wrap model for distributed training
         self.model = self._wrap_model_for_distributed(self.model)
-        
+
         # AMP setup
         self.amp_enabled = config.training_params.amp
-        self.amp_dtype = {
-            "fp16": torch.float16, 
-            "bf16": torch.bfloat16
-        }[config.training_params.amp_dtype]
-        
+        self.amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}[
+            config.training_params.amp_dtype
+        ]
+
         # Training state
         self.best_val_acc = 0.0
         self.start_epoch = 1
         self.global_updates = 0
-        
+
         # Load checkpoint if specified
         if is_main_process() and resume_from_checkpoint:
             self._load_checkpoint(resume_from_checkpoint)
-        
+
         # Broadcast training state in distributed setting
         self._broadcast_training_state()
-        
+
         # Log static hyperparameters
         self._log_hyperparameters()
 
@@ -133,7 +135,9 @@ class Trainer:
     def train(self) -> None:
         """Run the full training loop for the configured number of epochs."""
         try:
-            for epoch in range(self.start_epoch, self.config.training_params.train_epochs + 1):
+            for epoch in range(
+                self.start_epoch, self.config.training_params.train_epochs + 1
+            ):
                 # Set epoch for distributed samplers
                 self._set_epoch_for_samplers(epoch)
 
@@ -182,8 +186,6 @@ class Trainer:
         # Reset metrics tracker for new epoch
         self.metrics_tracker.reset_epoch_state()
 
-
-
         context_mgr = torch.enable_grad() if train else torch.no_grad()
         is_main = is_main_process()
 
@@ -204,23 +206,27 @@ class Trainer:
 
                 # Forward pass using strategy
                 result = self._forward_with_strategy(batch)
-                
+
                 # Update metrics tracker
                 self.metrics_tracker.update_batch_metrics(
-                    result.loss, result.metrics_data, result.batch_size, 
-                    result.additional_metrics
+                    result.loss,
+                    result.metrics_data,
+                    result.batch_size,
+                    result.additional_metrics,
                 )
 
                 if train:
                     # Backward pass and optimization
                     self._backward_step(result.loss)
-                    
+
                     # Update EAT SSL teacher if needed
                     if isinstance(self.strategy, EATSSLStrategy):
                         self.strategy.update_teacher(self.model, self.global_updates)
 
                 # Periodic logging
-                if (i + 1) % self.config.training_params.log_steps == 0 or (i + 1) == len(loader):
+                if (i + 1) % self.config.training_params.log_steps == 0 or (
+                    i + 1
+                ) == len(loader):
                     self._log_batch_progress(i + 1, len(loader))
 
         # Get final epoch metrics
@@ -234,20 +240,16 @@ class Trainer:
             for k, v in batch.items()
         }
 
-
-
         # Forward pass with AMP
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
             result = self.strategy.forward(self.model, batch)
-
-
 
         return result
 
     def _backward_step(self, loss: torch.Tensor) -> None:
         """Perform backward pass and optimization step."""
         self.optimizer.zero_grad()
-        
+
         if self.scaler is not None:
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
@@ -270,7 +272,9 @@ class Trainer:
         # Build log message
         comp_str = ""
         if component_metrics:
-            comp_str = "  " + "  ".join(f"{k}={v:.2f}" for k, v in component_metrics.items())
+            comp_str = "  " + "  ".join(
+                f"{k}={v:.2f}" for k, v in component_metrics.items()
+            )
 
         logger.info(
             f"[LOG] Step {step}/{total_steps}: "
@@ -287,17 +291,17 @@ class Trainer:
             self.exp_logger.log_metrics(metrics_to_log, step=self.global_updates)
 
     def _log_epoch_results(
-        self, 
-        epoch: int, 
-        train_loss: float, 
-        train_metrics: Dict[str, float], 
-        val_loss: float, 
-        val_metrics: Dict[str, float]
+        self,
+        epoch: int,
+        train_loss: float,
+        train_metrics: Dict[str, float],
+        val_loss: float,
+        val_metrics: Dict[str, float],
     ) -> None:
         """Log epoch-level results."""
         current_lr = self.optimizer.param_groups[0]["lr"]
         primary_metric = self.metrics_tracker.primary_metric_name
-        
+
         train_acc = train_metrics.get(primary_metric, 0.0)
         val_acc = val_metrics.get(primary_metric, 0.0)
 
@@ -351,8 +355,11 @@ class Trainer:
             self._save_checkpoint(epoch, is_best=True)
 
         # Save periodic checkpoint
-        checkpoint_freq = getattr(self.config, 'checkpoint_freq', 1)
-        if epoch % checkpoint_freq == 0 and epoch != self.config.training_params.train_epochs:
+        checkpoint_freq = getattr(self.config, "checkpoint_freq", 1)
+        if (
+            epoch % checkpoint_freq == 0
+            and epoch != self.config.training_params.train_epochs
+        ):
             self._save_checkpoint(epoch)
 
     def _save_checkpoint(self, epoch: int, is_best: bool = False) -> None:
@@ -428,24 +435,26 @@ class Trainer:
         unwrapped_model = self._get_unwrapped_model()
         model_name = unwrapped_model.__class__.__name__
 
-        self.exp_logger.log_params({
-            "model_name": model_name,
-            "epochs": self.config.training_params.train_epochs,
-            "lr": self.config.training_params.lr,
-            "batch_size": self.config.training_params.batch_size,
-            "loss_fn": self.config.loss_function,
-            "optimizer": self.optimizer.__class__.__name__,
-            "weight_decay": self.config.training_params.weight_decay,
-            "amp": self.amp_enabled,
-            "amp_dtype": self.config.training_params.amp_dtype,
-            "distributed": self.is_distributed,
-            "world_size": self.world_size,
-            "gradient_checkpointing": self.config.training_params.gradient_checkpointing,
-            "scheduler": getattr(self.config.scheduler, "name", "none"),
-            "warmup_steps": getattr(self.config.scheduler, "warmup_steps", 0),
-            "min_lr": getattr(self.config.scheduler, "min_lr", 0),
-            "checkpoint_freq": getattr(self.config, "checkpoint_freq", 1),
-        })
+        self.exp_logger.log_params(
+            {
+                "model_name": model_name,
+                "epochs": self.config.training_params.train_epochs,
+                "lr": self.config.training_params.lr,
+                "batch_size": self.config.training_params.batch_size,
+                "loss_fn": self.config.loss_function,
+                "optimizer": self.optimizer.__class__.__name__,
+                "weight_decay": self.config.training_params.weight_decay,
+                "amp": self.amp_enabled,
+                "amp_dtype": self.config.training_params.amp_dtype,
+                "distributed": self.is_distributed,
+                "world_size": self.world_size,
+                "gradient_checkpointing": self.config.training_params.gradient_checkpointing,
+                "scheduler": getattr(self.config.scheduler, "name", "none"),
+                "warmup_steps": getattr(self.config.scheduler, "warmup_steps", 0),
+                "min_lr": getattr(self.config.scheduler, "min_lr", 0),
+                "checkpoint_freq": getattr(self.config, "checkpoint_freq", 1),
+            }
+        )
 
     def _wrap_model_for_distributed(self, model: nn.Module) -> nn.Module:
         """Wrap model with DistributedDataParallel if needed."""

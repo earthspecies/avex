@@ -99,6 +99,7 @@ def get_optimizer(
         optimiser_cls = torch.optim.Adam  # type: ignore[assignment]
     elif opt_name == "adamw8bit":
         import bitsandbytes as bnb
+
         optimiser_cls = bnb.optim.PagedAdamW8bit  # type: ignore[assignment]
     else:
         raise ValueError(
