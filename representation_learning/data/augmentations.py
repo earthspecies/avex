@@ -18,7 +18,7 @@ import numpy as np
 import soundfile as sf
 import torch
 import torchaudio
-from esp_data.io import GSPath
+from esp_data.io import AnyPathT, anypath
 
 from representation_learning.data.data_utils import combine_text_labels
 
@@ -154,9 +154,7 @@ class AugmentationProcessor:
         """
         noise_paths: list[Path] = []
         for dir_str in noise_dirs:
-            dir_path: Path | GSPath = (
-                GSPath(dir_str) if dir_str.startswith("gs://") else Path(dir_str)
-            )
+            dir_path: AnyPathT = anypath(dir_str)
             if not dir_path.exists():
                 msg = f"Noise directory not found: {dir_str}"
                 raise FileNotFoundError(msg)
@@ -200,7 +198,7 @@ class AugmentationProcessor:
 
     def _load_noise_segment(
         self,
-        noise_path: Path | GSPath,
+        noise_path: AnyPathT,
         audio_len: int,
         max_window_sec: float,
     ) -> torch.Tensor:
@@ -208,7 +206,7 @@ class AugmentationProcessor:
 
         Parameters
         ----------
-        noise_path : Path | GSPath
+        noise_path : AnyPathT
             Path to noise file.
         audio_len : int
             Target audio length in samples.
@@ -285,7 +283,7 @@ class AugmentationProcessor:
     def _mix_noise(
         self,
         wav: torch.Tensor,
-        noise_path: Path | GSPath,
+        noise_path: AnyPathT,
         snr_db_range: tuple[float, float],
         max_window_sec: float = 10.0,
     ) -> torch.Tensor:
@@ -295,7 +293,7 @@ class AugmentationProcessor:
         ----------
         wav : torch.Tensor
             Input audio tensor.
-        noise_path : Path | GSPath
+        noise_path : AnyPathT
             Path to noise file.
         snr_db_range : tuple[float, float]
             Range of SNR values in dB to randomly sample from.

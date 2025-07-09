@@ -2,85 +2,33 @@
 General utility functions for the representation learning package.
 
 This module contains utility functions that are used across multiple modules,
-including GCS path handling and universal file loading functionality.
+including universal file loading functionality.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
-import cloudpathlib
 import torch
-from google.cloud.storage.client import Client
+from esp_data.io import AnyPathT, anypath
 
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def _get_client() -> cloudpathlib.GSClient:
-    """Get a cached Google Cloud Storage client.
-
-    Returns
-    -------
-    cloudpathlib.GSClient
-        A Google Cloud Storage client instance.
-    """
-    return cloudpathlib.GSClient(storage_client=Client())
-
-
-class GSPath(cloudpathlib.GSPath):
-    """
-    A wrapper for the GSPath class that provides a default client to the constructor.
-    This is necessary due to a bug in cloudpathlib (v0.20.0) which assumes that the
-    GOOGLE_APPLICATION_CREDENTIALS environment variable always points to a service
-    account. This assumption is incorrect when using Workload Identity Federation, which
-    we in our Github Action. Here, we fallback to the actual Google library for a
-    default client that handles this correctly.
-
-    For more details, see: https://github.com/drivendataorg/cloudpathlib/issues/390
-    """
-
-    def __init__(
-        self,
-        client_path: str | os.PathLike,
-        client: cloudpathlib.GSClient | None = None,
-    ) -> None:
-        if client is None:
-            client = _get_client()
-        super().__init__(client_path, client=client)
-
-
-def is_gcs_path(path: Union[str, os.PathLike]) -> bool:
-    """Check if a path is a Google Cloud Storage path.
-
-    Parameters
-    ----------
-    path : Union[str, os.PathLike]
-        The path to check.
-
-    Returns
-    -------
-    bool
-        True if the path is a GCS path (starts with 'gs://'), False otherwise.
-    """
-    return str(path).startswith("gs://")
-
-
 def universal_torch_load(
-    f: str | os.PathLike | GSPath,
+    f: str | os.PathLike | AnyPathT,
     *,
     cache_mode: Literal["none", "use", "force"] = "none",
     **kwargs: Any,  # noqa: ANN401
 ) -> Any:  # noqa: ANN401
     """
-    Wrapper function for torch.load that can handle GCS paths.
+    Wrapper function for torch.load that can handle cloud and local paths.
 
     This function provides a convenient way to load PyTorch objects from both local and
-    Google Cloud Storage (GCS) paths. For GCS paths, it can optionally caches the
+    cloud storage paths (GCS, R2, etc.). For cloud paths, it can optionally cache the
     downloaded files locally to avoid repeated downloads.
 
     The cache location is determined by:
@@ -89,9 +37,9 @@ def universal_torch_load(
 
     Args:
         f: File-like object, string or PathLike object.
-           Can be a local path or a GCS path (starting with 'gs://').
-        cache_mode (str, optional): Cache mode for GCS files. Options are:
-            "none": No caching (use bucket directly)
+           Can be a local path or a cloud path (starting with 'gs://', 'r2://', etc.).
+        cache_mode (str, optional): Cache mode for cloud files. Options are:
+            "none": No caching (use cloud storage directly)
             "use": Use cache if available, download if not
             "force": Force redownload even if cache exists
             Defaults to "none".
@@ -101,19 +49,20 @@ def universal_torch_load(
         The object loaded from the file using torch.load.
 
     Raises:
-        IsADirectoryError: If the GCS path points to a directory instead of a file.
+        IsADirectoryError: If the cloud path points to a directory instead of a file.
         FileNotFoundError: If the local file does not exist.
     """
-    if is_gcs_path(f):
-        gs_path = GSPath(str(f))
-        if gs_path.is_dir():
+    path = anypath(f)
+
+    if path.is_cloud:
+        if path.is_dir():
             raise IsADirectoryError(f"Cannot load a directory: {f}")
 
         if cache_mode in ["use", "force"]:
             if "ESP_CACHE_HOME" in os.environ:
-                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / gs_path.name
+                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
             else:
-                cache_path = Path.home() / ".cache" / "esp" / gs_path.name
+                cache_path = Path.home() / ".cache" / "esp" / path.name
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
@@ -123,16 +72,16 @@ def universal_torch_load(
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                gs_path.download_to(cache_path)
+                path.download_to(cache_path)
             else:
                 logger.debug(f"Found {cache_path}, using local cache.")
             f = cache_path
         else:
-            f = gs_path
+            f = path
     else:
-        f = Path(f)
-        if not f.exists():
+        if not path.exists():
             raise FileNotFoundError(f"File does not exist: {f}")
+        f = path
 
     with open(f, "rb") as opened_file:
         return torch.load(opened_file, **kwargs)

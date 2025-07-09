@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.parallel as parallel
-from esp_data.io.paths import GSPath, R2Path, anypath  # type: ignore
+from esp_data.io import anypath
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -44,9 +44,6 @@ from representation_learning.utils import ExperimentLogger
 from representation_learning.utils.experiment_tracking import save_experiment_metadata
 
 logger = logging.getLogger(__name__)
-
-
-CloudPathT = GSPath | R2Path  # type: ignore[misc]
 
 
 # --------------------------------------------------------------------------- #
@@ -875,8 +872,9 @@ class Trainer:
         # Decide where to place the checkpoint:
         #   • If user provided a cloud path → always use that.
         #   • Otherwise fall back to ExperimentLogger.log_dir when available.
-        if isinstance(self.model_dir, CloudPathT):  # type: ignore[arg-type]
-            base_dir = self.model_dir
+        model_dir_path = anypath(self.model_dir)
+        if model_dir_path.is_cloud:
+            base_dir = model_dir_path
         elif self.log is not None and hasattr(self.log, "log_dir"):
             base_dir = Path(self.log.log_dir)
         else:
@@ -893,8 +891,9 @@ class Trainer:
         # torch.save requires a writable file-like object or a local path. To
         # support cloud paths we use the .open('wb') API when dealing with
         # cloudpathlib objects.
-        if isinstance(ckpt_path, CloudPathT):  # type: ignore[arg-type]
-            with ckpt_path.open("wb") as f:
+        ckpt_path_obj = anypath(ckpt_path)
+        if ckpt_path_obj.is_cloud:
+            with ckpt_path_obj.open("wb") as f:
                 torch.save(checkpoint, f)
         else:
             torch.save(checkpoint, ckpt_path)
