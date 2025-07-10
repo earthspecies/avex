@@ -1,0 +1,332 @@
+benchmark_name: "Individual ID and Vocal Repertoire Benchmark (48kHz)"
+
+evaluation_sets:
+  # =====================================================
+  # INDIVIDUAL ID CLASSIFICATION TASKS
+  # =====================================================
+
+  - name: "zebra_finch_bird_id"
+    train: &zebra_finch_train
+      dataset_name: "zebra_finch_julie_elie"
+      split: "train"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+
+    validation: &zebra_finch_val
+      dataset_name: "zebra_finch_julie_elie"
+      split: "val"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+
+    test: &zebra_finch_test
+      dataset_name: "zebra_finch_julie_elie"
+      split: "test"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "pipit_id_within_year"
+    train:
+      dataset_name: "pipit_id"
+      split: "train_within_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    validation:
+      dataset_name: "pipit_id"
+      split: "train_within_year"  # Use same as train since only train/test available
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    test:
+      dataset_name: "pipit_id"
+      split: "test_within_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "pipit_id_across_year"
+    train:
+      dataset_name: "pipit_id"
+      split: "train_across_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    validation:
+      dataset_name: "pipit_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    test:
+      dataset_name: "pipit_id"
+      split: "test_across_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "chiffchaff_id_within_year"
+    train:
+      dataset_name: "chiffchaff_id"
+      split: "train_within_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    validation:
+      dataset_name: "chiffchaff_id"
+      split: "train_within_year"  # Use same as train
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    test:
+      dataset_name: "chiffchaff_id"
+      split: "test_within_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "chiffchaff_id_across_year"
+    train:
+      dataset_name: "chiffchaff_id"
+      split: "train_across_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    validation:
+      dataset_name: "chiffchaff_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    test:
+      dataset_name: "chiffchaff_id"
+      split: "test_across_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "littleowl_id_across_year"
+    train:
+      dataset_name: "littleowl_id"
+      split: "train_across_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    validation:
+      dataset_name: "littleowl_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    test:
+      dataset_name: "littleowl_id"
+      split: "test_across_year"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "giant_otters_individual_id"
+    train:
+      dataset_name: "giant_otters"
+      split: "test"  # Only test split available
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "Individual"
+          override: true
+
+    validation:
+      dataset_name: "giant_otters"
+      split: "test"  # Use same as train since only test available
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "Individual"
+          override: true
+
+    test:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "Individual"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  # =====================================================
+  # VOCAL REPERTOIRE CLASSIFICATION TASKS
+  # =====================================================
+
+  - name: "zebra_finch_call_type"
+    train:
+      <<: *zebra_finch_train
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_1"
+          override: true
+
+    validation:
+      <<: *zebra_finch_val
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_1"
+          override: true
+
+    test:
+      <<: *zebra_finch_test
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_1"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "zebra_finch_call_type_id"
+    train:
+      <<: *zebra_finch_train
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_id"
+          override: true
+
+    validation:
+      <<: *zebra_finch_val
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_id"
+          override: true
+
+    test:
+      <<: *zebra_finch_test
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_id"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  - name: "giant_otters_vocalization"
+    train:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "vocalization"
+          override: true
+
+    validation:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "vocalization"
+          override: true
+
+    test:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "vocalization"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+
+  # =====================================================
+  # SPECIES CLASSIFICATION TASKS
+  # =====================================================
+
+  - name: "insectset_species_classification"
+    train:
+      dataset_name: "insectset_459"
+      split: "train"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "species_scientific"
+          override: true
+
+    validation:
+      dataset_name: "insectset_459"
+      split: "train"  # Use same as train since only train/validation available
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "species_scientific"
+          override: true
+
+    test:
+      dataset_name: "insectset_459"
+      split: "validation"
+      sample_rate: 48000
+      transformations:
+        - type: "label_from_feature"
+          feature: "species_scientific"
+          override: true
+
+    metrics: ["accuracy", "f1_macro", "f1_weighted"]

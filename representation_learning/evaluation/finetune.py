@@ -40,6 +40,11 @@ def train_and_eval_linear_probe(
         • **train_metrics** – aggregated over training split
         • **val_metrics**   – aggregated over validation split
         • **probe_test_metrics** – metrics on cached-embedding test split
+
+    Raises
+    ------
+    ValueError
+        If no dataset metrics are provided in the evaluation configuration
     """
 
     # Get input dimension from the first batch of training data
@@ -77,7 +82,9 @@ def train_and_eval_linear_probe(
         device=device,
         cfg=eval_cfg,
         exp_logger=exp_logger,
+        num_labels=num_labels,
         multi_label=multi_label,
+        dataset_metrics=dataset_metrics,
     )
 
     train_metrics, val_metrics = trainer.train(
@@ -91,12 +98,12 @@ def train_and_eval_linear_probe(
         shuffle=False,
     )
 
-    # Metric selection (use dataset metrics if provided, otherwise fallback to accuracy)
-    if dataset_metrics is not None:
+    # Metric selection - require explicit metrics, no fallbacks
+    if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
-        metric_names = getattr(test_embed_ds, "metadata", {}).get(
-            "metrics", ["accuracy"]
+        raise ValueError(
+            "Expected metrics to be specified in the evaluation configuration. "
         )
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
@@ -167,6 +174,11 @@ def train_and_eval_full_fine_tune(
         • **train_metrics** – aggregated over training split
         • **val_metrics**   – aggregated over validation split
         • **probe_test_metrics** – metrics on test split
+
+    Raises
+    ------
+    ValueError
+        If no dataset metrics are provided in the evaluation configuration
     """
     # Enable training mode
     base_model.train()
@@ -199,7 +211,9 @@ def train_and_eval_full_fine_tune(
         device=device,
         cfg=eval_cfg,
         exp_logger=exp_logger,
+        num_labels=num_labels,
         multi_label=multi_label,
+        dataset_metrics=dataset_metrics,
     )
 
     # Train
@@ -212,10 +226,12 @@ def train_and_eval_full_fine_tune(
     test_metrics = {}
 
     # Get metric class based on task type and dataset metrics
-    if dataset_metrics is not None:
+    if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
-        metric_names = ["accuracy"] if not multi_label else ["f1"]
+        raise ValueError(
+            "Expected metrics to be specified in the evaluation configuration. "
+        )
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 

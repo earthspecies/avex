@@ -171,11 +171,12 @@ class AveragePrecision:
         """Update the metric with new predictions and ground truth.
 
         Args:
-            output: Model output scores of shape (N, K)
+            output: Model output logits of shape (N, K)
             target: Ground truth labels of shape (N, K)
             weight: Optional sample weights of shape (N,)
         """
-        y_scores = output.cpu().numpy()
+        # Convert logits to probabilities using sigmoid for mAP computation
+        y_scores = torch.sigmoid(output).cpu().numpy()
         y_true = target.cpu().numpy()
         self.y_true.extend(y_true)
         self.y_scores.extend(y_scores)

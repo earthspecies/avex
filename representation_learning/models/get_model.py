@@ -82,6 +82,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             model_config, "atst_model_path", "pretrained/atst_as2M.pt"
         )
         # atst_model_path = "pretrained/atst_frame_base.pt"
+
         return ATSTModel(
             atst_model_path=atst_model_path,
             num_classes=num_classes,
@@ -130,11 +131,14 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             Model as BeatsModel,
         )
 
+        use_naturelm = getattr(model_config, "use_naturelm", False)
+
         return BeatsModel(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
+            use_naturelm=use_naturelm,
         )
     elif model_name == "eat_hf":
         from representation_learning.models.eat_hf import (
@@ -163,8 +167,8 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     else:
         # Fallback
         supported = (
-            "'efficientnet', 'clip', 'perch', 'atst', 'eat', 'eat_hf', 'resnet18', "
-            "'resnet50', 'resnet152', 'beats'"
+            "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
+            "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', 'dummy_model'"
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"

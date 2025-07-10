@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import multiprocessing
+import random
 from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
@@ -12,7 +14,7 @@ from esp_data import (
     concatenate_datasets,
     dataset_from_config,
 )
-from esp_data.transforms import LabelFromFeatureConfig
+from esp_data.transforms import LabelFromFeatureConfig, MultiLabelFromFeaturesConfig
 from torch.utils.data import DataLoader, DistributedSampler
 
 from representation_learning.configs import (
@@ -27,6 +29,12 @@ from representation_learning.data.augmentations import (
     AugmentationProcessor,
     make_item_postprocessor,
 )
+
+# from representation_learning.preprocessing.activity_detector import (
+#     load_activity_detector
+# )
+
+logger = logging.getLogger(__name__)
 
 
 class AudioDataset(torch.utils.data.Dataset):
@@ -112,8 +120,8 @@ def _build_one_dataset_split(
     try:
         ds_list = []
         for ds_cfg in cfg_list:
-            # applies any transformations defined in the dataset config
             ds, metadata = dataset_from_config(ds_cfg)
+
             ds_list.append((ds, metadata))
 
         if concatenate and len(ds_list) > 1:
@@ -155,7 +163,7 @@ def _build_datasets(
     )
 
     if cfg.transformations:
-        # Apply those on train
+        # Apply those on train and update metadata
         train_metadata = train_ds.apply_transformations(cfg.transformations)
 
     # Build validation
@@ -172,14 +180,19 @@ def _build_datasets(
     label_map = {}
     num_classes = 0
 
-    # Apply label_to_feature transform to validation set
+    # Apply label_from_feature transform to validation/test sets
     if "label_from_feature" in train_metadata:
-        label_map = train_metadata["label_from_feature"].get("label_map", {})
-        num_classes = train_metadata["label_from_feature"].get(
-            "num_classes", len(label_map)
-        )
+        label_transform_metadata = train_metadata["label_from_feature"]
+        label_map = label_transform_metadata.get("label_map", {})
+        # Prioritize num_classes when available and > 0, fallback to len(label_map)
+        if (
+            "num_classes" in label_transform_metadata
+            and label_transform_metadata["num_classes"] > 0
+        ):
+            num_classes = label_transform_metadata["num_classes"]
+        else:
+            num_classes = len(label_map)
 
-        # Get the feature name used for labeling
         label_feature = train_metadata["label_from_feature"]["label_feature"]
 
         # Always set override=True when applying transformations to val/test datasets
@@ -198,19 +211,60 @@ def _build_datasets(
         if test_ds:
             test_ds.apply_transformations([label_transform])
 
-    if "labels_from_features" in train_metadata:
-        label_map = train_metadata["labels_from_features"].get("label_map", {})
-        num_classes = train_metadata["labels_from_features"].get(
-            "num_classes", len(label_map)
-        )
+    # Handle multi-label case - check for labels_from_features transform metadata
+    elif "labels_from_features" in train_metadata:
+        label_transform_metadata = train_metadata["labels_from_features"]
+        label_map = label_transform_metadata.get("label_map", {})
+        # Prioritize num_classes when available and > 0, fallback to len(label_map)
+        if (
+            "num_classes" in label_transform_metadata
+            and label_transform_metadata["num_classes"] > 0
+        ):
+            num_classes = label_transform_metadata["num_classes"]
+        else:
+            num_classes = len(label_map)
 
         # Get the feature name(s) used for labeling
-        label_features = train_metadata["labels_from_features"]["label_feature"]
+        label_features = label_transform_metadata.get("label_feature", ["label"])
 
         # Always set override=True when applying transformations to val/test datasets
         # since we know we want to replace any existing label features
-        label_transform = LabelFromFeatureConfig(
-            feature=label_features,
+        # Use MultiLabelFromFeaturesConfig for multi-label datasets
+        label_transform = MultiLabelFromFeaturesConfig(
+            type="labels_from_features",
+            features=label_features,
+            output_feature="label",
+            label_map=label_map,
+            override=True,
+        )
+
+        # Apply label transform to val/test datasets
+        if val_ds:
+            val_ds.apply_transformations([label_transform])
+        if test_ds:
+            test_ds.apply_transformations([label_transform])
+
+    # Handle legacy multi-label case - check if label_feature is a list
+    # (indicates multi-label)
+    elif "label_feature" in train_metadata and isinstance(
+        train_metadata["label_feature"], list
+    ):
+        label_map = train_metadata.get("label_map", {})
+        # Prioritize num_classes when available and > 0, fallback to len(label_map)
+        if "num_classes" in train_metadata and train_metadata["num_classes"] > 0:
+            num_classes = train_metadata["num_classes"]
+        else:
+            num_classes = len(label_map)
+
+        # Get the feature name(s) used for labeling
+        label_features = train_metadata["label_feature"]
+
+        # Always set override=True when applying transformations to val/test datasets
+        # since we know we want to replace any existing label features
+        # Use MultiLabelFromFeaturesConfig for multi-label datasets
+        label_transform = MultiLabelFromFeaturesConfig(
+            type="labels_from_features",
+            features=label_features,
             output_feature="label",
             label_map=label_map,
             override=True,
@@ -261,6 +315,11 @@ class Collater:
     """
     Combines samples into a batch, ensuring every audio clip has the same
     length (`audio_max_length`) by truncating or zero-padding as needed.
+
+    Supports two-step processing:
+    1. First truncate to dataset_audio_max_length_seconds (benchmark constraint)
+       if specified
+    2. Then pad/truncate to audio_max_length_seconds (model requirement)
     """
 
     def __init__(
@@ -268,15 +327,15 @@ class Collater:
         audio_max_length_seconds: int,
         sr: int,
         window_selection: str = "random",
-        keep_text: bool = False,
         preprocessor: Optional[str] = None,
         device: str = "cpu",
         batch_aug_processor: Optional[AugmentationProcessor] = None,
         num_labels: int = 0,
+        dataset_audio_max_length_seconds: Optional[int] = None,
     ) -> None:
         self.audio_max_length_seconds = audio_max_length_seconds
+        self.dataset_audio_max_length_seconds = dataset_audio_max_length_seconds
         self.window_selection = window_selection
-        self.keep_text = keep_text
         self.preprocessor = preprocessor
         self.sr = sr
         self.device = device
@@ -293,14 +352,29 @@ class Collater:
             # fallback to "raw_wav" for compatibility
             audio_key = "audio" if "audio" in item else "raw_wav"
             wav = torch.as_tensor(item[audio_key])  # (T,)
+
+            # Step 1: Apply dataset constraint (benchmark limit) if specified
+            if self.dataset_audio_max_length_seconds is not None:
+                dataset_max_samples = self.dataset_audio_max_length_seconds * self.sr
+                if wav.size(-1) > dataset_max_samples:
+                    # Apply dataset constraint truncation with same window
+                    # selection strategy
+                    wav, _ = pad_or_window(
+                        wav, dataset_max_samples, self.window_selection
+                    )
+
+            # Step 2: Apply model requirement (pad/truncate to target length)
             wav, pad_mask = pad_or_window(
                 wav, self.audio_max_length_seconds * self.sr, self.window_selection
             )
             audios.append(wav)
             masks.append(pad_mask)
             labels.append(item["label"])
-            if self.keep_text:
-                text_labels.append(item["text_label"])
+            if "text_label" in item:
+                txt_lbl = item["text_label"]
+                if isinstance(txt_lbl, list) and len(txt_lbl) > 0:
+                    txt_lbl = random.choice(txt_lbl)
+                text_labels.append(txt_lbl)
 
         # Apply batch-level mixup AFTER all audios are same length
         if self.batch_aug_processor is not None and audios:
@@ -309,12 +383,12 @@ class Collater:
                 {
                     "audio": wav,  # Use standard "audio" key
                     "label": lbl,
-                    "text_label": txt if self.keep_text else None,
+                    "text_label": txt,
                 }
                 for wav, lbl, txt in zip(
                     audios,
                     labels,
-                    text_labels if self.keep_text else [None] * len(audios),
+                    text_labels if text_labels else [None] * len(audios),
                     strict=False,
                 )
             ]
@@ -323,8 +397,11 @@ class Collater:
             # Extract back to separate lists
             audios = [item["audio"] for item in mixed_batch]  # Use standard "audio" key
             labels = [item["label"] for item in mixed_batch]
-            if self.keep_text:
-                text_labels = [item["text_label"] for item in mixed_batch]
+            for item in mixed_batch:
+                if "text_label" in item:
+                    text_labels.append(item["text_label"])
+                else:
+                    text_labels.append(None)
 
         # ------------------------------------
         # Stack into tensors (audio + mask)
@@ -408,6 +485,10 @@ def build_dataloaders(
     cfg: RunConfig,
     data_config: DatasetCollectionConfig | None = None,
     device: str = "cpu",
+    task_type: str | None = None,
+    dataset_audio_max_length_seconds: Optional[int] = None,
+    enable_eval_augmentations: bool = False,
+    is_evaluation_context: bool = False,
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     """Create train/val/(optional) test :pyclass:`torch.utils.data.DataLoader`s.
 
@@ -420,6 +501,25 @@ def build_dataloaders(
         the dataset configuration specified in `cfg.dataset_config`.
     device : str, optional
         The device to use for the DataLoader workers. Defaults to "cpu". If set to
+
+    task_type : str | None, optional
+        The task type ("detection", "classification", etc.). If provided, allows
+        single-class datasets for detection tasks. Defaults to None.
+
+    dataset_audio_max_length_seconds : Optional[int], optional
+        Maximum audio length in seconds to use from the source audio before
+        applying model target length. This represents benchmark constraints.
+        If None, no dataset-level constraint is applied. Defaults to None.
+
+    enable_eval_augmentations : bool, optional
+        Whether to enable augmentations during evaluation. Defaults to False.
+        This is needed for BirdSet linear probing where train/test are different
+        datasets.
+
+    is_evaluation_context : bool, optional
+        Whether we're in evaluation context (run_evaluate.py) vs training context
+        (run_train.py). In evaluation context, augmentations are disabled by default
+        for train/val unless enable_eval_augmentations=True. Defaults to False.
 
     Returns
     -------
@@ -453,10 +553,20 @@ def build_dataloaders(
     )
 
     num_labels = ds_train.metadata.get("num_labels", 0)
-    if num_labels <= 1:
-        raise ValueError(
-            "Dataset must have more than one label for classification tasks."
-        )
+
+    # Allow single-class datasets for detection tasks, but require multiple
+    # classes for classification
+    if task_type == "detection":
+        # For detection tasks, we need at least 1 class
+        # (binary detection: present/absent)
+        if num_labels < 1:
+            raise ValueError("Detection tasks must have at least one label.")
+    else:
+        # For classification tasks (or unknown task types), require multiple classes
+        if num_labels <= 1:
+            raise ValueError(
+                "Dataset must have more than one label for classification tasks."
+            )
 
     # logger.info(f"Train data size : {len(ds_train)} samples")
     # logger.info(f"Validation data size : {len(ds_val)} samples")
@@ -473,23 +583,50 @@ def build_dataloaders(
     # ------------------------------------------------------------------ #
     # Collaters
     # ------------------------------------------------------------------ #
+
+    # Determine augmentation strategy based on context
+    if is_evaluation_context:
+        # Evaluation context (run_evaluate.py):
+        # - Default: no augmentations for train/val
+        # - BirdSet: augmentations for train/val (enable_eval_augmentations=True)
+        train_aug_processor = aug_processor if enable_eval_augmentations else None
+        eval_aug_processor = aug_processor if enable_eval_augmentations else None
+    else:
+        # Training context (run_train.py):
+        # - Train: augmentations enabled (standard training behavior)
+        # - Val: no augmentations (standard validation behavior)
+        train_aug_processor = aug_processor
+        eval_aug_processor = None
+
+    # Test augmentations are ALWAYS off, regardless of context or dataset type
+    test_aug_processor = None
+
     collate_fn_train = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
-        keep_text=(cfg.label_type == "text"),
         device=device,
-        batch_aug_processor=aug_processor,
+        batch_aug_processor=train_aug_processor,
         num_labels=num_labels,
+        dataset_audio_max_length_seconds=dataset_audio_max_length_seconds,
     )
     collate_fn_eval = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
         sr=cfg.model_spec.audio_config.sample_rate,
         window_selection=cfg.model_spec.audio_config.window_selection,
-        keep_text=(cfg.label_type == "text"),
         device=device,
-        batch_aug_processor=None,  # no augmentation during eval
+        batch_aug_processor=eval_aug_processor,
         num_labels=num_labels,
+        dataset_audio_max_length_seconds=dataset_audio_max_length_seconds,
+    )
+    collate_fn_test = Collater(
+        audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
+        sr=cfg.model_spec.audio_config.sample_rate,
+        window_selection=cfg.model_spec.audio_config.window_selection,
+        device=device,
+        batch_aug_processor=test_aug_processor,  # ALWAYS None
+        num_labels=num_labels,
+        dataset_audio_max_length_seconds=dataset_audio_max_length_seconds,
     )
 
     # ------------------------------------------------------------------ #
@@ -532,7 +669,7 @@ def build_dataloaders(
             batch_size=cfg.training_params.batch_size,
             shuffle=False,
             num_workers=cfg.num_workers,
-            collate_fn=collate_fn_eval,  # eval collater (no aug)
+            collate_fn=collate_fn_test,  # test collater (NEVER has augmentations)
             pin_memory=(device != "cpu"),
         )
     else:

@@ -1,0 +1,41 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark_debug.yml
+
+training_params:
+  train_epochs: 300
+  lr: 0.0003
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Which experiments to evaluate
+experiments:
+  - run_name: bird_aves_bio
+    run_config: configs/run_configs/pretrained/aves_base.yml
+    ### which layers to probe for embeddings
+    layers: last_layer
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    frozen: true
+
+# Where to save the evaluation results
+save_dir: evaluation_results/bird_aves_bio
+
+# Optional: Append results to a global CSV file for cross-model comparison
+results_csv_path: evaluation_results/all_models_results.csv
+
+device: cuda
+
+seed: 42
+
+num_workers: 8  # Enable workers for better memory management
+
+# Evaluation phases
+eval_modes:
+  # - linear_probe
+  - retrieval
+  - clustering
+
+overwrite_embeddings: true

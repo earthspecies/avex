@@ -19,21 +19,24 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.parallel as parallel
-from esp_data.io.paths import GSPath, R2Path, anypath  # type: ignore
+from esp_data.io import anypath
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, RunConfig
+from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.training.distributed import (
     cleanup_distributed,
+    gather_metrics_from_all_ranks,
     get_local_device_index,
     is_main_process,
+    synchronize_scalar,
 )
 from representation_learning.training.losses import ClipLoss, build_criterion
 from representation_learning.training.training_utils import build_scheduler
@@ -41,9 +44,6 @@ from representation_learning.utils import ExperimentLogger
 from representation_learning.utils.experiment_tracking import save_experiment_metadata
 
 logger = logging.getLogger(__name__)
-
-
-CloudPathT = GSPath | R2Path  # type: ignore[misc]
 
 
 # --------------------------------------------------------------------------- #
@@ -316,8 +316,10 @@ class Trainer:
 
                     logger_line = (
                         f"[Epoch {epoch:03d}] "
-                        f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
-                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f} | "
+                        f"train_loss={train_loss:.4f}  "
+                        f"train_{self.primary_metric_name}={train_acc:.4f} | "
+                        f"val_loss={val_loss:.4f}  "
+                        f"val_{self.primary_metric_name}={val_acc:.4f} | "
                         f"lr={current_lr:.2e}"
                     )
 
@@ -416,14 +418,21 @@ class Trainer:
 
         context_mgr = torch.enable_grad() if train else torch.no_grad()
 
+        # Only show progress bar on rank 0 to avoid duplicate output
+        is_main = is_main_process()
+
         with context_mgr:
-            for i, batch in enumerate(
-                tqdm(
-                    loader,
-                    desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
-                    leave=False,
+            iterator = enumerate(loader)
+            if is_main:
+                iterator = enumerate(
+                    tqdm(
+                        loader,
+                        desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+                        leave=False,
+                    )
                 )
-            ):
+
+            for i, batch in iterator:
                 # ------------------------------------------------------
                 if not hasattr(self, "_global_updates"):
                     self._global_updates = 0  # type: ignore[attr-defined]
@@ -480,21 +489,16 @@ class Trainer:
 
                 # Per-log_steps logging
                 if (i + 1) % self.log_steps == 0 or (i + 1) == len(loader):
-                    avg_loss_so_far = (
-                        total_loss / total_samples if total_samples else 0.0
+                    # Synchronize metrics across ranks before logging
+                    avg_loss_so_far, avg_acc_so_far = gather_metrics_from_all_ranks(
+                        total_loss,
+                        total_correct,
+                        total_samples,
+                        self.device,
+                        is_clip_mode=self.is_clip_mode,
+                        total_correct_a2t=total_correct_a2t,
+                        total_correct_t2a=total_correct_t2a,
                     )
-                    if self.is_clip_mode:
-                        avg_acc_a2t = (
-                            total_correct_a2t / total_samples if total_samples else 0.0
-                        )
-                        avg_acc_t2a = (
-                            total_correct_t2a / total_samples if total_samples else 0.0
-                        )
-                        avg_acc_so_far = (avg_acc_a2t + avg_acc_t2a) / 2.0
-                    else:
-                        avg_acc_so_far = (
-                            total_correct / total_samples if total_samples else 0.0
-                        )
 
                     # Build log line extensions for EAT SSL component losses
                     comp_log_str = ""
@@ -505,31 +509,68 @@ class Trainer:
                             comp_log_str += f"  {k}={comp_avg:.2f}"
                             comp_log_metrics[k] = comp_avg
 
-                    logger.info(
-                        (
-                            f"[LOG] Step {i + 1}/{len(loader)}: "
-                            f"avg_loss={avg_loss_so_far:.4f}, "
-                            f"avg_acc={avg_acc_so_far:.4f}"  # noqa: E501  (assembled)
-                            f"{comp_log_str}"
+                    # Only log from rank 0 to avoid duplicate log entries
+                    if is_main:
+                        logger.info(
+                            (
+                                f"[LOG] Step {i + 1}/{len(loader)}: "
+                                f"avg_loss={avg_loss_so_far:.4f}, "
+                                f"avg_acc={avg_acc_so_far:.4f}"  # noqa: E501  (assembled)
+                                f"{comp_log_str}"
+                            )
                         )
-                    )
 
-                    if self.log is not None:
-                        metrics_to_log = {
-                            "loss": avg_loss_so_far,
-                            "acc": avg_acc_so_far,
-                            **comp_log_metrics,
-                        }
-                        self.log.log_metrics(metrics_to_log, step=self._global_updates)
+                        if self.log is not None:
+                            metrics_to_log = {
+                                "loss": avg_loss_so_far,
+                                "acc": avg_acc_so_far,
+                                **comp_log_metrics,
+                            }
+                            self.log.log_metrics(
+                                metrics_to_log, step=self._global_updates
+                            )
 
         # ------------------------------------
         # Aggregate epoch metrics
         # ------------------------------------
-        avg_loss = total_loss / total_samples if total_samples else 0.0
+        # Add synchronization barrier to ensure all ranks finish the epoch together
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.barrier()
+
+        # Synchronize final epoch metrics across all ranks
+        avg_loss, avg_acc = gather_metrics_from_all_ranks(
+            total_loss,
+            total_correct,
+            total_samples,
+            self.device,
+            is_clip_mode=self.is_clip_mode,
+            total_correct_a2t=total_correct_a2t,
+            total_correct_t2a=total_correct_t2a,
+        )
 
         if self.is_clip_mode:
-            avg_acc_a2t = total_correct_a2t / total_samples if total_samples else 0.0
-            avg_acc_t2a = total_correct_t2a / total_samples if total_samples else 0.0
+            # Calculate individual accuracy components for CLIP metrics
+            if torch.distributed.is_available() and torch.distributed.is_initialized():
+                total_samples_sync = synchronize_scalar(total_samples, self.device)
+                avg_acc_a2t = (
+                    synchronize_scalar(total_correct_a2t, self.device)
+                    / total_samples_sync
+                    if total_samples_sync > 0
+                    else 0.0
+                )
+                avg_acc_t2a = (
+                    synchronize_scalar(total_correct_t2a, self.device)
+                    / total_samples_sync
+                    if total_samples_sync > 0
+                    else 0.0
+                )
+            else:
+                avg_acc_a2t = (
+                    total_correct_a2t / total_samples if total_samples else 0.0
+                )
+                avg_acc_t2a = (
+                    total_correct_t2a / total_samples if total_samples else 0.0
+                )
 
             # Also log the current temperature (logit scale) for monitoring.
             if isinstance(self.model, parallel.DistributedDataParallel):
@@ -548,10 +589,6 @@ class Trainer:
                 "acc_t2a": avg_acc_t2a,
                 "logit_scale": current_scale,
             }
-
-            avg_acc = (avg_acc_a2t + avg_acc_t2a) / 2.0
-        else:
-            avg_acc = total_correct / total_samples if total_samples else 0.0
 
         return avg_loss, avg_acc
 
@@ -835,8 +872,9 @@ class Trainer:
         # Decide where to place the checkpoint:
         #   • If user provided a cloud path → always use that.
         #   • Otherwise fall back to ExperimentLogger.log_dir when available.
-        if isinstance(self.model_dir, CloudPathT):  # type: ignore[arg-type]
-            base_dir = self.model_dir
+        model_dir_path = anypath(self.model_dir)
+        if model_dir_path.is_cloud:
+            base_dir = model_dir_path
         elif self.log is not None and hasattr(self.log, "log_dir"):
             base_dir = Path(self.log.log_dir)
         else:
@@ -853,8 +891,9 @@ class Trainer:
         # torch.save requires a writable file-like object or a local path. To
         # support cloud paths we use the .open('wb') API when dealing with
         # cloudpathlib objects.
-        if isinstance(ckpt_path, CloudPathT):  # type: ignore[arg-type]
-            with ckpt_path.open("wb") as f:
+        ckpt_path_obj = anypath(ckpt_path)
+        if ckpt_path_obj.is_cloud:
+            with ckpt_path_obj.open("wb") as f:
                 torch.save(checkpoint, f)
         else:
             torch.save(checkpoint, ckpt_path)
@@ -996,7 +1035,9 @@ class FineTuneTrainer:
         device: torch.device,
         cfg: EvaluateConfig,
         exp_logger: ExperimentLogger,
+        num_labels: int,
         multi_label: bool = False,
+        dataset_metrics: Optional[List[str]] = None,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -1005,7 +1046,9 @@ class FineTuneTrainer:
         self.device = device
         self.cfg = cfg
         self.log = exp_logger
+        self.num_labels = num_labels
         self.multi_label = multi_label
+        self.dataset_metrics = dataset_metrics
 
         # Set up loss function
         if self.multi_label:
@@ -1023,10 +1066,27 @@ class FineTuneTrainer:
             }
         )
 
-        self.best_val_acc = 0.0
+        # Determine primary metric name based on task type and dataset configuration
+        if self.dataset_metrics and len(self.dataset_metrics) > 0:
+            self.primary_metric_name = self.dataset_metrics[0].lower()
+        else:
+            # For detection tasks (multi_label=True), require explicit metrics
+            if self.multi_label:
+                raise ValueError("No dataset metrics provided for multi-label task. ")
+            else:
+                # For single-label classification, still allow accuracy as default
+                self.primary_metric_name = "acc"
+
+        self.best_val_metric = 0.0
         # Track best epoch metrics for return value
-        self.best_train_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
-        self.best_val_metrics: dict[str, float] = {"loss": float("inf"), "acc": 0.0}
+        self.best_train_metrics: dict[str, float] = {
+            "loss": float("inf"),
+            self.primary_metric_name: 0.0,
+        }
+        self.best_val_metrics: dict[str, float] = {
+            "loss": float("inf"),
+            self.primary_metric_name: 0.0,
+        }
 
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
         """
@@ -1038,30 +1098,42 @@ class FineTuneTrainer:
             A tuple of (best_train_metrics, best_val_metrics) collected across epochs.
         """
         for epoch in range(1, num_epochs + 1):
-            train_loss, train_acc = self._run_epoch(train=True, epoch=epoch)
-            val_loss, val_acc = self._run_epoch(train=False, epoch=epoch)
+            train_loss, train_metric = self._run_epoch(train=True, epoch=epoch)
+            val_loss, val_metric = self._run_epoch(train=False, epoch=epoch)
 
             logger.info(
                 f"[Epoch {epoch:03d}] "
-                f"train_loss={train_loss:.4f}  train_acc={train_acc:.4f} | "
-                f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                f"train_loss={train_loss:.4f}  "
+                f"train_{self.primary_metric_name}={train_metric:.4f} | "
+                f"val_loss={val_loss:.4f}  "
+                f"val_{self.primary_metric_name}={val_metric:.4f}"
             )
 
             # Log epoch-level metrics
             self.log.log_metrics(
-                {"loss": train_loss, "acc": train_acc}, step=epoch, split="train"
+                {"loss": train_loss, self.primary_metric_name: train_metric},
+                step=epoch,
+                split="train",
             )
             self.log.log_metrics(
-                {"loss": val_loss, "acc": val_acc}, step=epoch, split="val"
+                {"loss": val_loss, self.primary_metric_name: val_metric},
+                step=epoch,
+                split="val",
             )
 
-            # Save best model
-            if val_acc > self.best_val_acc:
-                self.best_val_acc = val_acc
+            # Save best model (higher is better for all our metrics)
+            if val_metric > self.best_val_metric:
+                self.best_val_metric = val_metric
                 self._save_checkpoint("best.pt")
                 # Update best metrics
-                self.best_train_metrics = {"loss": train_loss, "acc": train_acc}
-                self.best_val_metrics = {"loss": val_loss, "acc": val_acc}
+                self.best_train_metrics = {
+                    "loss": train_loss,
+                    self.primary_metric_name: train_metric,
+                }
+                self.best_val_metrics = {
+                    "loss": val_loss,
+                    self.primary_metric_name: val_metric,
+                }
 
         # Load the best model after training is complete
         self._load_best_checkpoint()
@@ -1081,13 +1153,30 @@ class FineTuneTrainer:
         Returns
         -------
         tuple[float, float]
-            A tuple ``(loss, accuracy)`` computed over the entire epoch.
+            A tuple ``(loss, metric_value)`` computed over the entire epoch.
+
+        Raises
+        ------
+        RuntimeError
+            If metric initialization fails due to configuration issues
         """
         loader = self.train_loader if train else self.val_loader
 
         total_loss = 0.0
-        total_correct = 0
         total_samples = 0
+
+        try:
+            metric_calculator = get_metric_class(
+                self.primary_metric_name, self.num_labels
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to initialize metric '{self.primary_metric_name}' "
+                f"for {self.num_labels} classes. "
+                f"Error: {e}. This indicates a configuration issue - ensure "
+                f"the metric name is valid "
+                f"and properly supported by the metric factory."
+            ) from e
 
         for batch in tqdm(
             loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
@@ -1109,7 +1198,15 @@ class FineTuneTrainer:
                     else self.model(x)
                 )
 
-            loss = self.criterion(logits, y)
+            # Calculate loss - handle different label formats for different loss
+            # functions
+            if self.multi_label:
+                # BCEWithLogitsLoss expects one-hot encoded labels
+                loss = self.criterion(logits, y)
+            else:
+                # CrossEntropyLoss expects class indices, not one-hot encoded labels
+                y_indices = y.argmax(dim=1)
+                loss = self.criterion(logits, y_indices)
 
             # Backward pass if training
             if train:
@@ -1117,22 +1214,15 @@ class FineTuneTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            # Calculate accuracy
-            if self.multi_label:
-                pred = (torch.sigmoid(logits) > 0.5).float()
-                correct = (pred == y).all(dim=1).sum().item()
-            else:
-                pred = logits.argmax(dim=1)
-                # Convert one-hot labels back to class indices for comparison
-                y_indices = y.argmax(dim=1)
-                correct = (pred == y_indices).sum().item()
+            metric_calculator.update(logits, y)
 
-            # Update metrics
+            # Update loss
             total_loss += loss.item() * y.size(0)
-            total_correct += correct
             total_samples += y.size(0)
 
-        return total_loss / total_samples, total_correct / total_samples
+        metric_value = metric_calculator.get_primary_metric()
+
+        return total_loss / total_samples, metric_value
 
     def _save_checkpoint(self, name: str) -> None:
         """Save model checkpoint."""
@@ -1148,7 +1238,8 @@ class FineTuneTrainer:
             {
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
-                "best_val_acc": self.best_val_acc,
+                "best_val_metric": self.best_val_metric,
+                "primary_metric_name": self.primary_metric_name,
             },
             ckpt_path,
         )
@@ -1173,5 +1264,6 @@ class FineTuneTrainer:
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         logger.info(
-            f"Restored best model from {ckpt_path} (val_acc: {self.best_val_acc:.4f})"
+            f"Restored best model from {ckpt_path} "
+            f"(val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
         )

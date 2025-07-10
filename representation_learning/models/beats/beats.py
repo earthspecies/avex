@@ -276,4 +276,4 @@ class BEATs(nn.Module):
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
                 Model output (features or predictions)
         """
-        return self.extract_features(source, padding_mask)
+        return self.extract_features(source, padding_mask, feature_only=True)

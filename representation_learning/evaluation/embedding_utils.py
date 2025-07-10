@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import h5py
 import numpy as np
 import torch
-from cloudpathlib import GSPath
+from esp_data.io import anypath
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -243,16 +243,17 @@ def save_embeddings_arrays(
     """
 
     # Ensure directory exists for local filesystem paths
-    if not (GSPath is not None and isinstance(save_path, GSPath)):
-        save_path.parent.mkdir(parents=True, exist_ok=True)
+    save_path_obj = anypath(save_path)
+    if not save_path_obj.is_cloud:
+        save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     # Prepare numpy arrays
     embeds_np = embeddings.detach().cpu().numpy().astype(np.float32)
     labels_np = labels.detach().cpu().numpy()
 
-    # Write file – use file-like stream for GCS
-    if GSPath is not None and isinstance(save_path, GSPath):
-        with save_path.open("wb") as fh, h5py.File(fh, "w") as h5f:
+    # Write file – use file-like stream for cloud storage
+    if save_path_obj.is_cloud:
+        with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
             h5f.create_dataset(
                 "embeddings",
                 data=embeds_np,
@@ -267,7 +268,7 @@ def save_embeddings_arrays(
             )
             h5f.attrs["num_labels"] = num_labels
     else:
-        with h5py.File(str(save_path), "w") as h5f:
+        with h5py.File(str(save_path_obj), "w") as h5f:
             h5f.create_dataset(
                 "embeddings",
                 data=embeds_np,
@@ -302,18 +303,19 @@ def load_embeddings_arrays(path: Path) -> Tuple[torch.Tensor, torch.Tensor, int]
         If the provided *path* does not exist.
     """
 
-    # cloudpathlib.GSPath and pathlib.Path both provide .exists and .open
-    if not path.exists():
+    # anypath handles both local and cloud paths
+    path_obj = anypath(path)
+    if not path_obj.exists():
         raise FileNotFoundError(f"Embeddings file not found: {path}")
 
-    # Handle remote (gs://) paths by streaming through a file-like object
-    if GSPath is not None and isinstance(path, GSPath):
-        with path.open("rb") as fh, h5py.File(fh, "r") as h5f:
+    # Handle remote (cloud) paths by streaming through a file-like object
+    if path_obj.is_cloud:
+        with path_obj.open("rb") as fh, h5py.File(fh, "r") as h5f:
             embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
             labels = torch.from_numpy(np.asarray(h5f["labels"]))
             num_labels = h5f.attrs.get("num_labels", None)
     else:
-        with h5py.File(str(path), "r") as h5f:
+        with h5py.File(str(path_obj), "r") as h5f:
             embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
             labels = torch.from_numpy(np.asarray(h5f["labels"]))
             num_labels = h5f.attrs.get("num_labels", None)

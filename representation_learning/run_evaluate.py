@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -23,6 +22,7 @@ import torch
 from esp_data import DatasetConfig
 from esp_data.io import anypath
 
+# Import representation_learning modules
 from representation_learning.configs import (
     DatasetCollectionConfig,
     EvaluateConfig,
@@ -31,6 +31,10 @@ from representation_learning.configs import (
     load_config,
 )
 from representation_learning.data.dataset import build_dataloaders
+from representation_learning.evaluation.clustering import (
+    eval_clustering,
+    eval_clustering_multiple_k,
+)
 from representation_learning.evaluation.embedding_utils import (
     EmbeddingDataset,
     extract_embeddings_for_split,
@@ -45,10 +49,11 @@ from representation_learning.evaluation.retrieval import eval_retrieval
 from representation_learning.models.get_model import get_model
 from representation_learning.utils import ExperimentLogger
 from representation_learning.utils.experiment_tracking import (
+    create_experiment_summary_csvs,
     get_or_create_experiment_metadata,
-    load_experiment_metadata,
     save_evaluation_metadata,
 )
+from representation_learning.utils.utils import _process_state_dict
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -64,10 +69,14 @@ logging.basicConfig(
 class ExperimentResult:
     dataset_name: str
     experiment_name: str
+    evaluation_dataset_name: Optional[
+        str
+    ]  # The evaluation set name (e.g., "giant_otters_vocalization")
     train_metrics: Dict[str, float]
     val_metrics: Dict[str, float]
     probe_test_metrics: Dict[str, float]
     retrieval_metrics: Dict[str, float]
+    clustering_metrics: Dict[str, float]
 
 
 # -------------------------------------------------------------------- #
@@ -85,39 +94,17 @@ def _parse_args() -> argparse.Namespace:
 
 
 # -------------------------------------------------------------------- #
-#  Checkpoint sanitiser helper                                         #
-# -------------------------------------------------------------------- #
-
-
-def _process_state_dict(state_dict: dict) -> dict:
-    """Remove classifier layers when loading backbone checkpoints.
-
-    Returns
-    -------
-    dict
-        Processed state dictionary with classifier layers removed.
-    """
-    if "model_state_dict" in state_dict:
-        state_dict = state_dict["model_state_dict"]
-
-    # Safely drop common classifier parameter names (different wrappers)
-    state_dict.pop("classifier.weight", None)
-    state_dict.pop("classifier.bias", None)
-    state_dict.pop("model.classifier.1.weight", None)
-    state_dict.pop("model.classifier.1.bias", None)
-
-    return state_dict
-
-
-# -------------------------------------------------------------------- #
 #  Core routine for one (dataset, experiment) pair
 # -------------------------------------------------------------------- #
 def run_experiment(
     eval_cfg: EvaluateConfig,
     dataset_cfg: DatasetConfig,
     experiment_cfg: ExperimentConfig,
+    data_collection_cfg: DatasetCollectionConfig,
     device: torch.device,
     save_dir: Path,
+    evaluation_dataset_name: Optional[str] = None,
+    evaluation_set_metrics: Optional[List[str]] = None,
 ) -> ExperimentResult:
     logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
@@ -138,13 +125,33 @@ def run_experiment(
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
     run_cfg.model_spec.device = str(device)
-    run_cfg.augmentations = []  # disable training-time noise / mix-up
+    run_cfg.augmentations = []  # disable training-time augs during (most) eval
 
-    # Set sample rate on the dataset config
-    dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
+    if run_cfg.model_spec.audio_config.sample_rate is not None:
+        dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
+    else:
+        run_cfg.model_spec.audio_config.sample_rate = dataset_cfg.sample_rate
+        logger.info(f"Using benchmark sample rate: {dataset_cfg.sample_rate} Hz")
 
-    # Embedding paths
-    emb_base_dir = save_dir / experiment_name / dataset_name
+    # Force data collection config to use the model sample rate
+    # TODO: just one place
+    target_sample_rate = dataset_cfg.sample_rate
+    for dataset_list in [
+        data_collection_cfg.train_datasets,
+        data_collection_cfg.val_datasets,
+        data_collection_cfg.test_datasets,
+    ]:
+        if dataset_list:
+            for ds_cfg in dataset_list:
+                if ds_cfg.sample_rate != target_sample_rate:
+                    ds_cfg.sample_rate = target_sample_rate
+                    logging.warning(
+                        f"Overriding sample rate for {ds_cfg.dataset_name} "
+                        f"to model sample rate {target_sample_rate}"
+                    )
+
+    embedding_dir_name = evaluation_dataset_name or dataset_name
+    emb_base_dir = save_dir / experiment_name / embedding_dir_name
     train_path = emb_base_dir / "embedding_train.h5"
     val_path = emb_base_dir / "embedding_val.h5"
     test_path = emb_base_dir / "embedding_test.h5"
@@ -152,13 +159,14 @@ def run_experiment(
     # Flags to determine which embeddings we need
     need_probe = "linear_probe" in eval_cfg.eval_modes
     need_retrieval = "retrieval" in eval_cfg.eval_modes
+    need_clustering = "clustering" in eval_cfg.eval_modes
 
     overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
     need_recompute_embeddings_train = overwrite or (
-        need_probe and frozen and not (train_path.exists() and val_path.exists())
+        need_probe and not (train_path.exists() and val_path.exists())
     )
     need_recompute_embeddings_test = overwrite or (
-        (need_retrieval or (need_probe and frozen)) and not test_path.exists()
+        (need_retrieval or need_probe or need_clustering) and not test_path.exists()
     )
     logger.info(
         "Need to recompute embeddings for train: %s and test: %s",
@@ -189,22 +197,63 @@ def run_experiment(
     num_labels = None
 
     if need_raw_dataloaders:
-        # Create a DatasetCollectionConfig from the individual DatasetConfig
-        data_collection_cfg = DatasetCollectionConfig(
-            train_datasets=[dataset_cfg],
-            val_datasets=[dataset_cfg],
-            test_datasets=[dataset_cfg],
+        eval_data_collection_cfg = DatasetCollectionConfig(
+            train_datasets=data_collection_cfg.train_datasets
+            or ([dataset_cfg] if "linear_probe" in eval_cfg.eval_modes else None),
+            val_datasets=data_collection_cfg.val_datasets
+            or ([dataset_cfg] if "linear_probe" in eval_cfg.eval_modes else None),
+            test_datasets=[dataset_cfg],  # Always use the current dataset for testing
         )
+
+        # Extract dataset-level audio constraint (benchmark constraint) if it exists
+        dataset_audio_max_length = getattr(
+            dataset_cfg, "audio_max_length_seconds", None
+        )
+        if dataset_audio_max_length is not None:
+            logger.info(
+                f"Dataset audio constraint: {dataset_audio_max_length}s, "
+                f"Model target length: "
+                f"{run_cfg.model_spec.audio_config.target_length_seconds}s"
+            )
+
+        # For BirdSet datasets, augment during eval
+        is_birdset = (
+            hasattr(dataset_cfg, "train")
+            and hasattr(dataset_cfg.train, "dataset_name")
+            and dataset_cfg.train.dataset_name.lower() == "birdset"
+        )
+
+        if is_birdset:
+            logger.info(
+                f"BirdSet dataset detected ({dataset_name}). "
+                "Enabling augmentations for train/validation during evaluation "
+                "(test always has no augmentations)."
+            )
+
         train_dl_raw, val_dl_raw, test_dl_raw = build_dataloaders(
-            run_cfg, data_collection_cfg, device
+            run_cfg,
+            eval_data_collection_cfg,
+            device,
+            task_type=getattr(dataset_cfg, "type", None),
+            dataset_audio_max_length_seconds=dataset_audio_max_length,
+            enable_eval_augmentations=is_birdset,
+            is_evaluation_context=True,
         )
+
+        # Log dataloader info
+        train_batches = len(train_dl_raw) if train_dl_raw else 0
+        val_batches = len(val_dl_raw) if val_dl_raw else 0
+        test_batches = len(test_dl_raw) if test_dl_raw else 0
+
         logger.info(
             "Raw dataloaders ready: %d/%d/%d raw batches",
-            len(train_dl_raw),
-            len(val_dl_raw),
-            len(test_dl_raw),
+            train_batches,
+            val_batches,
+            test_batches,
         )
-        num_labels = len(train_dl_raw.dataset.metadata["label_map"])
+
+        if test_dl_raw and hasattr(test_dl_raw.dataset, "metadata"):
+            num_labels = test_dl_raw.dataset.metadata.get("num_labels", None)
 
     # ------------------------------------------------------------------ #
     #  Backbone (optionally load checkpoint)
@@ -213,16 +262,10 @@ def run_experiment(
 
     if need_base_model:
         if num_labels is None:
-            # Try to get num_labels from existing embeddings
-            if train_path.exists():
-                _, _, num_labels = load_embeddings_arrays(train_path)
-            elif test_path.exists():
-                _, _, num_labels = load_embeddings_arrays(test_path)
-            if num_labels is None:
-                raise ValueError(
-                    "Could not determine number of labels from "
-                    "embeddings or raw dataloaders"
-                )
+            raise ValueError(
+                "Could not determine number of labels from "
+                "embeddings or raw dataloaders"
+            )
 
         base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
 
@@ -234,9 +277,8 @@ def run_experiment(
                 state = torch.load(f, map_location=device)
             if "model_state_dict" in state:
                 state = _process_state_dict(state)
-                base_model.load_state_dict(state, strict=False)
-            else:
-                base_model.load_state_dict(state, strict=False)
+
+            base_model.load_state_dict(state, strict=False)
             logger.info("Loaded checkpoint from %s", ckpt_path)
 
         if frozen:
@@ -287,8 +329,8 @@ def run_experiment(
         val_ds = EmbeddingDataset(val_embeds, val_labels)
         num_labels = len(train_labels.unique()) if num_labels is None else num_labels
 
-    # ------------------- embeddings for retrieval ---------------------- #
-    if need_retrieval or (need_probe and frozen):
+    # ------------------- embeddings for retrieval and clustering -------- #
+    if need_retrieval or need_probe or need_clustering:
         test_path = emb_base_dir / "embedding_test.h5"
         logger.info(test_path)
 
@@ -308,7 +350,8 @@ def run_experiment(
     #  Experiment logger
     # ------------------------------------------------------------------ #
     exp_logger = ExperimentLogger.from_config(experiment_cfg)
-    exp_logger.log_dir = save_dir / experiment_name / dataset_name
+    log_dir_name = evaluation_dataset_name or dataset_name
+    exp_logger.log_dir = save_dir / experiment_name / log_dir_name
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ #
@@ -319,7 +362,22 @@ def run_experiment(
     probe_test_metrics: Dict[str, float] = {}
 
     if "linear_probe" in eval_cfg.eval_modes:
+        dataset_metrics = evaluation_set_metrics or getattr(
+            dataset_cfg, "metrics", None
+        )
+
+        # TODO: metrics per task-group
+        classification_metrics = [
+            m for m in dataset_metrics if not m.startswith("clustering_")
+        ]
+
         if frozen:
+            # Get multi-label setting from dataset config, with fallback based on type
+            is_multi_label = getattr(
+                dataset_cfg,
+                "multi_label",
+                getattr(dataset_cfg, "type", None) == "detection",
+            )
             (
                 train_metrics,
                 val_metrics,
@@ -333,11 +391,18 @@ def run_experiment(
                 eval_cfg,
                 device,
                 exp_logger,
-                dataset_cfg.multi_label,
-                dataset_metrics=getattr(dataset_cfg, "metrics", None),
+                is_multi_label,
+                dataset_metrics=classification_metrics,
             )
         else:
             # For fine-tuning, use raw dataloaders
+            # Get multi-label setting from dataset config, with fallback based on type
+            is_multi_label = getattr(
+                dataset_cfg,
+                "multi_label",
+                getattr(dataset_cfg, "type", None) == "detection",
+            )
+
             (
                 train_metrics,
                 val_metrics,
@@ -352,8 +417,8 @@ def run_experiment(
                 eval_cfg,
                 device,
                 exp_logger,
-                dataset_cfg.multi_label,
-                dataset_metrics=getattr(dataset_cfg, "metrics", None),
+                is_multi_label,
+                dataset_metrics=classification_metrics,
             )
     else:
         logger.info("Linear probe not run because not in eval_modes")
@@ -366,11 +431,22 @@ def run_experiment(
         retrieval_metrics = eval_retrieval(test_embeds, test_labels)
         # logger.info("retrieval metrics", retrieval_metrics)
 
+    # ------------------------------------------------------------------ #
+    #  (3) Clustering (from cached test embeddings)
+    # ------------------------------------------------------------------ #
+    clustering_metrics: Dict[str, float] = {}
+    if "clustering" in eval_cfg.eval_modes:
+        # Use both standard clustering with true K and multiple K search
+        clustering_metrics.update(eval_clustering(test_embeds, test_labels))
+        clustering_metrics.update(eval_clustering_multiple_k(test_embeds, test_labels))
+        logger.info("Clustering metrics: %s", clustering_metrics)
+
     # Log & finish
     exp_logger.log_metrics(train_metrics, step=0, split="train_final")
     exp_logger.log_metrics(val_metrics, step=0, split="val_final")
     exp_logger.log_metrics(probe_test_metrics, step=0, split="test_probe")
     exp_logger.log_metrics(retrieval_metrics, step=0, split="test_retrieval")
+    exp_logger.log_metrics(clustering_metrics, step=0, split="test_clustering")
     exp_logger.finalize()
 
     # Get or create training metadata
@@ -384,10 +460,12 @@ def run_experiment(
             checkpoint_name=checkpoint_name,
         )
 
-    # Save evaluation metadata
+    # Save evaluation metadata - Use evaluation_dataset_name to avoid
+    # metadata collisions
+    metadata_dataset_name = evaluation_dataset_name or dataset_name
     save_evaluation_metadata(
         output_dir=save_dir,
-        dataset_name=dataset_name,
+        dataset_name=metadata_dataset_name,
         experiment_name=experiment_name,
         checkpoint_name=Path(experiment_cfg.checkpoint_path).name
         if experiment_cfg.checkpoint_path
@@ -396,6 +474,7 @@ def run_experiment(
         val_metrics=val_metrics,
         probe_test_metrics=probe_test_metrics,
         retrieval_metrics=retrieval_metrics,
+        clustering_metrics=clustering_metrics,
         eval_config=eval_cfg.model_dump(mode="json"),
         training_metadata=training_metadata,
         run_config=run_cfg.model_dump(mode="json"),  # Always include run config
@@ -404,10 +483,12 @@ def run_experiment(
     return ExperimentResult(
         dataset_name=dataset_name,
         experiment_name=experiment_name,
+        evaluation_dataset_name=evaluation_dataset_name,
         train_metrics=train_metrics,
         val_metrics=val_metrics,
         probe_test_metrics=probe_test_metrics,
         retrieval_metrics=retrieval_metrics,
+        clustering_metrics=clustering_metrics,
     )
 
 
@@ -419,133 +500,104 @@ def main() -> None:
 
     # 1. Load configs
     eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
-    benchmark_cfg = load_config(eval_cfg.dataset_config, config_type="benchmark")
-    # logger.info("eval cfg", eval_cfg)
+
+    # Detect config format based on content structure
+    config_path = Path(eval_cfg.dataset_config)
+
+    # Load raw config to check structure
+    with open(config_path, "r") as f:
+        import yaml
+
+        raw_config = yaml.safe_load(f)
+
+    if "evaluation_sets" in raw_config:
+        # BenchmarkEvaluationConfig format
+        benchmark_eval_cfg = load_config(
+            eval_cfg.dataset_config, config_type="benchmark_evaluation"
+        )
+        evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
+        logger.info(
+            f"Loading dataset config '{eval_cfg.dataset_config}' as "
+            f"'benchmark_evaluation' format with {len(evaluation_sets)} evaluation sets"
+        )
+    else:
+        # Structured dataset collection config
+        load_config(eval_cfg.dataset_config, config_type="data")
+        logger.info(
+            f"Loading dataset config '{eval_cfg.dataset_config}' as 'data' format"
+        )
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
         save_dir = anypath(str(eval_cfg.save_dir))
-        # For GCS paths we rely on cloudpathlib to create objects lazily when
-        # data is written, so no mkdir is needed here.
     else:
         save_dir = Path(str(eval_cfg.save_dir)).expanduser()
         save_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
 
-    # 3. Run all (dataset × experiment)
+    # 3. Run experiments
     all_results: List[ExperimentResult] = []
-    for ds_cfg in benchmark_cfg.datasets:
+
+    if not evaluation_sets:
+        logger.warning(
+            "No evaluation sets found in BenchmarkEvaluationConfig. "
+            "Nothing to evaluate."
+        )
+        return
+
+    for eval_set_name, eval_set_data_cfg in evaluation_sets:
+        logger.info(f"Evaluating benchmark set: {eval_set_name}")
+
+        # Extract the test dataset from the evaluation set
+        test_datasets = eval_set_data_cfg.test_datasets or []
+        if not test_datasets:
+            logger.warning(
+                f"No test datasets in evaluation set '{eval_set_name}'. Skipping."
+            )
+            continue
+
+        # For benchmark evaluation sets, we expect exactly one test dataset per set
+        test_ds_cfg = test_datasets[0]
+
+        # Get metrics from the benchmark evaluation config
+        eval_set_metrics = benchmark_eval_cfg.get_metrics_for_evaluation_set(
+            eval_set_name
+        )
+
         for exp_cfg in eval_cfg.experiments:
-            res = run_experiment(eval_cfg, ds_cfg, exp_cfg, device, save_dir)
+            res = run_experiment(
+                eval_cfg,
+                test_ds_cfg,
+                exp_cfg,
+                eval_set_data_cfg,
+                device,
+                save_dir,
+                eval_set_name,
+                eval_set_metrics,
+            )
             all_results.append(res)
 
             logger.info(
-                "[%s | %s]  probe-test: %s | retrieval: %s",
+                "[%s | %s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
+                eval_set_name,
                 res.dataset_name,
                 res.experiment_name,
                 res.probe_test_metrics,
                 res.retrieval_metrics or "n/a",
+                res.clustering_metrics or "n/a",
             )
 
-    # 4. Write summary
-    summary_path = save_dir / f"summary_{datetime.now()}.txt"
-    with summary_path.open("w") as f:
-        f.write("Experiment Summary\n==================\n\n")
-        for r in all_results:
-            f.write(f"Dataset: {r.dataset_name}\n")
-            f.write(f"Experiment: {r.experiment_name}\n")
-            f.write(f"Train metrics: {r.train_metrics}\n")
-            f.write(f"Validation metrics: {r.val_metrics}\n")
-            f.write(f"Probe test metrics: {r.probe_test_metrics}\n")
-            f.write(f"Retrieval metrics: {r.retrieval_metrics}\n")
-            f.write("-" * 60 + "\n")
-
-    logger.info("Saved summary to %s", summary_path)
-
-    # 5. Create and save summary DataFrame
-    # First, collect all possible metrics from all datasets to ensure consistent columns
-    all_possible_metrics = set()
-    all_possible_val_metrics = set()
-    all_possible_test_metrics = set()
-    all_possible_retrieval_metrics = set()
-
-    # Collect metrics from all results
-    for r in all_results:
-        all_possible_metrics.update(r.train_metrics.keys())
-        all_possible_val_metrics.update(r.val_metrics.keys())
-        all_possible_test_metrics.update(r.probe_test_metrics.keys())
-        all_possible_retrieval_metrics.update(r.retrieval_metrics.keys())
-
-    # Also collect metrics from dataset configurations
-    for ds_cfg in benchmark_cfg.datasets:
-        if hasattr(ds_cfg, "metrics") and ds_cfg.metrics:
-            all_possible_test_metrics.update(ds_cfg.metrics)
-
-    # Add standard retrieval metrics that are always computed when retrieval is enabled
-    if "retrieval" in eval_cfg.eval_modes:
-        all_possible_retrieval_metrics.update(
-            ["retrieval_roc_auc", "retrieval_precision_at_1"]
-        )
-
-    # Add standard training/validation metrics that are always computed
-    all_possible_metrics.update(["loss", "acc"])
-    all_possible_val_metrics.update(["loss", "acc"])
-
-    summary_data = []
-    for r in all_results:
-        # Get training metadata if available
-        training_metadata = pd.DataFrame()
-        for exp_cfg in eval_cfg.experiments:
-            if exp_cfg.run_name == r.experiment_name:
-                if exp_cfg.checkpoint_path:
-                    checkpoint_dir = Path(exp_cfg.checkpoint_path).parent
-                    training_metadata = load_experiment_metadata(checkpoint_dir)
-                break
-
-        # Create summary entry with all possible metrics, using None for missing ones
-        summary_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "dataset_name": r.dataset_name,
-            "experiment_name": r.experiment_name,
-        }
-
-        # Add train metrics with None for missing ones
-        for metric in all_possible_metrics:
-            summary_entry[metric] = r.train_metrics.get(metric, None)
-
-        # Add validation metrics with None for missing ones
-        for metric in all_possible_val_metrics:
-            summary_entry[f"val_{metric}"] = r.val_metrics.get(metric, None)
-
-        # Add test metrics with None for missing ones
-        for metric in all_possible_test_metrics:
-            summary_entry[f"test_{metric}"] = r.probe_test_metrics.get(metric, None)
-
-        # Add retrieval metrics with None for missing ones
-        for metric in all_possible_retrieval_metrics:
-            # Remove the "retrieval_" prefix if it's already there to avoid
-            # double-prefixing
-            metric_name = metric.replace("retrieval_", "")
-            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(
-                metric, None
-            )
-
-        # Add training metadata if available
-        if not training_metadata.empty:
-            # Get the most recent training entry
-            latest_training = training_metadata.iloc[-1]
-            for col in training_metadata.columns:
-                if col not in summary_entry:
-                    summary_entry[f"training_{col}"] = latest_training[col]
-
-        summary_data.append(summary_entry)
-
-    # Create and save DataFrame
-    summary_df = pd.DataFrame(summary_data)
-    summary_df_path = save_dir / f"summary_{datetime.now()}.csv"
-    summary_df.to_csv(summary_df_path, index=False)
-    logger.info("Saved summary DataFrame to %s", summary_df_path)
+    # 5. Create and save summary CSV files
+    create_experiment_summary_csvs(
+        all_results=all_results,
+        eval_cfg=eval_cfg,
+        save_dir=save_dir,
+        config_file_path=str(args.config),
+        benchmark_eval_cfg=benchmark_eval_cfg,
+        evaluation_sets=evaluation_sets,
+        experiments=eval_cfg.experiments,
+    )
 
 
 if __name__ == "__main__":

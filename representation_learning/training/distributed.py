@@ -6,24 +6,10 @@ import logging
 import os
 from typing import Tuple
 
+import torch
 import torch.distributed as dist
 
 logger = logging.getLogger(__name__)
-
-
-# Disable printing when not in master process
-# def suppress_non_master_prints(is_master: bool) -> None:
-#     """
-#     This function disables printing when not in master process
-#     """
-#     builtin_print = builtins.print
-
-#     def print(*args: object, **kwargs: object) -> None:
-#         force = kwargs.pop("force", False)
-#         if is_master or force:
-#             builtin_print(*args, **kwargs)
-
-#     builtins.print = print
 
 
 @contextlib.contextmanager
@@ -190,9 +176,9 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                 world_size=world_size,
                 rank=rank,
             )
-            suppress_non_master_prints(rank == 0)
             is_distributed = True
             logger.info("Distributed training initialized successfully.")
+
         else:
             logger.info(
                 "Single GPU/task detected (world_size=1). "
@@ -293,3 +279,93 @@ def is_main_process() -> bool:
     if dist.is_initialized():
         return dist.get_rank() == 0
     return True  # If not initialized, assume single process
+
+
+def synchronize_tensor(tensor: torch.Tensor) -> torch.Tensor:
+    """Synchronize a scalar tensor across all ranks by summing and averaging.
+
+    Returns
+    -------
+    torch.Tensor
+        The synchronized tensor averaged across all ranks
+    """
+    if not dist.is_available() or not dist.is_initialized():
+        return tensor
+
+    # Ensure tensor is on the correct device and is a scalar
+    if tensor.dim() != 0:
+        tensor = tensor.sum()
+
+    # All-reduce to sum across ranks
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+
+    # Average by world size
+    world_size = dist.get_world_size()
+    tensor = tensor / world_size
+
+    return tensor
+
+
+def synchronize_scalar(value: float, device: torch.device) -> float:
+    """Synchronize a scalar value across all ranks.
+
+    Returns
+    -------
+    float
+        The synchronized scalar value averaged across all ranks
+    """
+    import torch
+
+    tensor = torch.tensor(value, dtype=torch.float32, device=device)
+    synchronized_tensor = synchronize_tensor(tensor)
+    return synchronized_tensor.item()
+
+
+def gather_metrics_from_all_ranks(
+    total_loss: float,
+    total_correct: int,
+    total_samples: int,
+    device: torch.device,
+    is_clip_mode: bool = False,
+    total_correct_a2t: int = 0,
+    total_correct_t2a: int = 0,
+) -> Tuple[float, float]:
+    """Gather and synchronize metrics from all ranks.
+
+    Returns
+    -------
+    Tuple[float, float]
+        A tuple of (average_loss, average_accuracy) synchronized across all ranks
+    """
+    if not dist.is_available() or not dist.is_initialized():
+        if is_clip_mode:
+            avg_acc = (
+                (total_correct_a2t + total_correct_t2a) / 2.0 / total_samples
+                if total_samples > 0
+                else 0.0
+            )
+        else:
+            avg_acc = total_correct / total_samples if total_samples > 0 else 0.0
+        return total_loss / total_samples if total_samples > 0 else 0.0, avg_acc
+
+    # Synchronize metrics across ranks
+    total_loss_sync = synchronize_scalar(total_loss, device)
+    total_samples_sync = synchronize_scalar(total_samples, device)
+
+    if is_clip_mode:
+        total_correct_a2t_sync = synchronize_scalar(total_correct_a2t, device)
+        total_correct_t2a_sync = synchronize_scalar(total_correct_t2a, device)
+        avg_acc = (
+            (total_correct_a2t_sync + total_correct_t2a_sync) / 2.0 / total_samples_sync
+            if total_samples_sync > 0
+            else 0.0
+        )
+    else:
+        total_correct_sync = synchronize_scalar(total_correct, device)
+        avg_acc = (
+            total_correct_sync / total_samples_sync if total_samples_sync > 0 else 0.0
+        )
+
+    avg_loss = total_loss_sync / total_samples_sync if total_samples_sync > 0 else 0.0
+
+    return avg_loss, avg_acc

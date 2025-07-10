@@ -3,11 +3,9 @@
 model_spec:
   name: perch
   pretrained: true  # Use Google's pretrained Perch weights
-  model_size: base  # Options: "base", "large"
-  embedding_dim: 1024  # Dimension of feature embeddings
   device: cuda
   audio_config:
-    sample_rate: 32000  # Perch typically uses 32kHz
+    sample_rate: 32000  # Perch uses 32kHz
     representation: mel_spectrogram
     normalize: true
     target_length_seconds: 5

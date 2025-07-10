@@ -158,16 +158,21 @@ class EATHFModel(ModelBase):
             model_name, trust_remote_code=True
         ).to(self.device)
         # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        load_fairseq_weights(
-            self.backbone,
-            # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
-            # "checkpoint_22_920000.pt"
-            "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/checkpoint_last.pt",
-        )
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
+        #     # "checkpoint_22_920000.pt"
+        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/
+        #     checkpoint_last.pt",
+        # )
         # load_fairseq_weights(
         #     self.backbone,
         #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"
         # )
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint30.pt"
+        # ) # 48khz
 
         embed_dim = getattr(self.backbone.config, "hidden_size", 768)
 
@@ -185,6 +190,7 @@ class EATHFModel(ModelBase):
         self,
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
+        framewise_embeddings: bool = False,
     ) -> torch.Tensor:  # noqa: D401 – keep signature consistent
         """Forward pass through the EAT model.
 
@@ -217,6 +223,8 @@ class EATHFModel(ModelBase):
         # )  # type: ignore[arg-type]
         # feats: torch.Tensor = backbone_out["x"]  # (B, L, D)
         feats = self.backbone.extract_features(spec)
+        if framewise_embeddings:
+            return feats[:, 1:]  # drop the cls embedding
 
         # 4) Pool patch embeddings → clip-level vector
         if self.pooling == "cls":

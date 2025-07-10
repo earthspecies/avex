@@ -4,12 +4,14 @@ Factory module for creating metric instances.
 
 from typing import Optional, Type, Union
 
+from representation_learning.metrics.beans_metrics import (
+    MeanAveragePrecision,
+)
 from representation_learning.metrics.sklearn_metrics import (
     ROCAUC,
     Accuracy,
     BalancedAccuracy,
     BinaryF1Score,
-    MeanAveragePrecision,
     MulticlassBinaryF1Score,
 )
 
@@ -35,6 +37,7 @@ def get_metric_class(
         "binary_f1": BinaryF1Score,
         "multiclass_f1": lambda: MulticlassBinaryF1Score(num_classes),
         "map": MeanAveragePrecision,
+        "mAP": MeanAveragePrecision,  # Support both map and mAP
         "roc_auc": ROCAUC,
     }
 

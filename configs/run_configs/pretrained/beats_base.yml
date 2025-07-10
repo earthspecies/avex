@@ -15,7 +15,7 @@ model_spec:
 dataset_config: configs/data_configs/data_base.yml
 
 # Output directory for checkpoints and logs
-output_dir: "./beats_baseline_full"
+output_dir: "./runs/beats_baseline_full"
 
 label_type: supervised
 

@@ -1,0 +1,329 @@
+benchmark_name: "benchmark_id_repertoire_with_clustering"
+
+
+evaluation_sets:
+  # =====================================================
+  # INDIVIDUAL ID CLASSIFICATION TASKS
+  # =====================================================
+
+  - name: "zebra_finch_bird_id"
+    train: &zebra_finch_train
+      dataset_name: "zebra_finch_julie_elie"
+      split: "train"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+          label_map: {'BlaBla0506': 0, 'BlaLbl8026': 1, 'BluRas07dd': 2, 'BluRas61dd': 3, 'GraGra0201': 4, 'GraGre0813': 5, 'GraGre1001': 6, 'GraLbl0457': 7, 'GraRas1500': 8, 'GraRas1600': 9, 'GreGre2522': 10, 'GreGre6364': 11, 'GreOra1817': 12, 'GreRas2400': 13, 'GreWhi1242': 14, 'HPiHPi4748': 15, 'HpiGra1004': 16, 'HpiHpi4748': 17, 'LblBla4419': 18, 'LblBla4548': 19, 'LblBlu1630': 20, 'LblBlu1729': 21, 'LblBlu1927': 22, 'LblBlu2028': 23, 'LblBlu6243': 24, 'LblBlu6379': 25, 'LblBlu6680': 26, 'LblGre0000': 27, 'LblGre0001': 28, 'LblRas1800': 29, 'LblRed0613': 30, 'PurRas20dd': 31, 'RedRas3600': 32, 'Unknown': 33, 'Unknown000': 34, 'Unknown00F': 35, 'Unknown01F': 36, 'WhiBlu0112': 37, 'WhiBlu3414': 38, 'WhiBlu3513': 39, 'WhiBlu3615': 40, 'WhiBlu4818': 41, 'WhiBlu4917': 42, 'WhiBlu5698': 43, 'WhiGra0114': 44, 'WhiLbl0010': 45, 'WhiRas44dd': 46, 'WhiWhi1415': 47, 'YelGre5275': 48, 'YelOra2575': 49}
+
+    validation: &zebra_finch_val
+      dataset_name: "zebra_finch_julie_elie"
+      split: "val"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+          label_map: {'BlaBla0506': 0, 'BlaLbl8026': 1, 'BluRas07dd': 2, 'BluRas61dd': 3, 'GraGra0201': 4, 'GraGre0813': 5, 'GraGre1001': 6, 'GraLbl0457': 7, 'GraRas1500': 8, 'GraRas1600': 9, 'GreGre2522': 10, 'GreGre6364': 11, 'GreOra1817': 12, 'GreRas2400': 13, 'GreWhi1242': 14, 'HPiHPi4748': 15, 'HpiGra1004': 16, 'HpiHpi4748': 17, 'LblBla4419': 18, 'LblBla4548': 19, 'LblBlu1630': 20, 'LblBlu1729': 21, 'LblBlu1927': 22, 'LblBlu2028': 23, 'LblBlu6243': 24, 'LblBlu6379': 25, 'LblBlu6680': 26, 'LblGre0000': 27, 'LblGre0001': 28, 'LblRas1800': 29, 'LblRed0613': 30, 'PurRas20dd': 31, 'RedRas3600': 32, 'Unknown': 33, 'Unknown000': 34, 'Unknown00F': 35, 'Unknown01F': 36, 'WhiBlu0112': 37, 'WhiBlu3414': 38, 'WhiBlu3513': 39, 'WhiBlu3615': 40, 'WhiBlu4818': 41, 'WhiBlu4917': 42, 'WhiBlu5698': 43, 'WhiGra0114': 44, 'WhiLbl0010': 45, 'WhiRas44dd': 46, 'WhiWhi1415': 47, 'YelGre5275': 48, 'YelOra2575': 49}
+
+    test: &zebra_finch_test
+      dataset_name: "zebra_finch_julie_elie"
+      split: "test"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+          label_map: {'BlaBla0506': 0, 'BlaLbl8026': 1, 'BluRas07dd': 2, 'BluRas61dd': 3, 'GraGra0201': 4, 'GraGre0813': 5, 'GraGre1001': 6, 'GraLbl0457': 7, 'GraRas1500': 8, 'GraRas1600': 9, 'GreGre2522': 10, 'GreGre6364': 11, 'GreOra1817': 12, 'GreRas2400': 13, 'GreWhi1242': 14, 'HPiHPi4748': 15, 'HpiGra1004': 16, 'HpiHpi4748': 17, 'LblBla4419': 18, 'LblBla4548': 19, 'LblBlu1630': 20, 'LblBlu1729': 21, 'LblBlu1927': 22, 'LblBlu2028': 23, 'LblBlu6243': 24, 'LblBlu6379': 25, 'LblBlu6680': 26, 'LblGre0000': 27, 'LblGre0001': 28, 'LblRas1800': 29, 'LblRed0613': 30, 'PurRas20dd': 31, 'RedRas3600': 32, 'Unknown': 33, 'Unknown000': 34, 'Unknown00F': 35, 'Unknown01F': 36, 'WhiBlu0112': 37, 'WhiBlu3414': 38, 'WhiBlu3513': 39, 'WhiBlu3615': 40, 'WhiBlu4818': 41, 'WhiBlu4917': 42, 'WhiBlu5698': 43, 'WhiGra0114': 44, 'WhiLbl0010': 45, 'WhiRas44dd': 46, 'WhiWhi1415': 47, 'YelGre5275': 48, 'YelOra2575': 49}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "pipit_id_within_year"
+    train:
+      dataset_name: "pipit_id"
+      split: "train_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    validation:
+      dataset_name: "pipit_id"
+      split: "train_within_year"  # Use same as train since only train/test available
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    test:
+      dataset_name: "pipit_id"
+      split: "test_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "pipit_id_across_year"
+    train:
+      dataset_name: "pipit_id"
+      split: "train_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    validation:
+      dataset_name: "pipit_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    test:
+      dataset_name: "pipit_id"
+      split: "test_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "chiffchaff_id_within_year"
+    train:
+      dataset_name: "chiffchaff_id"
+      split: "train_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'PC1101': 0, 'PC1102': 1, 'PC1103': 2, 'PC1104': 3, 'PC1105': 4, 'PC1106': 5, 'PC1107': 6, 'PC1108': 7, 'PC1109': 8, 'PC1110': 9, 'PC1111': 10, 'PC1112': 11, 'PC1113': 12}
+
+    validation:
+      dataset_name: "chiffchaff_id"
+      split: "train_within_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'PC1101': 0, 'PC1102': 1, 'PC1103': 2, 'PC1104': 3, 'PC1105': 4, 'PC1106': 5, 'PC1107': 6, 'PC1108': 7, 'PC1109': 8, 'PC1110': 9, 'PC1111': 10, 'PC1112': 11, 'PC1113': 12}
+
+    test:
+      dataset_name: "chiffchaff_id"
+      split: "test_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'PC1101': 0, 'PC1102': 1, 'PC1103': 2, 'PC1104': 3, 'PC1105': 4, 'PC1106': 5, 'PC1107': 6, 'PC1108': 7, 'PC1109': 8, 'PC1110': 9, 'PC1111': 10, 'PC1112': 11, 'PC1113': 12}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "chiffchaff_id_across_year"
+    train:
+      dataset_name: "chiffchaff_id"
+      split: "train_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    validation:
+      dataset_name: "chiffchaff_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    test:
+      dataset_name: "chiffchaff_id"
+      split: "test_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "littleowl_id_across_year"
+    train:
+      dataset_name: "littleowl_id"
+      split: "train_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    validation:
+      dataset_name: "littleowl_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    test:
+      dataset_name: "littleowl_id"
+      split: "test_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  # - name: "giant_otters_individual_id"
+  #   train:
+  #     dataset_name: "giant_otters"
+  #     split: "test"  # Only test split available
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "Individual"
+  #         override: true
+  #         label_map: {'?Firecat?': 0, '?Murcielago?': 1, 'Alua': 2, 'Amana': 3, 'Beni': 4, 'Blanka': 5, 'Chelsea': 6, 'Dagget': 7, 'Diente': 8, 'Firecat': 9, 'Frida': 10, 'Frita': 11, 'Gordito': 12, 'Iny': 13, 'Kurt': 14, 'Loudmouth': 15, 'Madelaine': 16, 'Madidi': 17, 'Maku': 18, 'Maldito': 19, 'Maldonado': 20, 'Maldondado': 21, 'Malfoy': 22, 'Mantis': 23, 'Maria': 24, 'Matias': 25, 'Mordy': 26, 'Murcielago': 27, 'Naipi': 28, 'Norbert': 29, 'Pablo(Pierre)': 30, 'Pauto': 31, 'Perla': 32, 'Roto': 33, 'Sammy': 34, 'Tacutu': 35, 'Tarubo': 36, 'Theo': 37, 'Tina?': 38, 'Tuparro/Felipe': 39, 'Voldemort': 40, 'Ziggy': 41, 'unknown': 42}
+
+  #   validation:
+  #     dataset_name: "giant_otters"
+  #     split: "test"  # Use same as train since only test available
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "Individual"
+  #         override: true
+  #         label_map: {'?Firecat?': 0, '?Murcielago?': 1, 'Alua': 2, 'Amana': 3, 'Beni': 4, 'Blanka': 5, 'Chelsea': 6, 'Dagget': 7, 'Diente': 8, 'Firecat': 9, 'Frida': 10, 'Frita': 11, 'Gordito': 12, 'Iny': 13, 'Kurt': 14, 'Loudmouth': 15, 'Madelaine': 16, 'Madidi': 17, 'Maku': 18, 'Maldito': 19, 'Maldonado': 20, 'Maldondado': 21, 'Malfoy': 22, 'Mantis': 23, 'Maria': 24, 'Matias': 25, 'Mordy': 26, 'Murcielago': 27, 'Naipi': 28, 'Norbert': 29, 'Pablo(Pierre)': 30, 'Pauto': 31, 'Perla': 32, 'Roto': 33, 'Sammy': 34, 'Tacutu': 35, 'Tarubo': 36, 'Theo': 37, 'Tina?': 38, 'Tuparro/Felipe': 39, 'Voldemort': 40, 'Ziggy': 41, 'unknown': 42}
+
+  #   test:
+  #     dataset_name: "giant_otters"
+  #     split: "test"
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "Individual"
+  #         override: true
+  #         label_map: {'?Firecat?': 0, '?Murcielago?': 1, 'Alua': 2, 'Amana': 3, 'Beni': 4, 'Blanka': 5, 'Chelsea': 6, 'Dagget': 7, 'Diente': 8, 'Firecat': 9, 'Frida': 10, 'Frita': 11, 'Gordito': 12, 'Iny': 13, 'Kurt': 14, 'Loudmouth': 15, 'Madelaine': 16, 'Madidi': 17, 'Maku': 18, 'Maldito': 19, 'Maldonado': 20, 'Maldondado': 21, 'Malfoy': 22, 'Mantis': 23, 'Maria': 24, 'Matias': 25, 'Mordy': 26, 'Murcielago': 27, 'Naipi': 28, 'Norbert': 29, 'Pablo(Pierre)': 30, 'Pauto': 31, 'Perla': 32, 'Roto': 33, 'Sammy': 34, 'Tacutu': 35, 'Tarubo': 36, 'Theo': 37, 'Tina?': 38, 'Tuparro/Felipe': 39, 'Voldemort': 40, 'Ziggy': 41, 'unknown': 42}
+
+  #   metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  # =====================================================
+  # VOCAL REPERTOIRE CLASSIFICATION TASKS
+  # =====================================================
+
+  - name: "zebra_finch_call_type"
+    train:
+      <<: *zebra_finch_train
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_1"
+          override: true
+          label_map: {'alarm': 0, 'contact': 1, 'distress': 2, 'nest': 3, 'unknown': 4}
+
+    validation:
+      <<: *zebra_finch_val
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_1"
+          override: true
+          label_map: {'alarm': 0, 'contact': 1, 'distress': 2, 'nest': 3, 'unknown': 4}
+
+    test:
+      <<: *zebra_finch_test
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_1"
+          override: true
+          label_map: {'alarm': 0, 'contact': 1, 'distress': 2, 'nest': 3, 'unknown': 4}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "zebra_finch_call_type_id"
+    train:
+      <<: *zebra_finch_train
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_id"
+          override: true
+          label_map: {'01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5, '07': 6, '08': 7, '09': 8, '10': 9, '11': 10, '12': 11, '13': 12, '14': 13, '15': 14, '16': 15, '17': 16, '18': 17, '19': 18, '20': 19, '21': 20, '22': 21, '23': 22, '24': 23, '25': 24, '26': 25, '27': 26, '28': 27, '29': 28, '30': 29, '31': 30, '32': 31, '33': 32, '34': 33, 'Ag': 34, 'Be': 35, 'DC': 36, 'Di': 37, 'LT': 38, 'Ne': 39, 'So': 40, 'Te': 41, 'Th': 42, 'Tu': 43, 'WC': 44, 'Wh': 45}
+
+    validation:
+      <<: *zebra_finch_val
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_id"
+          override: true
+          label_map: {'01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5, '07': 6, '08': 7, '09': 8, '10': 9, '11': 10, '12': 11, '13': 12, '14': 13, '15': 14, '16': 15, '17': 16, '18': 17, '19': 18, '20': 19, '21': 20, '22': 21, '23': 22, '24': 23, '25': 24, '26': 25, '27': 26, '28': 27, '29': 28, '30': 29, '31': 30, '32': 31, '33': 32, '34': 33, 'Ag': 34, 'Be': 35, 'DC': 36, 'Di': 37, 'LT': 38, 'Ne': 39, 'So': 40, 'Te': 41, 'Th': 42, 'Tu': 43, 'WC': 44, 'Wh': 45}
+
+    test:
+      <<: *zebra_finch_test
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type_id"
+          override: true
+          label_map: {'01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5, '07': 6, '08': 7, '09': 8, '10': 9, '11': 10, '12': 11, '13': 12, '14': 13, '15': 14, '16': 15, '17': 16, '18': 17, '19': 18, '20': 19, '21': 20, '22': 21, '23': 22, '24': 23, '25': 24, '26': 25, '27': 26, '28': 27, '29': 28, '30': 29, '31': 30, '32': 31, '33': 32, '34': 33, 'Ag': 34, 'Be': 35, 'DC': 36, 'Di': 37, 'LT': 38, 'Ne': 39, 'So': 40, 'Te': 41, 'Th': 42, 'Tu': 43, 'WC': 44, 'Wh': 45}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "giant_otters_vocalization"
+    train:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "vocalization"
+          override: true
+          label_map: {'Bark': 0, 'Bark-like vocalization': 1, 'Begging Scream': 2, 'Begging call': 3, 'Begging call-like vocalization': 4, 'Begging scream gradat': 5, 'Close Call': 6, 'Contact Call': 7, 'Contact call gradation': 8, 'Contact call-like vocalization': 9, 'Distress call 1': 10, 'Distress call 2': 11, 'Growl': 12, 'Hah!': 13, 'High whistle': 14, 'Hum': 15, 'Hum gradation': 16, 'Hum gradation-like vocalization': 17, 'Hum short': 18, 'Hum-like vocalization': 19, 'Isolation Call': 20, 'Low whistle': 21, 'Scream Ascending': 22, 'Snort': 23, 'Suckling Call': 24, 'Suckling call': 25, 'Wavering Scream': 26, 'Whine': 27, 'Whistle': 28, 'Whistle Double': 29, 'under water call': 30, 'whine': 31}
+
+    validation:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "vocalization"
+          override: true
+          label_map: {'Bark': 0, 'Bark-like vocalization': 1, 'Begging Scream': 2, 'Begging call': 3, 'Begging call-like vocalization': 4, 'Begging scream gradat': 5, 'Close Call': 6, 'Contact Call': 7, 'Contact call gradation': 8, 'Contact call-like vocalization': 9, 'Distress call 1': 10, 'Distress call 2': 11, 'Growl': 12, 'Hah!': 13, 'High whistle': 14, 'Hum': 15, 'Hum gradation': 16, 'Hum gradation-like vocalization': 17, 'Hum short': 18, 'Hum-like vocalization': 19, 'Isolation Call': 20, 'Low whistle': 21, 'Scream Ascending': 22, 'Snort': 23, 'Suckling Call': 24, 'Suckling call': 25, 'Wavering Scream': 26, 'Whine': 27, 'Whistle': 28, 'Whistle Double': 29, 'under water call': 30, 'whine': 31}
+
+    test:
+      dataset_name: "giant_otters"
+      split: "test"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "vocalization"
+          override: true
+          label_map: {'Bark': 0, 'Bark-like vocalization': 1, 'Begging Scream': 2, 'Begging call': 3, 'Begging call-like vocalization': 4, 'Begging scream gradat': 5, 'Close Call': 6, 'Contact Call': 7, 'Contact call gradation': 8, 'Contact call-like vocalization': 9, 'Distress call 1': 10, 'Distress call 2': 11, 'Growl': 12, 'Hah!': 13, 'High whistle': 14, 'Hum': 15, 'Hum gradation': 16, 'Hum gradation-like vocalization': 17, 'Hum short': 18, 'Hum-like vocalization': 19, 'Isolation Call': 20, 'Low whistle': 21, 'Scream Ascending': 22, 'Snort': 23, 'Suckling Call': 24, 'Suckling call': 25, 'Wavering Scream': 26, 'Whine': 27, 'Whistle': 28, 'Whistle Double': 29, 'under water call': 30, 'whine': 31}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]

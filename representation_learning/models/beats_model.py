@@ -16,7 +16,7 @@ BEATS_PRETRAINED_PATH = (
 #         "gs://representation-learning/pretrained/beats_pretrained.pt"
 #     )
 
-BEATS_PRETRAINED_PATH_NATURELM = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl.pt"
+BEATS_PRETRAINED_PATH_NATURELM = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 
 
 class Model(ModelBase):
@@ -50,6 +50,7 @@ class Model(ModelBase):
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
         return_features_only: bool = False,
+        use_naturelm: bool = False,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
@@ -60,14 +61,19 @@ class Model(ModelBase):
         beats_ckpt = universal_torch_load(
             BEATS_PRETRAINED_PATH, cache_mode="use", map_location="cpu"
         )
+        self.use_naturelm = use_naturelm
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
-        beats_ckpt_naturelm = universal_torch_load(
-            BEATS_PRETRAINED_PATH_NATURELM, cache_mode="use", map_location="cpu"
-        )
+        print(beats_cfg)
+        if use_naturelm:
+            beats_ckpt_naturelm = universal_torch_load(
+                BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu"
+            )
+        else:
+            beats_ckpt_naturelm = beats_ckpt["model"]
+        # beats_ckpt_naturelm = beats_ckpt
         self.backbone = BEATs(beats_cfg)
         self.backbone.to(device)
-        # print(beats_ckpt_naturelm.keys())
-        self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
+        self.backbone.load_state_dict(beats_ckpt_naturelm)
 
         # ------------------------------------------------------------------
         # 2.  Optional classifier for supervised training
@@ -128,15 +134,15 @@ class Model(ModelBase):
         else:
             return self.classifier(pooled)
 
-    def extract_embeddings(
-        self,
-        x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
-        *,
-        padding_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    def extract_embeddings(self, x: torch.Tensor, layers: List[str]) -> torch.Tensor:
         self._return_features_only = True
         if isinstance(x, dict):
             return self.forward(x["raw_wav"], x["padding_mask"])
         else:
-            return self.forward(x, padding_mask)
+            return self.forward(x)
+
+    def process_audio(self, x: torch.Tensor) -> torch.Tensor:
+        audio = super().process_audio(x)
+        if self.use_naturelm:
+            audio = torch.clamp(audio, -1.0, 1.0)
+        return audio

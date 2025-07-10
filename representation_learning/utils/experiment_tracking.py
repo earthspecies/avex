@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -110,6 +110,7 @@ def save_evaluation_metadata(
     val_metrics: Dict[str, float],
     probe_test_metrics: Dict[str, float],
     retrieval_metrics: Dict[str, float],
+    clustering_metrics: Dict[str, float],
     eval_config: Dict[str, Any],
     training_metadata: Optional[pd.DataFrame] = None,
     run_config: Optional[Dict[str, Any]] = None,
@@ -134,6 +135,8 @@ def save_evaluation_metadata(
         Test metrics from linear probe
     retrieval_metrics : Dict[str, float]
         Retrieval metrics
+    clustering_metrics : Dict[str, float]
+        Clustering metrics
     eval_config : Dict[str, Any]
         Evaluation configuration
     training_metadata : Optional[pd.DataFrame]
@@ -156,6 +159,17 @@ def save_evaluation_metadata(
         "roc_auc",
     }
     all_possible_retrieval_metrics = {"retrieval_roc_auc", "retrieval_precision_at_1"}
+    all_possible_clustering_metrics = {
+        "clustering_ari",
+        "clustering_nmi",
+        "clustering_v_measure",
+        "clustering_silhouette",
+        "clustering_best_k",
+        "clustering_ari_best",
+        "clustering_nmi_best",
+        "clustering_v_measure_best",
+        "clustering_silhouette_best",
+    }
 
     # Create metadata entry with all possible metrics, using None for missing ones
     metadata = {
@@ -182,6 +196,13 @@ def save_evaluation_metadata(
         # Remove the "retrieval_" prefix if it's already there to avoid double-prefixing
         metric_name = metric.replace("retrieval_", "")
         metadata[f"retrieval_{metric_name}"] = retrieval_metrics.get(metric, None)
+
+    # Add clustering metrics with None for missing ones
+    for metric in all_possible_clustering_metrics:
+        # Remove the "clustering_" prefix if it's already there to avoid
+        # double-prefixing
+        metric_name = metric.replace("clustering_", "")
+        metadata[f"clustering_{metric_name}"] = clustering_metrics.get(metric, None)
 
     metadata["eval_config"] = json.dumps(
         eval_config
@@ -230,6 +251,260 @@ def load_evaluation_metadata(output_dir: Path) -> pd.DataFrame:
     if not metadata_file.exists():
         return pd.DataFrame()
     return pd.read_csv(metadata_file)
+
+
+def create_experiment_summary_csvs(
+    all_results: List[Any],  # ExperimentResult from run_evaluate.py
+    eval_cfg: Any,  # EvaluateConfig  # noqa: ANN401
+    save_dir: Path,
+    config_file_path: str,
+    benchmark_eval_cfg: Any,  # noqa: ANN401
+    evaluation_sets: List[tuple],
+    experiments: List[Any],
+) -> None:
+    """Create and save experiment summary DataFrames and CSV files.
+
+    This function handles:
+    1. Collecting all possible metrics from results and configs
+    2. Creating full summary DataFrame with all metrics
+    3. Creating simple summary DataFrame with key metrics only
+    4. Saving to local summary CSV
+    5. Appending to global results CSV (if configured)
+
+    Parameters
+    ----------
+    all_results : List[ExperimentResult]
+        List of experiment results
+    eval_cfg : EvaluateConfig
+        Evaluation configuration
+    save_dir : Path
+        Directory to save results
+    config_file_path : str
+        Path to the config file used
+    benchmark_eval_cfg : BenchmarkEvaluationConfig
+        Benchmark evaluation configuration
+    evaluation_sets : List[tuple]
+        List of (eval_set_name, eval_set_data_cfg) tuples
+    experiments : List[ExperimentConfig]
+        List of experiment configurations
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # First, collect all possible metrics from all datasets to ensure consistent columns
+    all_possible_metrics = set()
+    all_possible_val_metrics = set()
+    all_possible_test_metrics = set()
+    all_possible_retrieval_metrics = set()
+    all_possible_clustering_metrics = set()
+
+    # Collect metrics from all results
+    for r in all_results:
+        all_possible_metrics.update(r.train_metrics.keys())
+        all_possible_val_metrics.update(r.val_metrics.keys())
+        all_possible_test_metrics.update(r.probe_test_metrics.keys())
+        all_possible_retrieval_metrics.update(r.retrieval_metrics.keys())
+        all_possible_clustering_metrics.update(r.clustering_metrics.keys())
+
+    # Also collect metrics from dataset configurations
+    for eval_set_name, _eval_set_data_cfg in evaluation_sets:
+        eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
+        all_possible_test_metrics.update(eval_set.metrics)
+
+    # Add standard retrieval metrics that are always computed when retrieval is enabled
+    if "retrieval" in eval_cfg.eval_modes:
+        all_possible_retrieval_metrics.update(
+            ["retrieval_roc_auc", "retrieval_precision_at_1"]
+        )
+
+    # Add standard clustering metrics that are always computed when clustering
+    # is enabled
+    if "clustering" in eval_cfg.eval_modes:
+        all_possible_clustering_metrics.update(
+            [
+                "clustering_ari",
+                "clustering_nmi",
+                "clustering_v_measure",
+                "clustering_silhouette",
+                "clustering_best_k",
+                "clustering_ari_best",
+                "clustering_nmi_best",
+                "clustering_v_measure_best",
+                "clustering_silhouette_best",
+            ]
+        )
+
+    # Add standard training/validation metrics that are always computed
+    all_possible_metrics.update(["loss", "acc"])
+    all_possible_val_metrics.update(["loss", "acc"])
+
+    summary_data = []
+    for r in all_results:
+        # Get training metadata if available
+        training_metadata = pd.DataFrame()
+        for exp_cfg in experiments:
+            if exp_cfg.run_name == r.experiment_name:
+                if exp_cfg.checkpoint_path:
+                    checkpoint_dir = Path(exp_cfg.checkpoint_path).parent
+                    training_metadata = load_experiment_metadata(checkpoint_dir)
+                break
+
+        # Create summary entry with all possible metrics, using None for missing ones
+        summary_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "dataset_name": r.dataset_name,
+            "experiment_name": r.experiment_name,
+            "evaluation_dataset_name": r.evaluation_dataset_name,
+        }
+
+        # Add train metrics with None for missing ones
+        for metric in all_possible_metrics:
+            summary_entry[metric] = r.train_metrics.get(metric, None)
+
+        # Add validation metrics with None for missing ones
+        for metric in all_possible_val_metrics:
+            summary_entry[f"val_{metric}"] = r.val_metrics.get(metric, None)
+
+        # Add test metrics with None for missing ones
+        for metric in all_possible_test_metrics:
+            summary_entry[f"test_{metric}"] = r.probe_test_metrics.get(metric, None)
+
+        # Add retrieval metrics with None for missing ones
+        for metric in all_possible_retrieval_metrics:
+            # Remove the "retrieval_" prefix if it's already there to avoid
+            # double-prefixing
+            metric_name = metric.replace("retrieval_", "")
+            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(
+                metric, None
+            )
+
+        # Add clustering metrics with None for missing ones
+        for metric in all_possible_clustering_metrics:
+            # Remove the "clustering_" prefix if it's already there to avoid
+            # double-prefixing
+            metric_name = metric.replace("clustering_", "")
+            summary_entry[f"clustering_{metric_name}"] = r.clustering_metrics.get(
+                metric, None
+            )
+
+        # Add training metadata if available
+        if not training_metadata.empty:
+            # Get the most recent training entry
+            latest_training = training_metadata.iloc[-1]
+            for col in training_metadata.columns:
+                if col not in summary_entry:
+                    summary_entry[f"training_{col}"] = latest_training[col]
+
+        summary_data.append(summary_entry)
+
+    # Create and save DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    summary_df_path = save_dir / f"summary_{datetime.now()}.csv"
+    summary_jsonl_path = save_dir / f"summary_{datetime.now()}.jsonl"
+    # quoting=1 is QUOTE_ALL for proper CSV escaping
+    summary_df.to_csv(summary_df_path, index=False, quoting=1, escapechar="\\")
+    summary_df.to_json(summary_jsonl_path, orient="records", lines=True)
+    logger.info("Saved summary DataFrame to %s", summary_df_path)
+    logger.info("Saved summary JSONL to %s", summary_jsonl_path)
+
+    # Append to global results CSV if specified
+    if eval_cfg.results_csv_path:
+        results_csv_path = Path(eval_cfg.results_csv_path).expanduser()
+
+        # Add some additional metadata for the global CSV
+        global_summary_data = []
+        for entry in summary_data:
+            global_entry = entry.copy()
+            global_entry["config_file"] = config_file_path
+            global_entry["save_dir"] = str(save_dir)
+            global_summary_data.append(global_entry)
+
+        global_summary_df = pd.DataFrame(global_summary_data)
+
+        # Check if the file exists to determine if we need headers
+        file_exists = results_csv_path.exists()
+
+        # Create parent directory if it doesn't exist
+        results_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Append to the file (or create it with headers if it doesn't exist)
+        global_summary_df.to_csv(
+            results_csv_path,
+            mode="a" if file_exists else "w",
+            header=not file_exists,
+            index=False,
+            quoting=1,  # QUOTE_ALL to properly escape JSON and other special content
+            escapechar="\\",
+        )
+
+        # Also save as JSONL
+        results_jsonl_path = results_csv_path.with_suffix(".jsonl")
+
+        # For JSONL, we always append (no headers needed)
+        with open(results_jsonl_path, "a") as f:
+            global_summary_df.to_json(f, orient="records", lines=True)
+
+        logger.info("Appended results to global CSV: %s", results_csv_path)
+        logger.info("Appended results to global JSONL: %s", results_jsonl_path)
+
+    # Create simple CSV with just model name, date, dataset, and test metrics
+    if eval_cfg.results_csv_path:
+        # Derive simple CSV name from all_results CSV name
+        results_path = Path(eval_cfg.results_csv_path).expanduser()
+        simple_csv_path = results_path.parent / (
+            results_path.stem + "_simple" + results_path.suffix
+        )
+    else:
+        # Use a default name in the save_dir
+        simple_csv_path = (
+            save_dir / f"simple_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
+
+    # Create simple summary data
+    simple_summary_data = []
+    for entry in summary_data:
+        simple_entry = {
+            "model_name": entry["experiment_name"],
+            "date": entry["timestamp"],
+            "dataset": entry.get("evaluation_dataset_name") or entry["dataset_name"],
+        }
+
+        # Add all test metrics (those that start with "test_")
+        for key, value in entry.items():
+            if key.startswith("test_") and value is not None:
+                simple_entry[key] = value
+
+        simple_summary_data.append(simple_entry)
+
+    # Create and save simple DataFrame
+    simple_summary_df = pd.DataFrame(simple_summary_data)
+
+    # Check if the simple file exists to determine if we need headers
+    simple_file_exists = simple_csv_path.exists()
+
+    # Create parent directory if it doesn't exist
+    simple_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Append to the simple file (or create it with headers if it doesn't exist)
+    simple_summary_df.to_csv(
+        simple_csv_path,
+        mode="a" if simple_file_exists else "w",
+        header=not simple_file_exists,
+        index=False,
+        quoting=1,  # QUOTE_ALL
+        escapechar="\\",
+    )
+
+    # Also save as JSONL
+    simple_jsonl_path = simple_csv_path.with_suffix(".jsonl")
+
+    # For JSONL, we always append (no headers needed)
+    with open(simple_jsonl_path, "a") as f:
+        simple_summary_df.to_json(f, orient="records", lines=True)
+
+    logger.info("Saved simple results CSV: %s", simple_csv_path)
+    logger.info("Saved simple results JSONL: %s", simple_jsonl_path)
 
 
 def parse_config_string(config_str: str) -> Dict[str, Any]:
@@ -436,107 +711,3 @@ def get_or_create_experiment_metadata(
         return pd.read_csv(metadata_file)
     else:
         return create_initial_experiment_metadata(output_dir, config, checkpoint_name)
-
-
-class ExperimentLogger:
-    """Logger for tracking experiment metrics and metadata."""
-
-    def __init__(self, output_dir: Path, config: RunConfig) -> None:
-        """Initialize the experiment logger.
-
-        Parameters
-        ----------
-        output_dir : Path
-            Directory to save experiment logs
-        config : RunConfig
-            Training configuration
-        """
-        self.output_dir = output_dir
-        self.config = config
-        self.metadata_dir = output_dir / "metadata"
-        self.metadata_dir.mkdir(parents=True, exist_ok=True)
-
-    @classmethod
-    def from_config(cls, config: RunConfig) -> ExperimentLogger:
-        """Create an ExperimentLogger from a config.
-
-        Parameters
-        ----------
-        config : RunConfig
-            Training configuration
-
-        Returns
-        -------
-        ExperimentLogger
-            Initialized experiment logger
-        """
-        output_dir = Path(config.output_dir)
-        return cls(output_dir=output_dir, config=config)
-
-    def log_metrics(self, metrics: Dict[str, float], step: int) -> None:
-        """Log metrics for the current step.
-
-        Parameters
-        ----------
-        metrics : Dict[str, float]
-            Dictionary of metric names and values
-        step : int
-            Current training step
-        """
-        metrics_file = self.metadata_dir / "metrics.csv"
-
-        # Add timestamp and step
-        entry = {"timestamp": datetime.now().isoformat(), "step": step, **metrics}
-
-        # Convert to DataFrame
-        df = pd.DataFrame([entry])
-
-        # Save to CSV
-        if metrics_file.exists():
-            df.to_csv(metrics_file, mode="a", header=False, index=False)
-        else:
-            df.to_csv(metrics_file, index=False)
-
-    def log_checkpoint(
-        self,
-        checkpoint_name: str,
-        metrics: Optional[Dict[str, float]] = None,
-        is_best: bool = False,
-        is_final: bool = False,
-    ) -> None:
-        """Log checkpoint metadata.
-
-        Parameters
-        ----------
-        checkpoint_name : str
-            Name of the checkpoint file
-        metrics : Optional[Dict[str, float]], optional
-            Current metrics, by default None
-        is_best : bool, optional
-            Whether this is the best checkpoint, by default False
-        is_final : bool, optional
-            Whether this is the final checkpoint, by default False
-        """
-        save_experiment_metadata(
-            output_dir=self.output_dir,
-            config=self.config,
-            checkpoint_name=checkpoint_name,
-            metrics=metrics,
-            is_best=is_best,
-            is_final=is_final,
-        )
-
-    def get_latest_metrics(self) -> pd.DataFrame:
-        """Get the latest metrics from the log.
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame containing the latest metrics
-        """
-        metrics_file = self.metadata_dir / "metrics.csv"
-        if not metrics_file.exists():
-            return pd.DataFrame()
-
-        df = pd.read_csv(metrics_file)
-        return df.iloc[-1] if not df.empty else pd.DataFrame()

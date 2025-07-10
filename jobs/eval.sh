@@ -8,5 +8,7 @@
 #SBATCH --cpus-per-gpu=10
 
 cd ~/representation-learning
+uv tool install keyring --with keyrings.google-artifactregistry-auth
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/test.yml
+srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_model/efficientnet_beans.yml
+# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/eat_hf_48khz.yml

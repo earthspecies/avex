@@ -31,11 +31,11 @@ dependencies = [
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
-  "transformers==4.51",
+  "transformers",
   "h5py>=3.13.0",
   "semver>=3.0.4",
   "esp-data>=1.1.1",
-  "tensorflow>=2.19.0",
+  "tensorflow==2.17.0",
   "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
@@ -62,7 +62,6 @@ explicit = true
 
 [tool.uv.sources]
 esp-data = { index = "esp-pypi" }
-transformers = { git = "https://github.com/huggingface/transformers" }
 
 [tool.uv]
 default-groups = ["dev", "gpu"]
