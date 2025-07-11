@@ -1,8 +1,7 @@
 """
 General utility functions for the representation learning package.
 
-This module contains utility functions that are used across multiple modules,
-including universal file loading functionality.
+This module contains utility functions that are used across multiple modules.
 """
 
 from __future__ import annotations

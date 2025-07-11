@@ -35,6 +35,47 @@ def eval_retrieval(
     }
 
 
+def eval_retrieval_cross_set(
+    query_embeds: torch.Tensor,
+    query_labels: torch.Tensor,
+    db_embeds: torch.Tensor,
+    db_labels: torch.Tensor,
+) -> Dict[str, float]:
+    """Compute retrieval metrics using separate query and database sets.
+
+    Parameters
+    ----------
+    query_embeds : torch.Tensor
+        Query embeddings (e.g., from train set)
+    query_labels : torch.Tensor
+        Query labels
+    db_embeds : torch.Tensor
+        Database embeddings to search (e.g., from test set)
+    db_labels : torch.Tensor
+        Database labels
+
+    Returns
+    -------
+    Dict[str, float]
+        Retrieval metrics
+    """
+    roc_auc = evaluate_auc_roc_cross_set(
+        query_embeds.numpy(), query_labels.numpy(), db_embeds.numpy(), db_labels.numpy()
+    )
+    precision_at_1 = evaluate_precision_cross_set(
+        query_embeds.numpy(),
+        query_labels.numpy(),
+        db_embeds.numpy(),
+        db_labels.numpy(),
+        k=1,
+    )
+
+    return {
+        "retrieval_roc_auc": roc_auc,
+        "retrieval_precision_at_1": precision_at_1,
+    }
+
+
 # ------------------------------------------------------------------------- #
 #  Helpers
 # ------------------------------------------------------------------------- #
@@ -96,6 +137,53 @@ def _binary_relevance_matrix(labels: np.ndarray, i: int) -> np.ndarray:
 
     # Genuine multi-label: treat items as positive if **any** label overlaps.
     return np.logical_and(labels, labels[i]).any(axis=1).astype(int)
+
+
+def _binary_relevance_matrix_cross_set(
+    query_labels: np.ndarray, db_labels: np.ndarray, i: int
+) -> np.ndarray:
+    """Return binary relevance vector for query *i* against database labels.
+
+    The function supports the same label formats as _binary_relevance_matrix
+    but compares query labels against database labels for cross-set retrieval.
+
+    Parameters
+    ----------
+    query_labels : np.ndarray
+        Labels for the query set
+    db_labels : np.ndarray
+        Labels for the database set
+    i : int
+        Index of the query
+
+    Returns
+    -------
+    np.ndarray
+        Binary relevance vector where 1 indicates relevant database items for query i.
+    """
+    query_label = query_labels[i]
+
+    if query_labels.ndim == 1:
+        return (db_labels == query_label).astype(int)
+
+    # Handle multi-dimensional case
+    if query_labels.ndim == 2:
+        # Try collapsing one-hot situation first
+        collapsed_query = _convert_labels_to_int(query_labels)
+        collapsed_db = _convert_labels_to_int(db_labels)
+
+        if collapsed_query.ndim == 1 and collapsed_db.ndim == 1:
+            return (collapsed_db == collapsed_query[i]).astype(int)
+
+        # Genuine multi-label: treat items as positive if **any** label overlaps
+        if db_labels.ndim == 2:
+            return np.logical_and(db_labels, query_label).any(axis=1).astype(int)
+        else:
+            # db_labels is 1D but query_labels is 2D multi-label
+            # This case is less common but we handle it
+            return np.zeros(len(db_labels), dtype=int)
+
+    return np.zeros(len(db_labels), dtype=int)
 
 
 # ------------------------------------------------------------------------- #
@@ -164,6 +252,75 @@ def evaluate_auc_roc(
             auc = roc_auc_score(y_true[mask], y_score[mask])
             aucs.append(float(auc))
         except ValueError as v:  # pragma: no cover – extremely rare but safe-guard
+            logger.warning("ROC-AUC computation failed for query %d (reason: %s)", i, v)
+            continue
+
+    return float(np.mean(aucs)) if aucs else 0.0
+
+
+def evaluate_auc_roc_cross_set(
+    query_embeds: np.ndarray,
+    query_labels: np.ndarray,
+    db_embeds: np.ndarray,
+    db_labels: np.ndarray,
+) -> float:
+    """Compute ROC-AUC for cross-set retrieval (queries vs database).
+
+    Parameters
+    ----------
+    query_embeds : np.ndarray, shape (N_q, D)
+        Query embedding matrix.
+    query_labels : np.ndarray, shape (N_q,)
+        Query labels.
+    db_embeds : np.ndarray, shape (N_db, D)
+        Database embedding matrix.
+    db_labels : np.ndarray, shape (N_db,)
+        Database labels.
+
+    Returns
+    -------
+    float
+        Mean ROC-AUC over valid queries (0.0 if none valid).
+
+    Raises
+    ------
+    ValueError
+        If embeddings are not 2-D or if label lengths don't match embeddings.
+    """
+    if query_embeds.ndim != 2 or db_embeds.ndim != 2:
+        raise ValueError("embeddings must be 2-D (N, D)")
+
+    query_labels = np.asarray(query_labels)
+    db_labels = np.asarray(db_labels)
+
+    if query_labels.shape[0] != query_embeds.shape[0]:
+        raise ValueError("query labels length must match number of query embeddings")
+    if db_labels.shape[0] != db_embeds.shape[0]:
+        raise ValueError(
+            "database labels length must match number of database embeddings"
+        )
+
+    # Compute cosine similarity between query and database embeddings
+    query_normed = query_embeds / np.linalg.norm(
+        query_embeds, axis=1, keepdims=True
+    ).clip(1e-12)
+    db_normed = db_embeds / np.linalg.norm(db_embeds, axis=1, keepdims=True).clip(1e-12)
+    sim = np.matmul(query_normed, db_normed.T)  # Shape: (n_queries, n_db)
+
+    aucs: list[float] = []
+    for i in range(query_embeds.shape[0]):
+        # For each query, determine which database items are relevant
+        y_true = _binary_relevance_matrix_cross_set(query_labels, db_labels, i)
+
+        if y_true.sum() == 0:  # No positive samples
+            continue
+
+        y_score = sim[i]  # Similarities to all database items
+
+        try:
+            auc = roc_auc_score(y_true, y_score)
+            aucs.append(float(auc))
+        except ValueError as v:
             logger.warning("ROC-AUC computation failed for query %d (reason: %s)", i, v)
             continue
 
@@ -245,6 +402,87 @@ def evaluate_precision(
             topk_idx = np.argpartition(-sim[i], k)[:k]
 
         # Precision is the fraction of relevant items among the retrieved top-k.
+        precision_i = float(np.mean(y_true[topk_idx]))
+        precisions.append(precision_i)
+
+    return float(np.mean(precisions)) if precisions else 0.0
+
+
+def evaluate_precision_cross_set(
+    query_embeds: np.ndarray,
+    query_labels: np.ndarray,
+    db_embeds: np.ndarray,
+    db_labels: np.ndarray,
+    k: int = 1,
+) -> float:
+    """Compute precision@k for cross-set retrieval (queries vs database).
+
+    Parameters
+    ----------
+    query_embeds : np.ndarray, shape (N_q, D)
+        Query embedding matrix.
+    query_labels : np.ndarray, shape (N_q,)
+        Query labels.
+    db_embeds : np.ndarray, shape (N_db, D)
+        Database embedding matrix.
+    db_labels : np.ndarray, shape (N_db,)
+        Database labels.
+    k : int, optional
+        Number of top elements to consider (default: 1).
+
+    Returns
+    -------
+    float
+        Mean precision@k over all queries.
+
+    Raises
+    ------
+    ValueError
+        If embeddings are not 2-D or if label lengths don't match embeddings.
+    """
+    if query_embeds.ndim != 2 or db_embeds.ndim != 2:
+        raise ValueError("embeddings must be 2-D (N, D)")
+
+    query_labels = np.asarray(query_labels)
+    db_labels = np.asarray(db_labels)
+
+    if query_labels.shape[0] != query_embeds.shape[0]:
+        raise ValueError("query labels length must match number of query embeddings")
+    if db_labels.shape[0] != db_embeds.shape[0]:
+        raise ValueError(
+            "database labels length must match number of database embeddings"
+        )
+
+    n_db = db_embeds.shape[0]
+    if n_db == 0:
+        return 0.0
+
+    # Compute cosine similarity between query and database embeddings
+    query_normed = query_embeds / np.linalg.norm(
+        query_embeds, axis=1, keepdims=True
+    ).clip(1e-12)
+    db_normed = db_embeds / np.linalg.norm(db_embeds, axis=1, keepdims=True).clip(1e-12)
+    sim = np.matmul(query_normed, db_normed.T)  # Shape: (n_queries, n_db)
+
+    k = min(k, n_db)  # Can't retrieve more than available database items
+
+    precisions: list[float] = []
+    for i in range(query_embeds.shape[0]):
+        # For each query, determine which database items are relevant
+        y_true = _binary_relevance_matrix_cross_set(query_labels, db_labels, i)
+
+        if y_true.sum() == 0:  # No positive samples
+            continue
+
+        # Identify indices of the top-k most similar database items
+        if k == 1:
+            # Fast path for k=1 using argmax
+            topk_idx = [int(np.argmax(sim[i]))]
+        else:
+            # Use argpartition for efficiency when k>1
+            topk_idx = np.argpartition(-sim[i], k)[:k]
+
+        # Precision is the fraction of relevant items among the retrieved top-k
         precision_i = float(np.mean(y_true[topk_idx]))
         precisions.append(precision_i)
 

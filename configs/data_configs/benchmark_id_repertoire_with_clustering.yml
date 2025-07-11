@@ -104,6 +104,41 @@ evaluation_sets:
           label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+    retrieval_mode: "train_vs_test"
+
+  - name: "pipit_id_across_year_test_vs_test"
+    train:
+      dataset_name: "pipit_id"
+      split: "train_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    validation:
+      dataset_name: "pipit_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    test:
+      dataset_name: "pipit_id"
+      split: "test_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+    retrieval_mode: "test_vs_test"
 
   - name: "chiffchaff_id_within_year"
     train:
@@ -170,6 +205,41 @@ evaluation_sets:
           label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+    retrieval_mode: "train_vs_test"
+
+  - name: "chiffchaff_id_across_year_test_vs_test"
+    train:
+      dataset_name: "chiffchaff_id"
+      split: "train_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    validation:
+      dataset_name: "chiffchaff_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    test:
+      dataset_name: "chiffchaff_id"
+      split: "test_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+    retrieval_mode: "test_vs_test"
 
   - name: "littleowl_id_across_year"
     train:
@@ -203,6 +273,41 @@ evaluation_sets:
           label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+    retrieval_mode: "train_vs_test"
+
+  - name: "littleowl_id_across_year_test_vs_test"
+    train:
+      dataset_name: "littleowl_id"
+      split: "train_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    validation:
+      dataset_name: "littleowl_id"
+      split: "train_across_year"  # Use same as train
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    test:
+      dataset_name: "littleowl_id"
+      split: "test_across_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+    retrieval_mode: "test_vs_test"
 
   # - name: "giant_otters_individual_id"
   #   train:
@@ -327,3 +432,69 @@ evaluation_sets:
           label_map: {'Bark': 0, 'Bark-like vocalization': 1, 'Begging Scream': 2, 'Begging call': 3, 'Begging call-like vocalization': 4, 'Begging scream gradat': 5, 'Close Call': 6, 'Contact Call': 7, 'Contact call gradation': 8, 'Contact call-like vocalization': 9, 'Distress call 1': 10, 'Distress call 2': 11, 'Growl': 12, 'Hah!': 13, 'High whistle': 14, 'Hum': 15, 'Hum gradation': 16, 'Hum gradation-like vocalization': 17, 'Hum short': 18, 'Hum-like vocalization': 19, 'Isolation Call': 20, 'Low whistle': 21, 'Scream Ascending': 22, 'Snort': 23, 'Suckling Call': 24, 'Suckling call': 25, 'Wavering Scream': 26, 'Whine': 27, 'Whistle': 28, 'Whistle Double': 29, 'under water call': 30, 'whine': 31}
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "bengalese_finch_repertoire_bird0"
+    train:  # Dummy train set (using test set for compatibility)
+      dataset_name: "Bengalese Finch Calls"
+      split: "Bird0"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
+
+    validation:  # Dummy validation set (using test set for compatibility)
+      dataset_name: "Bengalese Finch Calls"
+      split: "Bird0"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
+
+    test:
+      dataset_name: "Bengalese Finch Calls"
+      split: "Bird0"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
+
+    metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "bengalese_finch_repertoire_bird1"
+    train:  # Dummy train set (using test set for compatibility)
+      dataset_name: "Bengalese Finch Calls"
+      split: "Bird1"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
+
+    validation:  # Dummy validation set (using test set for compatibility)
+      dataset_name: "Bengalese Finch Calls"
+      split: "Bird1"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
+
+    test:
+      dataset_name: "Bengalese Finch Calls"
+      split: "Bird1"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
+
+    metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]

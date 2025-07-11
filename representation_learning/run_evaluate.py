@@ -26,6 +26,7 @@ from esp_data.io import anypath
 from representation_learning.configs import (
     DatasetCollectionConfig,
     EvaluateConfig,
+    EvaluationSet,
     ExperimentConfig,
     RunConfig,
     load_config,
@@ -45,7 +46,10 @@ from representation_learning.evaluation.finetune import (
     train_and_eval_full_fine_tune,
     train_and_eval_linear_probe,
 )
-from representation_learning.evaluation.retrieval import eval_retrieval
+from representation_learning.evaluation.retrieval import (
+    eval_retrieval,
+    eval_retrieval_cross_set,
+)
 from representation_learning.models.get_model import get_model
 from representation_learning.utils import ExperimentLogger
 from representation_learning.utils.experiment_tracking import (
@@ -105,6 +109,7 @@ def run_experiment(
     save_dir: Path,
     evaluation_dataset_name: Optional[str] = None,
     evaluation_set_metrics: Optional[List[str]] = None,
+    evaluation_set: Optional[EvaluationSet] = None,
 ) -> ExperimentResult:
     logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
@@ -161,9 +166,22 @@ def run_experiment(
     need_retrieval = "retrieval" in eval_cfg.eval_modes
     need_clustering = "clustering" in eval_cfg.eval_modes
 
+    # Determine retrieval mode for this evaluation set
+    retrieval_mode = (
+        evaluation_set.retrieval_mode
+        if evaluation_set and evaluation_set.retrieval_mode is not None
+        else "test_vs_test"
+    )
+
     overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
-    need_recompute_embeddings_train = overwrite or (
-        need_probe and not (train_path.exists() and val_path.exists())
+    need_recompute_embeddings_train = (
+        overwrite
+        or (need_probe and not (train_path.exists() and val_path.exists()))
+        or (
+            need_retrieval
+            and retrieval_mode == "train_vs_test"
+            and not train_path.exists()
+        )
     )
     need_recompute_embeddings_test = overwrite or (
         (need_retrieval or need_probe or need_clustering) and not test_path.exists()
@@ -305,6 +323,8 @@ def run_experiment(
     val_ds: EmbeddingDataset | None = None
     test_embeds: torch.Tensor | None = None
     test_labels: torch.Tensor | None = None
+    train_embeds: torch.Tensor | None = None
+    train_labels: torch.Tensor | None = None
 
     # ------------------- embeddings for linear probe ------------------- #
     if need_probe and frozen:
@@ -328,6 +348,19 @@ def run_experiment(
         train_ds = EmbeddingDataset(train_embeds, train_labels)
         val_ds = EmbeddingDataset(val_embeds, val_labels)
         num_labels = len(train_labels.unique()) if num_labels is None else num_labels
+
+    # ------------------- embeddings for train-vs-test retrieval -------- #
+    if need_retrieval and retrieval_mode == "train_vs_test" and train_embeds is None:
+        if not need_recompute_embeddings_train:
+            train_embeds, train_labels, _ = load_embeddings_arrays(train_path)
+        else:
+            if base_model is None:
+                raise ValueError("base_model is required to compute embeddings")
+            train_embeds, train_labels = extract_embeddings_for_split(
+                base_model, train_dl_raw, layer_names, device
+            )
+            # Persist to disk
+            save_embeddings_arrays(train_embeds, train_labels, train_path, num_labels)
 
     # ------------------- embeddings for retrieval and clustering -------- #
     if need_retrieval or need_probe or need_clustering:
@@ -428,7 +461,15 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
-        retrieval_metrics = eval_retrieval(test_embeds, test_labels)
+        if retrieval_mode == "train_vs_test":
+            if train_embeds is None:
+                raise ValueError("train_embeds is required for train_vs_test retrieval")
+            retrieval_metrics = eval_retrieval_cross_set(
+                train_embeds, train_labels, test_embeds, test_labels
+            )
+        else:
+            # Current behavior: test-vs-test
+            retrieval_metrics = eval_retrieval(test_embeds, test_labels)
         # logger.info("retrieval metrics", retrieval_metrics)
 
     # ------------------------------------------------------------------ #
@@ -565,6 +606,9 @@ def main() -> None:
             eval_set_name
         )
 
+        # Get the evaluation set object for configuration
+        eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
+
         for exp_cfg in eval_cfg.experiments:
             res = run_experiment(
                 eval_cfg,
@@ -575,6 +619,7 @@ def main() -> None:
                 save_dir,
                 eval_set_name,
                 eval_set_metrics,
+                eval_set,
             )
             all_results.append(res)
 

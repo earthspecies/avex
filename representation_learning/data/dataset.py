@@ -165,6 +165,11 @@ def _build_datasets(
     if cfg.transformations:
         # Apply those on train and update metadata
         train_metadata = train_ds.apply_transformations(cfg.transformations)
+        additional_metadata = train_ds.apply_transformations(cfg.transformations)
+        if additional_metadata:
+            # Merge the additional metadata with existing metadata
+            train_metadata = train_metadata or {}
+            train_metadata.update(additional_metadata)
 
     # Build validation
     val_ds, _ = _build_one_dataset_split(
