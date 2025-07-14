@@ -21,7 +21,7 @@ _fs = filesystem_from_path(_GLOBAL_EXPERIMENT_DIR)
 
 
 def _generate_run_id() -> str:
-    return str(uuid.uuid5)
+    return str(uuid.uuid4())
 
 
 def save_experiment_metadata(
@@ -171,11 +171,8 @@ def save_evaluation_metadata(
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Define all possible metrics to ensure consistent columns
-    all_possible_train_metrics = [
-        "loss",
-        "acc",
-    ]
-    all_possible_val_metrics = ["loss", "acc"]
+    all_possible_train_metrics = ["loss", "acc", "accuracy"]
+    all_possible_val_metrics = ["loss", "acc", "accuracy"]
     all_possible_test_metrics = [
         "accuracy",
         "balanced_accuracy",
@@ -253,8 +250,8 @@ def save_evaluation_metadata(
         run_id = _generate_run_id()
 
     output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")
-    with _fs.open(output_json_path, "w") as f:
-        json.dump(output_json_path, f)
+    with _fs.open(str(output_json_path), "w") as f:
+        json.dump(metadata, f, indent=4)
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])
@@ -387,7 +384,7 @@ def create_experiment_summary_csvs(
 
         # Create summary entry with all possible metrics, using None for missing ones
         summary_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "end_timestamp": datetime.now().isoformat(),
             "dataset_name": r.dataset_name,
             "experiment_name": r.experiment_name,
             "evaluation_dataset_name": r.evaluation_dataset_name,
@@ -699,7 +696,7 @@ def create_initial_experiment_metadata(
     """
     # Create metadata entry with empty metrics
     metadata = {
-        "timestamp": datetime.now().isoformat(),
+        "end_timestamp": datetime.now().isoformat(),
         "checkpoint_name": checkpoint_name,
         "is_best": True,
         "is_final": True,
