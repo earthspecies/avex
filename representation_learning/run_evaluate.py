@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import pandas as pd
 import torch
@@ -489,7 +489,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     # 1. Load configs with patches
     if patches is None:
         patches = ()
-    eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
+    eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=patches)
 
     # Detect config format based on content structure
     config_path = Path(eval_cfg.dataset_config)
@@ -583,7 +583,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
         all_results=all_results,
         eval_cfg=eval_cfg,
         save_dir=save_dir,
-        config_file_path=str(args.config),
+        config_file_path=str(config_path),
         benchmark_eval_cfg=benchmark_eval_cfg,
         evaluation_sets=evaluation_sets,
         experiments=eval_cfg.experiments,
