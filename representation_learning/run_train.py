@@ -16,7 +16,6 @@ from esp_data.io.paths import anypath  # type: ignore
 
 from representation_learning.configs import (  # type: ignore
     RunConfig,
-    load_config,
 )
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
