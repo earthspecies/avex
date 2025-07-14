@@ -26,6 +26,7 @@ from esp_data.transforms import RegisteredTransformConfigs
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic.v1.utils import deep_update
 from pydantic_settings import BaseSettings, CliSettingsSource, YamlConfigSettingsSource
 
 # --------------------------------------------------------------------------- #
