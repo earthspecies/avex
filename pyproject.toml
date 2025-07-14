@@ -5,7 +5,7 @@
 [project]
 name = "representation-learning"
 version = "1.0.0"
-description = ""
+description = "A library for audio representation learning experiments"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 
@@ -39,6 +39,8 @@ dependencies = [
   "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
+  "pydantic-settings>=2.9.1",
+  "esp-sweep>=0.2.0",
 ]
 
 [dependency-groups]
@@ -54,7 +56,9 @@ dev = [
   "ipykernel>=6.29.5",
 ]
 
-# esp_data package
+[project.scripts]
+repr-learn = "representation_learning.cli:cli"
+
 [[tool.uv.index]]
 name = "esp-pypi"
 url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
@@ -62,6 +66,7 @@ explicit = true
 
 [tool.uv.sources]
 esp-data = { index = "esp-pypi" }
+esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
 default-groups = ["dev", "gpu"]

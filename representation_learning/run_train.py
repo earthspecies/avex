@@ -4,7 +4,6 @@ Entry‑point script for training experiments.
 
 from __future__ import annotations
 
-import argparse
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -39,27 +38,21 @@ logging.basicConfig(
 logger = logging.getLogger("run_train")
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train an audio representation model")
-    parser.add_argument(
-        "--config",
-        "-c",
-        type=Path,
-        default="configs/run_configs/clip_base.yml",
-        help="Path to the config file",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
+def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     """
     Training entry point.
-    """
-    args = _parse_args()
-    config_path = args.config
 
-    # Load config
-    config: RunConfig = load_config(config_path, config_type="run")
+    Parameters
+    ----------
+    config_path : Path
+        Path to the config file
+    patches : tuple[str, ...] | None
+        Tuple of config patches in format 'key=value'.
+    """
+
+    if patches is None:
+        patches = ()
+    config = RunConfig.from_sources(yaml_file=str(config_path), cli_args=patches)
     logger.info(f"Loaded config from {config_path}")
 
     # Initialize distributed training if needed
@@ -157,7 +150,3 @@ def main() -> None:
 
     # Train
     trainer.train()
-
-
-if __name__ == "__main__":
-    main()

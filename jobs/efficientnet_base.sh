@@ -10,4 +10,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/efficientnet_animalspeak_audioset.yml
+srun uv run repr-learn train --config configs/run_configs/aaai_train/efficientnet_animalspeak_audioset.yml

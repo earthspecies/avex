@@ -26,6 +26,7 @@ from esp_data.transforms import RegisteredTransformConfigs
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, CliSettingsSource, YamlConfigSettingsSource
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -248,7 +249,7 @@ class ModelSpec(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-#  Top‑level run‑configuration
+#  Top-level run-configuration
 # --------------------------------------------------------------------------- #
 
 
@@ -268,7 +269,50 @@ class SchedulerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RunConfig(BaseModel):
+class BaseCLIConfig(BaseSettings):
+    """
+    A base class for configs that can be loaded from a YAML file and CLI arguments.
+    """
+
+    @classmethod
+    def from_sources(
+        cls, yaml_file: str | Path, cli_args: tuple[str, ...]
+    ) -> "BaseCLIConfig":
+        """
+        Create a RunConfig object from a YAML file and CLI arguments. If there are any
+        conflicts, the CLI arguments will take precedence over the YAML file.
+
+        Parameters
+        ----------
+        yaml_file : str | Path
+            Path to the YAML configuration file
+        cli_args : tuple[str, ...]
+            Tuple of CLI arguments to override the YAML file
+
+        Returns
+        -------
+        RunConfig
+            Validated configuration object
+
+        Raises
+        ------
+        FileNotFoundError
+            If the configuration file does not exist
+        """
+
+        yaml_file = Path(yaml_file)
+        if not yaml_file.exists():
+            raise FileNotFoundError(f"Config file {yaml_file} does not exist")
+
+        yaml_values = YamlConfigSettingsSource(cls, yaml_file=yaml_file)
+        cli_values = CliSettingsSource(
+            cls, cli_parse_args=["--" + opt for opt in cli_args]
+        )
+        final_values = deep_update(yaml_values(), cli_values())
+        return cls.model_validate(final_values)
+
+
+class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     """Everything needed for a single *training run*."""
 
     # required
@@ -418,8 +462,6 @@ class RunConfig(BaseModel):
 
         return v
 
-    model_config = ConfigDict(extra="forbid")
-
 
 class ExperimentConfig(BaseModel):
     """Configuration for a single experiment in evaluation."""
@@ -451,7 +493,7 @@ class ExperimentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EvaluateConfig(BaseModel):
+class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     """Configuration for running evaluation experiments."""
 
     experiments: List[ExperimentConfig] = Field(

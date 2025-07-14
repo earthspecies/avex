@@ -8,4 +8,4 @@
 
 cd ~/code/representation-learning
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/aves_bio.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/aves_bio.yml

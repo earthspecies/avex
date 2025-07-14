@@ -11,11 +11,10 @@ Key points
 
 from __future__ import annotations
 
-import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import pandas as pd
 import torch
@@ -77,20 +76,6 @@ class ExperimentResult:
     probe_test_metrics: Dict[str, float]
     retrieval_metrics: Dict[str, float]
     clustering_metrics: Dict[str, float]
-
-
-# -------------------------------------------------------------------- #
-#  CLI
-# -------------------------------------------------------------------- #
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser("Linear-probe / fine-tune an audio model")
-    p.add_argument(
-        "--config",
-        type=Path,
-        required=True,
-        help="Path to evaluation YAML (see configs/evaluation_configs/*)",
-    )
-    return p.parse_args()
 
 
 # -------------------------------------------------------------------- #
@@ -258,7 +243,7 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     #  Backbone (optionally load checkpoint)
     # ------------------------------------------------------------------ #
-    base_model: Optional[torch.nn.Module] = None
+    base_model: torch.nn.Module | None = None
 
     if need_base_model:
         if num_labels is None:
@@ -495,10 +480,15 @@ def run_experiment(
 # -------------------------------------------------------------------- #
 #  Main
 # -------------------------------------------------------------------- #
-def main() -> None:
-    args = _parse_args()
+def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
+    """
+    Main entry point for evaluation.
+    """
 
     # 1. Load configs
+    # 1. Load configs with patches
+    if patches is None:
+        patches = ()
     eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
 
     # Detect config format based on content structure

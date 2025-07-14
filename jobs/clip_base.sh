@@ -19,4 +19,4 @@ export NCCL_SOCKET_IFNAME=^docker0,lo
 # Ensure GPU visibility is properly set
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 
-srun uv run representation_learning/run_train.py --config configs/run_configs/clip_base_beans.yml
+srun uv run repr-learn train --config configs/run_configs/clip_base_beans.yml
