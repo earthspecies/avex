@@ -5,13 +5,23 @@ Utilities for experiment tracking using pandas DataFrames.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from esp_data.io import anypath, filesystem_from_path
 
 from representation_learning.configs import RunConfig
+
+# Global experiment directory for saving metadata
+_GLOBAL_EXPERIMENT_DIR = "gs://representation-learning/experiment_results/"
+_fs = filesystem_from_path(_GLOBAL_EXPERIMENT_DIR)
+
+
+def _generate_run_id() -> str:
+    return str(uuid.uuid5)
 
 
 def save_experiment_metadata(
@@ -48,7 +58,7 @@ def save_experiment_metadata(
 
     # Create metadata entry
     metadata = {
-        "timestamp": datetime.now().isoformat(),
+        "end_timestamp": datetime.now().isoformat(),
         "checkpoint_name": checkpoint_name,
         "is_best": is_best,
         "is_final": is_final,
@@ -58,6 +68,18 @@ def save_experiment_metadata(
     # Add metrics if provided
     if metrics:
         metadata.update(metrics)
+
+    # Save metadata as in bucket
+    if "run_name" not in config_dict:
+        if "run_id" in config_dict:
+            run_id = config_dict["run_id"]
+        else:
+            run_id = _generate_run_id()
+        metadata["id"] = run_id
+    else:
+        metadata["id"] = config_dict.get("run_name", None) or config_dict.get(
+            "run_id", _generate_run_id()
+        )
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])
@@ -149,17 +171,23 @@ def save_evaluation_metadata(
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Define all possible metrics to ensure consistent columns
-    all_possible_train_metrics = {"loss", "acc"}
-    all_possible_val_metrics = {"loss", "acc"}
-    all_possible_test_metrics = {
+    all_possible_train_metrics = [
+        "loss",
+        "acc",
+    ]
+    all_possible_val_metrics = ["loss", "acc"]
+    all_possible_test_metrics = [
         "accuracy",
         "balanced_accuracy",
         "multiclass_f1",
         "map",
         "roc_auc",
-    }
-    all_possible_retrieval_metrics = {"retrieval_roc_auc", "retrieval_precision_at_1"}
-    all_possible_clustering_metrics = {
+    ]
+    all_possible_retrieval_metrics = [
+        "retrieval_roc_auc",
+        "retrieval_precision_at_1",
+    ]
+    all_possible_clustering_metrics = [
         "clustering_ari",
         "clustering_nmi",
         "clustering_v_measure",
@@ -169,46 +197,41 @@ def save_evaluation_metadata(
         "clustering_nmi_best",
         "clustering_v_measure_best",
         "clustering_silhouette_best",
-    }
+    ]
 
     # Create metadata entry with all possible metrics, using None for missing ones
     metadata = {
-        "timestamp": datetime.now().isoformat(),
+        "end_timestamp": datetime.now().isoformat(),
         "dataset_name": dataset_name,
         "experiment_name": experiment_name,
         "checkpoint_name": checkpoint_name,
     }
-
     # Add train metrics with None for missing ones
     for metric in all_possible_train_metrics:
-        metadata[metric] = train_metrics.get(metric, None)
+        metadata[f"train_{dataset_name}_{metric}"] = train_metrics.get(metric, None)
 
     # Add validation metrics with None for missing ones
     for metric in all_possible_val_metrics:
-        metadata[f"val_{metric}"] = val_metrics.get(metric, None)
+        metadata[f"val_{dataset_name}_{metric}"] = val_metrics.get(metric, None)
 
     # Add test metrics with None for missing ones
     for metric in all_possible_test_metrics:
-        metadata[f"test_{metric}"] = probe_test_metrics.get(metric, None)
+        metadata[f"test_{dataset_name}_{metric}"] = probe_test_metrics.get(metric, None)
 
     # Add retrieval metrics with None for missing ones
     for metric in all_possible_retrieval_metrics:
-        # Remove the "retrieval_" prefix if it's already there to avoid double-prefixing
-        metric_name = metric.replace("retrieval_", "")
-        metadata[f"retrieval_{metric_name}"] = retrieval_metrics.get(metric, None)
+        metadata[f"test_{dataset_name}_{metric}"] = retrieval_metrics.get(metric, None)
 
     # Add clustering metrics with None for missing ones
     for metric in all_possible_clustering_metrics:
-        # Remove the "clustering_" prefix if it's already there to avoid
-        # double-prefixing
-        metric_name = metric.replace("clustering_", "")
-        metadata[f"clustering_{metric_name}"] = clustering_metrics.get(metric, None)
+        metadata[f"test_{dataset_name}_{metric}"] = clustering_metrics.get(metric, None)
 
     metadata["eval_config"] = json.dumps(
         eval_config
     )  # Store eval config as JSON string
 
     # Add training metadata if available
+    latest_training = None
     if training_metadata is not None and not training_metadata.empty:
         # Get the most recent training entry and convert to dict
         latest_training = training_metadata.iloc[-1].to_dict()
@@ -220,6 +243,18 @@ def save_evaluation_metadata(
     if run_config is not None:
         # Store run config as JSON string
         metadata["run_config_params"] = json.dumps(run_config)
+
+    # Save metadata as in bucket
+    if run_config is not None:
+        run_id = run_config.get("run_name", _generate_run_id())
+    elif latest_training is not None:
+        run_id = latest_training.get("run_name", _generate_run_id())
+    else:
+        run_id = _generate_run_id()
+
+    output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")
+    with _fs.open(output_json_path, "w") as f:
+        json.dump(output_json_path, f)
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])

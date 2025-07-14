@@ -40,7 +40,7 @@ from representation_learning.training.distributed import (
 )
 from representation_learning.training.losses import ClipLoss, build_criterion
 from representation_learning.training.training_utils import build_scheduler
-from representation_learning.utils import ExperimentLogger
+from representation_learning.utils import ExperimentLogger, get_active_mlflow_run_name
 from representation_learning.utils.experiment_tracking import save_experiment_metadata
 
 logger = logging.getLogger(__name__)
@@ -901,6 +901,13 @@ class Trainer:
         logger.info("Saved checkpoint → %s", ckpt_path)
 
         # Save metadata in the same directory as the checkpoint
+        if (
+            self.log.backend == "mlflow"
+            and self.run_config
+            and not self.run_config.run_name
+        ):
+            self.run_config.run_name = get_active_mlflow_run_name(self.log)
+
         save_experiment_metadata(
             output_dir=base_dir,  # Use the checkpoint directory
             config=self.run_config,

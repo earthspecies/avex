@@ -412,7 +412,7 @@ name = "click"
 version = "8.1.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "platform_system == 'Windows'" },
+    { name = "colorama", marker = "platform_system == 'Windows' and sys_platform != 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/96/d3/f04c7bfcf5c1862a2a5b845c6b2b360488cf47af55dfa79c98f6a6bf98b5/click-8.1.7.tar.gz", hash = "sha256:ca9853ad459e787e2192211578cc907e7594e294c7ccc834310722b41b9ca6de", size = 336121 }
 wheels = [
@@ -623,7 +623,7 @@ wheels = [
 
 [[package]]
 name = "esp-data"
-version = "1.1.1"
+version = "1.1.2"
 source = { registry = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" }
 dependencies = [
     { name = "cloudpathlib", extra = ["all"] },
@@ -638,9 +638,9 @@ dependencies = [
     { name = "semver" },
     { name = "soundfile" },
 ]
-sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.1.tar.gz", hash = "sha256:1bab15fed334dc677b020155bda1978fa10c4a9f587183adcb2a87f84a3f9b6d" }
+sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.2.tar.gz", hash = "sha256:72539b6266add08520746197a164240e5a7cc664f2109dbcecacae5685f03843" }
 wheels = [
-    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.1-py3-none-any.whl", hash = "sha256:1b93c46bdc19710c1a2db7135e3c02fd279399630fa235cad783ced4e20a88ea" },
+    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.1.2-py3-none-any.whl", hash = "sha256:83d07b987addaefc299be8d7810617b30b0728127c6b5a47cc15bceab37db0a2" },
 ]
 
 [[package]]
@@ -1342,7 +1342,7 @@ name = "ipykernel"
 version = "6.29.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "appnope", marker = "platform_system == 'Darwin'" },
+    { name = "appnope", marker = "platform_system == 'Darwin' and sys_platform != 'linux'" },
     { name = "comm" },
     { name = "debugpy" },
     { name = "ipython" },
@@ -1786,7 +1786,7 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "sqlalchemy" },
-    { name = "waitress", marker = "platform_system == 'Windows'" },
+    { name = "waitress", marker = "platform_system == 'Windows' and sys_platform != 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/51/97/84f1433ca87b15357a7f2b01e8b1d2605856e3430ceeee7cc4620127fe8c/mlflow-3.1.0.tar.gz", hash = "sha256:de0b90aa058b532738081deec791bb2fca35abcca0fd9358da75fefe0a6170f4", size = 24096293 }
 wheels = [
@@ -2907,7 +2907,7 @@ gpu = [
 requires-dist = [
     { name = "cloudpathlib", specifier = ">=0.21.0" },
     { name = "einops", specifier = ">=0.8.1" },
-    { name = "esp-data", specifier = ">=1.1.1", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", specifier = ">=1.1.2", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "google-cloud-storage", specifier = ">=3.1.0" },
     { name = "gradio", specifier = ">=4.0.0" },
     { name = "gradio-leaderboard", specifier = ">=0.0.13" },
@@ -3626,7 +3626,7 @@ name = "tqdm"
 version = "4.67.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "platform_system == 'Windows'" },
+    { name = "colorama", marker = "platform_system == 'Windows' and sys_platform != 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737 }
 wheels = [
