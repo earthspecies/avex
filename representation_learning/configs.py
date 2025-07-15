@@ -830,8 +830,8 @@ def load_config(
     #     return RunConfig.model_validate(raw)
     if config_type == "data":
         return DatasetCollectionConfig.model_validate(raw)
-    # elif config_type == "evaluate":
-    #     return EvaluateConfig.model_validate(raw)
+    elif config_type == "evaluate":
+        return EvaluateConfig.model_validate(raw)
     elif config_type == "benchmark_evaluation":
         return BenchmarkEvaluationConfig.model_validate(raw)
     else:
