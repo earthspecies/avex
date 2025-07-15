@@ -5,15 +5,10 @@ This module provides a unified CLI for both training and evaluation tasks.
 """
 
 import logging
-import os
 from pathlib import Path
 
 import click
 
-# Enable detailed noise augmentation profiling
-os.environ["PROFILE_NOISE_AUG"] = "1"
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
