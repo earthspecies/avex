@@ -5,16 +5,22 @@ Entry‑point script for training experiments.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import multiprocessing as mp
 from datetime import datetime
 from pathlib import Path
 
 import torch
 import yaml
 
+mp.set_start_method("spawn", force=True)
+
+
 # Cloud-agnostic path factory (local / gs:// / r2://).
 from esp_data.io.paths import anypath  # type: ignore
 
+import representation_learning.data.require_features  # noqa: F401
 from representation_learning.configs import (  # type: ignore
     RunConfig,
     load_config,
@@ -84,6 +90,10 @@ def main() -> None:
 
     # 2. Build the dataloaders.
     train_dl, val_dl, _ = build_dataloaders(config, device=device)
+
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()
+
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl),
@@ -121,6 +131,17 @@ def main() -> None:
     # Save the config (works for cloud & local)
     with (output_dir / "config.yml").open("w") as f:
         yaml.dump(config.model_dump(mode="json"), f)
+
+    # Save the label_map from dataset metadata
+    label_map = train_dl.dataset.metadata.get("label_map", {})
+    if label_map:
+        with (output_dir / "label_map.json").open("w") as f:
+            json.dump(label_map, f, indent=2)
+        logger.info(
+            f"Saved label_map with {len(label_map)} classes to {output_dir / 'label_map.json'}"
+        )
+    else:
+        logger.warning("No label_map found in dataset metadata")
 
     # Create experiment logger
     exp_logger = ExperimentLogger.from_config(config)

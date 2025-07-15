@@ -3,6 +3,8 @@
 model_spec:
   name: eat_hf
   pretrained: true
+  # fairseq_weights_path: ../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint20.pt
+  # fairseq_weights_path: ../EAT/multirun/2025-07-11/12-38-06/0/eat_audioset_animalspeak/checkpoint3.pt
   audio_config:
     sample_rate: 16000
     representation: raw

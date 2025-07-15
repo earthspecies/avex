@@ -15,12 +15,22 @@ Usage
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Self, Tuple, Union
 
 import yaml
 from esp_data import DatasetConfig
-from esp_data.transforms import RegisteredTransformConfigs
+
+# Register custom esp-data transforms before we import RegisteredTransformConfigs
+try:
+    import_module("representation_learning.data.text_label_from_features")
+    import_module("representation_learning.data.require_features")
+except ModuleNotFoundError:
+    pass
+
+# Import the updated union type *after* custom transforms have registered.
+from esp_data.transforms.registry import RegisteredTransformConfigs
 
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
@@ -61,6 +71,11 @@ class TrainingParams(BaseModel):
     # Gradient checkpointing for memory optimization
     gradient_checkpointing: bool = Field(
         False, description="Enable gradient checkpointing to save memory"
+    )
+
+    # Skip validation during training
+    skip_validation: bool = Field(
+        False, description="Skip validation epochs during training (train-only mode)"
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -165,6 +180,21 @@ class ModelSpec(BaseModel):
     pretraining_mode: Optional[bool] = None
     handle_padding: Optional[bool] = None
 
+    # EAT HF specific configuration
+    fairseq_weights_path: Optional[str] = Field(
+        None, description="Path to fairseq checkpoint for EAT HF model"
+    )
+
+    # EAT HF audio normalization parameters
+    eat_norm_mean: Optional[float] = Field(
+        -4.268,
+        description="Normalization mean for EAT HF model (default for general audio)",
+    )
+    eat_norm_std: Optional[float] = Field(
+        4.569,
+        description="Normalization std for EAT HF model (default for general audio)",
+    )
+
     # EfficientNet variant configuration
     efficientnet_variant: Literal["b0", "b1"] = Field(
         "b0", description="EfficientNet variant to use (b0 or b1)"
@@ -174,6 +204,17 @@ class ModelSpec(BaseModel):
     # TODO: general approach for model-specific configs
     use_naturelm: Optional[bool] = Field(
         None, description="Whether to use NatureLM for BEATs model"
+    )
+
+    # BirdNet-specific configuration
+    language: Optional[str] = Field(
+        None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')"
+    )
+    apply_sigmoid: Optional[bool] = Field(
+        None, description="Whether to apply sigmoid to BirdNet output probabilities"
+    )
+    freeze_backbone: Optional[bool] = Field(
+        None, description="Whether to freeze the backbone for BirdNet"
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -268,6 +309,36 @@ class SchedulerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# --------------------------------------------------------------------------- #
+#  Clustering evaluation configuration
+# --------------------------------------------------------------------------- #
+
+
+class ClusteringEvalConfig(BaseModel):
+    """Configuration for clustering evaluation during training."""
+
+    enabled: bool = Field(False, description="Enable clustering evaluation")
+    frequency: int = Field(5, ge=1, description="Evaluate clustering every N epochs")
+    layers: str = Field(
+        "last_layer", description="Comma-separated layer names for embedding extraction"
+    )
+    use_validation_set: bool = Field(
+        True, description="Use validation set for clustering (else use train set)"
+    )
+    max_samples: Optional[int] = Field(
+        None, ge=100, description="Maximum samples to use (None = use all)"
+    )
+    run_before_training: bool = Field(
+        False, description="Run clustering evaluation before the first epoch"
+    )
+    text_label_strategy: str = Field(
+        "canonical_name",
+        description="Strategy for extracting labels from text datasets: 'canonical_name', 'hash_text', 'first_text', 'labels_field'",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class RunConfig(BaseModel):
     """Everything needed for a single *training run*."""
 
@@ -339,6 +410,11 @@ class RunConfig(BaseModel):
 
     # Debug mode
     debug_mode: bool = False
+
+    # Clustering evaluation configuration
+    clustering_eval: Optional[ClusteringEvalConfig] = Field(
+        None, description="Configuration for clustering evaluation during training"
+    )
 
     # ------------------------------
     # custom pre‑processing of augments

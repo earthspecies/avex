@@ -92,6 +92,20 @@ class TrainerFactory:
         # Determine training mode
         training_mode = TrainerFactory._get_training_mode(config)
 
+        # Validate clustering config if present
+        if (
+            hasattr(config, "clustering_eval")
+            and config.clustering_eval
+            and config.clustering_eval.enabled
+        ):
+            # Ensure the model supports extract_embeddings
+            if not hasattr(model, "extract_embeddings"):
+                raise ValueError(
+                    "Model must support extract_embeddings method for clustering evaluation. "
+                    f"Model type: {type(model).__name__}"
+                )
+            logger.info("Clustering evaluation configuration validated")
+
         # Create components
         strategy = StrategyFactory.create_strategy(
             mode=training_mode,

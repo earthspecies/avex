@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import os
+
+# Ensure google-cloud-storage finds a default project when running on compute
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
+
 import logging
 import multiprocessing
 import random
@@ -15,11 +20,27 @@ from esp_data import (
     dataset_from_config,
 )
 
+# New: trim AnimalSpeak columns to essentials
+from representation_learning.data.animalspeak_column_patch import (
+    apply_animalspeak_column_patch,
+)
+
+# CloudPathLib robustness patch (must come early)
+# from representation_learning.data.cloudpathlib_retry_patch import apply_cloudpathlib_patch
+from representation_learning.data.animalspeak_getitem_patch import (
+    apply_animalspeak_patches,
+)
+
 # Import AudioSet patch to fix NaN issues
 from representation_learning.data.audioset_getitem_patch import apply_audioset_patches
 
 # Force application of AudioSet patches immediately
 apply_audioset_patches()
+# Apply foundational patches *immediately* so that downstream dataset creation
+# (esp. esp_data.dataset_from_config) benefits from them.
+# apply_cloudpathlib_patch()
+# Apply AnimalSpeak column pruning patch (before dataset instantiation)
+apply_animalspeak_column_patch()
 from torch.utils.data import DataLoader, DistributedSampler
 
 from representation_learning.configs import (
@@ -128,6 +149,13 @@ def _build_one_dataset_split(
         for ds_cfg in cfg_list:
             ds, metadata = dataset_from_config(ds_cfg)
 
+            # Debug: Save samples from individual datasets
+            from representation_learning.data.data_debug import (
+                conditional_save_debug_samples,
+            )
+
+            conditional_save_debug_samples(ds._data, ds_cfg.dataset_name, "individual")
+
             ds_list.append((ds, metadata))
 
         if concatenate and len(ds_list) > 1:
@@ -135,6 +163,16 @@ def _build_one_dataset_split(
             ds = concatenate_datasets(
                 [d[0] for d in ds_list], merge_level=concatenate_method
             )
+
+            # Debug: Save samples from concatenated dataset
+            from representation_learning.data.data_debug import (
+                conditional_save_debug_samples,
+            )
+
+            dataset_names = [cfg.dataset_name for cfg in cfg_list]
+            concat_name = "_".join(dataset_names)
+            conditional_save_debug_samples(ds._data, concat_name, "concatenated")
+
             return ds, ds_list[0][1]  # return first metadata as representative
 
         # TODO : Handle case where concatenate is False so you return a list of datasets
@@ -161,7 +199,7 @@ def _create_unified_label_field(ds: Dataset) -> None:
 
 
 def _build_datasets(
-    cfg: DatasetCollectionConfig, postprocessors: list[Callable]
+    cfg: DatasetCollectionConfig, postprocessors: list[Callable], label_type: str
 ) -> list[AudioDataset]:
     """Build datasets from the provided configuration.
     Parameters
@@ -180,8 +218,12 @@ def _build_datasets(
         cfg.train_datasets, cfg.concatenate_train, cfg.concatenate_method
     )
 
-    # TODO: Remove when esp-data is fixed - apply label fixes to all datasets
-    _create_unified_label_field(train_ds)
+    # Check if we need unified labels (only for supervised learning with numeric labels)
+    needs_unified_labels = label_type == "supervised"
+
+    # Only create unified label field if we have transforms that need it
+    if needs_unified_labels:
+        _create_unified_label_field(train_ds)
 
     if cfg.transformations:
         additional_metadata = train_ds.apply_transformations(cfg.transformations)
@@ -189,12 +231,18 @@ def _build_datasets(
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
 
-        # Debug labels after transformation
-        from representation_learning.data.temp_label_fixes import (
-            debug_labels_after_transformation,
+        # Debug: Save samples after transformations (including text_label generation)
+        from representation_learning.data.data_debug import (
+            conditional_save_debug_samples,
         )
 
-        debug_labels_after_transformation(train_ds)
+        conditional_save_debug_samples(
+            train_ds._data, "train_dataset", "after_transforms"
+        )
+
+        # Debug labels after transformation
+
+        # debug_labels_after_transformation(train_ds)
 
     # Build validation
     val_ds, _ = _build_one_dataset_split(
@@ -210,11 +258,12 @@ def _build_datasets(
     label_map = {}
     num_classes = 0
 
-    # Apply label fixes to val/test datasets too (TODO: Remove when esp-data is fixed)
-    if val_ds:
-        _create_unified_label_field(val_ds)
-    if test_ds:
-        _create_unified_label_field(test_ds)
+    # Only apply label fixes to val/test datasets if we need unified labels
+    if needs_unified_labels:
+        if val_ds:
+            _create_unified_label_field(val_ds)
+        if test_ds:
+            _create_unified_label_field(test_ds)
 
     # Handle multi-label case - check for labels_from_features transform metadata
     if "labels_from_features" in train_metadata:
@@ -281,6 +330,11 @@ def _build_datasets(
             },
         )
 
+    # Debug: Finalize and save all collected debug samples
+    from representation_learning.data.data_debug import finalize_debug_samples
+
+    finalize_debug_samples("dataset_debug_samples.json")
+
     return train_ds, val_ds, test_ds
 
 
@@ -316,7 +370,6 @@ class Collater:
         self.sr = sr
         self.device = device
         self.batch_aug_processor = batch_aug_processor
-        assert num_labels > 1, "num_labels must be greater than 1"
         self.num_labels = num_labels
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
@@ -354,7 +407,13 @@ class Collater:
             )
             audios.append(wav)
             masks.append(pad_mask)
-            labels.append(item["label"])
+            # Some pipelines (e.g. CLAP) do not create numeric labels.  Keep the
+            # *length* of the labels list aligned with the batch by inserting a
+            # dummy placeholder when the key is missing.
+            if "label" in item:
+                labels.append(item["label"])
+            else:
+                labels.append(0)  # Placeholder – will turn into dummy tensor later
             if "text_label" in item:
                 txt_lbl = item["text_label"]
                 if isinstance(txt_lbl, list) and len(txt_lbl) > 0:
@@ -370,31 +429,39 @@ class Collater:
         # Handle different label formats (int → long, multi-hot → float32)
         if all(isinstance(lbl, (int, np.integer)) for lbl in labels):
             # Convert integer labels to one-hot vectors for classification
-            label_tensor = torch.nn.functional.one_hot(
-                torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
-            ).float()
+            if self.num_labels > 0:
+                label_tensor = torch.nn.functional.one_hot(
+                    torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
+                ).float()
+            else:
+                # For CLAP models without numeric labels, create dummy tensor
+                label_tensor = torch.zeros((len(labels), 1), dtype=torch.float32)
         else:
             # For multi-label case, convert lists of class indices to one-hot vectors
             label_tensors = []
             for lbl in labels:
                 # Create zero tensor of size num_labels
-                one_hot = torch.zeros(self.num_labels, dtype=torch.float32)
-                # Convert list of indices to tensor and set 1s at those indices
-                if isinstance(lbl, torch.Tensor):
-                    indices = lbl.clone().detach().long()
+                if self.num_labels > 0:
+                    one_hot = torch.zeros(self.num_labels, dtype=torch.float32)
+                    # Convert list of indices to tensor and set 1s at those indices
+                    if isinstance(lbl, torch.Tensor):
+                        indices = lbl.clone().detach().long()
+                    else:
+                        indices = torch.tensor(lbl, dtype=torch.long)
+                    # Ensure indices are within valid range
+                    valid_indices = indices[indices < self.num_labels]
+                    if len(valid_indices) > 0:
+                        one_hot[valid_indices] = 1.0
+                    # DEBUG: Check for invalid labels
+                    if len(valid_indices) != len(indices):
+                        invalid_indices = indices[indices >= self.num_labels]
+                        logger.warning(
+                            f"Invalid label indices found: {invalid_indices.tolist()}, max valid: {self.num_labels - 1}"
+                        )
+                    label_tensors.append(one_hot)
                 else:
-                    indices = torch.tensor(lbl, dtype=torch.long)
-                # Ensure indices are within valid range
-                valid_indices = indices[indices < self.num_labels]
-                if len(valid_indices) > 0:
-                    one_hot[valid_indices] = 1.0
-                # DEBUG: Check for invalid labels
-                if len(valid_indices) != len(indices):
-                    invalid_indices = indices[indices >= self.num_labels]
-                    logger.warning(
-                        f"Invalid label indices found: {invalid_indices.tolist()}, max valid: {self.num_labels - 1}"
-                    )
-                label_tensors.append(one_hot)
+                    # For CLAP models without numeric labels, create dummy tensor
+                    label_tensors.append(torch.zeros(1, dtype=torch.float32))
             label_tensor = torch.stack(label_tensors)
 
         # DEBUG: Check for NaN in label tensor
@@ -557,9 +624,15 @@ def build_dataloaders(
         If the dataset does not have more than one label for classification tasks.
     """
 
-    # CUDA requires "spawn" start method; safe on CPU too
-    if device != "cpu":
-        multiprocessing.set_start_method("spawn", force=True)
+    # CUDA requires "spawn" start method; safe on CPU too - do earlier
+    # if device != "cpu":
+    #     multiprocessing.set_start_method("spawn", force=True)
+
+    # Apply AnimalSpeak patches with model's target audio length for chunking
+    apply_animalspeak_patches(
+        max_duration_seconds=cfg.model_spec.audio_config.target_length_seconds,
+        chunk_selection="random",
+    )
 
     postprocessors: list[Any] = []
     aug_processor: Optional[AugmentationProcessor] = None
@@ -573,29 +646,31 @@ def build_dataloaders(
         data_config = load_config(cfg.dataset_config, config_type="data")
 
     ds_train, ds_val, ds_test = _build_datasets(
-        data_config, postprocessors=postprocessors
+        data_config, postprocessors=postprocessors, label_type=cfg.label_type
     )
 
     num_labels = ds_train.metadata.get("num_labels", 0)
 
     # Allow single-class datasets for detection tasks, but require multiple
     # classes for classification
-    if task_type == "detection":
-        # For detection tasks, we need at least 1 class
-        # (binary detection: present/absent)
-        if num_labels < 1:
-            raise ValueError("Detection tasks must have at least one label.")
-    else:
-        # For classification tasks (or unknown task types), require multiple classes
-        if num_labels <= 1:
-            raise ValueError(
-                "Dataset must have more than one label for classification tasks."
-            )
+    if cfg.label_type == "supervised":
+        if task_type == "detection":
+            # For detection tasks, we need at least 1 class
+            # (binary detection: present/absent)
+            if num_labels < 1:
+                raise ValueError("Detection tasks must have at least one label.")
+        else:
+            # For classification tasks (or unknown task types), require multiple classes
+            if num_labels <= 1:
+                raise ValueError(
+                    "Dataset must have more than one label for classification tasks."
+                )
+    # For CLAP/CLIP models (label_type="text"), numeric labels are not required
 
-    # logger.info(f"Train data size : {len(ds_train)} samples")
-    # logger.info(f"Validation data size : {len(ds_val)} samples")
-    # if ds_test is not None:
-    #     logger.info(f"Test data size : {len(ds_test)} samples")
+    logger.info(f"Train data size : {len(ds_train)} samples")
+    logger.info(f"Validation data size : {len(ds_val)} samples")
+    if ds_test is not None:
+        logger.info(f"Test data size : {len(ds_test)} samples")
 
     # Create samplers for distributed training
     train_sampler = None
@@ -662,6 +737,9 @@ def build_dataloaders(
     # ------------------------------------------------------------------ #
     # DataLoaders
     # ------------------------------------------------------------------ #
+    # Force "spawn" start method even if the global context is already locked
+    ctx = multiprocessing.get_context("spawn")
+
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
@@ -671,8 +749,8 @@ def build_dataloaders(
         collate_fn=collate_fn_train,
         pin_memory=(device != "cpu"),
         worker_init_fn=worker_init_fn,
+        multiprocessing_context=ctx,
         persistent_workers=(cfg.num_workers > 0),
-        prefetch_factor=2 if cfg.num_workers > 0 else None,
         drop_last=True,
     )
     val_dl = DataLoader(
@@ -684,8 +762,9 @@ def build_dataloaders(
         collate_fn=collate_fn_eval,
         pin_memory=(device != "cpu"),
         worker_init_fn=worker_init_fn,
+        multiprocessing_context=ctx,
+        drop_last=True,
         persistent_workers=(cfg.num_workers > 0),
-        prefetch_factor=2 if cfg.num_workers > 0 else None,
     )
     if ds_test is not None:
         test_dl = DataLoader(
@@ -695,6 +774,7 @@ def build_dataloaders(
             num_workers=cfg.num_workers,
             collate_fn=collate_fn_test,  # test collater (NEVER has augmentations)
             pin_memory=(device != "cpu"),
+            multiprocessing_context=ctx,
         )
     else:
         test_dl = None

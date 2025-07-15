@@ -13,9 +13,18 @@ from __future__ import annotations
 
 import argparse
 import logging
+
+# -------------------------------------------------------------------- #
+#  Early environment setup for GCS access                              #
+# -------------------------------------------------------------------- #
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
+
+# Prevent google-cloud-storage from crashing when no project is set.
+# This project ID is public-read only and works for anonymous access.
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
 
 import pandas as pd
 import torch

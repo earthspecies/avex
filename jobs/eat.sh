@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 #SBATCH --partition=a100-40
-#SBATCH --gpus=1
-#SBATCH --ntasks-per-gpu=1
+#SBATCH --gpus=2
+#SBATCH --ntasks-per-gpu=2
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="eat pretraining"
 #SBATCH --cpus-per-gpu=12

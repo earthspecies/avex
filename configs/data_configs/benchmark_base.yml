@@ -2,77 +2,77 @@ benchmark_name: "bioacoustic_benchmark_base"
 
 evaluation_sets:
   # Classification Tasks
-  # - name: "dog_classification"
-  #   train: &dogs_base
-  #     dataset_name: beans
-  #     split: dogs_train
-  #     type: classification
-  #     label_column: label
-  #     audio_path_col: path
-  #     multi_label: false
-  #     label_type: supervised
-  #     audio_max_length_seconds: 10
-  #     transformations:
-  #       - type: label_from_feature
-  #         feature: label
-  #         override: true
-  #         label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
-  #     sample_rate: 16000
-  #   validation:
-  #     <<: *dogs_base
-  #     split: dogs_validation
-  #   test:
-  #     <<: *dogs_base
-  #     split: dogs_test
-  #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  - name: "dog_classification"
+    train: &dogs_base
+      dataset_name: beans
+      split: dogs_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
+      sample_rate: 16000
+    validation:
+      <<: *dogs_base
+      split: dogs_validation
+    test:
+      <<: *dogs_base
+      split: dogs_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
 
-  # - name: "bat_classification"
-  #   train: &bats_base
-  #     dataset_name: beans
-  #     split: egyptian_fruit_bats_train
-  #     type: classification
-  #     label_column: label
-  #     audio_path_col: path
-  #     multi_label: false
-  #     label_type: supervised
-  #     audio_max_length_seconds: 5
-  #     transformations:
-  #       - type: label_from_feature
-  #         feature: label
-  #         override: true
-  #         label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
-  #     sample_rate: 16000
-  #   validation:
-  #     <<: *bats_base
-  #     split: egyptian_fruit_bats_validation
-  #   test:
-  #     <<: *bats_base
-  #     split: egyptian_fruit_bats_test
-  #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  - name: "bat_classification"
+    train: &bats_base
+      dataset_name: beans
+      split: egyptian_fruit_bats_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
+      sample_rate: 16000
+    validation:
+      <<: *bats_base
+      split: egyptian_fruit_bats_validation
+    test:
+      <<: *bats_base
+      split: egyptian_fruit_bats_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
 
-  # - name: "mosquito_classification"
-  #   train: &mosquito_base
-  #     dataset_name: beans
-  #     split: humbugdb_train
-  #     type: classification
-  #     label_column: label
-  #     audio_path_col: path
-  #     multi_label: false
-  #     label_type: supervised
-  #     audio_max_length_seconds: 3
-  #     transformations:
-  #       - type: label_from_feature
-  #         feature: label
-  #         override: true
-  #         label_map: {'ae aegypti': 0, 'an arabiensis': 1, 'an dirus': 2, 'an funestus sl': 3, 'an funestus ss': 4, 'an gambiae ss': 5, 'an harrisoni': 6, 'an maculatus': 7, 'an squamosus': 8, 'culex pipiens complex': 9, 'culex quinquefasciatus': 10, 'ma uniformis': 11, 'non-mosquito': 12, 'others': 13}
-  #     sample_rate: 16000
-  #   validation:
-  #     <<: *mosquito_base
-  #     split: humbugdb_validation
-  #   test:
-  #     <<: *mosquito_base
-  #     split: humbugdb_test
-  #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  - name: "mosquito_classification"
+    train: &mosquito_base
+      dataset_name: beans
+      split: humbugdb_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 3
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'ae aegypti': 0, 'an arabiensis': 1, 'an dirus': 2, 'an funestus sl': 3, 'an funestus ss': 4, 'an gambiae ss': 5, 'an harrisoni': 6, 'an maculatus': 7, 'an squamosus': 8, 'culex pipiens complex': 9, 'culex quinquefasciatus': 10, 'ma uniformis': 11, 'non-mosquito': 12, 'others': 13}
+      sample_rate: 16000
+    validation:
+      <<: *mosquito_base
+      split: humbugdb_validation
+    test:
+      <<: *mosquito_base
+      split: humbugdb_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
 
   - name: "bird_classification"
     train: &bird_base
@@ -165,7 +165,7 @@ evaluation_sets:
           features:
             - labels_as_list
           override: true
-          label_map: {"Minke Whale 'boing' call": 0}
+          label_map: {"Minke whale": 0}
       sample_rate: 16000
     validation:
       <<: *hiceas_base

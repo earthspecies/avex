@@ -11,14 +11,14 @@
 # Map array task ID to config file
 declare -A configs=(
     # [1]="efficientnet_beans.yml"
-    # [2]="eat_hf.yml"
+    [2]="eat_hf.yml"
     # [3]="atst_frame.yml"
     # [4]="clap.yml"
     [5]="beats.yml"
-    # [6]="bird_aves_bio.yml"
-    # [7]="beats_naturelm.yml"
+    [6]="bird_aves_bio.yml"
+    [7]="beats_naturelm.yml"
     # [8]="beats_finetuned.yml"
-    # [9]="perch.yml"
+    [9]="perch.yml"
 )
 
 # Get the config file for this array task
@@ -34,5 +34,7 @@ echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)
 cd ~/representation-learning
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
+export GOOGLE_APPLICATION_CREDENTIALS=/home/david_earthspecies_org/.config/gcloud/application_default_credentials.json
+export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 uv sync
 srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/$config_file

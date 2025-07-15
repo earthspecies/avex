@@ -132,15 +132,32 @@ class MetricsTracker:
         Tuple[float, float]
             Average loss and accuracy so far
         """
-        return gather_metrics_from_all_ranks(
-            self.total_loss,
-            self.total_correct,
-            self.total_samples,
-            self.device,
-            is_clip_mode=(self.training_mode == "clip"),
-            total_correct_a2t=self.total_correct_a2t,
-            total_correct_t2a=self.total_correct_t2a,
-        )
+        if self.total_samples == 0:
+            return 0.0, 0.0
+
+        avg_loss = self.total_loss / self.total_samples
+
+        # ------------------------------------------------------------------ #
+        #  Accuracy computation depends on training mode
+        # ------------------------------------------------------------------ #
+        if self.training_mode == "clip":
+            # Retrieval accuracies are tracked separately
+            avg_acc = (
+                (self.total_correct_a2t + self.total_correct_t2a)
+                / 2.0
+                / self.total_samples
+            )
+        elif self.training_mode == "supervised":
+            # Derive running accuracy directly from the metric calculator if present
+            if "accuracy" in self.metric_calculators:
+                avg_acc = self.metric_calculators["accuracy"].get_primary_metric()
+            else:
+                avg_acc = 0.0
+        else:
+            # eat_ssl or other modes that don't track accuracy
+            avg_acc = self.total_correct / self.total_samples
+
+        return float(avg_loss), float(avg_acc)
 
     def get_component_metrics(self) -> Dict[str, float]:
         """Get component metrics (for EAT SSL).

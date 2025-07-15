@@ -2,7 +2,7 @@
 dataset_config: configs/data_configs/benchmark_debug.yml
 
 training_params:
-  train_epochs: 300
+  train_epochs: 600
   lr: 0.0003
   batch_size: 32
   optimizer: adamw
@@ -34,7 +34,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

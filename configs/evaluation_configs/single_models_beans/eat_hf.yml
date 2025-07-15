@@ -2,7 +2,7 @@
 dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 300
+  train_epochs: 600
   lr: 0.0003
   batch_size: 32
   optimizer: adamw
@@ -13,7 +13,8 @@ training_params:
 # Which experiments to evaluate
 experiments:
   - run_name: eat_hf
-    run_config: configs/run_configs/eat_baseline.yml
+    # run_config: configs/run_configs/eat_baseline.yml
+    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
     ### which layers to probe for embeddings
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
@@ -29,7 +30,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 8  # Enable workers for better memory management
+num_workers: 6  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:

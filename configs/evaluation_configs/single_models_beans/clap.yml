@@ -1,8 +1,8 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_debug.yml
+dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 300
+  train_epochs: 600
   lr: 0.0003
   batch_size: 32
   optimizer: adamw
@@ -13,11 +13,13 @@ training_params:
 # Which experiments to evaluate
 experiments:
   - run_name: clap
-    run_config: configs/run_configs/clip_base_beans.yml
+    # run_config: configs/run_configs/clip_base_beans.yml
+    run_config: configs/run_configs/aaai_train/clap_efficientnet_captions_h100.yml
     ### which layers to probe for embeddings
-    layers: audio_projection
+    layers: audio_projectionx
     ### whether to use pretrained model or the one we train on bioacoustic data
-    checkpoint_path: runs/clip_caption_16khz_ga/2025-06-18_06-06-48/checkpoints/final_model.pt
+    # checkpoint_path:
+    checkpoint_path: runs/aaai/clap_efficientnet_captions/2025-07-12_05-21-17/checkpoint_epoch_015.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/clap
@@ -33,7 +35,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval
   - clustering
 

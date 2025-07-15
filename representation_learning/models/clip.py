@@ -13,7 +13,7 @@ from representation_learning.models.efficientnet import (
 
 
 class CLIPModel(ModelBase):
-    """CLIP-like model combining EfficientNet for audio and RoBERTa for text."""
+    """CLAP model combining EfficientNet for audio and RoBERTa for text."""
 
     def __init__(
         self,
@@ -102,7 +102,7 @@ class CLIPModel(ModelBase):
         """
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, max_length=40, return_tensors="pt"
+            text, padding=True, truncation=True, max_length=70, return_tensors="pt"
         ).to(current_device)
 
         outputs = self.text_encoder(**tokens)
@@ -131,3 +131,51 @@ class CLIPModel(ModelBase):
             self.logit_scale.clamp_(max=LOGIT_SCALE_MAX)
 
         return audio_embeddings, text_embeddings, self.logit_scale.exp()
+
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | Dict[str, torch.Tensor],
+        layers: list[str],
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+        average_over_time: bool = True,
+    ) -> torch.Tensor:
+        """Extract audio embeddings from the CLIP model.
+
+        Parameters
+        ----------
+        x : torch.Tensor | Dict[str, torch.Tensor]
+            Input audio tensor or dictionary containing 'raw_wav' and 'padding_mask'
+        layers : list[str]
+            List of layer names (kept for interface compatibility but ignored)
+        padding_mask : Optional[torch.Tensor]
+            Padding mask for the input
+        average_over_time : bool
+            Kept for interface compatibility but ignored
+
+        Returns
+        -------
+        torch.Tensor
+            Projected audio embeddings suitable for contrastive learning
+        """
+        # Handle input format
+        if isinstance(x, dict):
+            raw_wav = x["raw_wav"]
+            p_mask = x.get("padding_mask", padding_mask)
+        else:
+            raw_wav = x
+            p_mask = padding_mask
+
+        if p_mask is None:
+            p_mask = torch.zeros(
+                raw_wav.size(0),
+                raw_wav.size(1),
+                device=raw_wav.device,
+                dtype=torch.bool,
+            )
+
+        # Extract audio features and apply projection
+        audio_features = self.audio_encoder(raw_wav, p_mask)
+        projected_features = self.audio_projection(audio_features)
+
+        return projected_features

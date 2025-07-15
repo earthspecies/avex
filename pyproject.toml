@@ -34,11 +34,14 @@ dependencies = [
   "transformers",
   "h5py>=3.13.0",
   "semver>=3.0.4",
-  "esp-data>=1.1.2",
-  "tensorflow==2.17.0",
+  "esp-data",
+  "tensorflow==2.15.1",
   "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
+  "wandb>=0.21.0",
+  "birdnetlib>=0.18.0",
+  "soundfile>=0.12.0",
 ]
 
 [dependency-groups]
@@ -54,14 +57,16 @@ dev = [
   "ipykernel>=6.29.5",
 ]
 
-# esp_data package
-[[tool.uv.index]]
-name = "esp-pypi"
-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-explicit = true
+# esp_data package - using local reference
+# Original remote configuration (commented out):
+# [[tool.uv.index]]
+# name = "esp-pypi"
+# url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+# explicit = true
 
 [tool.uv.sources]
-esp-data = { index = "esp-pypi" }
+esp-data = { path = "./esp_data_reference" }
+# esp-data = { index = "esp-pypi" }  # original remote source
 
 [tool.uv]
 default-groups = ["dev", "gpu"]

@@ -16,6 +16,7 @@ A training loop that supports:
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, Optional
 
@@ -121,11 +122,51 @@ class Trainer:
         self.start_epoch = 1
         self.global_updates = 0
 
+        # Debug flags
+        self._debug_first_forward = False
+
+        # Initialize clustering evaluator if enabled
+        self.clustering_evaluator = None
+        if (
+            hasattr(config, "clustering_eval")
+            and config.clustering_eval
+            and config.clustering_eval.enabled
+        ):
+            # Use text-aware clustering evaluator for text-labeled datasets
+            if config.label_type == "text":
+                from representation_learning.training.text_aware_clustering_evaluator import (
+                    TextAwareClusteringEvaluator,
+                )
+
+                # Determine strategy based on dataset characteristics
+                text_label_strategy = "canonical_name"  # Default for AnimalSpeak
+                if hasattr(config.clustering_eval, "text_label_strategy"):
+                    text_label_strategy = config.clustering_eval.text_label_strategy
+
+                self.clustering_evaluator = TextAwareClusteringEvaluator(
+                    config.clustering_eval,
+                    device,
+                    text_label_strategy=text_label_strategy,
+                )
+                logger.info(
+                    f"Text-aware clustering evaluation enabled with strategy: {text_label_strategy}"
+                )
+            else:
+                from representation_learning.training.clustering_evaluator import (
+                    ClusteringEvaluator,
+                )
+
+                self.clustering_evaluator = ClusteringEvaluator(
+                    config.clustering_eval, device
+                )
+                logger.info("Clustering evaluation enabled")
+
         # Load checkpoint if specified
         if is_main_process() and resume_from_checkpoint:
             self._load_checkpoint(resume_from_checkpoint)
 
         # Broadcast training state in distributed setting
+
         self._broadcast_training_state()
 
         # Log static hyperparameters
@@ -135,6 +176,10 @@ class Trainer:
     def train(self) -> None:
         """Run the full training loop for the configured number of epochs."""
         try:
+            # Optional clustering evaluation before training starts
+            if self._should_run_clustering_eval_before_training():
+                self._run_clustering_evaluation(epoch=0, is_pre_training=True)
+
             for epoch in range(
                 self.start_epoch, self.config.training_params.train_epochs + 1
             ):
@@ -143,7 +188,20 @@ class Trainer:
 
                 # Run training and validation epochs
                 train_loss, train_metrics = self._run_epoch(train=True, epoch=epoch)
-                val_loss, val_metrics = self._run_epoch(train=False, epoch=epoch)
+
+                # Skip validation if configured
+                if self.config.training_params.skip_validation:
+                    val_loss, val_metrics = 0.0, {}
+                    logger.info(
+                        f"[Epoch {epoch:03d}] Skipping validation (skip_validation=True)"
+                    )
+                else:
+                    val_loss, val_metrics = self._run_epoch(train=False, epoch=epoch)
+
+                # Optional clustering evaluation
+                clustering_metrics = {}
+                if self._should_run_clustering_eval(epoch):
+                    clustering_metrics = self._run_clustering_evaluation(epoch)
 
                 # Extract primary metric for comparison
                 primary_metric_name = self.metrics_tracker.primary_metric_name
@@ -153,9 +211,20 @@ class Trainer:
                 # Log and save checkpoints on main process only
                 if is_main_process():
                     self._log_epoch_results(
-                        epoch, train_loss, train_metrics, val_loss, val_metrics
+                        epoch,
+                        train_loss,
+                        train_metrics,
+                        val_loss,
+                        val_metrics,
+                        clustering_metrics,
                     )
-                    self._handle_checkpointing(epoch, val_acc)
+                    # Use train_acc for checkpointing when validation is skipped
+                    checkpoint_acc = (
+                        val_acc
+                        if not self.config.training_params.skip_validation
+                        else train_acc
+                    )
+                    self._handle_checkpointing(epoch, checkpoint_acc)
 
             # Save final checkpoint
             if is_main_process():
@@ -203,6 +272,15 @@ class Trainer:
             for i, batch in iterator:
                 if train:
                     self.global_updates += 1
+                    # Update EAT SSL teacher *before* forward pass (match reference behaviour)
+                    if isinstance(self.strategy, EATSSLStrategy):
+                        self.strategy.update_teacher(self.model, self.global_updates)
+
+                # Debug: Log batch fetch completion
+                if is_main and i == 0:
+                    logger.info(
+                        f"[DEBUG] First batch fetched successfully, batch_size={batch['raw_wav'].size(0) if 'raw_wav' in batch else 'unknown'}"
+                    )
 
                 # Forward pass using strategy
                 result = self._forward_with_strategy(batch)
@@ -218,10 +296,6 @@ class Trainer:
                 if train:
                     # Backward pass and optimization
                     self._backward_step(result.loss)
-
-                    # Update EAT SSL teacher if needed
-                    if isinstance(self.strategy, EATSSLStrategy):
-                        self.strategy.update_teacher(self.model, self.global_updates)
 
                 # Periodic logging
                 if (i + 1) % self.config.training_params.log_steps == 0 or (
@@ -240,9 +314,28 @@ class Trainer:
             for k, v in batch.items()
         }
 
+        # Debug: Log before forward pass
+        if (
+            is_main_process()
+            and hasattr(self, "_debug_first_forward")
+            and not self._debug_first_forward
+        ):
+            logger.info("[DEBUG] Starting first forward pass")
+            self._debug_first_forward = True
+
         # Forward pass with AMP
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
             result = self.strategy.forward(self.model, batch)
+
+        # Debug: Log after forward pass
+        if (
+            is_main_process()
+            and hasattr(self, "_debug_first_forward")
+            and self._debug_first_forward
+            and not hasattr(self, "_debug_first_forward_done")
+        ):
+            logger.info("[DEBUG] First forward pass completed")
+            self._debug_first_forward_done = True
 
         return result
 
@@ -297,6 +390,7 @@ class Trainer:
         train_metrics: Dict[str, float],
         val_loss: float,
         val_metrics: Dict[str, float],
+        clustering_metrics: Dict[str, float] = None,
     ) -> None:
         """Log epoch-level results."""
         current_lr = self.optimizer.param_groups[0]["lr"]
@@ -306,14 +400,31 @@ class Trainer:
         val_acc = val_metrics.get(primary_metric, 0.0)
 
         # Basic log message
-        log_msg = (
-            f"[Epoch {epoch:03d}] "
-            f"train_loss={train_loss:.4f}  "
-            f"train_{primary_metric}={train_acc:.4f} | "
-            f"val_loss={val_loss:.4f}  "
-            f"val_{primary_metric}={val_acc:.4f} | "
-            f"lr={current_lr:.2e}"
-        )
+        if self.config.training_params.skip_validation:
+            # Train-only mode
+            log_msg = (
+                f"[Epoch {epoch:03d}] "
+                f"train_loss={train_loss:.4f}  "
+                f"train_{primary_metric}={train_acc:.4f} | "
+                f"lr={current_lr:.2e}"
+            )
+        else:
+            # Normal train + validation mode
+            log_msg = (
+                f"[Epoch {epoch:03d}] "
+                f"train_loss={train_loss:.4f}  "
+                f"train_{primary_metric}={train_acc:.4f} | "
+                f"val_loss={val_loss:.4f}  "
+                f"val_{primary_metric}={val_acc:.4f} | "
+                f"lr={current_lr:.2e}"
+            )
+
+        # Add clustering metrics if available
+        if clustering_metrics:
+            clustering_str = " | " + " ".join(
+                f"{k}={v:.4f}" for k, v in clustering_metrics.items()
+            )
+            log_msg += clustering_str
 
         # Add CLIP-specific metrics if available
         if self.strategy.get_expected_metrics_format() == "clip_accuracy":
@@ -323,7 +434,11 @@ class Trainer:
                     f" | train_a2t={train_metrics['acc_a2t']:.4f} "
                     f"train_t2a={train_metrics['acc_t2a']:.4f}"
                 )
-            if "acc_a2t" in val_metrics and "acc_t2a" in val_metrics:
+            if (
+                not self.config.training_params.skip_validation
+                and "acc_a2t" in val_metrics
+                and "acc_t2a" in val_metrics
+            ):
                 log_msg += (
                     f" val_a2t={val_metrics['acc_a2t']:.4f} "
                     f"val_t2a={val_metrics['acc_t2a']:.4f}"
@@ -340,18 +455,36 @@ class Trainer:
             }
             self.exp_logger.log_metrics(train_log_metrics, step=epoch, split="train")
 
-            val_log_metrics = {"loss": val_loss, **val_metrics}
-            self.exp_logger.log_metrics(val_log_metrics, step=epoch, split="val")
+            # Only log validation metrics if validation was run
+            if not self.config.training_params.skip_validation:
+                val_log_metrics = {"loss": val_loss, **val_metrics}
+                self.exp_logger.log_metrics(val_log_metrics, step=epoch, split="val")
+
+            # Log clustering metrics separately if available
+            if clustering_metrics:
+                self.exp_logger.log_metrics(
+                    clustering_metrics, step=epoch, split="clustering"
+                )
 
     def _handle_checkpointing(self, epoch: int, val_acc: float) -> None:
         """Handle checkpoint saving logic."""
+        # When validation is skipped, we use training accuracy for "best" model tracking
+        if self.config.training_params.skip_validation:
+            metric_name = "training accuracy"
+            metric_for_comparison = (
+                val_acc  # This is actually train_acc when validation is skipped
+            )
+        else:
+            metric_name = "validation accuracy"
+            metric_for_comparison = val_acc
+
         # Save best model
-        if val_acc > self.best_val_acc:
+        if metric_for_comparison > self.best_val_acc:
             logger.info(
-                f"New best validation accuracy: {val_acc:.4f} "
+                f"New best {metric_name}: {metric_for_comparison:.4f} "
                 f"(prev: {self.best_val_acc:.4f})"
             )
-            self.best_val_acc = val_acc
+            self.best_val_acc = metric_for_comparison
             self._save_checkpoint(epoch, is_best=True)
 
         # Save periodic checkpoint
@@ -388,6 +521,34 @@ class Trainer:
             is_final=True,
         )
 
+        # Save label_map at the end of training
+        self._save_label_map()
+
+    def _save_label_map(self) -> None:
+        """Save the label_map from dataset metadata to output directory."""
+        if not is_main_process():
+            return
+
+        try:
+            # Get label_map from train dataloader
+            label_map = self.train_dataloader.dataset.metadata.get("label_map", {})
+            if label_map:
+                # Use the same output directory structure as checkpoints
+                from esp_data.io.paths import anypath
+
+                output_dir = anypath(self.config.output_dir)
+                label_map_path = output_dir / "label_map.json"
+
+                with label_map_path.open("w") as f:
+                    json.dump(label_map, f, indent=2)
+                logger.info(
+                    f"Saved final label_map with {len(label_map)} classes to {label_map_path}"
+                )
+            else:
+                logger.warning("No label_map found in dataset metadata to save")
+        except Exception as e:
+            logger.error(f"Failed to save label_map: {e}")
+
     def _load_checkpoint(self, checkpoint_path: str) -> None:
         """Load checkpoint using the checkpoint manager."""
         unwrapped_model = self._get_unwrapped_model()
@@ -416,7 +577,9 @@ class Trainer:
         )
 
         # Broadcast from rank 0
+        dist.barrier()
         dist.broadcast(state_tensor, src=0)
+        dist.barrier()
 
         # Update state on non-main processes
         if not is_main_process():
@@ -472,15 +635,22 @@ class Trainer:
                 model,
                 device_ids=[device_index],
                 output_device=device_index,
-                find_unused_parameters=True,
+                broadcast_buffers=False,  # Avoid sync issues with dynamic buffers
+                find_unused_parameters=False,
             )
         else:
             # For CPU or when device index is None
             logger.info("Using CPU or auto-detect for DDP")
             wrapped_model = parallel.DistributedDataParallel(
                 model,
-                find_unused_parameters=True,
+                broadcast_buffers=False,
+                # Don't use find_unused_parameters when using _set_static_graph
+                find_unused_parameters=not self.config.training_params.gradient_checkpointing,
             )
+
+        if self.config.training_params.gradient_checkpointing:
+            logger.info("Setting static graph for DDP due to gradient checkpointing")
+            wrapped_model._set_static_graph()
 
         return wrapped_model
 
@@ -500,3 +670,53 @@ class Trainer:
             self.train_dataloader.sampler.set_epoch(epoch)
         if hasattr(self.eval_dataloader.sampler, "set_epoch"):
             self.eval_dataloader.sampler.set_epoch(epoch)
+
+    def _should_run_clustering_eval_before_training(self) -> bool:
+        """Check if clustering evaluation should run before training starts."""
+        if not self.clustering_evaluator:
+            return False
+        return self.clustering_evaluator.config.run_before_training
+
+    def _should_run_clustering_eval(self, epoch: int) -> bool:
+        """Check if clustering evaluation should run this epoch."""
+        if not self.clustering_evaluator:
+            return False
+        return epoch % self.clustering_evaluator.config.frequency == 0
+
+    def _run_clustering_evaluation(
+        self, epoch: int, is_pre_training: bool = False
+    ) -> Dict[str, float]:
+        """Run clustering evaluation."""
+        if not is_main_process():
+            return {}
+
+        if is_pre_training:
+            logger.info("Running clustering evaluation before training starts")
+        else:
+            logger.info(f"Running clustering evaluation at epoch {epoch}")
+
+        # Choose dataloader based on config
+        dataloader = (
+            self.eval_dataloader
+            if self.clustering_evaluator.config.use_validation_set
+            else self.train_dataloader
+        )
+
+        # Get unwrapped model for evaluation
+        model = self._get_unwrapped_model()
+
+        try:
+            clustering_metrics = self.clustering_evaluator.evaluate(
+                model, dataloader, epoch
+            )
+
+            # Log clustering metrics to experiment logger
+            if clustering_metrics and self.exp_logger:
+                step = epoch if not is_pre_training else 0
+                split = "clustering_pre" if is_pre_training else "clustering"
+                self.exp_logger.log_metrics(clustering_metrics, step=step, split=split)
+
+            return clustering_metrics
+        except Exception as e:
+            logger.error(f"Clustering evaluation failed: {e}")
+            return {}

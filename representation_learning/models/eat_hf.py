@@ -13,6 +13,8 @@ from representation_learning.models.eat.audio_processor import EATAudioProcessor
 
 logger = logging.getLogger(__name__)
 
+# Removed hardcoded VARIANT - now configurable via parameters
+
 
 def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
     """Load fairseq weights into HuggingFace model.
@@ -105,8 +107,6 @@ class EATHFModel(ModelBase):
     pooling
         One of ``"cls"`` or ``"mean"`` determining how patch-level features
         are aggregated into a clip-level embedding.
-    return_features_only
-        Force feature mode even when ``num_classes>0``.
     trust_remote_code
         Passed through to :pyfunc:`transformers.AutoModel.from_pretrained`.
     """
@@ -123,7 +123,9 @@ class EATHFModel(ModelBase):
         audio_config: Optional[Dict[str, Any]] = None,
         target_length: int = 1024,
         pooling: str = "cls",
-        return_features_only: bool = True,
+        fairseq_weights_path: Optional[str] = None,
+        norm_mean: float = -4.268,
+        norm_std: float = 4.569,
     ) -> None:
         """Initialize EATHFModel.
 
@@ -134,12 +136,14 @@ class EATHFModel(ModelBase):
             audio_config: Audio configuration (ignored, kept for API compatibility)
             target_length: Required spectrogram length in time frames
             pooling: Pooling method ("cls" or "mean")
-            return_features_only: Whether to return features only
+            fairseq_weights_path: Optional path to fairseq checkpoint
+            norm_mean: Normalization mean for mel spectrograms
+            norm_std: Normalization std for mel spectrograms
         """
         super().__init__(device=device, audio_config=audio_config)
 
         self.pooling = pooling
-        self.return_features_only = return_features_only or num_classes == 0
+        self.num_classes = num_classes
 
         # -------------------------------------------------------------- #
         #  Audio pre-processing – Mel FBanks identical to EAT reference  #
@@ -148,6 +152,8 @@ class EATHFModel(ModelBase):
             sample_rate=16_000,
             target_length=target_length,
             n_mels=128,
+            norm_mean=norm_mean,
+            norm_std=norm_std,
         )
 
         # -------------------------------------------------------------- #
@@ -175,17 +181,25 @@ class EATHFModel(ModelBase):
         # ) # 48khz
         # load_fairseq_weights(
         #     self.backbone,
-        #     "../EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint24.pt"
+        #     "../EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint15.pt"
         # ) # AudioSet
+        # load_fairseq_weights(
+        #     self.backbone,
+        #     "../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint15.pt"
+        # ) # AnimalSpeak
+
+        # Conditionally load fairseq weights if path is provided
+        if fairseq_weights_path is not None:
+            logger.info("Loading fairseq weights from '%s' …", fairseq_weights_path)
+            load_fairseq_weights(self.backbone, fairseq_weights_path)
 
         embed_dim = getattr(self.backbone.config, "hidden_size", 768)
 
         # Optional linear classifier for downstream tasks
-        if self.return_features_only:
-            self.classifier = None  # type: ignore[assignment]
-            # self.register_module("classifier", None)  # satisfies mypy
+        if self.num_classes > 0:
+            self.classifier = nn.Linear(embed_dim, self.num_classes).to(self.device)
         else:
-            self.classifier = nn.Linear(embed_dim, num_classes).to(self.device)
+            self.classifier = None
 
     # ------------------------------------------------------------------ #
     #  Forward pass                                                    #
@@ -195,6 +209,7 @@ class EATHFModel(ModelBase):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
         framewise_embeddings: bool = False,
+        return_features_only: bool = False,
     ) -> torch.Tensor:  # noqa: D401 – keep signature consistent
         """Forward pass through the EAT model.
 
@@ -204,6 +219,11 @@ class EATHFModel(ModelBase):
             Raw waveform tensor of shape ``(B, T)``.
         padding_mask
             Not used (kept for interface compatibility).
+        framewise_embeddings
+            If True, return frame-wise embeddings instead of pooled features.
+        return_features_only
+            If True, return features instead of classification logits.
+            Defaults to False, but automatically True if num_classes=0.
 
         Returns
         -------
@@ -239,7 +259,8 @@ class EATHFModel(ModelBase):
             raise ValueError("pooling must be 'cls' or 'mean'")
 
         # 5) Optional classification head
-        if self.return_features_only:
+        # Return features if explicitly requested or if no classifier exists
+        if return_features_only or self.classifier is None:
             return pooled
         return self.classifier(pooled)
 
@@ -272,9 +293,11 @@ class EATHFModel(ModelBase):
 
         prev_pooling = self.pooling
         self.pooling = pooling
-        with torch.no_grad():
-            emb = self.forward(wav, padding_mask)
-        self.pooling = prev_pooling
+        try:
+            with torch.no_grad():
+                emb = self.forward(wav, padding_mask, return_features_only=True)
+        finally:
+            self.pooling = prev_pooling
         return emb
 
 

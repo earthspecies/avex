@@ -1,8 +1,8 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_debug.yml
+dataset_config: configs/data_configs/benchmark_base.yml
 
 training_params:
-  train_epochs: 300
+  train_epochs: 600
   lr: 0.0003
   batch_size: 32
   optimizer: adamw
@@ -13,13 +13,16 @@ training_params:
 # Which experiments to evaluate
 experiments:
   - run_name: efficientnet_beans
-    run_config: configs/run_configs/efficientnet_base_beans.yml
+    run_config: configs/run_configs/aaai_train/sl_efficientnet_audioset.yml
     ### which layers to probe for embeddings
     layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     # checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
-    checkpoint_path: runs/efficientnet_multilabel/2025-06-30_17-36-11/checkpoints/checkpoint_epoch_038.pt
+    # checkpoint_path: runs/efficientnet_multilabel/2025-06-30_17-36-11/checkpoints/checkpoint_epoch_038.pt
+    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-10_03-15-39/checkpoint_epoch_013.pt
+    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-11_11-42-34/checkpoint_epoch_028.pt
+    checkpoint_path: runs/efficientnet_audioset/2025-07-13_07-19-26/checkpoint_epoch_021.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/efficientnet_beans
@@ -35,7 +38,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval
   - clustering
 

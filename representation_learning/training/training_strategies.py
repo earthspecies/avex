@@ -147,6 +147,12 @@ class CLIPStrategy(TrainingStrategy):
             audio, text=text, padding_mask=padding_mask
         )
 
+        # Debug: Log before loss computation
+        if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
+            if not hasattr(self, "_debug_first_loss"):
+                logger.info("[DEBUG] Starting first CLIP loss computation")
+                self._debug_first_loss = True
+
         # Get loss and logits from criterion
         if isinstance(self.criterion, ClipLoss):
             loss, logits = self.criterion(
@@ -156,6 +162,14 @@ class CLIPStrategy(TrainingStrategy):
             loss = self.criterion(audio_emb, text_emb, logit_scale)
             with torch.no_grad():
                 logits = audio_emb @ text_emb.T * logit_scale
+
+        # Debug: Log after loss computation
+        if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
+            if hasattr(self, "_debug_first_loss") and not hasattr(
+                self, "_debug_first_loss_done"
+            ):
+                logger.info("[DEBUG] First CLIP loss computation completed")
+                self._debug_first_loss_done = True
 
         # Compute accuracy metrics
         with torch.no_grad():

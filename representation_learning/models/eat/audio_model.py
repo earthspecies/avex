@@ -268,8 +268,8 @@ class Model(ModelBase):
                 "AudioProcessor must return a 3-D tensor with shape (B, F, T)"
             )
 
-        # 2) Re-arrange to (B, T, F)
-        # spec = spec.permute(0, 2, 1)  # -> (B, T, F)
+        # 2) Re-arrange to (B, T, F) – match reference implementation
+        spec = spec.permute(0, 2, 1)  # (B, T, F)
 
         # ------------------------------------------------------------------ #
         #  Optional: propagate padding mask (waveform → frame → patch)        #
@@ -277,7 +277,7 @@ class Model(ModelBase):
         patch_mask = None
         if self.handle_padding and original_lengths is not None:
             patch_mask = self.padding_handler.compute_patch_mask(
-                original_lengths, target_frames=spec.size(2), n_mels=spec.size(1)
+                original_lengths, target_frames=spec.size(1), n_mels=spec.size(2)
             )
 
         # Invert patch mask for transformer attention: True -> padded
@@ -285,7 +285,7 @@ class Model(ModelBase):
         if patch_mask is not None:
             attn_padding_mask = ~patch_mask
 
-        # 3) Add channel dimension expected by ImageEncoder
+        # 3) Add channel dimension expected by ImageEncoder (T becomes height)
         spec = spec.unsqueeze(1)  # (B, 1, T, F)
 
         # 4) Backbone
@@ -429,7 +429,7 @@ class Model(ModelBase):
             )
 
         # 2) Re-arrange to (B, T, F)
-        # spec = spec.permute(0, 2, 1)
+        spec = spec.permute(0, 2, 1)
 
         # ------------------------------------------------------------------ #
         #  Optional: compute patch padding mask                              #
@@ -437,7 +437,7 @@ class Model(ModelBase):
         patch_mask = None
         if self.handle_padding and original_lengths is not None:
             patch_mask = self.padding_handler.compute_patch_mask(
-                original_lengths, target_frames=spec.size(2), n_mels=spec.size(1)
+                original_lengths, target_frames=spec.size(1), n_mels=spec.size(2)
             )
 
         # Invert patch mask for transformer attention (True -> padded)

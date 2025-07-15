@@ -184,6 +184,13 @@ class AugmentationProcessor:
             Audio tensor with noise augmentation applied.
 
         """
+        # Skip noise augmentation if audio has zero length
+        if wav.numel() == 0 or wav.shape[-1] == 0:
+            logger.warning(
+                f"Skipping noise augmentation for audio with zero length: shape={wav.shape}"
+            )
+            return wav
+
         for cfg in self.noise_aug_configs:
             if random.random() >= cfg.augmentation_prob:  # noqa: S311
                 continue
@@ -193,8 +200,15 @@ class AugmentationProcessor:
                 continue
 
             noise_path = random.choice(noise_candidates)  # noqa: S311
-            # Apply noise mixing
-            wav = self._mix_noise(wav, noise_path, cfg.snr_db_range)
+            try:
+                wav = self._mix_noise(wav, noise_path, cfg.snr_db_range)
+            except Exception as exc:  # noqa: BLE001
+                # Log full stack trace for later debugging
+                logger.exception(
+                    "Noise augmentation failed for %s – skipping this file. Error: %s",
+                    noise_path,
+                    exc,
+                )
 
         return wav
 
@@ -224,17 +238,46 @@ class AugmentationProcessor:
         info = sf.info(str(noise_path))
         target_frames = min(int(self.sr * max_window_sec), audio_len)
 
+        # Handle edge case where audio_len is 0 or very small
+        if target_frames <= 0:
+            # Use a minimum reasonable segment size (e.g. 0.1 seconds)
+            min_frames = int(self.sr * 0.1)  # 0.1 seconds minimum
+            target_frames = min(min_frames, info.frames)
+
         if info.frames <= target_frames:
             frame_offset, num_frames = 0, info.frames
         else:
             frame_offset = random.randint(0, info.frames - target_frames)  # noqa: S311
             num_frames = target_frames
 
-        noise_wav, noise_sr = torchaudio.load(
-            noise_path,
-            frame_offset=frame_offset,
-            num_frames=num_frames,
-        )
+        # Final safeguard: ensure num_frames is valid
+        if num_frames <= 0:
+            logger.warning(
+                f"Invalid num_frames={num_frames} for noise file {noise_path}, "
+                f"audio_len={audio_len}, info.frames={info.frames}, target_frames={target_frames}. "
+                f"Using full file."
+            )
+            frame_offset, num_frames = 0, info.frames
+
+        # If still invalid, skip this noise file
+        if num_frames <= 0:
+            logger.error(
+                f"Noise file {noise_path} has no frames (info.frames={info.frames}). "
+                f"Returning empty tensor."
+            )
+            return torch.zeros((1, 1), dtype=torch.float32)
+
+        try:
+            noise_wav, noise_sr = torchaudio.load(
+                noise_path,
+                frame_offset=frame_offset,
+                num_frames=num_frames,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to load noise file %s: %s", noise_path, exc)
+            if audio_len <= 0:
+                audio_len = 1
+            return torch.zeros((1, audio_len), dtype=torch.float32)
 
         # Convert to mono
         if noise_wav.shape[0] > 1:

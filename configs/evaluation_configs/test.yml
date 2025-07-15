@@ -3,7 +3,7 @@
 dataset_config: configs/data_configs/benchmark_id_repertoire.yml
 
 training_params:
-  train_epochs: 300
+  train_epochs: 600
   lr: 0.0003
   batch_size: 32
   optimizer: adamw
