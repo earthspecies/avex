@@ -319,7 +319,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     # required
     model_spec: ModelSpec
     training_params: TrainingParams
-    dataset_config: str
+    dataset_config: DatasetCollectionConfig
     output_dir: str
 
     # optional / misc
@@ -378,6 +378,19 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
 
     # Debug mode
     debug_mode: bool = False
+
+    @field_validator("dataset_config", mode="before")
+    @classmethod
+    def _maybe_read_from_yml(cls, raw: Any) -> Any:  # noqa: ANN401
+        # If it's a string, treat it as a path to a YAML file
+        if isinstance(raw, str) and raw.endswith((".yml", ".yaml")):
+            path = Path(raw)
+            if not path.exists():
+                raise FileNotFoundError(f"Dataset config file not found: {path}")
+            with path.open("r", encoding="utf-8") as f:
+                return yaml.safe_load(f)
+        # Otherwise, let normal validation proceed
+        return raw
 
     # ------------------------------
     # custom pre‑processing of augments
@@ -813,12 +826,12 @@ def load_config(
     with path.open("r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
 
-    if config_type == "run":
-        return RunConfig.model_validate(raw)
-    elif config_type == "data":
+    # if config_type == "run":
+    #     return RunConfig.model_validate(raw)
+    if config_type == "data":
         return DatasetCollectionConfig.model_validate(raw)
-    elif config_type == "evaluate":
-        return EvaluateConfig.model_validate(raw)
+    # elif config_type == "evaluate":
+    #     return EvaluateConfig.model_validate(raw)
     elif config_type == "benchmark_evaluation":
         return BenchmarkEvaluationConfig.model_validate(raw)
     else:
