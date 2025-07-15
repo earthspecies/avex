@@ -10,4 +10,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/test_sft.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/test_sft.yml
