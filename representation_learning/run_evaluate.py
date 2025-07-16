@@ -11,7 +11,6 @@ Key points
 
 from __future__ import annotations
 
-import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,20 +80,6 @@ class ExperimentResult:
     probe_test_metrics: Dict[str, float]
     retrieval_metrics: Dict[str, float]
     clustering_metrics: Dict[str, float]
-
-
-# -------------------------------------------------------------------- #
-#  CLI
-# -------------------------------------------------------------------- #
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser("Linear-probe / fine-tune an audio model")
-    p.add_argument(
-        "--config",
-        type=Path,
-        required=True,
-        help="Path to evaluation YAML (see configs/evaluation_configs/*)",
-    )
-    return p.parse_args()
 
 
 # -------------------------------------------------------------------- #
@@ -276,7 +261,7 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     #  Backbone (optionally load checkpoint)
     # ------------------------------------------------------------------ #
-    base_model: Optional[torch.nn.Module] = None
+    base_model: torch.nn.Module | None = None
 
     if need_base_model:
         if num_labels is None:
@@ -536,11 +521,16 @@ def run_experiment(
 # -------------------------------------------------------------------- #
 #  Main
 # -------------------------------------------------------------------- #
-def main() -> None:
-    args = _parse_args()
+def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
+    """
+    Main entry point for evaluation.
+    """
 
     # 1. Load configs
-    eval_cfg: EvaluateConfig = load_config(args.config, config_type="evaluate")
+    # 1. Load configs with patches
+    if patches is None:
+        patches = ()
+    eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=patches)
 
     # Detect config format based on content structure
     config_path = Path(eval_cfg.dataset_config)
@@ -638,7 +628,7 @@ def main() -> None:
         all_results=all_results,
         eval_cfg=eval_cfg,
         save_dir=save_dir,
-        config_file_path=str(args.config),
+        config_file_path=str(config_path),
         benchmark_eval_cfg=benchmark_eval_cfg,
         evaluation_sets=evaluation_sets,
         experiments=eval_cfg.experiments,

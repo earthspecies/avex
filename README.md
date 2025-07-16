@@ -2,8 +2,7 @@
 
 #  To run:
 - `uv sync`
-
-- uv run python representation_learning/run_train.py --config configs/run_configs/efficientnet_base.yml
+- uv run repr-learn train --config configs/run_configs/efficientnet_base.yml
 
 #  To extend:
 To add a model, subclass ModelBase in representation_learning/models/base_model.py and add it to get_model in

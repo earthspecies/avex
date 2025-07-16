@@ -1,0 +1,11 @@
+program: dummy.py
+method: grid
+parameters:
+  learning_rate:
+    values: [0.1, 0.001]
+  batch_size:
+    values: [16, 32, 64]
+  epochs:
+    values: [5, 10, 15]
+  optimizer:
+    values: ["adam", "sgd"]

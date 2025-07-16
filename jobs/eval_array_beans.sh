@@ -35,4 +35,4 @@ cd ~/representation-learning
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/$config_file
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file

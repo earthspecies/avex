@@ -9,4 +9,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/efficientnet_base.yml
+srun uv run repr-learn train --config configs/run_configs/efficientnet_base.yml

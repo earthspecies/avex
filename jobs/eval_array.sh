@@ -33,4 +33,4 @@ echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_model/$config_file
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/$config_file
