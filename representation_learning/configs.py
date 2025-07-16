@@ -607,6 +607,15 @@ class EvaluationSet(BaseModel):
         description="List of metrics to compute for this evaluation set",
     )
 
+    # Add retrieval mode configuration
+    retrieval_mode: Literal["test_vs_test", "train_vs_test"] = Field(
+        "test_vs_test",
+        description=(
+            "Retrieval evaluation mode: 'test_vs_test' (current default) "
+            "or 'train_vs_test'"
+        ),
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     def to_dataset_collection_config(self) -> DatasetCollectionConfig:

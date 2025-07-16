@@ -18,7 +18,7 @@ experiments:
     layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
+    checkpoint_path: ../representation-learning/runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/efficientnet_beans
