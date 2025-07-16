@@ -276,9 +276,7 @@ class BaseCLIConfig(BaseSettings):
     """
 
     @classmethod
-    def from_sources(
-        cls, yaml_file: str | Path, cli_args: tuple[str, ...]
-    ) -> "BaseCLIConfig":
+    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> Self:
         """
         Create a RunConfig object from a YAML file and CLI arguments. If there are any
         conflicts, the CLI arguments will take precedence over the YAML file.
@@ -481,7 +479,7 @@ class ExperimentConfig(BaseModel):
     """Configuration for a single experiment in evaluation."""
 
     run_name: str = Field(..., description="Name of the experiment run")
-    run_config: str = Field(..., description="Path to the run config YAML file")
+    run_config: RunConfig
     pretrained: bool = Field(True, description="Whether to use pretrained weights")
     layers: str = Field(
         ...,
@@ -506,6 +504,19 @@ class ExperimentConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator("run_config", mode="before")
+    @classmethod
+    def _maybe_read_from_yml(cls, raw: Any) -> Any:  # noqa: ANN401
+        # If it's a string, treat it as a path to a YAML file
+        if isinstance(raw, str) and raw.endswith((".yml", ".yaml")):
+            path = Path(raw)
+            if not path.exists():
+                raise FileNotFoundError(f"Dataset config file not found: {path}")
+            with path.open("r", encoding="utf-8") as f:
+                return yaml.safe_load(f)
+        # Otherwise, let normal validation proceed
+        return raw
+
 
 class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     """Configuration for running evaluation experiments."""
@@ -513,7 +524,7 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     experiments: List[ExperimentConfig] = Field(
         ..., description="List of experiments to run"
     )
-    dataset_config: str = Field(..., description="Path to the dataset config YAML file")
+    dataset_config: BenchmarkEvaluationConfig
     save_dir: str = Field(..., description="Directory to save evaluation results")
 
     # Fine-tuning parameters for linear probing
@@ -561,6 +572,19 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("dataset_config", mode="before")
+    @classmethod
+    def _maybe_read_from_yml(cls, raw: Any) -> Any:  # noqa: ANN401
+        # If it's a string, treat it as a path to a YAML file
+        if isinstance(raw, str) and raw.endswith((".yml", ".yaml")):
+            path = Path(raw)
+            if not path.exists():
+                raise FileNotFoundError(f"Dataset config file not found: {path}")
+            with path.open("r", encoding="utf-8") as f:
+                return yaml.safe_load(f)
+        # Otherwise, let normal validation proceed
+        return raw
 
 
 class DatasetCollectionConfig(BaseModel):
@@ -788,51 +812,3 @@ class BenchmarkEvaluationConfig(BaseModel):
             List of metric names for this evaluation set
         """
         return self.get_evaluation_set(name).metrics
-
-
-# --------------------------------------------------------------------------- #
-#  Convenience loader
-# --------------------------------------------------------------------------- #
-def load_config(
-    path: str | Path,
-    config_type: Literal["run", "data", "evaluate", "benchmark_evaluation"] = "run",
-) -> RunConfig | DatasetCollectionConfig | EvaluateConfig | BenchmarkEvaluationConfig:
-    """Read YAML at *path*, validate, and return a configuration instance.
-
-    Parameters
-    ----------
-    path : str | Path
-        Path to the YAML configuration file
-    config_type : Literal["run", "data", "evaluate", "benchmark_evaluation"]
-        Type of configuration to load
-
-    Returns
-    -------
-    RunConfig | DatasetCollectionConfig | EvaluateConfig | BenchmarkEvaluationConfig
-        Validated configuration object
-
-    Raises
-    ------
-    FileNotFoundError
-        If the configuration file does not exist
-    NotImplementedError
-        If *config_type* is unrecognised
-    """
-
-    path = Path(path).expanduser()
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-
-    with path.open("r", encoding="utf-8") as fh:
-        raw = yaml.safe_load(fh)
-
-    # if config_type == "run":
-    #     return RunConfig.model_validate(raw)
-    if config_type == "data":
-        return DatasetCollectionConfig.model_validate(raw)
-    elif config_type == "evaluate":
-        return EvaluateConfig.model_validate(raw)
-    elif config_type == "benchmark_evaluation":
-        return BenchmarkEvaluationConfig.model_validate(raw)
-    else:
-        raise NotImplementedError(f"Unknown config type: {config_type}")

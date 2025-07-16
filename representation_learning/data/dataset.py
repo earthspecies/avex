@@ -487,6 +487,8 @@ _worker_init_data: dict[str, Any] = {}
 # --------------------------------------------------------------------------- #
 def build_dataloaders(
     cfg: RunConfig,
+    *,
+    data_config: DatasetCollectionConfig | None = None,
     device: str = "cpu",
     task_type: str | None = None,
     dataset_audio_max_length_seconds: Optional[int] = None,
@@ -499,6 +501,11 @@ def build_dataloaders(
     ----------
     cfg : RunConfig
         The run configuration containing dataset and model specifications.
+
+    data_config : DatasetConfig | None, optional
+        If provided, overrides the dataset configuration in `cfg`. If `None`, uses
+        the dataset configuration specified in `cfg.dataset_config`.
+
     device : str, optional
         The device to use for the DataLoader workers. Defaults to "cpu". If set to
 
@@ -545,8 +552,11 @@ def build_dataloaders(
         postprocessors.append(make_item_postprocessor(aug_processor))
 
     # Build datasets from the configuration
+    if data_config is None:
+        data_config = cfg.dataset_config
+
     ds_train, ds_val, ds_test = _build_datasets(
-        cfg.dataset_config, postprocessors=postprocessors
+        data_config, postprocessors=postprocessors
     )
 
     num_labels = ds_train.metadata.get("num_labels", 0)

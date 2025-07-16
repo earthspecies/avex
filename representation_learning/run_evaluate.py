@@ -27,8 +27,6 @@ from representation_learning.configs import (
     EvaluateConfig,
     EvaluationSet,
     ExperimentConfig,
-    RunConfig,
-    load_config,
 )
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
@@ -111,7 +109,7 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     #  Build run config
     # ------------------------------------------------------------------ #
-    run_cfg: RunConfig = load_config(experiment_cfg.run_config)
+    run_cfg = experiment_cfg.run_config
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
     run_cfg.model_spec.device = str(device)
@@ -235,8 +233,8 @@ def run_experiment(
 
         train_dl_raw, val_dl_raw, test_dl_raw = build_dataloaders(
             run_cfg,
-            eval_data_collection_cfg,
-            device,
+            data_config=eval_data_collection_cfg,
+            device=str(device),
             task_type=getattr(dataset_cfg, "type", None),
             dataset_audio_max_length_seconds=dataset_audio_max_length,
             enable_eval_augmentations=is_birdset,
@@ -532,31 +530,15 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
         patches = ()
     eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=patches)
 
-    # Detect config format based on content structure
-    config_path = Path(eval_cfg.dataset_config)
-
-    # Load raw config to check structure
-    with open(config_path, "r") as f:
-        import yaml
-
-        raw_config = yaml.safe_load(f)
-
-    if "evaluation_sets" in raw_config:
-        # BenchmarkEvaluationConfig format
-        benchmark_eval_cfg = load_config(
-            eval_cfg.dataset_config, config_type="benchmark_evaluation"
+    benchmark_eval_cfg = eval_cfg.dataset_config
+    evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
+    if not evaluation_sets:
+        logger.error(
+            "No evaluation sets found in BenchmarkEvaluationConfig. "
+            "Nothing to evaluate."
         )
-        evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
-        logger.info(
-            f"Loading dataset config '{eval_cfg.dataset_config}' as "
-            f"'benchmark_evaluation' format with {len(evaluation_sets)} evaluation sets"
-        )
-    else:
-        # Structured dataset collection config
-        load_config(eval_cfg.dataset_config, config_type="data")
-        logger.info(
-            f"Loading dataset config '{eval_cfg.dataset_config}' as 'data' format"
-        )
+        return
+    logger.info(f"Loaded {len(evaluation_sets)} evaluation sets")
 
     # 2. Output dir & device
     if str(eval_cfg.save_dir).startswith("gs://"):
@@ -569,13 +551,6 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
 
     # 3. Run experiments
     all_results: List[ExperimentResult] = []
-
-    if not evaluation_sets:
-        logger.warning(
-            "No evaluation sets found in BenchmarkEvaluationConfig. "
-            "Nothing to evaluate."
-        )
-        return
 
     for eval_set_name, eval_set_data_cfg in evaluation_sets:
         logger.info(f"Evaluating benchmark set: {eval_set_name}")
