@@ -33,7 +33,7 @@ class TrainingResult:
 class TrainingStrategy(ABC):
     """Base class for training strategies."""
 
-    def __init__(self, criterion: nn.Module, device: torch.device):
+    def __init__(self, criterion: nn.Module, device: torch.device) -> None:
         self.criterion = criterion
         self.device = device
         self.additional_metrics: Dict[str, float] = {}
@@ -56,7 +56,13 @@ class SupervisedStrategy(TrainingStrategy):
         return "predictions_targets"
 
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
-        """Forward pass for supervised learning."""
+        """Forward pass for supervised learning.
+
+        Returns
+        -------
+        TrainingResult
+            The result containing loss and metrics for supervised learning.
+        """
         # Get the inputs
         audio = batch["raw_wav"]
         target = batch["label"]
@@ -69,7 +75,8 @@ class SupervisedStrategy(TrainingStrategy):
         if torch.isnan(outputs).any():
             logger.warning(f"NaN detected in model outputs! Shape: {outputs.shape}")
             logger.warning(
-                f"Output stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}"
+                f"Output stats: min={outputs.min():.6f}, max={outputs.max():.6f}, "
+                f"mean={outputs.mean():.6f}"
             )
             nan_count = torch.isnan(outputs).sum().item()
             logger.warning(f"Number of NaN values in outputs: {nan_count}")
@@ -97,10 +104,12 @@ class SupervisedStrategy(TrainingStrategy):
         # DEBUG: Check for NaN loss
         if torch.isnan(loss).any():
             logger.warning(
-                f"NaN loss detected! outputs stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}"
+                f"NaN loss detected! outputs stats: min={outputs.min():.6f}, "
+                f"max={outputs.max():.6f}, mean={outputs.mean():.6f}"
             )
             logger.warning(
-                f"Target stats: min={target.min():.6f}, max={target.max():.6f}, mean={target.mean():.6f}"
+                f"Target stats: min={target.min():.6f}, max={target.max():.6f}, "
+                f"mean={target.mean():.6f}"
             )
             logger.warning(f"Loss value: {loss.item()}")
 
@@ -137,7 +146,13 @@ class CLIPStrategy(TrainingStrategy):
         return "clip_accuracy"
 
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
-        """Forward pass for CLIP training."""
+        """Forward pass for CLIP training.
+
+        Returns
+        -------
+        TrainingResult
+            The result containing loss and metrics for CLIP training.
+        """
         audio = batch["raw_wav"]
         text = batch["text_label"]
         padding_mask = batch.get("padding_mask")
@@ -222,7 +237,18 @@ class EATSSLStrategy(TrainingStrategy):
         return "ssl_dummy"
 
     def forward(self, model: nn.Module, batch: Dict[str, Any]) -> TrainingResult:
-        """Forward pass for EAT SSL training."""
+        """Forward pass for EAT SSL training.
+
+        Returns
+        -------
+        TrainingResult
+            The result containing loss and metrics for EAT SSL training.
+
+        Raises
+        ------
+        RuntimeError
+            If EAT model doesn't support SSL method.
+        """
         audio = batch["raw_wav"]
         padding_mask = batch.get("padding_mask")
 
@@ -279,7 +305,18 @@ class StrategyFactory:
     def create_strategy(
         mode: str, criterion: nn.Module, device: torch.device
     ) -> TrainingStrategy:
-        """Create appropriate training strategy based on mode."""
+        """Create appropriate training strategy based on mode.
+
+        Returns
+        -------
+        TrainingStrategy
+            The appropriate training strategy instance.
+
+        Raises
+        ------
+        ValueError
+            If the specified training mode is not supported.
+        """
         if mode == "supervised":
             return SupervisedStrategy(criterion, device)
         elif mode == "clip":

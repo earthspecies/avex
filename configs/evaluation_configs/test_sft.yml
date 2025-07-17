@@ -2,8 +2,8 @@
 dataset_config: configs/data_configs/benchmark_single.yml
 
 training_params:
-  train_epochs: 600
-  lr: 0.0003
+  train_epochs: 700
+  lr: 0.0007
   batch_size: 64
   optimizer: adamw
   weight_decay: 0.01

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -17,6 +17,10 @@ from esp_data.io.paths import GSPath, R2Path, anypath
 
 from representation_learning.configs import RunConfig
 from representation_learning.training.distributed import is_main_process
+from representation_learning.utils.experiment_logger import get_active_mlflow_run_name
+
+if TYPE_CHECKING:
+    from representation_learning.utils.experiment_logger import ExperimentLogger
 from representation_learning.utils.experiment_tracking import save_experiment_metadata
 
 logger = logging.getLogger(__name__)
@@ -31,9 +35,9 @@ class CheckpointManager:
         self,
         model_dir: Union[str, Path],
         checkpoint_freq: int = 1,
-        experiment_logger=None,
+        experiment_logger: Optional["ExperimentLogger"] = None,
         run_config: Optional[RunConfig] = None,
-    ):
+    ) -> None:
         """Initialize checkpoint manager.
 
         Parameters
@@ -255,6 +259,16 @@ class CheckpointManager:
         is_final: bool,
     ) -> None:
         """Save experiment metadata alongside checkpoint."""
+        if (
+            self.experiment_logger
+            and self.experiment_logger.backend == "mlflow"
+            and self.run_config
+            and not self.run_config.run_name
+        ):
+            self.run_config.run_name = get_active_mlflow_run_name(
+                self.experiment_logger
+            )
+
         try:
             save_experiment_metadata(
                 output_dir=base_dir,

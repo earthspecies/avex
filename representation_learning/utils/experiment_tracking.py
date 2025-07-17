@@ -5,13 +5,75 @@ Utilities for experiment tracking using pandas DataFrames.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from esp_data.io import anypath, filesystem_from_path
 
 from representation_learning.configs import RunConfig
+
+# Global experiment directory for saving metadata
+_GLOBAL_EXPERIMENT_DIR = "gs://representation-learning/experiment_results/"
+_fs = filesystem_from_path(_GLOBAL_EXPERIMENT_DIR)
+
+# Global metadata cache to accumulate results across datasets
+_experiment_metadata_cache: Dict[str, Dict[str, Any]] = {}
+
+
+def _generate_run_id(
+    experiment_name: Optional[str] = None,
+    checkpoint_name: Optional[str] = None,
+    run_config: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Generate a meaningful run ID that includes model and timestamp info.
+
+    Returns
+    -------
+    str
+        A unique run ID in the format "{model}_{timestamp}_{uuid}".
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Extract model name, prioritizing run_config.model_spec.name
+    model_part = "unknown_model"
+
+    # First priority: model name from run_config
+    if run_config and "model_spec" in run_config:
+        model_spec = run_config["model_spec"]
+        if isinstance(model_spec, dict) and "name" in model_spec:
+            model_part = model_spec["name"]
+        elif hasattr(model_spec, "name"):  # Handle pydantic model objects
+            model_part = model_spec.name
+    # Second priority: experiment_name
+    elif experiment_name:
+        # Extract model name from experiment_name (e.g., "eat_hf" from various formats)
+        model_part = (
+            experiment_name.split("_")[0] if "_" in experiment_name else experiment_name
+        )
+    # Last priority: checkpoint_name (often not meaningful like "best.pt")
+    elif checkpoint_name and checkpoint_name != "None":
+        # Extract model info from checkpoint name
+        if "eat" in checkpoint_name.lower():
+            model_part = "eat"
+        elif "clip" in checkpoint_name.lower():
+            model_part = "clip"
+        elif "beats" in checkpoint_name.lower():
+            model_part = "beats"
+        else:
+            # Use first part of checkpoint name
+            model_part = (
+                checkpoint_name.split("_")[0]
+                if "_" in checkpoint_name
+                else checkpoint_name
+            )
+
+    # Clean the model part (remove special characters, limit length)
+    model_part = "".join(c for c in model_part if c.isalnum()).lower()[:10]
+
+    return f"{model_part}_{timestamp}_{str(uuid.uuid4())[:8]}"
 
 
 def save_experiment_metadata(
@@ -48,7 +110,7 @@ def save_experiment_metadata(
 
     # Create metadata entry
     metadata = {
-        "timestamp": datetime.now().isoformat(),
+        "end_timestamp": datetime.now().isoformat(),
         "checkpoint_name": checkpoint_name,
         "is_best": is_best,
         "is_final": is_final,
@@ -58,6 +120,23 @@ def save_experiment_metadata(
     # Add metrics if provided
     if metrics:
         metadata.update(metrics)
+
+    # Save metadata as in bucket
+    if "run_name" not in config_dict:
+        if "run_id" in config_dict:
+            run_id = config_dict["run_id"]
+        else:
+            # Pass experiment name from config and checkpoint name for meaningful ID
+            experiment_name = getattr(config, "experiment_name", None)
+            run_id = _generate_run_id(experiment_name, checkpoint_name, config_dict)
+        metadata["id"] = run_id
+    else:
+        experiment_name = getattr(config, "experiment_name", None)
+        metadata["id"] = (
+            config_dict.get("run_name", None)
+            or config_dict.get("run_id", None)
+            or _generate_run_id(experiment_name, checkpoint_name, config_dict)
+        )
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])
@@ -149,17 +228,20 @@ def save_evaluation_metadata(
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Define all possible metrics to ensure consistent columns
-    all_possible_train_metrics = {"loss", "acc"}
-    all_possible_val_metrics = {"loss", "acc"}
-    all_possible_test_metrics = {
+    all_possible_train_metrics = ["loss", "acc", "accuracy"]
+    all_possible_val_metrics = ["loss", "acc", "accuracy"]
+    all_possible_test_metrics = [
         "accuracy",
         "balanced_accuracy",
         "multiclass_f1",
         "map",
         "roc_auc",
-    }
-    all_possible_retrieval_metrics = {"retrieval_roc_auc", "retrieval_precision_at_1"}
-    all_possible_clustering_metrics = {
+    ]
+    all_possible_retrieval_metrics = [
+        "retrieval_roc_auc",
+        "retrieval_precision_at_1",
+    ]
+    all_possible_clustering_metrics = [
         "clustering_ari",
         "clustering_nmi",
         "clustering_v_measure",
@@ -169,46 +251,41 @@ def save_evaluation_metadata(
         "clustering_nmi_best",
         "clustering_v_measure_best",
         "clustering_silhouette_best",
-    }
+    ]
 
     # Create metadata entry with all possible metrics, using None for missing ones
     metadata = {
-        "timestamp": datetime.now().isoformat(),
+        "end_timestamp": datetime.now().isoformat(),
         "dataset_name": dataset_name,
         "experiment_name": experiment_name,
         "checkpoint_name": checkpoint_name,
     }
-
     # Add train metrics with None for missing ones
     for metric in all_possible_train_metrics:
-        metadata[metric] = train_metrics.get(metric, None)
+        metadata[f"train_{dataset_name}_{metric}"] = train_metrics.get(metric, None)
 
     # Add validation metrics with None for missing ones
     for metric in all_possible_val_metrics:
-        metadata[f"val_{metric}"] = val_metrics.get(metric, None)
+        metadata[f"val_{dataset_name}_{metric}"] = val_metrics.get(metric, None)
 
     # Add test metrics with None for missing ones
     for metric in all_possible_test_metrics:
-        metadata[f"test_{metric}"] = probe_test_metrics.get(metric, None)
+        metadata[f"test_{dataset_name}_{metric}"] = probe_test_metrics.get(metric, None)
 
     # Add retrieval metrics with None for missing ones
     for metric in all_possible_retrieval_metrics:
-        # Remove the "retrieval_" prefix if it's already there to avoid double-prefixing
-        metric_name = metric.replace("retrieval_", "")
-        metadata[f"retrieval_{metric_name}"] = retrieval_metrics.get(metric, None)
+        metadata[f"test_{dataset_name}_{metric}"] = retrieval_metrics.get(metric, None)
 
     # Add clustering metrics with None for missing ones
     for metric in all_possible_clustering_metrics:
-        # Remove the "clustering_" prefix if it's already there to avoid
-        # double-prefixing
-        metric_name = metric.replace("clustering_", "")
-        metadata[f"clustering_{metric_name}"] = clustering_metrics.get(metric, None)
+        metadata[f"test_{dataset_name}_{metric}"] = clustering_metrics.get(metric, None)
 
     metadata["eval_config"] = json.dumps(
         eval_config
     )  # Store eval config as JSON string
 
     # Add training metadata if available
+    latest_training = None
     if training_metadata is not None and not training_metadata.empty:
         # Get the most recent training entry and convert to dict
         latest_training = training_metadata.iloc[-1].to_dict()
@@ -220,6 +297,57 @@ def save_evaluation_metadata(
     if run_config is not None:
         # Store run config as JSON string
         metadata["run_config_params"] = json.dumps(run_config)
+
+    # Determine run_id for global metadata cache
+    # Handle None values properly - use 'or' instead of .get() default to
+    # catch explicit None
+    if run_config is not None:
+        run_id = run_config.get("run_name") or _generate_run_id(
+            experiment_name, checkpoint_name, run_config
+        )
+    elif latest_training is not None:
+        run_id = latest_training.get("run_name") or _generate_run_id(
+            experiment_name, checkpoint_name, run_config
+        )
+    else:
+        run_id = _generate_run_id(experiment_name, checkpoint_name, run_config)
+
+    # Update global metadata cache with this dataset's results
+    global _experiment_metadata_cache
+
+    if run_id not in _experiment_metadata_cache:
+        # Initialize with base metadata (non-dataset-specific fields)
+        _experiment_metadata_cache[run_id] = {
+            "end_timestamp": metadata["end_timestamp"],
+            "experiment_name": metadata["experiment_name"],
+            "checkpoint_name": metadata["checkpoint_name"],
+            "eval_config": metadata["eval_config"],
+        }
+        # Add run_config_params if available
+        if "run_config_params" in metadata:
+            _experiment_metadata_cache[run_id]["run_config_params"] = metadata[
+                "run_config_params"
+            ]
+        if "training_params" in metadata:
+            _experiment_metadata_cache[run_id]["training_params"] = metadata[
+                "training_params"
+            ]
+
+    # Add this dataset's metrics to the cache
+    dataset_metrics = {
+        k: v
+        for k, v in metadata.items()
+        if k.startswith(("train_", "val_", "test_")) and dataset_name in k
+    }
+    _experiment_metadata_cache[run_id].update(dataset_metrics)
+
+    # Update timestamp to latest
+    _experiment_metadata_cache[run_id]["end_timestamp"] = metadata["end_timestamp"]
+
+    # Save accumulated metadata to global bucket
+    output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")
+    with _fs.open(str(output_json_path), "w") as f:
+        json.dump(_experiment_metadata_cache[run_id], f, indent=4)
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])
@@ -352,7 +480,7 @@ def create_experiment_summary_csvs(
 
         # Create summary entry with all possible metrics, using None for missing ones
         summary_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "end_timestamp": datetime.now().isoformat(),
             "dataset_name": r.dataset_name,
             "experiment_name": r.experiment_name,
             "evaluation_dataset_name": r.evaluation_dataset_name,
@@ -664,7 +792,7 @@ def create_initial_experiment_metadata(
     """
     # Create metadata entry with empty metrics
     metadata = {
-        "timestamp": datetime.now().isoformat(),
+        "end_timestamp": datetime.now().isoformat(),
         "checkpoint_name": checkpoint_name,
         "is_best": True,
         "is_final": True,

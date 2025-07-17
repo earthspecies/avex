@@ -27,10 +27,10 @@ class MetricsTracker:
     def __init__(
         self,
         metrics: List[str],
-        num_classes: int,
-        device: torch.device,
+        num_classes: Optional[int] = None,
+        device: Optional[torch.device] = None,
         training_mode: str = "supervised",
-    ):
+    ) -> None:
         """Initialize metrics tracker.
 
         Parameters
@@ -44,6 +44,9 @@ class MetricsTracker:
         training_mode : str, optional
             Training mode (supervised, clip, eat_ssl), by default "supervised"
         """
+        if device is None:
+            device = torch.device("cpu")
+
         self.metrics = metrics
         self.num_classes = num_classes
         self.device = device

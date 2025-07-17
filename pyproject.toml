@@ -1,6 +1,8 @@
 # TODO (OSS): change [project]`, `[dependency-groups]`,
 # `[project.urls]`, and `[tool.hatch.build.targets.wheel]
 # According to your needs.
+# #  "pysoundfile>=0.9.0.post1",
+
 
 [project]
 name = "representation-learning"
@@ -22,7 +24,6 @@ dependencies = [
   "pandas>=2.2.3",
   "psutil>=7.0.0",
   "pydantic>=2.11.3",
-  "pysoundfile>=0.9.0.post1",
   "pyyaml>=6.0.2",
   "resampy>=0.4.3",
   "soundfile>=0.13.1",
@@ -34,14 +35,13 @@ dependencies = [
   "transformers",
   "h5py>=3.13.0",
   "semver>=3.0.4",
-  "esp-data",
-  "tensorflow==2.15.1",
+  "esp-data>=1.1.2",
+  "tensorflow==2.17.0",
   "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
   "wandb>=0.21.0",
   "birdnetlib>=0.18.0",
-  "soundfile>=0.12.0",
 ]
 
 [dependency-groups]
@@ -66,7 +66,6 @@ dev = [
 
 [tool.uv.sources]
 esp-data = { path = "./esp_data_reference" }
-# esp-data = { index = "esp-pypi" }  # original remote source
 
 [tool.uv]
 default-groups = ["dev", "gpu"]

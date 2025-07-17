@@ -1,0 +1,25 @@
+save_dir: "evaluation_results/benchmark_id_clustering"
+dataset_config: "configs/data_configs/benchmark_id_repertoire_with_clustering.yml"
+
+eval_modes:
+  - "linear_probe"
+  - "clustering"
+
+experiments:
+  - run_name: "dummy_baseline_with_clustering"
+    run_config: "configs/run_configs/dummy_baseline.yml"
+    checkpoint_path: null
+    frozen: true
+    layers: "last_layer"
+
+training_params:
+  lr: 1e-4
+  train_epochs: 3
+  batch_size: 16
+
+device: "cuda"
+seed: 42
+num_workers: 4
+
+# Optional: Save results to a global CSV for tracking
+results_csv_path: "evaluation_results/global_clustering_results.csv"

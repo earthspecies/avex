@@ -1,0 +1,18 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+If you're not sure of the latest versions or a particular library's details, look that up. Make everything very modular. Don't ask for permission, go ahead and modify files.
+
+Always check for existing code before writing new files, do create new ones but just make sure you're not overwriting what's already there. Search for the existing code.
+- Keep the codebase modular and clean for scale.
+- Try and write tests in advance and run them for complex features. Focus on integration tests, and then continue developing once they're done.
+- Don't write things which fail silently with .get() etc. -> this leads to bugs. If something is expected and not present, that should fail. Avoid fallbacks, solve core issues.
+- Always consider or inspect how your changes might effect other areas of the code. Make sure you change all touchpoints appropriate when you make a change.
+- Proceed with your changes, keep going independently. Only ask for my input if you're stuck, not for hand-holding - you've got this.
+- If you need to run python code, we manage it with uv. e.g. uv run python ... uv manages our dependencies, so this goes for most commands.
+- Leave esp_data_temp untouched when possible
+- When running pre-commits, do not add exceptions to the rules (pyproject.toml, etc.) to get around the errors. Fix the errors in the code.
+- If you need to reference the esp-data package, I've put a copy at esp_data_reference. However, this is only for reference. No changes will work, don't change the reference. If results from the actual package don't match with the reference copy, it could be out of date.
+- Don't run git add or commit commands, etc. The user will do that.

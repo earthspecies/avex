@@ -25,40 +25,40 @@ from representation_learning.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
 
-# CloudPathLib robustness patch (must come early)
-# from representation_learning.data.cloudpathlib_retry_patch import apply_cloudpathlib_patch
+
 from representation_learning.data.animalspeak_getitem_patch import (
     apply_animalspeak_patches,
 )
+# audioset patches
+from representation_learning.data.audioset_getitem_patch import (
+    apply_audioset_patches,
+)
+# cloudpathlib patches
+from representation_learning.data.cloudpathlib_retry_patch import (
+    apply_cloudpathlib_patch,
+)
 
-# Import AudioSet patch to fix NaN issues
-from representation_learning.data.audioset_getitem_patch import apply_audioset_patches
+apply_cloudpathlib_patch()
 
-# Force application of AudioSet patches immediately
-apply_audioset_patches()
-# Apply foundational patches *immediately* so that downstream dataset creation
-# (esp. esp_data.dataset_from_config) benefits from them.
-# apply_cloudpathlib_patch()
 # Apply AnimalSpeak column pruning patch (before dataset instantiation)
 apply_animalspeak_column_patch()
-from torch.utils.data import DataLoader, DistributedSampler
 
-from representation_learning.configs import (
+apply_audioset_patches()
+
+from torch.utils.data import DataLoader, DistributedSampler  # noqa: E402
+
+from representation_learning.configs import (  # noqa: E402
     DatasetCollectionConfig,
     RunConfig,
     load_config,
 )
-from representation_learning.data.audio_utils import (
+from representation_learning.data.audio_utils import (  # noqa: E402
     pad_or_window,  # type: ignore
 )
-from representation_learning.data.augmentations import (
+from representation_learning.data.augmentations import (  # noqa: E402
     AugmentationProcessor,
     make_item_postprocessor,
 )
-
-# from representation_learning.preprocessing.activity_detector import (
-#     load_activity_detector
-# )
 
 
 logger = logging.getLogger(__name__)
@@ -186,18 +186,6 @@ def _build_one_dataset_split(
         ) from e
 
 
-# TODO: Remove this when esp-data is fixed
-from representation_learning.data.temp_label_fixes import create_unified_label_field
-
-
-def _create_unified_label_field(ds: Dataset) -> None:
-    """Temporary wrapper for label field creation. Remove when esp-data is fixed."""
-    # First fix any AudioSet string formatting issues
-    # fix_audioset_string_labels(ds)
-    # Then create unified field if needed for concatenated datasets
-    create_unified_label_field(ds)
-
-
 def _build_datasets(
     cfg: DatasetCollectionConfig, postprocessors: list[Callable], label_type: str
 ) -> list[AudioDataset]:
@@ -218,31 +206,11 @@ def _build_datasets(
         cfg.train_datasets, cfg.concatenate_train, cfg.concatenate_method
     )
 
-    # Check if we need unified labels (only for supervised learning with numeric labels)
-    needs_unified_labels = label_type == "supervised"
-
-    # Only create unified label field if we have transforms that need it
-    if needs_unified_labels:
-        _create_unified_label_field(train_ds)
-
     if cfg.transformations:
         additional_metadata = train_ds.apply_transformations(cfg.transformations)
         if additional_metadata:
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
-
-        # Debug: Save samples after transformations (including text_label generation)
-        from representation_learning.data.data_debug import (
-            conditional_save_debug_samples,
-        )
-
-        conditional_save_debug_samples(
-            train_ds._data, "train_dataset", "after_transforms"
-        )
-
-        # Debug labels after transformation
-
-        # debug_labels_after_transformation(train_ds)
 
     # Build validation
     val_ds, _ = _build_one_dataset_split(
@@ -257,13 +225,6 @@ def _build_datasets(
     # Extract label information from transform metadata
     label_map = {}
     num_classes = 0
-
-    # Only apply label fixes to val/test datasets if we need unified labels
-    if needs_unified_labels:
-        if val_ds:
-            _create_unified_label_field(val_ds)
-        if test_ds:
-            _create_unified_label_field(test_ds)
 
     # Handle multi-label case - check for labels_from_features transform metadata
     if "labels_from_features" in train_metadata:
@@ -330,11 +291,6 @@ def _build_datasets(
             },
         )
 
-    # Debug: Finalize and save all collected debug samples
-    from representation_learning.data.data_debug import finalize_debug_samples
-
-    finalize_debug_samples("dataset_debug_samples.json")
-
     return train_ds, val_ds, test_ds
 
 
@@ -384,7 +340,10 @@ class Collater:
 
             # Handle corrupted audio with NaN values
             if torch.isnan(wav).any() or torch.isinf(wav).any():
-                # logger.warning(f"Corrupted audio detected (NaN/Inf), replacing with zeros. Shape: {wav.shape}")
+                # logger.warning(
+                #     f"Corrupted audio detected (NaN/Inf), "
+                #     f"replacing with zeros. Shape: {wav.shape}"
+                # )
                 wav = torch.zeros_like(wav)
 
             # Handle multichannel audio by taking mean across channels
@@ -456,7 +415,8 @@ class Collater:
                     if len(valid_indices) != len(indices):
                         invalid_indices = indices[indices >= self.num_labels]
                         logger.warning(
-                            f"Invalid label indices found: {invalid_indices.tolist()}, max valid: {self.num_labels - 1}"
+                            f"Invalid label indices found: {invalid_indices.tolist()}, "
+                            f"max valid: {self.num_labels - 1}"
                         )
                     label_tensors.append(one_hot)
                 else:
@@ -468,14 +428,16 @@ class Collater:
         if torch.isnan(label_tensor).any():
             logger.warning(f"NaN detected in label tensor! Shape: {label_tensor.shape}")
             logger.warning(
-                f"Label tensor stats: min={label_tensor.min():.6f}, max={label_tensor.max():.6f}"
+                f"Label tensor stats: min={label_tensor.min():.6f}, "
+                f"max={label_tensor.max():.6f}"
             )
 
         # DEBUG: Check for NaN in audio tensor
         if torch.isnan(audio_tensor).any():
             logger.warning(f"NaN detected in audio tensor! Shape: {audio_tensor.shape}")
             logger.warning(
-                f"Audio tensor stats: min={audio_tensor.min():.6f}, max={audio_tensor.max():.6f}"
+                f"Audio tensor stats: min={audio_tensor.min():.6f}, "
+                f"max={audio_tensor.max():.6f}"
             )
             nan_count = torch.isnan(audio_tensor).sum().item()
             logger.warning(f"Number of NaN values in audio: {nan_count}")
@@ -564,6 +526,90 @@ def worker_init_fn(worker_id: int) -> None:
     torch.manual_seed(worker_seed)
     logger.debug(f"Worker {worker_id} initialized with seed {worker_seed}")
 
+    # ------------------------------------------------------------------ #
+    #  Re-apply dataset patches inside each worker process
+    # ------------------------------------------------------------------ #
+    # Optional: BEANS dataset debug patch (log path + timing) when env var set
+    if os.getenv("BEANS_DEBUG", "0") == "1":
+        try:
+            from esp_data.datasets.beans import Beans  # type: ignore
+            import time
+            import numpy as np
+            import librosa
+            from esp_data.io import anypath, audio_stereo_to_mono, read_audio
+
+            logger.debug("Worker %d: Applying Beans debug patch", worker_id)
+
+            def _debug_getitem(self, idx):  # noqa: ANN001
+                import logging
+                dbg = logging.getLogger("beans_debug")
+
+                if idx >= len(self._data):
+                    raise IndexError(idx)
+
+                row = self._data.iloc[idx].to_dict()
+
+                dbg.info("[BEANS DEBUG] Sample %d", idx)
+                dbg.info("  local_path = %s", row.get("local_path"))
+                dbg.info("  data_root = %s", self.data_root)
+
+                if self.data_root:
+                    audio_path = anypath(self.data_root) / row["local_path"]
+                else:
+                    audio_path = anypath(row["local_path"])
+
+                dbg.info("  audio_path = %s", audio_path)
+                dbg.info("  audio_path.exists = %s", audio_path.exists())
+
+                t0 = time.perf_counter()
+                audio, sr = read_audio(audio_path)
+                t1 = time.perf_counter()
+                dbg.info("  read_audio took %.3fs (sr=%d)", t1 - t0, sr)
+
+                audio = audio.astype(np.float32)
+                audio = audio_stereo_to_mono(audio, mono_method="average")
+
+                t2 = time.perf_counter()
+                if self.sample_rate is not None and sr != self.sample_rate:
+                    dbg.info("  Resampling from %d to %d", sr, self.sample_rate)
+                    audio = librosa.resample(
+                        y=audio,
+                        orig_sr=sr,
+                        target_sr=self.sample_rate,
+                        scale=True,
+                        res_type="kaiser_best",
+                    )
+                t3 = time.perf_counter()
+                dbg.info("  resample took %.3fs", t3 - t2)
+
+                row["audio"] = audio
+
+                if self.output_take_and_give:
+                    return {
+                        new: row[old] for old, new in self.output_take_and_give.items()
+                    }
+                return row
+
+            Beans.__getitem__ = _debug_getitem  # type: ignore[assignment]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Worker %d: Failed to patch Beans debug: %s", worker_id, exc)
+
+    try:
+        from representation_learning.data.animalspeak_getitem_patch import (
+            apply_animalspeak_patches,
+        )
+
+        # We cannot easily access the model target length here, so we use a
+        # conservative default (30s) which is long enough for most cases and
+        # still enables chunk loading.
+        apply_animalspeak_patches(max_duration_seconds=30.0, chunk_selection="random")
+        # apply_audioset_patches()
+        logger.debug("Worker %d: Re-applied dataset patches successfully", worker_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Worker %d: Failed to re-apply dataset patches: %s", worker_id, exc
+        )
+
 
 # Will be populated before DataLoader construction
 _worker_init_data: dict[str, Any] = {}
@@ -633,6 +679,17 @@ def build_dataloaders(
         max_duration_seconds=cfg.model_spec.audio_config.target_length_seconds,
         chunk_selection="random",
     )
+
+    # Apply Beans patches to avoid loading full-length (>target) clips
+    try:
+        from representation_learning.data.beans_getitem_patch import apply_beans_patches
+
+        apply_beans_patches(
+            max_duration_seconds=cfg.model_spec.audio_config.target_length_seconds,
+            chunk_selection="start",
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to apply Beans patch: %s", exc)
 
     postprocessors: list[Any] = []
     aug_processor: Optional[AugmentationProcessor] = None

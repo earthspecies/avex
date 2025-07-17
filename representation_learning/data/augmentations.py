@@ -18,7 +18,7 @@ import numpy as np
 import soundfile as sf
 import torch
 import torchaudio
-from esp_data.io import GSPath
+from esp_data.io import AnyPathT, anypath
 
 from representation_learning.data.data_utils import combine_text_labels
 
@@ -154,9 +154,7 @@ class AugmentationProcessor:
         """
         noise_paths: list[Path] = []
         for dir_str in noise_dirs:
-            dir_path: Path | GSPath = (
-                GSPath(dir_str) if dir_str.startswith("gs://") else Path(dir_str)
-            )
+            dir_path: AnyPathT = anypath(dir_str)
             if not dir_path.exists():
                 msg = f"Noise directory not found: {dir_str}"
                 raise FileNotFoundError(msg)
@@ -187,7 +185,8 @@ class AugmentationProcessor:
         # Skip noise augmentation if audio has zero length
         if wav.numel() == 0 or wav.shape[-1] == 0:
             logger.warning(
-                f"Skipping noise augmentation for audio with zero length: shape={wav.shape}"
+                f"Skipping noise augmentation for audio with zero length: "
+                f"shape={wav.shape}"
             )
             return wav
 
@@ -214,7 +213,7 @@ class AugmentationProcessor:
 
     def _load_noise_segment(
         self,
-        noise_path: Path | GSPath,
+        noise_path: AnyPathT,
         audio_len: int,
         max_window_sec: float,
     ) -> torch.Tensor:
@@ -222,7 +221,7 @@ class AugmentationProcessor:
 
         Parameters
         ----------
-        noise_path : Path | GSPath
+        noise_path : AnyPathT
             Path to noise file.
         audio_len : int
             Target audio length in samples.
@@ -254,8 +253,8 @@ class AugmentationProcessor:
         if num_frames <= 0:
             logger.warning(
                 f"Invalid num_frames={num_frames} for noise file {noise_path}, "
-                f"audio_len={audio_len}, info.frames={info.frames}, target_frames={target_frames}. "
-                f"Using full file."
+                f"audio_len={audio_len}, info.frames={info.frames}, "
+                f"target_frames={target_frames}. Using full file."
             )
             frame_offset, num_frames = 0, info.frames
 
@@ -328,7 +327,7 @@ class AugmentationProcessor:
     def _mix_noise(
         self,
         wav: torch.Tensor,
-        noise_path: Path | GSPath,
+        noise_path: AnyPathT,
         snr_db_range: tuple[float, float],
         max_window_sec: float = 10.0,
     ) -> torch.Tensor:
@@ -338,7 +337,7 @@ class AugmentationProcessor:
         ----------
         wav : torch.Tensor
             Input audio tensor.
-        noise_path : Path | GSPath
+        noise_path : AnyPathT
             Path to noise file.
         snr_db_range : tuple[float, float]
             Range of SNR values in dB to randomly sample from.

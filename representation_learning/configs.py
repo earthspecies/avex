@@ -73,6 +73,28 @@ class TrainingParams(BaseModel):
         False, description="Enable gradient checkpointing to save memory"
     )
 
+    # Two-stage fine-tuning parameters
+    freeze_backbone_epochs: int = Field(
+        0,
+        ge=0,
+        description=(
+            "If >0, keep backbone parameters frozen for this many initial epochs "
+            "(train only the classification head). At the end of the freeze "
+            "period the backbone is unfrozen and optimisation restarts with a "
+            "fresh learning-rate schedule."
+        ),
+    )
+    second_stage_lr: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Learning rate to use after unfreezing the backbone. If omitted we default to current lr × 0.1.",
+    )
+    second_stage_warmup_steps: Optional[int] = Field(
+        None,
+        ge=0,
+        description="Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided.",
+    )
+
     # Skip validation during training
     skip_validation: bool = Field(
         False, description="Skip validation epochs during training (train-only mode)"
@@ -205,6 +227,9 @@ class ModelSpec(BaseModel):
     use_naturelm: Optional[bool] = Field(
         None, description="Whether to use NatureLM for BEATs model"
     )
+    fine_tuned: Optional[bool] = Field(
+        None, description="Whether to use fine-tuned weights for BEATs model"
+    )
 
     # BirdNet-specific configuration
     language: Optional[str] = Field(
@@ -333,7 +358,10 @@ class ClusteringEvalConfig(BaseModel):
     )
     text_label_strategy: str = Field(
         "canonical_name",
-        description="Strategy for extracting labels from text datasets: 'canonical_name', 'hash_text', 'first_text', 'labels_field'",
+        description=(
+            "Strategy for extracting labels from text datasets: "
+            "'canonical_name', 'hash_text', 'first_text', 'labels_field'"
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")

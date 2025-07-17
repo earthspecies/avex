@@ -19,6 +19,7 @@ declare -A configs=(
     [7]="beats_naturelm.yml"
     # [8]="beats_finetuned.yml"
     [9]="perch.yml"
+    # [9]="perch.yml"
 )
 
 # Get the config file for this array task

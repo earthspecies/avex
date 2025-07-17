@@ -6,6 +6,8 @@ evaluation_results/
 pretrained/
 runs/
 static/
+labels/
+wandb/
 
 # VSCode
 .vscode/

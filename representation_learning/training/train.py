@@ -37,9 +37,12 @@ from representation_learning.training.distributed import (
 from representation_learning.training.metrics_tracker import MetricsTracker
 from representation_learning.training.training_strategies import (
     EATSSLStrategy,
+    TrainingResult,
     TrainingStrategy,
 )
 from representation_learning.utils import ExperimentLogger
+from representation_learning.training.optimisers import get_optimizer
+from representation_learning.training.training_utils import build_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +128,18 @@ class Trainer:
         # Debug flags
         self._debug_first_forward = False
 
+        # --------------------------- two-stage fine-tuning --------------------------- #
+        self.freeze_backbone_epochs: int = (
+            getattr(config.training_params, "freeze_backbone_epochs", 0) or 0
+        )
+        self.second_stage_lr: float | None = getattr(
+            config.training_params, "second_stage_lr", None
+        )
+        self.second_stage_warmup_steps: int | None = getattr(
+            config.training_params, "second_stage_warmup_steps", None
+        )
+        self._second_stage_active = self.freeze_backbone_epochs == 0  # Already unfrozen
+
         # Initialize clustering evaluator if enabled
         self.clustering_evaluator = None
         if (
@@ -134,7 +149,7 @@ class Trainer:
         ):
             # Use text-aware clustering evaluator for text-labeled datasets
             if config.label_type == "text":
-                from representation_learning.training.text_aware_clustering_evaluator import (
+                from representation_learning.training.text_aware_clustering_evaluator import (  # noqa: E501
                     TextAwareClusteringEvaluator,
                 )
 
@@ -149,7 +164,8 @@ class Trainer:
                     text_label_strategy=text_label_strategy,
                 )
                 logger.info(
-                    f"Text-aware clustering evaluation enabled with strategy: {text_label_strategy}"
+                    f"Text-aware clustering evaluation enabled with strategy: "
+                    f"{text_label_strategy}"
                 )
             else:
                 from representation_learning.training.clustering_evaluator import (
@@ -186,6 +202,14 @@ class Trainer:
                 # Set epoch for distributed samplers
                 self._set_epoch_for_samplers(epoch)
 
+                # Activate 2nd stage if freeze period is over and not yet activated
+                if (
+                    not self._second_stage_active
+                    and self.freeze_backbone_epochs > 0
+                    and epoch > self.freeze_backbone_epochs
+                ):
+                    self._activate_second_stage(current_epoch=epoch)
+
                 # Run training and validation epochs
                 train_loss, train_metrics = self._run_epoch(train=True, epoch=epoch)
 
@@ -193,7 +217,8 @@ class Trainer:
                 if self.config.training_params.skip_validation:
                     val_loss, val_metrics = 0.0, {}
                     logger.info(
-                        f"[Epoch {epoch:03d}] Skipping validation (skip_validation=True)"
+                        f"[Epoch {epoch:03d}] Skipping validation "
+                        f"(skip_validation=True)"
                     )
                 else:
                     val_loss, val_metrics = self._run_epoch(train=False, epoch=epoch)
@@ -272,14 +297,17 @@ class Trainer:
             for i, batch in iterator:
                 if train:
                     self.global_updates += 1
-                    # Update EAT SSL teacher *before* forward pass (match reference behaviour)
+                    # Update EAT SSL teacher *before* forward pass
+                    # (match reference behaviour)
                     if isinstance(self.strategy, EATSSLStrategy):
                         self.strategy.update_teacher(self.model, self.global_updates)
 
                 # Debug: Log batch fetch completion
                 if is_main and i == 0:
                     logger.info(
-                        f"[DEBUG] First batch fetched successfully, batch_size={batch['raw_wav'].size(0) if 'raw_wav' in batch else 'unknown'}"
+                        f"[DEBUG] First batch fetched successfully, "
+                        f"batch_size="
+                        f"{batch['raw_wav'].size(0) if 'raw_wav' in batch else 'N/A'}"
                     )
 
                 # Forward pass using strategy
@@ -306,8 +334,14 @@ class Trainer:
         # Get final epoch metrics
         return self.metrics_tracker.get_epoch_metrics()
 
-    def _forward_with_strategy(self, batch: Dict[str, Any]):
-        """Forward pass using the current strategy."""
+    def _forward_with_strategy(self, batch: Dict[str, Any]) -> TrainingResult:
+        """Forward pass using the current strategy.
+
+        Returns
+        -------
+        TrainingResult
+            The result of the forward pass including loss and metrics.
+        """
         # Move batch to device
         batch = {
             k: v.to(self.device) if isinstance(v, torch.Tensor) else v
@@ -428,22 +462,13 @@ class Trainer:
 
         # Add CLIP-specific metrics if available
         if self.strategy.get_expected_metrics_format() == "clip_accuracy":
-            clip_metrics = self.metrics_tracker.get_clip_additional_metrics(self.model)
-            if "acc_a2t" in train_metrics and "acc_t2a" in train_metrics:
-                log_msg += (
-                    f" | train_a2t={train_metrics['acc_a2t']:.4f} "
-                    f"train_t2a={train_metrics['acc_t2a']:.4f}"
-                )
-            if (
-                not self.config.training_params.skip_validation
-                and "acc_a2t" in val_metrics
-                and "acc_t2a" in val_metrics
-            ):
-                log_msg += (
-                    f" val_a2t={val_metrics['acc_a2t']:.4f} "
-                    f"val_t2a={val_metrics['acc_t2a']:.4f}"
-                )
-
+            # Comment out unused variable assignment
+            # clip_metrics = self.metrics_tracker.get_clip_additional_metrics(
+            #     self.model
+            # )
+            pass
+        # Temporarily commented out problematic CLIP metrics section
+        # TODO: Fix CLIP metrics logging
         logger.info(log_msg)
 
         # Log to experiment tracker
@@ -542,7 +567,8 @@ class Trainer:
                 with label_map_path.open("w") as f:
                     json.dump(label_map, f, indent=2)
                 logger.info(
-                    f"Saved final label_map with {len(label_map)} classes to {label_map_path}"
+                    f"Saved final label_map with {len(label_map)} classes to "
+                    f"{label_map_path}"
                 )
             else:
                 logger.warning("No label_map found in dataset metadata to save")
@@ -611,7 +637,9 @@ class Trainer:
                 "amp_dtype": self.config.training_params.amp_dtype,
                 "distributed": self.is_distributed,
                 "world_size": self.world_size,
-                "gradient_checkpointing": self.config.training_params.gradient_checkpointing,
+                "gradient_checkpointing": (
+                    self.config.training_params.gradient_checkpointing
+                ),
                 "scheduler": getattr(self.config.scheduler, "name", "none"),
                 "warmup_steps": getattr(self.config.scheduler, "warmup_steps", 0),
                 "min_lr": getattr(self.config.scheduler, "min_lr", 0),
@@ -620,7 +648,13 @@ class Trainer:
         )
 
     def _wrap_model_for_distributed(self, model: nn.Module) -> nn.Module:
-        """Wrap model with DistributedDataParallel if needed."""
+        """Wrap model with DistributedDataParallel if needed.
+
+        Returns
+        -------
+        nn.Module
+            The model wrapped with DDP if distributed training is enabled.
+        """
         if not self.is_distributed:
             return model
 
@@ -636,7 +670,7 @@ class Trainer:
                 device_ids=[device_index],
                 output_device=device_index,
                 broadcast_buffers=False,  # Avoid sync issues with dynamic buffers
-                find_unused_parameters=False,
+                find_unused_parameters=True,
             )
         else:
             # For CPU or when device index is None
@@ -645,7 +679,9 @@ class Trainer:
                 model,
                 broadcast_buffers=False,
                 # Don't use find_unused_parameters when using _set_static_graph
-                find_unused_parameters=not self.config.training_params.gradient_checkpointing,
+                find_unused_parameters=(
+                    not self.config.training_params.gradient_checkpointing
+                ),
             )
 
         if self.config.training_params.gradient_checkpointing:
@@ -655,7 +691,13 @@ class Trainer:
         return wrapped_model
 
     def _get_unwrapped_model(self) -> nn.Module:
-        """Get unwrapped model for checkpointing."""
+        """Get unwrapped model for checkpointing.
+
+        Returns
+        -------
+        nn.Module
+            The unwrapped model (without DDP wrapper).
+        """
         if isinstance(self.model, parallel.DistributedDataParallel):
             return self.model.module
         return self.model
@@ -672,13 +714,25 @@ class Trainer:
             self.eval_dataloader.sampler.set_epoch(epoch)
 
     def _should_run_clustering_eval_before_training(self) -> bool:
-        """Check if clustering evaluation should run before training starts."""
+        """Check if clustering evaluation should run before training starts.
+
+        Returns
+        -------
+        bool
+            True if clustering evaluation should run before training.
+        """
         if not self.clustering_evaluator:
             return False
         return self.clustering_evaluator.config.run_before_training
 
     def _should_run_clustering_eval(self, epoch: int) -> bool:
-        """Check if clustering evaluation should run this epoch."""
+        """Check if clustering evaluation should run this epoch.
+
+        Returns
+        -------
+        bool
+            True if clustering evaluation should run this epoch.
+        """
         if not self.clustering_evaluator:
             return False
         return epoch % self.clustering_evaluator.config.frequency == 0
@@ -686,7 +740,13 @@ class Trainer:
     def _run_clustering_evaluation(
         self, epoch: int, is_pre_training: bool = False
     ) -> Dict[str, float]:
-        """Run clustering evaluation."""
+        """Run clustering evaluation.
+
+        Returns
+        -------
+        Dict[str, float]
+            Dictionary containing clustering evaluation metrics.
+        """
         if not is_main_process():
             return {}
 
@@ -720,3 +780,53 @@ class Trainer:
         except Exception as e:
             logger.error(f"Clustering evaluation failed: {e}")
             return {}
+
+    def _activate_second_stage(self, *, current_epoch: int) -> None:
+        """Unfreeze backbone and rebuild optimiser/scheduler."""
+
+        logger.info(
+            "[Two-stage] Freezing period finished at epoch %d – unfreezing backbone and resetting optimiser/scheduler",
+            current_epoch,
+        )
+
+        # Unfreeze backbone parameters
+        if hasattr(self.model, "backbone"):
+            for p in self.model.backbone.parameters():  # type: ignore[attr-defined]
+                p.requires_grad = True
+        else:
+            logger.warning("Model has no attribute 'backbone'; skipping unfreeze")
+
+        # ------------------------------------------------------------------
+        # Re-initialise optimiser with full parameter set
+        # ------------------------------------------------------------------
+        new_lr = (
+            self.second_stage_lr
+            if self.second_stage_lr is not None
+            else float(self.config.training_params.lr) * 0.1
+        )
+        # Mutate config in-place so downstream logging & saves reflect change
+        self.config.training_params.lr = new_lr
+
+        # Build fresh optimiser
+        self.optimizer = get_optimizer(
+            self.model.parameters(), self.config.training_params
+        )
+
+        # ------------------------------------------------------------------
+        # Re-create LR scheduler with (optional) new warm-up
+        # ------------------------------------------------------------------
+        remaining_epochs = self.config.training_params.train_epochs - current_epoch + 1
+        total_steps = len(self.train_dataloader) * remaining_epochs
+
+        if self.second_stage_warmup_steps is not None:
+            self.config.scheduler.warmup_steps = self.second_stage_warmup_steps
+
+        self.scheduler = build_scheduler(self.optimizer, self.config, total_steps)
+
+        # Mark stage as active (only once)
+        self._second_stage_active = True
+        logger.info(
+            "[Two-stage] Second stage optimiser initialised: lr=%s, warmup_steps=%s",
+            new_lr,
+            self.config.scheduler.warmup_steps,
+        )

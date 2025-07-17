@@ -1,9 +1,9 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_debug.yml
+dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
-  train_epochs: 600
-  lr: 0.0003
+  train_epochs: 700
+  lr: 0.0007
   batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
@@ -12,8 +12,8 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: beats
-    run_config: configs/run_configs/pretrained/beats_base.yml
+  - run_name: beats_ft
+    run_config: configs/run_configs/pretrained/beats_ft.yml
     ### which layers to probe for embeddings
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data

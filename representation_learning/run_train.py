@@ -17,24 +17,26 @@ import yaml
 mp.set_start_method("spawn", force=True)
 
 
-# Cloud-agnostic path factory (local / gs:// / r2://).
-from esp_data.io.paths import anypath  # type: ignore
+from esp_data.io.paths import anypath  # type: ignore  # noqa: E402
 
-import representation_learning.data.require_features  # noqa: F401
-from representation_learning.configs import (  # type: ignore
+from representation_learning.configs import (  # type: ignore  # noqa: E402
     RunConfig,
     load_config,
 )
-from representation_learning.data.dataset import build_dataloaders
-from representation_learning.models.get_model import get_model
-from representation_learning.training.distributed import (
+from representation_learning.data.dataset import build_dataloaders  # noqa: E402
+from representation_learning.models.get_model import get_model  # noqa: E402
+from representation_learning.training.distributed import (  # noqa: E402
     get_local_device_index,
     init_distributed,
 )
-from representation_learning.training.optimisers import get_optimizer
-from representation_learning.training.trainer_factory import TrainerFactory
-from representation_learning.training.training_utils import build_scheduler
-from representation_learning.utils import ExperimentLogger
+from representation_learning.training.optimisers import get_optimizer  # noqa: E402
+from representation_learning.training.trainer_factory import (  # noqa: E402
+    TrainerFactory,
+)
+from representation_learning.training.training_utils import (  # noqa: E402
+    build_scheduler,
+)
+from representation_learning.utils import ExperimentLogger  # noqa: E402
 
 # Configure logging to ensure INFO level logs are visible
 logging.basicConfig(
@@ -115,6 +117,15 @@ def main() -> None:
     model = get_model(config.model_spec, num_classes=num_labels).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
 
+    # --------------------------------------------------------------
+    # Optional 1st-stage backbone freeze for two-stage fine-tuning
+    # --------------------------------------------------------------
+    freeze_epochs = getattr(config.training_params, "freeze_backbone_epochs", 0)
+    if freeze_epochs > 0 and hasattr(model, "backbone"):
+        logger.info("Freezing backbone for the first %d epochs", freeze_epochs)
+        for p in model.backbone.parameters():  # type: ignore[attr-defined]
+            p.requires_grad = False
+
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     base_out = anypath(config.output_dir)
@@ -138,7 +149,8 @@ def main() -> None:
         with (output_dir / "label_map.json").open("w") as f:
             json.dump(label_map, f, indent=2)
         logger.info(
-            f"Saved label_map with {len(label_map)} classes to {output_dir / 'label_map.json'}"
+            f"Saved label_map with {len(label_map)} classes to "
+            f"{output_dir / 'label_map.json'}"
         )
     else:
         logger.warning("No label_map found in dataset metadata")

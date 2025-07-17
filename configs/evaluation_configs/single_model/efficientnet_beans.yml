@@ -1,8 +1,8 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
+dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
-  train_epochs: 600
+  train_epochs: 300
   lr: 0.0003
   batch_size: 32
   optimizer: adamw

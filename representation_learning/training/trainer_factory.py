@@ -8,7 +8,7 @@ based on the run configuration and training parameters.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
 import torch.nn as nn
@@ -24,6 +24,9 @@ from representation_learning.training.training_strategies import StrategyFactory
 
 # Import will be done in the method to avoid circular imports
 from representation_learning.utils import ExperimentLogger
+
+if TYPE_CHECKING:
+    from representation_learning.training.train import Trainer
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ class TrainerFactory:
         exp_logger: Optional[ExperimentLogger] = None,
         num_classes: int = 1000,
         resume_from_checkpoint: Optional[str] = None,
-    ):
+    ) -> "Trainer":
         """Create a trainer based on configuration.
 
         Parameters
@@ -85,6 +88,11 @@ class TrainerFactory:
         -------
         ModularTrainer
             Configured trainer instance
+
+        Raises
+        ------
+        ValueError
+            If clustering evaluation is configured but model doesn't support it.
         """
         # Import here to avoid circular imports
         from representation_learning.training.train import Trainer
@@ -101,7 +109,8 @@ class TrainerFactory:
             # Ensure the model supports extract_embeddings
             if not hasattr(model, "extract_embeddings"):
                 raise ValueError(
-                    "Model must support extract_embeddings method for clustering evaluation. "
+                    "Model must support extract_embeddings method for clustering "
+                    "evaluation. "
                     f"Model type: {type(model).__name__}"
                 )
             logger.info("Clustering evaluation configuration validated")

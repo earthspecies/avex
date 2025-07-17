@@ -175,31 +175,31 @@ evaluation_sets:
       split: hiceas_test
     metrics: [mAP]
 
-  - name: "hainan_gibbons_detection"
-    train: &gibbons_base
-      dataset_name: beans
-      split: hainan_gibbons_train
-      type: detection
-      label_column: labels_as_list
-      audio_path_col: path
-      multi_label: true
-      label_type: supervised
-      audio_max_length_seconds: 5
-      transformations:
-        # Convert list labels to multi-label format
-        - type: labels_from_features
-          features:
-            - labels_as_list
-          override: true
-          label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'Single pulse gibbon call': 2}
-      sample_rate: 16000
-    validation:
-      <<: *gibbons_base
-      split: hainan_gibbons_validation
-    test:
-      <<: *gibbons_base
-      split: hainan_gibbons_test
-    metrics: [mAP]
+  # - name: "hainan_gibbons_detection"
+  #   train: &gibbons_base
+  #     dataset_name: beans
+  #     split: hainan_gibbons_train
+  #     type: detection
+  #     label_column: labels_as_list
+  #     audio_path_col: path
+  #     multi_label: true
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     transformations:
+  #       # Convert list labels to multi-label format
+  #       - type: labels_from_features
+  #         features:
+  #           - labels_as_list
+  #         override: true
+  #         label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'Single pulse gibbon call': 2}
+  #     sample_rate: 16000
+  #   validation:
+  #     <<: *gibbons_base
+  #     split: hainan_gibbons_validation
+  #   test:
+  #     <<: *gibbons_base
+  #     split: hainan_gibbons_test
+  #   metrics: [mAP]
 
   - name: "dcase_detection"
     train: &dcase_base

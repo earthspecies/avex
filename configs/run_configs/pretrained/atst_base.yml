@@ -15,6 +15,7 @@ model_spec:
 # Required fields for RunConfig validation
 dataset_config: configs/data_configs/benchmark_small.yml
 output_dir: ./runs/atst_base
+run_name: atst_frame
 loss_function: cross_entropy
 
 training_params:

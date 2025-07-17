@@ -174,7 +174,7 @@ class AudioProcessor:
         )
 
     @staticmethod
-    def _normalize_zscore(self, x: Tensor) -> Tensor:
+    def _normalize_zscore(x: Tensor) -> Tensor:
         x = torch.log(x + 1e-6)
         mean = x.mean(dim=-1, keepdim=True)  # (B, F, 1)
         std = x.std(dim=-1, keepdim=True).clamp(1e-5)

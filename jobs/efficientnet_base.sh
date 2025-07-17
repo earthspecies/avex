@@ -6,7 +6,6 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-efffnet"
 #SBATCH --cpus-per-gpu=12
-#SBATCH --nodelist=slurm-4x-a100-40gb-1
 
 
 cd ~/representation-learning

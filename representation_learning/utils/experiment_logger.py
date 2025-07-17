@@ -205,6 +205,18 @@ class ExperimentLogger:
             self.handle.finish()  # type: ignore[attr-defined]
 
 
+def get_active_mlflow_run_name(logger: ExperimentLogger) -> str:
+    """Get active run's name from mflow backend.
+
+    Returns
+    -------
+    run_name: str
+        The active run's name
+    """
+    run = logger.handle.active_run()
+    return run.info.run_name
+
+
 # --------------------------------------------------------------------------- #
 #  Convenience getter (singleton per process)
 # --------------------------------------------------------------------------- #
