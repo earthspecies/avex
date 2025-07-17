@@ -19,61 +19,9 @@ from representation_learning.configs import RunConfig
 _GLOBAL_EXPERIMENT_DIR = "gs://representation-learning/experiment_results/"
 _fs = filesystem_from_path(_GLOBAL_EXPERIMENT_DIR)
 
-# Global metadata cache to accumulate results across datasets
-_experiment_metadata_cache: Dict[str, Dict[str, Any]] = {}
 
-
-def _generate_run_id(
-    experiment_name: Optional[str] = None,
-    checkpoint_name: Optional[str] = None,
-    run_config: Optional[Dict[str, Any]] = None,
-) -> str:
-    """Generate a meaningful run ID that includes model and timestamp info.
-
-    Returns
-    -------
-    str
-        A unique run ID in the format "{model}_{timestamp}_{uuid}".
-    """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # Extract model name, prioritizing run_config.model_spec.name
-    model_part = "unknown_model"
-
-    # First priority: model name from run_config
-    if run_config and "model_spec" in run_config:
-        model_spec = run_config["model_spec"]
-        if isinstance(model_spec, dict) and "name" in model_spec:
-            model_part = model_spec["name"]
-        elif hasattr(model_spec, "name"):  # Handle pydantic model objects
-            model_part = model_spec.name
-    # Second priority: experiment_name
-    elif experiment_name:
-        # Extract model name from experiment_name (e.g., "eat_hf" from various formats)
-        model_part = (
-            experiment_name.split("_")[0] if "_" in experiment_name else experiment_name
-        )
-    # Last priority: checkpoint_name (often not meaningful like "best.pt")
-    elif checkpoint_name and checkpoint_name != "None":
-        # Extract model info from checkpoint name
-        if "eat" in checkpoint_name.lower():
-            model_part = "eat"
-        elif "clip" in checkpoint_name.lower():
-            model_part = "clip"
-        elif "beats" in checkpoint_name.lower():
-            model_part = "beats"
-        else:
-            # Use first part of checkpoint name
-            model_part = (
-                checkpoint_name.split("_")[0]
-                if "_" in checkpoint_name
-                else checkpoint_name
-            )
-
-    # Clean the model part (remove special characters, limit length)
-    model_part = "".join(c for c in model_part if c.isalnum()).lower()[:10]
-
-    return f"{model_part}_{timestamp}_{str(uuid.uuid4())[:8]}"
+def _generate_run_id() -> str:
+    return str(uuid.uuid4())
 
 
 def save_experiment_metadata(
@@ -126,16 +74,11 @@ def save_experiment_metadata(
         if "run_id" in config_dict:
             run_id = config_dict["run_id"]
         else:
-            # Pass experiment name from config and checkpoint name for meaningful ID
-            experiment_name = getattr(config, "experiment_name", None)
-            run_id = _generate_run_id(experiment_name, checkpoint_name, config_dict)
+            run_id = _generate_run_id()
         metadata["id"] = run_id
     else:
-        experiment_name = getattr(config, "experiment_name", None)
-        metadata["id"] = (
-            config_dict.get("run_name", None)
-            or config_dict.get("run_id", None)
-            or _generate_run_id(experiment_name, checkpoint_name, config_dict)
+        metadata["id"] = config_dict.get("run_name", None) or config_dict.get(
+            "run_id", _generate_run_id()
         )
 
     # Convert to DataFrame
@@ -298,56 +241,17 @@ def save_evaluation_metadata(
         # Store run config as JSON string
         metadata["run_config_params"] = json.dumps(run_config)
 
-    # Determine run_id for global metadata cache
-    # Handle None values properly - use 'or' instead of .get() default to
-    # catch explicit None
+    # Save metadata as in bucket
     if run_config is not None:
-        run_id = run_config.get("run_name") or _generate_run_id(
-            experiment_name, checkpoint_name, run_config
-        )
+        run_id = run_config.get("run_name", _generate_run_id())
     elif latest_training is not None:
-        run_id = latest_training.get("run_name") or _generate_run_id(
-            experiment_name, checkpoint_name, run_config
-        )
+        run_id = latest_training.get("run_name", _generate_run_id())
     else:
-        run_id = _generate_run_id(experiment_name, checkpoint_name, run_config)
+        run_id = _generate_run_id()
 
-    # Update global metadata cache with this dataset's results
-    global _experiment_metadata_cache
-
-    if run_id not in _experiment_metadata_cache:
-        # Initialize with base metadata (non-dataset-specific fields)
-        _experiment_metadata_cache[run_id] = {
-            "end_timestamp": metadata["end_timestamp"],
-            "experiment_name": metadata["experiment_name"],
-            "checkpoint_name": metadata["checkpoint_name"],
-            "eval_config": metadata["eval_config"],
-        }
-        # Add run_config_params if available
-        if "run_config_params" in metadata:
-            _experiment_metadata_cache[run_id]["run_config_params"] = metadata[
-                "run_config_params"
-            ]
-        if "training_params" in metadata:
-            _experiment_metadata_cache[run_id]["training_params"] = metadata[
-                "training_params"
-            ]
-
-    # Add this dataset's metrics to the cache
-    dataset_metrics = {
-        k: v
-        for k, v in metadata.items()
-        if k.startswith(("train_", "val_", "test_")) and dataset_name in k
-    }
-    _experiment_metadata_cache[run_id].update(dataset_metrics)
-
-    # Update timestamp to latest
-    _experiment_metadata_cache[run_id]["end_timestamp"] = metadata["end_timestamp"]
-
-    # Save accumulated metadata to global bucket
     output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")
     with _fs.open(str(output_json_path), "w") as f:
-        json.dump(_experiment_metadata_cache[run_id], f, indent=4)
+        json.dump(metadata, f, indent=4)
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])

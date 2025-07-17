@@ -106,23 +106,6 @@ class ExperimentLogger:
             except Exception as e:
                 logger.warning(f"Failed to read secrets file: {e}")
 
-        # Try alternative secrets file locations
-        alt_secrets_file = Path("secrets.yaml")
-        if alt_secrets_file.exists():
-            try:
-                import yaml
-
-                with alt_secrets_file.open("r") as f:
-                    secrets = yaml.safe_load(f)
-
-                api_key = secrets.get("wandb_api_key")
-                if api_key:
-                    logger.info("Using WANDB_API_KEY from secrets.yaml")
-                    wandb_module.login(key=api_key)
-                    return
-            except Exception as e:
-                logger.warning(f"Failed to read alternative secrets file: {e}")
-
         # Let wandb handle authentication naturally (might already be logged in)
         try:
             # Check if already logged in

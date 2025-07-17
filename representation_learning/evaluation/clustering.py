@@ -46,7 +46,6 @@ def eval_clustering(
         - clustering_ari: Adjusted Rand Index
         - clustering_nmi: Normalized Mutual Information
         - clustering_v_measure: V-measure
-        (Silhouette score removed for compute efficiency)
 
     Raises
     ------
@@ -119,8 +118,6 @@ def eval_clustering(
         metrics["clustering_v_measure"] = float(
             v_measure_score(labels_np, cluster_labels)
         )
-
-        # Silhouette score removed to save computation time
 
         return metrics
 
@@ -216,7 +213,7 @@ def _get_empty_clustering_metrics() -> Dict[str, float]:
     Returns
     -------
     Dict[str, float]
-        Dictionary with clustering metric keys set to 0.0 (silhouette removed)
+        Dictionary with clustering metric keys set to 0.0
     """
     return {
         "clustering_ari": 0.0,
@@ -231,7 +228,7 @@ def _get_empty_clustering_best_metrics() -> Dict[str, float]:
     Returns
     -------
     Dict[str, float]
-        Dictionary with best clustering metric keys set to 0.0 (silhouette removed)
+        Dictionary with best clustering metric keys set to 0.0
     """
     return {
         "clustering_best_k": 0.0,
