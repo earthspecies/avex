@@ -20,7 +20,6 @@ from torch.utils.data import DataLoader, DistributedSampler
 from representation_learning.configs import (
     DatasetCollectionConfig,
     RunConfig,
-    load_config,
 )
 from representation_learning.data.audio_utils import (
     pad_or_window,  # type: ignore
@@ -488,6 +487,7 @@ _worker_init_data: dict[str, Any] = {}
 # --------------------------------------------------------------------------- #
 def build_dataloaders(
     cfg: RunConfig,
+    *,
     data_config: DatasetCollectionConfig | None = None,
     device: str = "cpu",
     task_type: str | None = None,
@@ -501,9 +501,11 @@ def build_dataloaders(
     ----------
     cfg : RunConfig
         The run configuration containing dataset and model specifications.
+
     data_config : DatasetConfig | None, optional
         If provided, overrides the dataset configuration in `cfg`. If `None`, uses
         the dataset configuration specified in `cfg.dataset_config`.
+
     device : str, optional
         The device to use for the DataLoader workers. Defaults to "cpu". If set to
 
@@ -551,7 +553,7 @@ def build_dataloaders(
 
     # Build datasets from the configuration
     if data_config is None:
-        data_config = load_config(cfg.dataset_config, config_type="data")
+        data_config = cfg.dataset_config
 
     ds_train, ds_val, ds_test = _build_datasets(
         data_config, postprocessors=postprocessors
