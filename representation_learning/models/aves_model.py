@@ -81,6 +81,21 @@ class Model(ModelBase):
         self.model.load_state_dict(state_dict)
         self.model.to(device)
 
+        # ------------------------------------------------------------------
+        # Pre-discover feed-forward (intermediate_dense, output_dense) layers
+        # for efficient hook management
+        # ------------------------------------------------------------------
+        self._mlp_layer_names: List[str] = []
+        for name, module in self.named_modules():
+            if isinstance(module, torch.nn.Linear) and (
+                "intermediate_dense" in name or "output_dense" in name
+            ):
+                self._mlp_layer_names.append(name)
+        print(
+            f"Discovered {len(self._mlp_layer_names)} feed-forward "
+            f"(intermediate_dense/output_dense) layers for hook management"
+        )
+
     def _prep_input(self, inputs: torch.Tensor) -> torch.Tensor:
         if inputs.ndim == 1:
             inputs = inputs.unsqueeze(0)
@@ -121,9 +136,194 @@ class Model(ModelBase):
         *,
         padding_mask: torch.Tensor | None = None,  # noqa: ANN401
         masked_mean: bool = False,
+        average_over_time: bool = True,
     ) -> torch.Tensor:
-        if isinstance(x, dict):
-            sequence_embeddings = self.forward(x["raw_wav"], padding_mask)
-        else:
-            sequence_embeddings = self.forward(x, padding_mask)
-        return sequence_embeddings.mean(dim=1)  # (B, C)
+        """Extract embeddings from specified layers of the AVES model.
+
+        Args:
+            x: Input tensor or dictionary containing 'raw_wav'
+                    layers: List of layer names to extract embeddings from. If 'all' is
+                   included, all feed-forward (intermediate_dense and output_dense)
+                   layers will be used for comprehensive representation extraction.
+            padding_mask: Optional padding mask
+            masked_mean: Whether to use masked mean pooling (kept for compatibility)
+            average_over_time: Whether to average embeddings over time dimension
+
+        Returns:
+            torch.Tensor: Concatenated embeddings from the requested layers
+
+        Raises:
+            ValueError: If none of the supplied layers are found in the model
+        """
+        # Handle empty layers list - return main features
+        if not layers:
+            if isinstance(x, dict):
+                wav = x["raw_wav"]
+                mask = x.get("padding_mask")
+            else:
+                wav = x
+                mask = padding_mask
+
+            with torch.no_grad():
+                emb = self.forward(wav, mask)
+                # Average over time dimension if it's 3D
+                if emb.dim() == 3:
+                    if average_over_time:
+                        emb = emb.mean(dim=1)  # Average over time dimension
+                    else:
+                        # Return as list for consistency with other cases
+                        return [emb]
+                else:
+                    if not average_over_time:
+                        # Return as list for consistency
+                        return [emb]
+            return emb
+
+        # Clear previous hook outputs
+        self._clear_hook_outputs()
+
+        # Handle 'all' case - use all feed-forward (intermediate_dense, output_dense)
+        # layers for comprehensive representations
+        # If 'all' is not in layers, use the exact layers specified
+        target_layers = layers.copy()
+        if "all" in layers:
+            print(
+                "'all' specified in layers, using pre-discovered feed-forward "
+                "(intermediate_dense/output_dense) layers for AVES model..."
+            )
+
+            if self._mlp_layer_names:
+                print(
+                    f"Using {len(self._mlp_layer_names)} pre-discovered "
+                    f"feed-forward layers"
+                )
+                target_layers = [
+                    layer for layer in layers if layer != "all"
+                ] + self._mlp_layer_names
+                print(
+                    f"Target layers after 'all' expansion: {len(target_layers)} layers"
+                )
+            else:
+                print(
+                    "No feed-forward (intermediate_dense/output_dense) layers "
+                    "found in AVES model"
+                )
+                # Fallback to main features when no MLP layers found
+                if isinstance(x, dict):
+                    wav = x["raw_wav"]
+                    mask = x.get("padding_mask")
+                else:
+                    wav = x
+                    mask = padding_mask
+
+                with torch.no_grad():
+                    emb = self.forward(wav, mask)
+                    # Average over time dimension if it's 3D
+                    if emb.dim() == 3:
+                        if average_over_time:
+                            emb = emb.mean(dim=1)  # Average over time dimension
+                        else:
+                            # Return as list for consistency with other cases
+                            return [emb]
+                    else:
+                        if not average_over_time:
+                            # Return as list for consistency
+                            return [emb]
+                return emb
+
+        # Register hooks for requested layers (only if not already registered)
+        self._register_hooks_for_layers(target_layers)
+
+        try:
+            # Process input
+            if isinstance(x, dict):
+                wav = x["raw_wav"]
+                mask = x.get("padding_mask")
+            else:
+                wav = x
+                mask = padding_mask
+
+            print(f"Starting forward pass with target layers: {target_layers}")
+
+            # Forward pass to trigger hooks
+            with torch.no_grad():
+                self.forward(wav, mask)
+
+            print(
+                f"Forward pass completed. Hook outputs: "
+                f"{list(self._hook_outputs.keys())}"
+            )
+
+            # Collect embeddings from hook outputs
+            embeddings = []
+            print(f"Collecting embeddings from {len(target_layers)} target layers")
+            for layer_name in target_layers:
+                if layer_name in self._hook_outputs:
+                    embeddings.append(self._hook_outputs[layer_name])
+                    print(
+                        f"Found embedding for {layer_name}: "
+                        f"{self._hook_outputs[layer_name].shape}"
+                    )
+                else:
+                    print(f"No output captured for layer: {layer_name}")
+
+            print(f"Collected {len(embeddings)} embeddings")
+
+            # Check if we got any embeddings
+            if not embeddings:
+                raise ValueError(f"No layers found matching: {target_layers}")
+
+            if average_over_time:
+                result = []
+                # Determine expected batch size from input
+                if isinstance(x, dict):
+                    expected_batch_size = x["raw_wav"].shape[0]
+                else:
+                    expected_batch_size = x.shape[0]
+
+                for emb in embeddings:
+                    if emb.dim() == 2:
+                        # Already in correct shape, just append
+                        result.append(emb)
+                    elif emb.dim() == 3:
+                        # Check if tensor is in time-first format
+                        # (time, batch, features)
+                        if emb.shape[0] != expected_batch_size:
+                            # Transpose to batch-first format
+                            emb = emb.transpose(0, 1)
+                        aggregated = torch.mean(emb, dim=1)
+                        result.append(aggregated)
+                    else:
+                        raise ValueError(
+                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Expected 2 or 3."
+                        )
+                return torch.cat(result, dim=1)
+            else:
+                # For non-averaged case, also transpose time-first tensors
+                result = []
+                # Determine expected batch size from input
+                if isinstance(x, dict):
+                    expected_batch_size = x["raw_wav"].shape[0]
+                else:
+                    expected_batch_size = x.shape[0]
+
+                for emb in embeddings:
+                    if emb.dim() == 2:
+                        result.append(emb)
+                    elif emb.dim() == 3:
+                        # Check if tensor is in time-first format
+                        if emb.shape[0] != expected_batch_size:
+                            # Transpose to batch-first format
+                            emb = emb.transpose(0, 1)
+                        result.append(emb)
+                    else:
+                        raise ValueError(
+                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Expected 2 or 3."
+                        )
+                return result
+
+        finally:
+            # Clear hook outputs for next call
+            self._clear_hook_outputs()

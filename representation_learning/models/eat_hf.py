@@ -183,6 +183,19 @@ class EATHFModel(ModelBase):
         else:
             self.classifier = nn.Linear(embed_dim, num_classes).to(self.device)
 
+        # -------------------------------------------------------------- #
+        #  Pre-discover MLP layers for efficient hook management        #
+        # -------------------------------------------------------------- #
+        self._mlp_layer_names: List[str] = []
+        for name, module in self.named_modules():
+            if isinstance(module, torch.nn.Linear) and (
+                "mlp.fc1" in name or "mlp.fc2" in name
+            ):
+                self._mlp_layer_names.append(name)
+        logger.info(
+            f"Discovered {len(self._mlp_layer_names)} MLP layers for hook management"
+        )
+
     # ------------------------------------------------------------------ #
     #  Forward pass                                                    #
     # ------------------------------------------------------------------ #
@@ -245,33 +258,170 @@ class EATHFModel(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],  # ignored – kept for API parity
+        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
         pooling: str = "cls",
+        average_over_time: bool = True,
     ) -> torch.Tensor:  # type: ignore[override]
-        """Return a clip-level embedding (CLS or mean-pooled).
+        """Extract embeddings from specified layers of the EAT model.
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav'
-            layers: Layer names (ignored, kept for API compatibility)
+            layers: List of layer names to extract embeddings from. If 'all' is
+                   included, MLP layers (fc1 and fc2 outputs) will be used as they
+                   provide rich intermediate representations from the transformer
+                   blocks.
             padding_mask: Optional padding mask (unused)
             pooling: Pooling method ("cls" or "mean")
+            average_over_time: Whether to average embeddings over time dimension
 
         Returns:
-            torch.Tensor: Clip-level embedding tensor
-        """
-        if isinstance(x, dict):
-            wav = x["raw_wav"]
-        else:
-            wav = x
+            torch.Tensor: Concatenated embeddings from the requested layers
 
-        prev_pooling = self.pooling
-        self.pooling = pooling
-        with torch.no_grad():
-            emb = self.forward(wav, padding_mask)
-        self.pooling = prev_pooling
-        return emb
+        Raises:
+            ValueError: If none of the supplied layers are found in the model
+        """
+        # Handle empty layers list - return main features
+        if not layers:
+            if isinstance(x, dict):
+                wav = x["raw_wav"]
+            else:
+                wav = x
+
+            prev_pooling = self.pooling
+            self.pooling = pooling
+
+            # Temporarily set return_features_only to get main features
+            prev_return_features_only = self.return_features_only
+            self.return_features_only = True
+
+            with torch.no_grad():
+                emb = self.forward(wav, padding_mask)
+
+            # Restore original settings
+            self.pooling = prev_pooling
+            self.return_features_only = prev_return_features_only
+            return emb
+
+        # Clear previous hook outputs
+        self._clear_hook_outputs()
+
+        # Handle 'all' case - use MLP layers (fc1 and fc2 outputs) for rich
+        # representations
+        # If 'all' is not in layers, use the exact layers specified
+        target_layers = layers.copy()
+        if "all" in layers:
+            logger.info(
+                "'all' specified in layers, using pre-discovered MLP layers "
+                "for EAT model..."
+            )
+
+            if self._mlp_layer_names:
+                logger.info(
+                    f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers"
+                )
+                target_layers = [
+                    layer for layer in layers if layer != "all"
+                ] + self._mlp_layer_names
+                logger.info(
+                    f"Target layers after 'all' expansion: {len(target_layers)} layers"
+                )
+            else:
+                logger.warning("No MLP layers found in EAT model")
+                # Fallback to classifier if available
+                if self.classifier is not None:
+                    target_layers = [layer for layer in layers if layer != "all"] + [
+                        "classifier"
+                    ]
+                else:
+                    # For features_only mode, return main features when no MLP
+                    # layers found
+                    if self.return_features_only:
+                        if isinstance(x, dict):
+                            wav = x["raw_wav"]
+                        else:
+                            wav = x
+
+                        prev_pooling = self.pooling
+                        self.pooling = pooling
+                        with torch.no_grad():
+                            emb = self.forward(wav, padding_mask)
+                        self.pooling = prev_pooling
+                        return emb
+                    else:
+                        target_layers = [layer for layer in layers if layer != "all"]
+
+        # Register hooks for requested layers (only if not already registered)
+        self._register_hooks_for_layers(target_layers)
+
+        try:
+            # Process input
+            if isinstance(x, dict):
+                wav = x["raw_wav"]
+            else:
+                wav = x
+
+            # Store original pooling method
+            prev_pooling = self.pooling
+            self.pooling = pooling
+
+            logger.debug(f"Starting forward pass with target layers: {target_layers}")
+
+            # Forward pass to trigger hooks
+            with torch.no_grad():
+                self.forward(wav, padding_mask)
+
+            # Restore original pooling method
+            self.pooling = prev_pooling
+
+            logger.debug(
+                f"Forward pass completed. Hook outputs: "
+                f"{list(self._hook_outputs.keys())}"
+            )
+
+            # Collect embeddings from hook outputs
+            embeddings = []
+            logger.debug(
+                f"Collecting embeddings from {len(target_layers)} target layers"
+            )
+            for layer_name in target_layers:
+                if layer_name in self._hook_outputs:
+                    embeddings.append(self._hook_outputs[layer_name])
+                    logger.debug(
+                        f"Found embedding for {layer_name}: "
+                        f"{self._hook_outputs[layer_name].shape}"
+                    )
+                else:
+                    logger.warning(f"No output captured for layer: {layer_name}")
+
+            logger.debug(f"Collected {len(embeddings)} embeddings")
+
+            # Check if we got any embeddings
+            if not embeddings:
+                raise ValueError(f"No layers found matching: {target_layers}")
+
+            if average_over_time:
+                result = []
+                for emb in embeddings:
+                    if emb.dim() == 2:
+                        # Already in correct shape, just append
+                        result.append(emb)
+                    elif emb.dim() == 3:
+                        aggregated = torch.mean(emb, dim=1)
+                        result.append(aggregated)
+                    else:
+                        raise ValueError(
+                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Expected 2 or 3."
+                        )
+                return torch.cat(result, dim=1)
+            else:
+                return embeddings
+
+        finally:
+            # Clear hook outputs for next call
+            self._clear_hook_outputs()
 
 
 # Public alias for consistency with other model modules

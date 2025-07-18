@@ -20,6 +20,100 @@ class ModelBase(nn.Module):
         # Initialize audio processor if config is provided
         self.audio_processor = AudioProcessor(audio_config) if audio_config else None
 
+        # Initialize hook management
+        self._hooks: Dict[str, torch.utils.hooks.RemovableHandle] = {}
+        self._hook_outputs: Dict[str, torch.Tensor] = {}
+        self._linear_layer_names: List[str] = []
+        # Note: _discover_linear_layers() will be called lazily when needed
+
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache all linear layer names in the model."""
+        self._linear_layer_names = []
+        for name, module in self.named_modules():
+            if isinstance(module, nn.Linear):
+                self._linear_layer_names.append(name)
+        logger.debug(
+            f"Discovered {len(self._linear_layer_names)} linear layers: "
+            f"{self._linear_layer_names}"
+        )
+
+    def _create_hook_fn(self, layer_name: str) -> callable:
+        """Create a hook function for a specific layer.
+
+        Returns:
+            callable: A hook function that captures layer outputs.
+        """
+
+        def hook_fn(
+            module: nn.Module,
+            input: tuple[torch.Tensor, ...],
+            output: torch.Tensor,
+        ) -> None:
+            # Capture the tensor without detaching so gradients can propagate
+            logger.debug(f"Hook triggered for layer: {layer_name}")
+            if isinstance(output, dict):  # TODO: hacky - model-specific handling
+                self._hook_outputs[layer_name] = output["x"]
+            elif isinstance(output, tuple):
+                self._hook_outputs[layer_name] = output[0]
+            else:
+                self._hook_outputs[layer_name] = output
+            logger.debug(
+                f"Captured output for {layer_name}: "
+                f"{self._hook_outputs[layer_name].shape}"
+            )
+
+        return hook_fn
+
+    def _register_hooks_for_layers(self, layer_names: List[str]) -> None:
+        """Register hooks for the specified layers if not already registered."""
+        for layer_name in layer_names:
+            if layer_name not in self._hooks:
+                # Find the module
+                module = None
+                for name, mod in self.named_modules():
+                    if name == layer_name:
+                        module = mod
+                        break
+
+                if module is not None:
+                    hook_fn = self._create_hook_fn(layer_name)
+                    self._hooks[layer_name] = module.register_forward_hook(hook_fn)
+                    logger.debug(
+                        f"Registered hook for layer: {layer_name} on module: {module}"
+                    )
+                else:
+                    logger.warning(f"Layer '{layer_name}' not found in model")
+
+    def _clear_hook_outputs(self) -> None:
+        """Clear cached hook outputs."""
+        self._hook_outputs.clear()
+
+    def _get_all_linear_layers(self) -> List[str]:
+        """Get all linear layer names including the classification layer.
+
+        Returns:
+            List[str]: List of linear layer names.
+        """
+        # Discover linear layers if not already done
+        if not self._linear_layer_names:
+            self._discover_linear_layers()
+
+        return self._linear_layer_names
+
+    def _cleanup_hooks(self) -> None:
+        """Remove all registered hooks."""
+        for hook in self._hooks.values():
+            hook.remove()
+        self._hooks.clear()
+        self._hook_outputs.clear()
+
+    def __del__(self) -> None:
+        """Cleanup hooks when the model is destroyed."""
+        try:
+            self._cleanup_hooks()
+        except Exception:
+            pass  # Ignore errors during cleanup
+
     def prepare_inference(self) -> None:
         self.model.eval()
         self.model = self.model.to(self.device)
@@ -96,8 +190,11 @@ class ModelBase(nn.Module):
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
-            layers: List of layer names to extract embeddings from
+            layers: List of layer names to extract embeddings from. If 'all' is
+                   included, all linear layers in the model will be automatically
+                   found and used.
             padding_mask: Optional padding mask tensor
+            average_over_time: Whether to average embeddings over time dimension
 
         Returns
         -------
@@ -109,32 +206,32 @@ class ModelBase(nn.Module):
         ValueError
             If none of the supplied *layers* are found in the model.
         """
-        embeddings = []
-        output_padding_mask = []
+        # Clear previous hook outputs
+        self._clear_hook_outputs()
 
-        def hook_fn(
-            module: nn.Module,
-            input: tuple[torch.Tensor, ...],
-            output: torch.Tensor,
-        ) -> None:
-            nonlocal embeddings  # noqa: F823 – defined in enclosing scope
-            # Capture the tensor without detaching so gradients can propagate
-            if isinstance(output, dict):  # TODO: hacky - model-specific handling
-                embeddings.append(output["x"])
-            elif isinstance(output, tuple):
-                embeddings.append(output[0])
-                output_padding_mask.append(output[1])
+        # Handle 'all' case - use cached linear layers
+        target_layers = layers.copy()
+        if "all" in layers:
+            logger.info("'all' specified in layers, using cached linear layers...")
+            linear_layer_names = self._get_all_linear_layers()
+
+            if not linear_layer_names:
+                logger.warning("No linear layers found in the model")
             else:
-                embeddings.append(output)
+                logger.info(f"Using linear layers: {linear_layer_names}")
 
-        hooks = []
+            # Replace 'all' with the actual linear layer names
+            target_layers = [
+                layer for layer in layers if layer != "all"
+            ] + linear_layer_names
+            logger.info(f"Target layers after 'all' expansion: {target_layers}")
+
+        # Register hooks for requested layers (only if not already registered)
+        self._register_hooks_for_layers(target_layers)
+
         try:
-            for name, module in self.named_modules():
-                if name in layers:
-                    logger.info(f"Registering forward hook for {name}")
-                    hooks.append(module.register_forward_hook(hook_fn))
-
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)
+            logger.debug(f"Starting forward pass with target layers: {target_layers}")
             if isinstance(x, dict):
                 # Input provided as dictionary with explicit padding mask
                 raw_wav = x["raw_wav"]
@@ -144,7 +241,6 @@ class ModelBase(nn.Module):
                     self(raw_wav, dummy_text, p_mask)
                 else:
                     self(raw_wav, p_mask)
-
             else:
                 # Tensor input – use provided mask if available, otherwise assume
                 # fully-valid signal (all ones).
@@ -159,9 +255,31 @@ class ModelBase(nn.Module):
                 else:
                     self(x, padding_mask)
 
-            # Concatenate embeddings
+            logger.debug(
+                f"Forward pass completed. Hook outputs: "
+                f"{list(self._hook_outputs.keys())}"
+            )
+
+            # Collect embeddings from hook outputs
+            embeddings = []
+            logger.debug(
+                f"Collecting embeddings from {len(target_layers)} target layers"
+            )
+            for layer_name in target_layers:
+                if layer_name in self._hook_outputs:
+                    embeddings.append(self._hook_outputs[layer_name])
+                    logger.debug(
+                        f"Found embedding for {layer_name}: "
+                        f"{self._hook_outputs[layer_name].shape}"
+                    )
+                else:
+                    logger.warning(f"No output captured for layer: {layer_name}")
+
+            logger.debug(f"Collected {len(embeddings)} embeddings")
+
+            # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(f"No layers found matching: {layers}")
+                raise ValueError(f"No layers found matching: {target_layers}")
 
             if average_over_time:
                 result = []
@@ -182,6 +300,5 @@ class ModelBase(nn.Module):
                 return embeddings
 
         finally:
-            for hook in hooks:
-                hook.remove()
-            del embeddings
+            # Clear hook outputs for next call
+            self._clear_hook_outputs()
