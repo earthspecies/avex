@@ -3,8 +3,8 @@ dataset_config: configs/data_configs/benchmark.yml
 # dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
 
 training_params:
-  train_epochs: 600
-  lr: 0.0006
+  train_epochs: 900
+  lr: 0.001
   batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
@@ -22,9 +22,9 @@ experiments:
     # checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
     # checkpoint_path: runs/efficientnet_multilabel/2025-06-30_17-36-11/checkpoints/checkpoint_epoch_038.pt
     # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-10_03-15-39/checkpoint_epoch_013.pt
-    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-15_15-12-13/checkpoint_epoch_044.pt
+    checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-15_15-12-13/checkpoint_epoch_049.pt
     # checkpoint_path: runs/efficientnet_audioset/2025-07-13_07-19-26/checkpoint_epoch_021.pt
-    checkpoint_path: runs/aaai/efficientnet_animalspeak/2025-07-15_15-11-34/checkpoint_epoch_049.pt
+    # checkpoint_path: runs/aaai/efficientnet_animalspeak/2025-07-15_15-11-34/checkpoint_epoch_049.pt
     # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-11_11-42-34/checkpoint_epoch_015.pt
     # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-11_11-42-34/checkpoint_epoch_028.pt
 

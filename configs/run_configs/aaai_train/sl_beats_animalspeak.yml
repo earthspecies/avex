@@ -42,7 +42,7 @@ training_params:
   amp_dtype: bf16
   freeze_backbone_epochs: 2
   second_stage_lr: 0.0001
-  second_stage_warmup_steps: 1000 
+  second_stage_warmup_steps: 5000
 
 # Learning rate scheduler configuration
 scheduler:

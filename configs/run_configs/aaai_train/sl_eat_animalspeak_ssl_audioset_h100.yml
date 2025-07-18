@@ -15,7 +15,7 @@ model_spec:
     window_selection: random
 
 # Dataset configuration (path to a valid dataset config)
-dataset_config: configs/data_configs/aaai_train/data_animalspeak.yml
+dataset_config: configs/data_configs/aaai_train/data_animalspeak_nfs.yml
 
 # Output directory for checkpoints and logs
 output_dir: "./runs/aaai/sl_eat_animalspeak_ssl_audioset"

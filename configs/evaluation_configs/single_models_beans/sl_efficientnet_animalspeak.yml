@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_debug.yml
+dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
   train_epochs: 900
@@ -12,16 +12,17 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: perch
-    run_config: configs/run_configs/pretrained/perch_base.yml
+  - run_name: efficientnet_animalspeak
+    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml
     ### which layers to probe for embeddings
-    layers: last_layer
+    layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    frozen: true
+    checkpoint_path: runs/aaai/efficientnet_animalspeak/2025-07-15_15-11-34/checkpoint_epoch_049.pt
+
 
 # Where to save the evaluation results
-save_dir: evaluation_results/bird_aves_bio
+save_dir: evaluation_results/efficientnet_beans
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv
@@ -34,7 +35,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval
   - clustering
 

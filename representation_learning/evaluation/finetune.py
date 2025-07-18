@@ -71,7 +71,7 @@ class FineTuneTrainer:
                 raise ValueError("No dataset metrics provided for multi-label task. ")
             else:
                 # For single-label classification, still allow accuracy as default
-                self.primary_metric_name = "acc"
+                self.primary_metric_name = "accuracy"
 
         self.best_val_metric = 0.0
         # Track best epoch metrics for return value

@@ -1,53 +1,56 @@
 ---
-# BEATs backbone for audio classification (masked pooling + linear head)
+# EAT backbone for audio classification (masked pooling + linear head)
 model_spec:
-  name: beats
-  pretrained: false  # Set to true when loading pretrained BEATs weights
+  name: eat_hf
+  pretrained: false
   device: cuda
+  fairseq_weights_path: ../EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint30.pt
+  eat_norm_mean: -5.553
+  eat_norm_std: 4.606
   audio_config:  # Still define for completeness; BEATs does its own Fbank conversion
     sample_rate: 16000
-    representation: raw
+    representation: raw  # BEATs expects raw waveform
     normalize: false
     target_length_seconds: 10
     window_selection: random
 
 # Dataset configuration (path to a valid dataset config)
-dataset_config: configs/data_configs/aaai_train/data_animalspeak_audioset_nfs.yml
+dataset_config: configs/data_configs/aaai_train/data_animalspeak_nfs.yml
+
 # Output directory for checkpoints and logs
-output_dir: "./runs/aaai/sl_beats_animalspeak_audioset"
-multilabel: true
+output_dir: "./runs/aaai/sl_eat_animalspeak_ssl_all"
+
 label_type: supervised
-run_name: sl_beats_animalspeak_audioset
+
 # audio preprocessing (none – handled inside the model)
 preprocessing: null
 
 # Target sample-rate expected by the model
 sr: 16000
 debug_mode: false
-multilabel: true
+
 # Log training runs to MLflow
 logging: wandb
 
 # Path to checkpoint to resume from (set to null or a path)
-resume_from_checkpoint: none
-# runs/aaai/sl_beats_animalspeak_audioset/2025-07-16_02-50-45/checkpoint_epoch_001.pt
+resume_from_checkpoint: null
 
 training_params:
   train_epochs: 10
-  lr: 0.0005
+  lr: 0.0001
   batch_size: 128
   optimizer: adamw8bit
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
   freeze_backbone_epochs: 2
-  second_stage_lr: 0.0001
-  second_stage_warmup_steps: 3000
+  second_stage_lr: 0.00008
+  second_stage_warmup_steps: 6000
 
 # Learning rate scheduler configuration
 scheduler:
   name: cosine
-  warmup_steps: 4000
+  warmup_steps: 2000
   min_lr: 1e-6
 
 augmentations:
@@ -75,20 +78,23 @@ augmentations:
           foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
         - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
           foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
-        # - "/scratch-representation-learning/noise_16k/ssw-detection"
+        # - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+        #   foundation-model-storage/foundation-model-data/audio_16k/noise/\
+        #   ssw-detection"
       snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
       augmentation_prob: 0.5
     # Mixup augmentation for audio samples
   - mixup:
       alpha: 0.4  # Controls the Beta distribution shape
       n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
-      augmentation_prob: 0.5  # Probability of applying mixup to a batch
+      augmentation_prob: 0.5  # Probability of applying mixup to a batchmultilabel: true
 
 # Loss for classification
 loss_function: bce
 
 # General settings
 seed: 42
-num_workers: 18
+num_workers: 10
 
+run_name: sl_eat_animalspeak
 wandb_project: representation_learning

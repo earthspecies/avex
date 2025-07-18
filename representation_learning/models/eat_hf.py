@@ -192,7 +192,7 @@ class EATHFModel(ModelBase):
             logger.info("Loading fairseq weights from '%s' …", fairseq_weights_path)
             load_fairseq_weights(self.backbone, fairseq_weights_path)
         
-        self.classifier = nn.Linear(self.backbone.config.hidden_size, num_classes)
+        self.classifier = nn.Linear(768, num_classes)
 
     def forward(
         self,

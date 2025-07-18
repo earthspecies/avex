@@ -21,4 +21,4 @@ export WANDB_DIR=/scratch-representation-learning/wandb_tmp
 export WANDB_CACHE_DIR=/scratch-representation-learning/wandb_cache
 
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_eat_animalspeak_h100.yml
+srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_eat_animalspeak_ssl_all_h100.yml
