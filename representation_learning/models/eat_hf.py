@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
-import torch.nn as nn
+
 import torch
+import torch.nn as nn
 from transformers import AutoModel
 
 from representation_learning.models.base_model import ModelBase
@@ -191,7 +192,7 @@ class EATHFModel(ModelBase):
         if fairseq_weights_path is not None:
             logger.info("Loading fairseq weights from '%s' …", fairseq_weights_path)
             load_fairseq_weights(self.backbone, fairseq_weights_path)
-        
+
         self.classifier = nn.Linear(768, num_classes)
 
     def forward(

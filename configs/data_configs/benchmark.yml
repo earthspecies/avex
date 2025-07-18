@@ -104,7 +104,7 @@ evaluation_sets:
       <<: *bird_base
       split: cbi_test
     metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
-    
+
 
   - name: "marine_mammal_classification"
     train: &watkins_base
@@ -149,7 +149,7 @@ evaluation_sets:
           label_map: {'American Crow': 0, 'American Goldfinch': 1, 'American Redstart': 2, 'American Robin': 3, 'Black-and-white Warbler': 4, 'Black-capped Chickadee': 5, 'Black-throated Blue Warbler': 6, 'Black-throated Green Warbler': 7, 'Blue Jay': 8, 'Blue-gray Gnatcatcher': 9, 'Blue-headed Vireo': 10, 'Brown-headed Cowbird': 11, 'Carolina Wren': 12, 'Common Yellowthroat': 13, 'Eastern Towhee': 14, 'Hermit Thrush': 15, 'Hooded Warbler': 16, "Kirtland's Warbler": 17, 'Louisiana Waterthrush': 18, 'None': 19, 'Northern Cardinal': 20, 'Northern Flicker': 21, 'Other Bird': 22, 'Ovenbird': 23, 'Red-bellied Woodpecker': 24, 'Red-eyed Vireo': 25, 'Rose-breasted Grosbeak': 26, 'Ruby-crowned Kinglet': 27, 'Scarlet Tanager': 28, "Swainson's Thrush": 29, 'Tufted Titmouse': 30, 'White-breasted Nuthatch': 31, 'Wild Turkey': 32, 'Wood Thrush': 33, 'Yellow-billed Cuckoo': 34}
       sample_rate: 16000
       data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
-      
+
     validation:
       <<: *enabirds_base
       split: enabirds_validation
@@ -397,7 +397,7 @@ evaluation_sets:
       split: HSN-test
     metrics: [mAP]
 
-  
+
   - name: "zebra_finch_bird_id"
     train: &zebra_finch_train
       dataset_name: "zebra_finch_julie_elie"
