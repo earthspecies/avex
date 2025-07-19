@@ -269,10 +269,21 @@ class Model(ModelBase):
                     elif emb.dim() == 3:
                         aggregated = torch.mean(emb, dim=1)
                         result.append(aggregated)
+                    elif emb.dim() == 4:
+                        # Handle 4D tensors (e.g., from avgpool layer)
+                        # Flatten spatial dimensions and then average
+                        # over time if needed
+                        batch_size, channels, height, width = emb.shape
+                        flattened = emb.view(batch_size, channels, -1)  # (B, C, H*W)
+                        if average_over_time:
+                            aggregated = torch.mean(flattened, dim=2)  # (B, C)
+                        else:
+                            aggregated = flattened.mean(dim=2)  # (B, C)
+                        result.append(aggregated)
                     else:
                         raise ValueError(
                             f"Unexpected embedding dimension: {emb.dim()}. "
-                            f"Expected 2 or 3."
+                            f"Expected 2, 3, or 4."
                         )
                 return torch.cat(result, dim=1)
             else:
