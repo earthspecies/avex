@@ -1,3 +1,4 @@
+import os
 from typing import Dict, Optional, Tuple, Union
 
 import torch
@@ -60,6 +61,13 @@ def gather_features(
         "torch.distributed did not import correctly, "
         "please use a PyTorch version with support."
     )
+    # Optional debug print – enable by setting DEBUG_CLIP_GATHER=1
+    if (
+        torch.distributed.is_initialized()
+        and os.environ.get("DEBUG_CLIP_GATHER", "0") == "1"
+        and rank == 0
+    ):
+        print(f"[DEBUG] rank {rank} | batch={image_features.size(0)}")
     if use_horovod:
         assert hvd is not None, "Please install horovod"
         if gather_with_grad:

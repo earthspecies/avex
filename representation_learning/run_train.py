@@ -4,28 +4,41 @@ Entry‑point script for training experiments.
 
 from __future__ import annotations
 
+<<<<<<< HEAD
+=======
+import argparse
+import json
+>>>>>>> origin/david-training4
 import logging
+import multiprocessing as mp
 from datetime import datetime
 from pathlib import Path
 
 import torch
 import yaml
 
-# Cloud-agnostic path factory (local / gs:// / r2://).
-from esp_data.io.paths import anypath  # type: ignore
+mp.set_start_method("spawn", force=True)
 
-from representation_learning.configs import (  # type: ignore
+
+from esp_data.io.paths import anypath  # type: ignore  # noqa: E402
+
+from representation_learning.configs import (  # type: ignore  # noqa: E402
     RunConfig,
 )
-from representation_learning.data.dataset import build_dataloaders
-from representation_learning.models.get_model import get_model
-from representation_learning.training.distributed import (
+from representation_learning.data.dataset import build_dataloaders  # noqa: E402
+from representation_learning.models.get_model import get_model  # noqa: E402
+from representation_learning.training.distributed import (  # noqa: E402
     get_local_device_index,
     init_distributed,
 )
-from representation_learning.training.optimisers import get_optimizer
-from representation_learning.training.train import Trainer
-from representation_learning.utils import ExperimentLogger
+from representation_learning.training.optimisers import get_optimizer  # noqa: E402
+from representation_learning.training.trainer_factory import (  # noqa: E402
+    TrainerFactory,
+)
+from representation_learning.training.training_utils import (  # noqa: E402
+    build_scheduler,
+)
+from representation_learning.utils import ExperimentLogger  # noqa: E402
 
 # Configure logging to ensure INFO level logs are visible
 logging.basicConfig(
@@ -75,6 +88,10 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
 
     # 2. Build the dataloaders.
     train_dl, val_dl, _ = build_dataloaders(config, device=device)
+
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()
+
     logger.info(
         "Dataset ready: %d training batches / %d validation batches",
         len(train_dl),
@@ -96,6 +113,15 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     model = get_model(config.model_spec, num_classes=num_labels).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
 
+    # --------------------------------------------------------------
+    # Optional 1st-stage backbone freeze for two-stage fine-tuning
+    # --------------------------------------------------------------
+    freeze_epochs = getattr(config.training_params, "freeze_backbone_epochs", 0)
+    if freeze_epochs > 0 and hasattr(model, "backbone"):
+        logger.info("Freezing backbone for the first %d epochs", freeze_epochs)
+        for p in model.backbone.parameters():  # type: ignore[attr-defined]
+            p.requires_grad = False
+
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     base_out = anypath(config.output_dir)
@@ -113,38 +139,53 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     with (output_dir / "config.yml").open("w") as f:
         yaml.dump(config.model_dump(mode="json"), f)
 
+    # Save the label_map from dataset metadata
+    label_map = train_dl.dataset.metadata.get("label_map", {})
+    if label_map:
+        with (output_dir / "label_map.json").open("w") as f:
+            json.dump(label_map, f, indent=2)
+        logger.info(
+            f"Saved label_map with {len(label_map)} classes to "
+            f"{output_dir / 'label_map.json'}"
+        )
+    else:
+        logger.warning("No label_map found in dataset metadata")
+
     # Create experiment logger
     exp_logger = ExperimentLogger.from_config(config)
 
     # Create optimizer
     optim = get_optimizer(model.parameters(), config.training_params)
 
-    trainer = Trainer(
+    # Create scheduler
+    total_steps = len(train_dl) * config.training_params.train_epochs
+    scheduler = build_scheduler(optim, config, total_steps)
+
+    # Create scaler for mixed precision training
+    scaler = None
+    if config.training_params.amp:
+        from torch.cuda.amp import GradScaler
+
+        scaler = GradScaler()
+
+    # Keep the original config.output_dir which was already set correctly above
+
+    # Create trainer using the factory
+    trainer = TrainerFactory.create_trainer(
         model=model,
         optimizer=optim,
-        train_dl=train_dl,
-        eval_dl=val_dl,
-        model_dir=output_dir / "checkpoints",
+        scheduler=scheduler,
+        scaler=scaler,
+        train_dataloader=train_dl,
+        eval_dataloader=val_dl,
+        config=config,
         local_rank=local_device_index,
         world_size=world_size,
         is_distributed=is_distributed,
-        criterion=config.loss_function,
-        lr=config.training_params.lr,
-        weight_decay=config.training_params.weight_decay,
-        max_epochs=config.training_params.train_epochs,
-        amp=config.training_params.amp,
-        amp_dtype=config.training_params.amp_dtype,
-        scheduler_config=config.scheduler.model_dump(mode="json"),
-        is_clip_mode=(config.label_type == "text"),
-        is_eat_ssl=(config.label_type == "self_supervised"),
-        checkpoint_freq=getattr(config, "checkpoint_freq", 1),
-        exp_logger=exp_logger,
-        batch_size=config.training_params.batch_size,
         device=device,
+        exp_logger=exp_logger,
+        num_classes=num_labels,
         resume_from_checkpoint=getattr(config, "resume_from_checkpoint", None),
-        run_config=config,
-        log_steps=config.training_params.log_steps,
-        gradient_checkpointing=config.training_params.gradient_checkpointing,
     )
 
     # Train

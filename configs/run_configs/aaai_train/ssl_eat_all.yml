@@ -1,0 +1,48 @@
+---
+# Model configuration
+model_spec:
+  name: eat_hf
+  pretrained: true
+  # fairseq_weights_path: ../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint20.pt
+  # fairseq_weights_path: ../EAT/multirun/2025-07-11/12-38-06/0/eat_audioset_animalspeak/checkpoint9.pt
+  fairseq_weights_path: ../EAT/multirun/2025-07-13/10-15-32/0/eat_audioset_animalspeak/checkpoint30.pt
+  # Combined dataset - using default normalization parameters
+  eat_norm_mean: -5.553
+  eat_norm_std: 4.606
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_base.yml
+run_name: ssl_eat_all_e18
+
+# How to use the labels (supervised: use class indices, text: use text labels)
+label_type: supervised
+debug_mode: false
+
+# audio preprocessing (e.g. event detection)
+preprocessing: null
+
+# Target sample‑rate expected by the model
+sr: 16000
+
+# Training parameters (for evaluation fine-tuning)
+training_params:
+  train_epochs: 100
+  lr: 0.0003
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Required fields for RunConfig schema
+output_dir: "./runs/eat_hf_baseline"
+loss_function: cross_entropy
+
+device: cuda
+seed: 42
+num_workers: 8

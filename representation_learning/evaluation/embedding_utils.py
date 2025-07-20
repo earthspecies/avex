@@ -33,8 +33,20 @@ def extract_embeddings_for_split(
     labels: list[torch.Tensor] = []
     model.eval()
 
+
+    progress = tqdm(
+        enumerate(dataloader),
+        desc="Extracting embeddings",
+        total=len(dataloader),
+        unit="batch",
+    )
+
+    logger.info(f"Extracting embeddings for {len(dataloader)} batches")
+
     with torch.no_grad():
-        for batch in dataloader:
+        for idx, batch in progress:
+
+            
             wav = batch["raw_wav"].to(device)
             mask = batch.get("padding_mask")
             if mask is not None:
@@ -44,8 +56,11 @@ def extract_embeddings_for_split(
             else:
                 inp = {"raw_wav": wav, "padding_mask": mask}
                 emb = model.extract_embeddings(inp, layers=layer_names)
+
             embeds.append(emb.cpu())
             labels.append(batch["label"].cpu())
+
+    logger.info(f"Extracted {len(embeds)} embeddings")
 
     return torch.cat(embeds), torch.cat(labels)
 

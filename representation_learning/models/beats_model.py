@@ -8,13 +8,12 @@ from representation_learning.models.base_model import ModelBase
 from representation_learning.models.beats.beats import BEATs, BEATsConfig
 from representation_learning.utils import universal_torch_load
 
-BEATS_PRETRAINED_PATH = (
+BEATS_PRETRAINED_PATH_FT = (
     "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
 )
-
-# BEATS_PRETRAINED_PATH = (
-#         "gs://representation-learning/pretrained/beats_pretrained.pt"
-#     )
+BEATS_PRETRAINED_PATH_SSL = (
+    "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
+)
 
 BEATS_PRETRAINED_PATH_NATURELM = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 
@@ -51,6 +50,7 @@ class Model(ModelBase):
         audio_config: Optional[AudioConfig] = None,
         return_features_only: bool = False,
         use_naturelm: bool = False,
+        fine_tuned: bool = False,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
@@ -58,10 +58,19 @@ class Model(ModelBase):
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
 
+        # Determine which checkpoint to load based on configuration
+        if use_naturelm:
+            beats_checkpoint_path = BEATS_PRETRAINED_PATH_NATURELM
+        elif fine_tuned:
+            beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
+        else:
+            beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
+
         beats_ckpt = universal_torch_load(
-            BEATS_PRETRAINED_PATH, cache_mode="use", map_location="cpu"
+            beats_checkpoint_path, cache_mode="use", map_location="cpu"
         )
         self.use_naturelm = use_naturelm
+        self.fine_tuned = fine_tuned
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
         print(beats_cfg)
         if use_naturelm:

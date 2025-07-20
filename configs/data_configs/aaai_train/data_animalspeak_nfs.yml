@@ -1,0 +1,41 @@
+train_datasets:
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    split: train
+    balance: false
+    balance_attribute: canonical_name   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
+    # data_root: /scratch-representation-learning/
+    transformations:
+      - type: label_from_feature
+        feature: canonical_name
+        override: true
+
+
+val_datasets:
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    split: validation
+    balance: false
+    balance_attribute: canonical_name   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 10
+    audio_path_col: path
+    transformations:
+      - type: label_from_feature
+        feature: canonical_name
+        override: true
+    # data_root: gs://foundation-model-data/audio_16k/
+    data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
+    # data_root: /scratch-representation-learning/
+
+transformations:
+  - type: deduplicate
+    subset: ['local_path']

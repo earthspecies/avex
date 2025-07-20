@@ -241,13 +241,8 @@ def save_evaluation_metadata(
         # Store run config as JSON string
         metadata["run_config_params"] = json.dumps(run_config)
 
-    # Save metadata as in bucket
-    if run_config is not None:
-        run_id = run_config.get("run_name", _generate_run_id())
-    elif latest_training is not None:
-        run_id = latest_training.get("run_name", _generate_run_id())
-    else:
-        run_id = _generate_run_id()
+    # Always generate a fresh run_id (simpler and avoids None issues)
+    run_id = _generate_run_id()
 
     output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")
     with _fs.open(str(output_json_path), "w") as f:
@@ -498,7 +493,7 @@ def create_experiment_summary_csvs(
     for entry in summary_data:
         simple_entry = {
             "model_name": entry["experiment_name"],
-            "date": entry["timestamp"],
+            "date": entry.get("end_timestamp", entry.get("timestamp")),
             "dataset": entry.get("evaluation_dataset_name") or entry["dataset_name"],
         }
 

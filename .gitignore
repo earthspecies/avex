@@ -6,6 +6,8 @@ evaluation_results/
 pretrained/
 runs/
 static/
+labels/
+wandb/
 
 # VSCode
 .vscode/
@@ -148,6 +150,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Secrets files
+.secrets.yaml
+secrets.yaml
 
 # Spyder project settings
 .spyderproject

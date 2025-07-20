@@ -1,6 +1,8 @@
 # TODO (OSS): change [project]`, `[dependency-groups]`,
 # `[project.urls]`, and `[tool.hatch.build.targets.wheel]
 # According to your needs.
+# #  "pysoundfile>=0.9.0.post1",
+
 
 [project]
 name = "representation-learning"
@@ -22,7 +24,6 @@ dependencies = [
   "pandas>=2.2.3",
   "psutil>=7.0.0",
   "pydantic>=2.11.3",
-  "pysoundfile>=0.9.0.post1",
   "pyyaml>=6.0.2",
   "resampy>=0.4.3",
   "soundfile>=0.13.1",
@@ -41,6 +42,8 @@ dependencies = [
   "einops>=0.8.1",
   "pydantic-settings>=2.9.1",
   "esp-sweep>=0.2.0",
+  "wandb>=0.21.0",
+  "birdnetlib>=0.18.0",
 ]
 
 [dependency-groups]
@@ -67,6 +70,15 @@ explicit = true
 [tool.uv.sources]
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
+# esp_data package - using local reference
+# Original remote configuration (commented out):
+# [[tool.uv.index]]
+# name = "esp-pypi"
+# url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+# explicit = true
+
+[tool.uv.sources]
+esp-data = { path = "./esp_data_reference" }
 
 [tool.uv]
 default-groups = ["dev", "gpu"]

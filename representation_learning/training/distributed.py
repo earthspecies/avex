@@ -1,7 +1,7 @@
 """Distributed training setup utilities."""
 
 import builtins
-import contextlib
+import datetime as _dt
 import logging
 import os
 from typing import Tuple
@@ -12,20 +12,25 @@ import torch.distributed as dist
 logger = logging.getLogger(__name__)
 
 
-@contextlib.contextmanager
 def suppress_non_master_prints(is_master: bool):  # noqa: ANN201
+    """Permanently silence *print* on non-master ranks.
+
+    Existing call-sites invoke this helper as a **regular function**, not as a
+    context manager.  We therefore simplify the implementation – non-master
+    processes have their built-in *print* replaced with a no-op for the rest of
+    the program lifetime.  Rank-0 is left unchanged.
     """
-    Context manager to temporarily suppress prints for non-master processes
-    """
+    return
+
     if is_master:
-        yield
-    else:
-        original_print = builtins.print
-        builtins.print = lambda *args, **kwargs: None
-        try:
-            yield
-        finally:
-            builtins.print = original_print
+        return
+
+    # Only override once per process – avoid repeated reassignments
+    if getattr(suppress_non_master_prints, "_applied", False):
+        return
+
+    builtins.print = lambda *args, **kwargs: None  # type: ignore[assignment]
+    suppress_non_master_prints._applied = True  # type: ignore[attr-defined]
 
 
 def get_slurm_env() -> Tuple[int, int, int, int, str]:
@@ -175,6 +180,7 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                 backend=backend,
                 world_size=world_size,
                 rank=rank,
+                timeout=_dt.timedelta(minutes=5),
             )
             is_distributed = True
             logger.info("Distributed training initialized successfully.")
