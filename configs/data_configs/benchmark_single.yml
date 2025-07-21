@@ -1,26 +1,50 @@
 benchmark_name: "bioacoustic_benchmark_single"
 
 evaluation_sets:
-  - name: "marine_mammal_classification"
-    train: &watkins_base
+  # Classification Tasks
+  - name: "dog_classification"
+    train: &dogs_base
       dataset_name: beans
-      split: watkins_train
+      split: dogs_train
       type: classification
       label_column: label
       audio_path_col: path
       multi_label: false
       label_type: supervised
-      audio_max_length_seconds: 3
+      audio_max_length_seconds: 10
       transformations:
         - type: label_from_feature
           feature: label
           override: true
-          label_map: {'Atlantic_Spotted_Dolphin': 0, 'Bearded_Seal': 1, 'Beluga,_White_Whale': 2, 'Bottlenose_Dolphin': 3, 'Bowhead_Whale': 4, 'Clymene_Dolphin': 5, 'Common_Dolphin': 6, 'False_Killer_Whale': 7, 'Fin,_Finback_Whale': 8, 'Frasers_Dolphin': 9, 'Grampus,_Rissos_Dolphin': 10, 'Harp_Seal': 11, 'Humpback_Whale': 12, 'Killer_Whale': 13, 'Leopard_Seal': 14, 'Long-Finned_Pilot_Whale': 15, 'Melon_Headed_Whale': 16, 'Minke_Whale': 17, 'Narwhal': 18, 'Northern_Right_Whale': 19, 'Pantropical_Spotted_Dolphin': 20, 'Ross_Seal': 21, 'Rough-Toothed_Dolphin': 22, 'Short-Finned_Pacific_Pilot_Whale': 23, 'Southern_Right_Whale': 24, 'Sperm_Whale': 25, 'Spinner_Dolphin': 26, 'Striped_Dolphin': 27, 'Walrus': 28, 'White-beaked_Dolphin': 29, 'White-sided_Dolphin': 30}
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
       sample_rate: 16000
     validation:
-      <<: *watkins_base
-      split: watkins_validation
+      <<: *dogs_base
+      split: dogs_validation
     test:
-      <<: *watkins_base
-      split: watkins_test
-    metrics: [accuracy, balanced_accuracy]
+      <<: *dogs_base
+      split: dogs_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  # - name: "bat_classification"
+  #   train: &bats_base
+  #     dataset_name: beans
+  #     split: egyptian_fruit_bats_train
+  #     type: classification
+  #     label_column: label
+  #     audio_path_col: path
+  #     multi_label: false
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     transformations:
+  #       - type: label_from_feature
+  #         feature: label
+  #         override: true
+  #         label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
+  #     sample_rate: 16000
+  #   validation:
+  #     <<: *bats_base
+  #     split: egyptian_fruit_bats_validation
+  #   test:
+  #     <<: *bats_base
+  #     split: egyptian_fruit_bats_test
+  #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
