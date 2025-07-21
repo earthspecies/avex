@@ -498,7 +498,7 @@ def create_experiment_summary_csvs(
     for entry in summary_data:
         simple_entry = {
             "model_name": entry["experiment_name"],
-            "date": entry["timestamp"],
+            "date": entry["end_timestamp"],
             "dataset": entry.get("evaluation_dataset_name") or entry["dataset_name"],
         }
 
