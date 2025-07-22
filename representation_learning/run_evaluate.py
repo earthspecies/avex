@@ -12,17 +12,12 @@ Key points
 from __future__ import annotations
 
 import logging
-
-# -------------------------------------------------------------------- #
-#  Early environment setup for GCS access                              #
-# -------------------------------------------------------------------- #
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Prevent google-cloud-storage from crashing when no project is set.
-# This project ID is public-read only and works for anonymous access.
+# Seems to prevent a cloudpathlib error
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
 
 import pandas as pd
@@ -326,7 +321,6 @@ def run_experiment(
             base_model.eval()
 
         # Update cached model metadata for next iteration
-        # Only cache models for frozen evaluation, not for fine-tuning
         if frozen:
             cached_model_metadata = {
                 "checkpoint_path": experiment_cfg.checkpoint_path,
@@ -463,7 +457,6 @@ def run_experiment(
             )
         else:
             # For fine-tuning, use raw dataloaders
-            # Get multi-label setting from dataset config, with fallback based on type
             is_multi_label = getattr(
                 dataset_cfg,
                 "multi_label",
@@ -502,9 +495,7 @@ def run_experiment(
                 train_embeds, train_labels, test_embeds, test_labels
             )
         else:
-            # Current behavior: test-vs-test
             retrieval_metrics = eval_retrieval(test_embeds, test_labels)
-        # logger.info("retrieval metrics", retrieval_metrics)
 
     # ------------------------------------------------------------------ #
     #  (3) Clustering (from cached test embeddings)
@@ -615,11 +606,10 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
         )
         return
 
-    # Group by experiment to load each model only once
+    # Group by experiment to load each model only once (saved a lot of time.)
     for exp_cfg in eval_cfg.experiments:
         logger.info(f"Starting experiment: {exp_cfg.run_name}")
 
-        # Load model once per experiment (if needed)
         cached_model = None
         model_metadata = None
 

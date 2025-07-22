@@ -135,7 +135,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     with (output_dir / "config.yml").open("w") as f:
         yaml.dump(config.model_dump(mode="json"), f)
 
-    # Save the label_map from dataset metadata
+    # Save label_map for reference
     label_map = train_dl.dataset.metadata.get("label_map", {})
     if label_map:
         with (output_dir / "label_map.json").open("w") as f:

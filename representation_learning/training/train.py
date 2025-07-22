@@ -147,35 +147,14 @@ class Trainer:
             and config.clustering_eval
             and config.clustering_eval.enabled
         ):
-            # Use text-aware clustering evaluator for text-labeled datasets
-            if config.label_type == "text":
-                from representation_learning.training.text_aware_clustering_evaluator import (  # noqa: E501
-                    TextAwareClusteringEvaluator,
-                )
+            from representation_learning.training.clustering_evaluator import (
+                ClusteringEvaluator,
+            )
 
-                # Determine strategy based on dataset characteristics
-                text_label_strategy = "canonical_name"  # Default for AnimalSpeak
-                if hasattr(config.clustering_eval, "text_label_strategy"):
-                    text_label_strategy = config.clustering_eval.text_label_strategy
-
-                self.clustering_evaluator = TextAwareClusteringEvaluator(
-                    config.clustering_eval,
-                    device,
-                    text_label_strategy=text_label_strategy,
-                )
-                logger.info(
-                    f"Text-aware clustering evaluation enabled with strategy: "
-                    f"{text_label_strategy}"
-                )
-            else:
-                from representation_learning.training.clustering_evaluator import (
-                    ClusteringEvaluator,
-                )
-
-                self.clustering_evaluator = ClusteringEvaluator(
-                    config.clustering_eval, device
-                )
-                logger.info("Clustering evaluation enabled")
+            self.clustering_evaluator = ClusteringEvaluator(
+                config.clustering_eval, device
+            )
+            logger.info("Clustering evaluation enabled")
 
         # Load checkpoint if specified
         if is_main_process() and resume_from_checkpoint:

@@ -241,7 +241,6 @@ def save_evaluation_metadata(
         # Store run config as JSON string
         metadata["run_config_params"] = json.dumps(run_config)
 
-    # Always generate a fresh run_id (simpler and avoids None issues)
     run_id = _generate_run_id()
 
     output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")

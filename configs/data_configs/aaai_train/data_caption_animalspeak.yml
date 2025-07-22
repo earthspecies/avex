@@ -1,9 +1,3 @@
-# Configuration that concatenates AnimalSpeak with AudioSet during training
-# - Training: AnimalSpeak + AudioSet (concatenated)
-# - Validation: AnimalSpeak only
-# - Both use 16kHz sample rate and unified column mappings
-# - Option B: Global label transforms applied after concatenation to avoid collisions
-
 train_datasets:
   # AnimalSpeak dataset for training (keep original canonical_name field)
   - dataset_name: animalspeak
@@ -18,19 +12,6 @@ train_datasets:
     audio_path_col: path
     data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
     sample_rate: 16000
-    transformations:
-      - type: require_features
-        # Drop rows where canonical_name is missing or empty
-        features: [canonical_name]
-        mode: exclude
-
-  # AudioSet dataset for training (keep original labels field)
-  # - dataset_name: audioset
-  #   split: train
-  #   sample_rate: 16000
-  #   # data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
-  #   data_root: ../esp-data/audioset/v0.1.0/raw/
-  #   # NO transformations here - keep original labels field
 
 val_datasets:
   # Only use AnimalSpeak for validation (keep original canonical_name field)
@@ -46,12 +27,6 @@ val_datasets:
     audio_path_col: path
     data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
     sample_rate: 16000
-    # transformations:
-    #   # Drop rows without a canonical_name in the validation split as well
-    #   - type: filter
-    #     property: canonical_name
-    #     values: [""]
-    #     mode: exclude
 
 # Concatenation settings
 concatenate_train: true

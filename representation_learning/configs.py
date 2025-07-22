@@ -15,22 +15,12 @@ Usage
 
 from __future__ import annotations
 
-from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Self, Tuple, Union
 
 import yaml
 from esp_data import DatasetConfig
-
-# Register custom esp-data transforms before we import RegisteredTransformConfigs
-try:
-    import_module("representation_learning.data.text_label_from_features")
-    import_module("representation_learning.data.require_features")
-except ModuleNotFoundError:
-    pass
-
-# Import the updated union type *after* custom transforms have registered.
-from esp_data.transforms.registry import RegisteredTransformConfigs
+from esp_data.transforms import RegisteredTransformConfigs
 
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
@@ -210,7 +200,7 @@ class ModelSpec(BaseModel):
     pretraining_mode: Optional[bool] = None
     handle_padding: Optional[bool] = None
 
-    # EAT HF specific configuration
+    # EAT HF specific configuration: TODO handling for model-specific configs
     fairseq_weights_path: Optional[str] = Field(
         None, description="Path to fairseq checkpoint for EAT HF model"
     )
@@ -242,12 +232,6 @@ class ModelSpec(BaseModel):
     # BirdNet-specific configuration
     language: Optional[str] = Field(
         None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')"
-    )
-    apply_sigmoid: Optional[bool] = Field(
-        None, description="Whether to apply sigmoid to BirdNet output probabilities"
-    )
-    freeze_backbone: Optional[bool] = Field(
-        None, description="Whether to freeze the backbone for BirdNet"
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -400,13 +384,6 @@ class ClusteringEvalConfig(BaseModel):
     run_before_training: bool = Field(
         False, description="Run clustering evaluation before the first epoch"
     )
-    text_label_strategy: str = Field(
-        "canonical_name",
-        description=(
-            "Strategy for extracting labels from text datasets: "
-            "'canonical_name', 'hash_text', 'first_text', 'labels_field'"
-        ),
-    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -417,6 +394,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     # --------------------------------------------------------------------------- #
     #  Clustering evaluation configuration
     # --------------------------------------------------------------------------- #
+    """Everything needed for a single *training run*."""
 
     # required
     model_spec: ModelSpec

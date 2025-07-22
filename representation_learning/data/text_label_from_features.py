@@ -20,24 +20,14 @@ class TextLabelFromFeaturesConfig(BaseModel):
 
     type: Literal["text_label_from_features"]
 
-    # Columns to pull the textual information from.  Either a single string or a
-    # list of strings.
     features: str | List[str]
 
-    # Name of the generated column.  Default matches the expectation of our
-    # Collater / TrainingStrategy.
     output_feature: str = "text_label"
 
-    # If *False* and the output column already exists in the dataset an
-    # AssertionError is raised.
     override: bool = False
 
-    # Whether to always store the caption as a *list* (so that the collater can
-    # randomly select one element).  If *False*, the individual parts will be
-    # joined with *join_with*.
     listify: bool = True
 
-    # Delimiter for joining when *listify* is False.
     join_with: str = ", "
 
 

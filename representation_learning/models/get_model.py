@@ -175,25 +175,17 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             Model as BirdNetModel,  # Local import to avoid TF deps when unused
         )
 
-        # BirdNet-specific configuration
-        language = getattr(model_config, "language", "en_us")
-        apply_sigmoid = getattr(model_config, "apply_sigmoid", True)
-        freeze_backbone = getattr(model_config, "freeze_backbone", True)
-
         return BirdNetModel(
             num_classes=num_classes,
             device=model_config.device,
             audio_config=model_config.audio_config,
-            language=language,
-            apply_sigmoid=apply_sigmoid,
-            freeze_backbone=freeze_backbone,
         )
     else:
         # Fallback
         supported = (
             "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
             "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', "
-            "'birdnet', 'dummy_model'"
+            "'birdnet', "
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"

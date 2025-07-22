@@ -1,6 +1,5 @@
 """Distributed training setup utilities."""
 
-import builtins
 import datetime as _dt
 import logging
 import os
@@ -10,27 +9,6 @@ import torch
 import torch.distributed as dist
 
 logger = logging.getLogger(__name__)
-
-
-def suppress_non_master_prints(is_master: bool):  # noqa: ANN201
-    """Permanently silence *print* on non-master ranks.
-
-    Existing call-sites invoke this helper as a **regular function**, not as a
-    context manager.  We therefore simplify the implementation – non-master
-    processes have their built-in *print* replaced with a no-op for the rest of
-    the program lifetime.  Rank-0 is left unchanged.
-    """
-    return
-
-    if is_master:
-        return
-
-    # Only override once per process – avoid repeated reassignments
-    if getattr(suppress_non_master_prints, "_applied", False):
-        return
-
-    builtins.print = lambda *args, **kwargs: None  # type: ignore[assignment]
-    suppress_non_master_prints._applied = True  # type: ignore[attr-defined]
 
 
 def get_slurm_env() -> Tuple[int, int, int, int, str]:
@@ -190,7 +168,6 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                 "Single GPU/task detected (world_size=1). "
                 "Skipping distributed initialization."
             )
-            suppress_non_master_prints(True)  # Standalone process is master
 
     elif dist.is_available() and not dist.is_initialized():
         # Fallback for non-SLURM environments if needed, e.g. torchrun
@@ -211,32 +188,27 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                     logger.warning("Failed to set CUDA device: %s", e)
 
                 dist.init_process_group(backend=backend, init_method="env://")
-                suppress_non_master_prints(rank == 0)
                 is_distributed = True
                 logger.info(
                     f"Initialized torch.distributed via env:// "
                     f"(rank {rank}, world_size {world_size})"
                 )
-            else:
-                suppress_non_master_prints(True)
         else:
             logger.info(
                 "Neither SLURM nor standard torch.distributed env vars found. "
                 "Running in non-distributed mode."
             )
-            suppress_non_master_prints(True)  # Standalone process is master
+
     elif dist.is_initialized():
         rank = dist.get_rank()
         world_size = dist.get_world_size()
         is_distributed = world_size > 1
-        suppress_non_master_prints(rank == 0)
         logger.info(
             "torch.distributed already initialized "
             f"(rank {rank}, world_size {world_size}, is_distributed={is_distributed})"
         )
     else:
         logger.info("torch.distributed not available. Running in non-distributed mode.")
-        suppress_non_master_prints(True)  # Standalone process is master
 
     return rank, world_size, is_distributed
 

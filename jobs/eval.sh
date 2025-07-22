@@ -15,8 +15,9 @@ cd ~/rep5
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 uv sync
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/efficientnet_beans.yml
+
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/eat_hf_48khz.yml
-# srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/sl_efficientnet_animalspeak.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/sl_efficientnet_animalspeak.yml
 # srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/clap.yml
 # srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/birdnet.yml
 # srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/eat_hf.yml

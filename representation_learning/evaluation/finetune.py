@@ -19,7 +19,7 @@ logging.basicConfig(
 
 
 # -------------------------------------------------------------------- #
-#  FineTuneTrainer (moved from dep_train.py)
+#  FineTuneTrainer
 # -------------------------------------------------------------------- #
 class FineTuneTrainer:
     def __init__(

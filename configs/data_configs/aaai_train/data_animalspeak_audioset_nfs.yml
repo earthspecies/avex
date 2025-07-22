@@ -1,9 +1,3 @@
-# Configuration that concatenates AnimalSpeak with AudioSet during training
-# - Training: AnimalSpeak + AudioSet (concatenated)
-# - Validation: AnimalSpeak only
-# - Both use 16kHz sample rate and unified column mappings
-# - Option B: Global label transforms applied after concatenation to avoid collisions
-
 train_datasets:
   # AnimalSpeak dataset for training (keep original canonical_name field)
   - dataset_name: animalspeak

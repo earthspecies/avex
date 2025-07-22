@@ -31,23 +31,3 @@ val_datasets:
       - type: label_from_feature
         feature: canonical_name
         override: true
-    # data_root: gs://foundation-model-data/audio_16k/
-  # - dataset_name: audioset
-  #   split: validation
-  #   balance: false
-  #   balance_attribute: labels   # balance data across via this attribute
-  #   custom_balancing: false
-  #   balancing_method: upsample
-  #   subset_percentage: 1.0      # <1 to consider a subset of data
-  #   audio_max_length_seconds: 10
-  #   sample_rate: 16000
-  #   data_root: /scratch-representation-learning/audioset/v0.1.0/raw/
-  #   # data_root: ../esp-data/audioset/v0.1.0/raw/
-  #   # data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
-  #   transformations:
-  #     - type: labels_from_features
-  #       features: [labels]
-  #       override: true
-# transformations:
-#   - type: deduplicate
-#     subset: null

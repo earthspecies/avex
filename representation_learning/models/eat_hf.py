@@ -13,8 +13,6 @@ from representation_learning.models.eat.audio_processor import EATAudioProcessor
 
 logger = logging.getLogger(__name__)
 
-# Removed hardcoded VARIANT - now configurable via parameters
-
 
 def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
     """Load fairseq weights into HuggingFace model.
@@ -163,30 +161,6 @@ class EATHFModel(ModelBase):
         self.backbone = AutoModel.from_pretrained(
             model_name, trust_remote_code=True
         ).to(self.device)
-        # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
-        #     # "checkpoint_22_920000.pt"
-        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/
-        #     checkpoint_last.pt",
-        # )
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"
-        # )
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint30.pt"
-        # ) # 48khz
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint15.pt"
-        # ) # AudioSet
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint15.pt"
-        # ) # AnimalSpeak
 
         # Conditionally load fairseq weights if path is provided
         if fairseq_weights_path is not None:
