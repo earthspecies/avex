@@ -19,7 +19,7 @@ experiments:
     layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-15_15-12-13/checkpoint_epoch_049.pt
+    checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak_audioset.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/efficientnet_beans

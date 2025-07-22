@@ -19,7 +19,7 @@ experiments:
     layers: audio_projection
     ### whether to use pretrained model or the one we train on bioacoustic data
     # checkpoint_path: runs/aaai/clap_efficientnet_captions_animalspeak/2025-07-15_15-17-22/checkpoint_epoch_049.pt
-    checkpoint_path: runs/aaai/clap_efficientnet_captions/2025-07-12_05-21-17/checkpoint_epoch_049.pt
+    checkpoint_path: gs://representation-learning/models/clap_efficientnet_all.pt
 
 
 # Where to save the evaluation results

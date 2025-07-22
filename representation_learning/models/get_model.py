@@ -149,12 +149,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
 
         target_length = getattr(model_config, "target_length", 1024)
         pooling = getattr(model_config, "pooling", "cls")
-        model_id = getattr(
-            model_config,
-            "model_id",
-            "worstchan/EAT-base_epoch30_pretrain",
-            # "worstchan/EAT-base_epoch30_finetune_AS2M",
-        )
+        model_id = model_config.model_id
         fairseq_weights_path = getattr(model_config, "fairseq_weights_path", None)
         norm_mean = getattr(model_config, "eat_norm_mean", -4.268)
         norm_std = getattr(model_config, "eat_norm_std", 4.569)

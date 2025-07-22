@@ -309,12 +309,12 @@ class Collater:
             audio_key = "audio" if "audio" in item else "raw_wav"
             wav = torch.as_tensor(item[audio_key])  # (T,) or (C, T)
 
-            # Handle corrupted audio with NaN values
+            # Handle rare corrupted audio without crashing
             if torch.isnan(wav).any() or torch.isinf(wav).any():
-                # logger.warning(
-                #     f"Corrupted audio detected (NaN/Inf), "
-                #     f"replacing with zeros. Shape: {wav.shape}"
-                # )
+                logger.warning(
+                    f"Corrupted audio detected (NaN/Inf), "
+                    f"replacing with zeros. Shape: {wav.shape}"
+                )
                 wav = torch.zeros_like(wav)
 
             # Handle multichannel audio by taking mean across channels
@@ -382,42 +382,12 @@ class Collater:
                     valid_indices = indices[indices < self.num_labels]
                     if len(valid_indices) > 0:
                         one_hot[valid_indices] = 1.0
-                    # DEBUG: Check for invalid labels
-                    if len(valid_indices) != len(indices):
-                        invalid_indices = indices[indices >= self.num_labels]
-                        logger.warning(
-                            f"Invalid label indices found: {invalid_indices.tolist()}, "
-                            f"max valid: {self.num_labels - 1}"
-                        )
+
                     label_tensors.append(one_hot)
                 else:
                     # For CLAP models without numeric labels, create dummy tensor
                     label_tensors.append(torch.zeros(1, dtype=torch.float32))
             label_tensor = torch.stack(label_tensors)
-
-        # DEBUG: Check for NaN in label tensor
-        if torch.isnan(label_tensor).any():
-            logger.warning(f"NaN detected in label tensor! Shape: {label_tensor.shape}")
-            logger.warning(
-                f"Label tensor stats: min={label_tensor.min():.6f}, "
-                f"max={label_tensor.max():.6f}"
-            )
-
-        # DEBUG: Check for NaN in audio tensor
-        if torch.isnan(audio_tensor).any():
-            logger.warning(f"NaN detected in audio tensor! Shape: {audio_tensor.shape}")
-            logger.warning(
-                f"Audio tensor stats: min={audio_tensor.min():.6f}, "
-                f"max={audio_tensor.max():.6f}"
-            )
-            nan_count = torch.isnan(audio_tensor).sum().item()
-            logger.warning(f"Number of NaN values in audio: {nan_count}")
-
-        # DEBUG: Check for extreme values in audio
-        if torch.isinf(audio_tensor).any():
-            logger.warning("Inf detected in audio tensor!")
-            inf_count = torch.isinf(audio_tensor).sum().item()
-            logger.warning(f"Number of Inf values in audio: {inf_count}")
 
         # Apply batch-level mixup AFTER converting labels to consistent tensors
         if self.batch_aug_processor is not None and audios:
@@ -436,20 +406,6 @@ class Collater:
             audio_tensor = torch.stack([item["audio"] for item in mixed_batch])
             label_tensor = torch.stack([item["label"] for item in mixed_batch])
             text_labels = [item.get("text_label") for item in mixed_batch]
-
-            # DEBUG: Check for NaN after mixup
-            if torch.isnan(audio_tensor).any():
-                logger.warning("NaN detected in audio tensor after mixup!")
-                nan_count = torch.isnan(audio_tensor).sum().item()
-                logger.warning(
-                    f"Number of NaN values in audio after mixup: {nan_count}"
-                )
-            if torch.isnan(label_tensor).any():
-                logger.warning("NaN detected in label tensor after mixup!")
-                nan_count = torch.isnan(label_tensor).sum().item()
-                logger.warning(
-                    f"Number of NaN values in labels after mixup: {nan_count}"
-                )
 
         return {
             # Keep raw_wav for backward compatibility with models

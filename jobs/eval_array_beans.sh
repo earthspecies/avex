@@ -10,20 +10,18 @@
 
 # Map array task ID to config file
 declare -A configs=(
-    # [1]="efficientnet_beans.yml"
     [2]="sl_efficientnet_animalspeak.yml"
     [3]="sl_efficientnet_animalspeak_audioset.yml"
-    # [4]="ssl_eat_all.yml"
-    # [5]="ssl_eat_animalspeak.yml"
-    # [6]="ssl_eat_audioset.yml"
-    # [3]="atst_frame.yml"
-    # [4]="clap.yml"
-    # [5]="beats.yml"
-    # [6]="bird_aves_bio.yml"
-    # [7]="beats_naturelm.yml"
-    # [8]="beats_finetuned.yml"
-    # [9]="perch.yml"
-    # [9]="perch.yml"
+    [4]="ssl_eat_all.yml"
+    [5]="ssl_eat_animalspeak.yml"
+    [6]="ssl_eat_audioset.yml"
+    [7]="atst_frame.yml"
+    [8]="clap.yml"
+    [9]="beats.yml"
+    [10]="bird_aves_bio.yml"
+    [11]="beats_naturelm.yml"
+    [12]="beats_finetuned.yml"
+    [13]="perch.yml"
 )
 
 # Get the config file for this array task

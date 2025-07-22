@@ -18,7 +18,7 @@ from representation_learning.models.base_model import ModelBase  # Add missing i
 logger = logging.getLogger(__name__)
 
 
-class Model(ModelBase):  # Changed from BirdNetTFLite to Model for factory compatibility
+class Model(ModelBase):
     """
     Thin wrapper around *birdnetlib* that exposes:
         • forward()  – returns clip-level class probabilities (rarely needed)
@@ -26,44 +26,36 @@ class Model(ModelBase):  # Changed from BirdNetTFLite to Model for factory compa
     Everything else (batching, .prepare_train(), …) comes from ModelBase.
     """
 
-    SAMPLE_RATE = 48_000  # what BirdNET expects
+    SAMPLE_RATE = 48_000
     CHUNK_SEC = 3.0  # fixed window length inside the model
 
     def __init__(
         self,
-        num_classes: int = 0,  # Add back for factory compatibility
+        num_classes: int = 0,
         device: str = "cpu",
         audio_config: Optional[Dict[str, Any]] = None,
         *,
-        language: str = "en_us",  # Add back for factory compatibility
-        apply_sigmoid: bool = True,  # Add back for factory compatibility
-        freeze_backbone: bool = True,  # Add back for factory compatibility
+        language: str = "en_us",
+        apply_sigmoid: bool = True,
+        freeze_backbone: bool = True,
         **kwargs,  # Accept additional config parameters  # noqa: ANN003
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
-        # birdnetlib downloads ~/.cache/birdnet/analyzer/BirdNET_…_V2.4_FP32.tflite
-        # on first construction – no manual model handling required.
         self._analyzer = Analyzer()  # classification helper
         self._interpreter = self._analyzer.interpreter  # TFLite interpreter
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
 
-        # Store factory parameters for compatibility
         self.num_classes = num_classes
         self.language = language
         self.apply_sigmoid = apply_sigmoid
         self.freeze_backbone = freeze_backbone
 
-        # Optional classification head if num_classes is specified and different
-        # from BirdNET's default
         if num_classes > 0 and num_classes != self.num_species:
             self.classifier = nn.Linear(self.num_species, num_classes)
         else:
             self.classifier = None
-
-        # Remove the circular reference that was causing recursion error
-        # self.model = self  # This line caused infinite recursion in .to(device)
 
         logger.info(
             "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • "
@@ -173,16 +165,11 @@ class Model(ModelBase):  # Changed from BirdNetTFLite to Model for factory compa
                     # Fall back to manual extraction
                     pass
 
-        # Manual extraction as fallback
         interp = self._interpreter
-        # The neat trick: feed through RecordingBuffer which handles
-        # resampling + spectrograms the same way the CLI tool does.
+
         buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
         buf.analyze()
 
-        # After .analyze() the Interpreter holds tensors for each 3-s chunk.
-        #   output_details[0] → class logits
-        #   output_details[1] → 1024-d embedding  (documented by devs)
         out_info = interp.get_output_details()
         emb_idx = (
             out_info[1]["index"] if len(out_info) > 1 else out_info[0]["index"] - 1

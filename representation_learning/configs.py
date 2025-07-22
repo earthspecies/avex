@@ -205,6 +205,14 @@ class ModelSpec(BaseModel):
         None, description="Path to fairseq checkpoint for EAT HF model"
     )
 
+    model_id: Optional[str] = Field(
+        "worstchan/EAT-base_epoch30_pretrain",
+        description=(
+            "HuggingFace model ID for EAT models "
+            "(e.g., 'worstchan/EAT-base_epoch30_finetune_AS2M')"
+        ),
+    )
+
     # EAT HF audio normalization parameters
     eat_norm_mean: Optional[float] = Field(
         -4.268,

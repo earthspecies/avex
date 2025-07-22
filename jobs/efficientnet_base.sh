@@ -13,9 +13,4 @@ cd ~/representation-learning
 # export UV_CACHE_DIR=/scratch/$USER/uv_cache/
 
 uv sync
-<<<<<<< HEAD
-srun uv run repr-learn train --config configs/run_configs/aaai_train/efficientnet_animalspeak_audioset.yml
-=======
-# srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_efficientnet_audioset.yml
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
->>>>>>> origin/david-training4
+srun uv run repr-learn train --config  configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml

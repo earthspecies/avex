@@ -18,7 +18,6 @@ experiments:
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    checkpoint_path: runs/aaai/sl_eat_animalspeak_audioset/2025-07-10_11-02-16/checkpoint_epoch_002.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/eat_hf

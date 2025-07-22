@@ -5,7 +5,7 @@ model_spec:
   pretrained: true
   # fairseq_weights_path: ../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint20.pt
   # fairseq_weights_path: ../EAT/multirun/2025-07-11/12-38-06/0/eat_audioset_animalspeak/checkpoint9.pt
-  fairseq_weights_path: ../EAT/multirun/2025-07-13/10-15-32/0/eat_audioset_animalspeak/checkpoint30.pt
+  fairseq_weights_path: ../../david_earthspecies_org/EAT/multirun/2025-07-13/10-15-32/0/eat_audioset_animalspeak/checkpoint30.pt
   # Combined dataset - using default normalization parameters
   eat_norm_mean: -5.553
   eat_norm_std: 4.606
