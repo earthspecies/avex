@@ -163,30 +163,6 @@ class EATHFModel(ModelBase):
         self.backbone = AutoModel.from_pretrained(
             model_name, trust_remote_code=True
         ).to(self.device)
-        # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
-        #     # "checkpoint_22_920000.pt"
-        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/
-        #     checkpoint_last.pt",
-        # )
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"
-        # )
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint30.pt"
-        # ) # 48khz
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint15.pt"
-        # ) # AudioSet
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint15.pt"
-        # ) # AnimalSpeak
 
         # Conditionally load fairseq weights if path is provided
         if fairseq_weights_path is not None:
@@ -264,7 +240,7 @@ class EATHFModel(ModelBase):
         layers: List[str],  # ignored – kept for API parity
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        pooling: str = "cls",
+        pooling: str = "mean",
     ) -> torch.Tensor:  # type: ignore[override]
         """Return a clip-level embedding (CLS or mean-pooled).
 

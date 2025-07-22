@@ -35,14 +35,14 @@ from representation_learning.training.distributed import (
     is_main_process,
 )
 from representation_learning.training.metrics_tracker import MetricsTracker
+from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.training_strategies import (
     EATSSLStrategy,
     TrainingResult,
     TrainingStrategy,
 )
-from representation_learning.utils import ExperimentLogger
-from representation_learning.training.optimisers import get_optimizer
 from representation_learning.training.training_utils import build_scheduler
+from representation_learning.utils import ExperimentLogger
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ class Trainer:
         # Debug flags
         self._debug_first_forward = False
 
-        # --------------------------- two-stage fine-tuning --------------------------- #
+        # ------------------------ two-stage fine-tuning ------------------------ #
         self.freeze_backbone_epochs: int = (
             getattr(config.training_params, "freeze_backbone_epochs", 0) or 0
         )
@@ -785,16 +785,22 @@ class Trainer:
         """Unfreeze backbone and rebuild optimiser/scheduler."""
 
         logger.info(
-            "[Two-stage] Freezing period finished at epoch %d – unfreezing backbone and resetting optimiser/scheduler",
+            "[Two-stage] Freezing period finished at epoch %d – "
+            "unfreezing backbone and resetting optimiser/scheduler",
             current_epoch,
         )
 
         # Unfreeze backbone parameters
-        if hasattr(self.model, "backbone"):
-            for p in self.model.backbone.parameters():  # type: ignore[attr-defined]
+        unwrapped = self._get_unwrapped_model()
+        if hasattr(unwrapped, "backbone"):
+            for p in unwrapped.backbone.parameters():  # type: ignore[attr-defined]
                 p.requires_grad = True
+            logger.info("Backbone parameters unfrozen successfully")
         else:
-            logger.warning("Model has no attribute 'backbone'; skipping unfreeze")
+            logger.warning(
+                "Model has no attribute 'backbone'; skipping unfreeze – "
+                "ensure your model exposes a .backbone attribute."
+            )
 
         # ------------------------------------------------------------------
         # Re-initialise optimiser with full parameter set

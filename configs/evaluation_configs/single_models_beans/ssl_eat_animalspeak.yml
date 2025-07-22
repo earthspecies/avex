@@ -12,7 +12,7 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: ssl_eat_animalspeak
+  - run_name: ssl_eat_animalspeak_probe
     run_config: configs/run_configs/aaai_train/ssl_eat_animalspeak.yml
     ### which layers to probe for embeddings
     layers: backbone
@@ -20,7 +20,7 @@ experiments:
     pretrained: true
 
 # Where to save the evaluation results
-save_dir: evaluation_results/aaai/eat_audioset
+save_dir: evaluation_results/aaai/eat_animalspeak
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv
@@ -33,7 +33,7 @@ num_workers: 12  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

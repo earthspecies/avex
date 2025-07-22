@@ -42,7 +42,6 @@ from representation_learning.configs import (
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
     eval_clustering,
-    eval_clustering_multiple_k,
 )
 from representation_learning.evaluation.embedding_utils import (
     EmbeddingDataset,
@@ -91,6 +90,7 @@ class ExperimentResult:
 @dataclass
 class ExperimentResultWithModel:
     """Result that includes model caching information for optimization."""
+
     result: ExperimentResult
     model: Optional[torch.nn.Module]
     model_metadata: Optional[Dict[str, str]]
@@ -288,19 +288,26 @@ def run_experiment(
 
         # Check if we can reuse cached model
         experiment_cfg.checkpoint_path = experiment_cfg.checkpoint_path
-        
-        if (not frozen):
+
+        if not frozen:
             logger.info("Loading fresh model for fine-tuning (frozen=False)")
-            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
-        elif (cached_model is not None and 
-            cached_model_metadata is not None and
-            cached_model_metadata.get("checkpoint_path") == experiment_cfg.checkpoint_path and
-            cached_model_metadata.get("frozen") == str(frozen)):
+            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
+                device
+            )
+        elif (
+            cached_model is not None
+            and cached_model_metadata is not None
+            and cached_model_metadata.get("checkpoint_path")
+            == experiment_cfg.checkpoint_path
+            and cached_model_metadata.get("frozen") == str(frozen)
+        ):
             logger.info("Reusing cached model from previous dataset (frozen=True)")
             base_model = cached_model
         else:
             logger.info("Loading model (cache miss or first dataset)")
-            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
+            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
+                device
+            )
 
             if experiment_cfg.checkpoint_path:
                 ckpt_path = anypath(experiment_cfg.checkpoint_path)
@@ -316,7 +323,7 @@ def run_experiment(
 
         if frozen:
             base_model.eval()
-        
+
         # Update cached model metadata for next iteration
         # Only cache models for frozen evaluation, not for fine-tuning
         if frozen:
@@ -415,55 +422,67 @@ def run_experiment(
             m for m in dataset_metrics if not m.startswith("clustering_")
         ]
 
-        if frozen:
-            # Get multi-label setting from dataset config, with fallback based on type
-            is_multi_label = getattr(
-                dataset_cfg,
-                "multi_label",
-                getattr(dataset_cfg, "type", None) == "detection",
+        if not classification_metrics:
+            logger.info(
+                "No classification metrics for '%s' – skipping linear probe.",
+                dataset_name,
             )
-            (
-                train_metrics,
-                val_metrics,
-                probe_test_metrics,
-            ) = train_and_eval_linear_probe(
-                train_ds,
-                val_ds,
-                EmbeddingDataset(test_embeds, test_labels),
-                num_labels,
-                layer_names,
-                eval_cfg,
-                device,
-                exp_logger,
-                is_multi_label,
-                dataset_metrics=classification_metrics,
-            )
+            # Keep empty metrics dicts to maintain structure
+            train_metrics = {}
+            val_metrics = {}
+            probe_test_metrics = {}
         else:
-            # For fine-tuning, use raw dataloaders
-            # Get multi-label setting from dataset config, with fallback based on type
-            is_multi_label = getattr(
-                dataset_cfg,
-                "multi_label",
-                getattr(dataset_cfg, "type", None) == "detection",
-            )
+            if frozen:
+                # Get multi-label setting from dataset config,
+                # with fallback based on type
+                is_multi_label = getattr(
+                    dataset_cfg,
+                    "multi_label",
+                    getattr(dataset_cfg, "type", None) == "detection",
+                )
+                (
+                    train_metrics,
+                    val_metrics,
+                    probe_test_metrics,
+                ) = train_and_eval_linear_probe(
+                    train_ds,
+                    val_ds,
+                    EmbeddingDataset(test_embeds, test_labels),
+                    num_labels,
+                    layer_names,
+                    eval_cfg,
+                    device,
+                    exp_logger,
+                    is_multi_label,
+                    dataset_metrics=classification_metrics,
+                )
+            else:
+                # For fine-tuning, use raw dataloaders
+                # Get multi-label setting from dataset config,
+                # with fallback based on type
+                is_multi_label = getattr(
+                    dataset_cfg,
+                    "multi_label",
+                    getattr(dataset_cfg, "type", None) == "detection",
+                )
 
-            (
-                train_metrics,
-                val_metrics,
-                probe_test_metrics,
-            ) = train_and_eval_full_fine_tune(
-                train_dl_raw,
-                val_dl_raw,
-                test_dl_raw,
-                base_model,
-                num_labels,
-                layer_names,
-                eval_cfg,
-                device,
-                exp_logger,
-                is_multi_label,
-                dataset_metrics=classification_metrics,
-            )
+                (
+                    train_metrics,
+                    val_metrics,
+                    probe_test_metrics,
+                ) = train_and_eval_full_fine_tune(
+                    train_dl_raw,
+                    val_dl_raw,
+                    test_dl_raw,
+                    base_model,
+                    num_labels,
+                    layer_names,
+                    eval_cfg,
+                    device,
+                    exp_logger,
+                    is_multi_label,
+                    dataset_metrics=classification_metrics,
+                )
     else:
         logger.info("Linear probe not run because not in eval_modes")
 
@@ -596,13 +615,15 @@ def main() -> None:
     # Group by experiment to load each model only once
     for exp_cfg in eval_cfg.experiments:
         logger.info(f"Starting experiment: {exp_cfg.run_name}")
-        
+
         # Load model once per experiment (if needed)
         cached_model = None
         model_metadata = None
-        
+
         for eval_set_name, eval_set_data_cfg in evaluation_sets:
-            logger.info(f"Evaluating experiment '{exp_cfg.run_name}' on set: {eval_set_name}")
+            logger.info(
+                f"Evaluating experiment '{exp_cfg.run_name}' on set: {eval_set_name}"
+            )
 
             # Extract the test dataset from the evaluation set
             test_datasets = eval_set_data_cfg.test_datasets or []
@@ -633,7 +654,7 @@ def main() -> None:
                 model_metadata,
             )
             all_results.append(res.result)
-            
+
             # Cache the model for reuse in next dataset
             cached_model = res.model
             model_metadata = res.model_metadata

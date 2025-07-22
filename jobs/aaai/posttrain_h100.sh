@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 #SBATCH --partition=h100-80
-#SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=1
+#SBATCH --ntasks-per-node=2
+#SBATCH --gpus-per-node=2
 #SBATCH --output="/home/%u/logs/%A.log"
-#SBATCH --job-name="rl-posttrain-beats"
+#SBATCH --job-name="ptb-all"
 #SBATCH --cpus-per-gpu=26
 
 export NCCL_DEBUG=INFO
@@ -21,4 +21,7 @@ export WANDB_DIR=/scratch-representation-learning/wandb_tmp
 export WANDB_CACHE_DIR=/scratch-representation-learning/wandb_cache
 
 uv sync
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_eat_animalspeak_ssl_all_h100.yml
+# srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_beats_animalspeak_audioset_h100.yml
+
+srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_eat_all_ssl_all_h100.yml
+# srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/sl_eat_animalspeak_ssl_all_h100.yml

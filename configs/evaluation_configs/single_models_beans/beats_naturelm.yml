@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_debug.yml
+dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
   train_epochs: 900
@@ -20,7 +20,7 @@ experiments:
     pretrained: true
 
 # Where to save the evaluation results
-save_dir: evaluation_results/beats_naturelm
+save_dir: evaluation_results/aaai/beats_naturelm
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv

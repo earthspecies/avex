@@ -12,12 +12,14 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: ssl_eat_audioset
+  - run_name: ssl_eat_audioset_probe
     run_config: configs/run_configs/aaai_train/ssl_eat_audioset.yml
     ### which layers to probe for embeddings
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
+    # checkpoint_path: runs/aaai/sl_eat_animalspeak_ssl_all/2025-07-18_06-36-15/checkpoint_epoch_017_avg.pt
+    # checkpoint_path: runs/aaai/sl_eat_animalspeak_ssl_all/2025-07-18_00-44-40/checkpoint_epoch_005.pt
 
 # Where to save the evaluation resaults
 save_dir: evaluation_results/aaai/eat_audioset
@@ -33,7 +35,7 @@ num_workers: 12  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

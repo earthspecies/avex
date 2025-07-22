@@ -16,10 +16,11 @@ experiments:
     # run_config: configs/run_configs/clip_base_beans.yml
     run_config: configs/run_configs/aaai_train/clap_efficientnet_captions_h100.yml
     ### which layers to probe for embeddings
-    layers: audio_projection
+    layers: audio_encoder
     ### whether to use pretrained model or the one we train on bioacoustic data
     # checkpoint_path: runs/aaai/clap_efficientnet_captions_animalspeak/2025-07-15_15-17-22/checkpoint_epoch_049.pt
-    checkpoint_path: runs/aaai/clap_efficientnet_captions/2025-07-12_05-21-17/checkpoint_epoch_049.pt
+    # checkpoint_path: runs/aaai/clap_efficientnet_captions/2025-07-12_05-21-17/checkpoint_epoch_049.pt
+    checkpoint_path: runs/aaai/clap_efficientnet_captions_audioset/2025-07-20_12-17-09/checkpoint_epoch_012.pt
 
 
 # Where to save the evaluation results

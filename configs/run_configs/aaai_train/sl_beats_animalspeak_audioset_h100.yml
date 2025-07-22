@@ -14,35 +14,34 @@ model_spec:
 # Dataset configuration (path to a valid dataset config)
 dataset_config: configs/data_configs/aaai_train/data_animalspeak_audioset_nfs.yml
 # Output directory for checkpoints and logs
-output_dir: "./runs/aaai/sl_beats_animalspeak_audioset"
-multilabel: true
+output_dir: "./runs/aaai/sl_beats_animalspeak_audioset_matched"
 label_type: supervised
-run_name: sl_beats_animalspeak_audioset
+run_name: sl_beats_animalspeak_audioset_matched
 # audio preprocessing (none – handled inside the model)
 preprocessing: null
 
 # Target sample-rate expected by the model
 sr: 16000
 debug_mode: false
-multilabel: true
 # Log training runs to MLflow
 logging: wandb
 
 # Path to checkpoint to resume from (set to null or a path)
-resume_from_checkpoint: none
+resume_from_checkpoint: null
+# resume_from_checkpoint: runs/aaai/sl_beats_animalspeak_audioset_40/2025-07-20_09-11-45/checkpoint_epoch_003.pt
 # runs/aaai/sl_beats_animalspeak_audioset/2025-07-16_02-50-45/checkpoint_epoch_001.pt
 
 training_params:
-  train_epochs: 10
+  train_epochs: 20
   lr: 0.0005
-  batch_size: 128
+  batch_size: 64
   optimizer: adamw8bit
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
-  freeze_backbone_epochs: 2
+  freeze_backbone_epochs: 3
   second_stage_lr: 0.0001
-  second_stage_warmup_steps: 3000
+  second_stage_warmup_steps: 4000
 
 # Learning rate scheduler configuration
 scheduler:
@@ -88,7 +87,7 @@ augmentations:
 loss_function: bce
 
 # General settings
-seed: 42
+seed: 13
 num_workers: 18
 
 wandb_project: representation_learning

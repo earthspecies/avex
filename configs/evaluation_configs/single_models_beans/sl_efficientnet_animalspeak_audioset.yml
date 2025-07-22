@@ -13,7 +13,7 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: efficientnet_animalspeak_audioset
+  - run_name: efficientnet_animalspeak_audioset_probe
     run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
     ### which layers to probe for embeddings
     layers: model.avgpool
@@ -35,7 +35,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

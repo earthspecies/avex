@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_base.yml
+dataset_config: configs/data_configs/benchmark_originals.yml
 
 training_params:
   train_epochs: 900
@@ -21,7 +21,7 @@ experiments:
     frozen: true
 
 # Where to save the evaluation results
-save_dir: evaluation_results/birdnet
+save_dir: evaluation_results/aaai/birdnet
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv

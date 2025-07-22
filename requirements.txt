@@ -148,7 +148,6 @@ pydantic-core==2.33.2
 pydub==0.25.1
 pygments==2.19.2
 pyparsing==3.2.3
-pysoundfile==0.9.0.post1
 python-dateutil==2.9.0.post0
 python-multipart==0.0.20
 pytorch-lightning==2.5.2

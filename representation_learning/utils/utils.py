@@ -109,3 +109,56 @@ def _process_state_dict(state_dict: dict) -> dict:
     state_dict.pop("model.classifier.1.bias", None)
 
     return state_dict
+
+
+# -------------------------------------------------------------------- #
+#  EfficientNet checkpoint helper                                     #
+# -------------------------------------------------------------------- #
+
+
+def sanitize_efficientnet_state_dict(state_dict: dict) -> dict:
+    """Prepare an EfficientNet checkpoint for loading into audio encoder.
+
+    This helper removes common wrapping layers (``model.``, ``module.``),
+    strips the classifier head to avoid shape mismatches and returns a clean
+    mapping that can be passed directly to ``load_state_dict``.
+
+    The function is intentionally *loss-less* for backbone parameters – only
+    obvious classifier keys are dropped.  Prefix removal is performed in a
+    loop so nested wrappers (e.g. ``module.model.features…``) are handled.
+
+    Parameters
+    ----------
+    state_dict : dict
+        Original state-dict (possibly wrapped).
+
+    Returns
+    -------
+    dict
+        Sanitised state-dict ready for ``load_state_dict``.
+    """
+
+    # Unwrap common containers first
+    if "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+    if "model" in state_dict and isinstance(state_dict["model"], dict):
+        state_dict = state_dict["model"]
+
+    clean_sd: dict[str, torch.Tensor] = {}
+
+    for k, v in state_dict.items():
+        # Remove DistributedDataParallel prefix
+        if k.startswith("module."):
+            k = k[len("module.") :]
+
+        # Remove training wrapper prefix (our scripts save under "model.")
+        if k.startswith("model."):
+            k = k[len("model.") :]
+
+        # Skip classifier layers (they differ in shape across tasks)
+        if k.startswith("classifier"):
+            continue
+
+        clean_sd[k] = v
+
+    return clean_sd

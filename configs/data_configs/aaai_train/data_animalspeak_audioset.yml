@@ -20,17 +20,6 @@ train_datasets:
     data_root: /scratch-representation-learning/
     # data_root: gs://foundation-model-data/audio_16k/
     sample_rate: 16000
-    # NO label transformations here - keep original canonical_name field
-
-    # transformations:
-    #   - type: filter
-    #     mode: exclude
-    #     property: canonical_name
-    #     values: [""]
-    #   - type: filter
-    #     mode: exclude
-    #     property: source
-    #     values: ["AudioCaps", "WavCaps", "wavcaps", "audiocaps", "audio_caps", "Audiocaps"]
 
   # AudioSet dataset for training (keep original labels field)
   - dataset_name: audioset

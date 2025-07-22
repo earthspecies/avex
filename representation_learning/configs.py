@@ -87,12 +87,18 @@ class TrainingParams(BaseModel):
     second_stage_lr: Optional[float] = Field(
         None,
         ge=0,
-        description="Learning rate to use after unfreezing the backbone. If omitted we default to current lr × 0.1.",
+        description=(
+            "Learning rate to use after unfreezing the backbone. "
+            "If omitted we default to current lr × 0.1."
+        ),
     )
     second_stage_warmup_steps: Optional[int] = Field(
         None,
         ge=0,
-        description="Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided.",
+        description=(
+            "Warm-up steps for the second stage. "
+            "Defaults to scheduler.warmup_steps if not provided."
+        ),
     )
 
     # Skip validation during training
@@ -240,6 +246,24 @@ class ModelSpec(BaseModel):
     )
     freeze_backbone: Optional[bool] = Field(
         None, description="Whether to freeze the backbone for BirdNet"
+    )
+
+    # Optional EfficientNet checkpoint for CLIP (audio encoder)
+    audio_checkpoint: Optional[str] = Field(
+        None,
+        description=(
+            "Path to a pre-trained EfficientNet checkpoint to initialise "
+            "CLIP's audio encoder (classifier head ignored)"
+        ),
+    )
+
+    # EAT HF model ID
+    model_id: Optional[str] = Field(
+        "worstchan/EAT-base_epoch30_pretrain",
+        description=(
+            "HuggingFace model ID for EAT models "
+            "(e.g., 'worstchan/EAT-base_epoch30_finetune_AS2M')"
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")

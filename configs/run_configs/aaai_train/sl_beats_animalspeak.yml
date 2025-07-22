@@ -8,14 +8,13 @@ model_spec:
     sample_rate: 16000
     representation: raw  # BEATs expects raw waveform
     normalize: false
-    target_length_seconds: 10
+    target_length_seconds: 10  # Window for EAT
     window_selection: random
 
 # Dataset configuration (path to a valid dataset config)
 dataset_config: configs/data_configs/aaai_train/data_animalspeak.yml
 # Output directory for checkpoints and logs
 output_dir: "./runs/aaai/sl_beats_animalspeak"
-multilabel: true
 label_type: supervised
 run_name: sl_beats_animalspeak # should be sl_beats_animalspeak
 # audio preprocessing (none – handled inside the model)
@@ -24,7 +23,6 @@ preprocessing: null
 # Target sample-rate expected by the model
 sr: 16000
 debug_mode: false
-multilabel: true
 # Log training runs to MLflow
 logging: wandb
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=1-6%3
+#SBATCH --array=1-12%3
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
@@ -11,19 +11,25 @@
 # Map array task ID to config file
 declare -A configs=(
     # [1]="efficientnet_beans.yml"
-    [2]="sl_efficientnet_animalspeak.yml"
-    [3]="sl_efficientnet_animalspeak_audioset.yml"
-    [4]="ssl_eat_all.yml"
-    [5]="ssl_eat_animalspeak.yml"
-    [6]="ssl_eat_audioset.yml"
+    # [2]="sl_efficientnet_animalspeak.yml"
+    # [3]="sl_efficientnet_animalspeak_audioset.yml"
+    # [4]="ssl_eat_all.yml"
+    # [5]="ssl_eat_animalspeak.yml"
+    [6]="eat_hf.yml"
+    [7]="eat_hf_finetuned.yml"
+    # [6]="ssl_eat_audioset.yml"
     # [3]="atst_frame.yml"
     # [4]="clap.yml"
-    # [5]="beats.yml"
+    # [7]="beats.yml"
     # [6]="bird_aves_bio.yml"
     # [7]="beats_naturelm.yml"
+    # [8]="beats_raw.yml"
     # [8]="beats_finetuned.yml"
     # [9]="perch.yml"
     # [9]="perch.yml"
+    [10]="sl_efficientnet_audioset.yml"
+    # [11]="clap_efficientnet_animalspeak.yml"
+    # [12]="clap_efficientnet_animalspeak_audioset.yml"
 )
 
 # Get the config file for this array task

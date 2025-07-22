@@ -6,6 +6,7 @@ model_spec:
   # fairseq_weights_path: ../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint20.pt
   # fairseq_weights_path: ../EAT/multirun/2025-07-11/12-38-06/0/eat_audioset_animalspeak/checkpoint9.pt
   fairseq_weights_path: ../EAT/multirun/2025-07-13/10-15-32/0/eat_audioset_animalspeak/checkpoint30.pt
+  # fairseq_weights_path: ../EAT/multirun/2025-07-18/17-26-28/0/eat_audioset_animalspeak/checkpoint31.pt
   # Combined dataset - using default normalization parameters
   eat_norm_mean: -5.553
   eat_norm_std: 4.606
@@ -17,7 +18,7 @@ model_spec:
     window_selection: random
 
 dataset_config: configs/data_configs/data_base.yml
-run_name: ssl_eat_all_e18
+run_name: ssl_eat_all
 
 # How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised

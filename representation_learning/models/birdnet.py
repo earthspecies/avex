@@ -156,6 +156,11 @@ class Model(ModelBase):  # Changed from BirdNetTFLite to Model for factory compa
         Directly grabs the **embedding output tensor** from BirdNET's
         underlying TFLite *Interpreter* – the tensor right before logits.
 
+        Raises
+        ------
+        ValueError
+            If no embedding tensor can be found in the model.
+
         Returns:
             np.ndarray: Embedding vector for the audio clip.
         """
@@ -175,19 +180,103 @@ class Model(ModelBase):  # Changed from BirdNetTFLite to Model for factory compa
 
         # Manual extraction as fallback
         interp = self._interpreter
+        logger.info(
+            f"DEBUG: Starting manual embedding extraction, interpreter: {type(interp)}"
+        )
+
         # The neat trick: feed through RecordingBuffer which handles
         # resampling + spectrograms the same way the CLI tool does.
         buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
+        logger.info("DEBUG: Created RecordingBuffer, about to analyze...")
         buf.analyze()
+        logger.info("DEBUG: RecordingBuffer.analyze() completed")
+
+        # Ensure tensors are allocated before accessing tensor data
+        # This is required in newer versions of TensorFlow Lite
+        logger.info("DEBUG: About to allocate tensors...")
+        try:
+            interp.allocate_tensors()
+            logger.info("DEBUG: allocate_tensors() successful")
+        except Exception as e:
+            logger.error(f"DEBUG: allocate_tensors() failed: {e}")
 
         # After .analyze() the Interpreter holds tensors for each 3-s chunk.
-        #   output_details[0] → class logits
-        #   output_details[1] → 1024-d embedding  (documented by devs)
+        # Modern BirdNet models may only have logits output,
+        # so we need to find the embedding layer
         out_info = interp.get_output_details()
-        emb_idx = (
-            out_info[1]["index"] if len(out_info) > 1 else out_info[0]["index"] - 1
-        )
-        embeddings = interp.get_tensor(emb_idx)  # (Nchunks,1024)
+        logger.info(f"DEBUG: Output details: {len(out_info)} outputs")
+        for i, detail in enumerate(out_info):
+            logger.info(
+                f"DEBUG: Output {i}: shape={detail.get('shape')}, "
+                f"dtype={detail.get('dtype')}, index={detail.get('index')}"
+            )
+
+        # Try to find embeddings in different ways
+        embeddings = None
+
+        if len(out_info) > 1:
+            # Old BirdNet format with separate embedding output
+            emb_idx = out_info[1]["index"]
+            logger.info(f"DEBUG: Using embedding index from output[1]: {emb_idx}")
+            try:
+                embeddings = interp.get_tensor(emb_idx)
+                logger.info(
+                    f"DEBUG: Found embeddings from output[1], shape: {embeddings.shape}"
+                )
+            except Exception as e:
+                logger.error(f"DEBUG: Failed to get embeddings from output[1]: {e}")
+
+        if embeddings is None:
+            # Modern BirdNet format - need to find embedding layer
+            # by searching tensor details
+            logger.info("DEBUG: Searching for embedding layer in tensor details...")
+            tensor_details = interp.get_tensor_details()
+            logger.info(f"DEBUG: Found {len(tensor_details)} total tensors")
+
+            # Look for a tensor with shape containing 1024 (typical embedding dimension)
+            embedding_candidates = []
+            for i, detail in enumerate(tensor_details):
+                shape = detail.get("shape", [])
+                name = detail.get("name", "")
+                if len(shape) >= 1 and (
+                    1024 in shape
+                    or "embedding" in name.lower()
+                    or "feature" in name.lower()
+                ):
+                    embedding_candidates.append((i, detail))
+                    logger.info(
+                        f"DEBUG: Embedding candidate {i}: name='{name}', "
+                        f"shape={shape}, index={detail.get('index')}"
+                    )
+
+            # Try the most promising candidates
+            for i, detail in embedding_candidates:
+                try:
+                    emb_idx = detail.get("index")
+                    logger.info(
+                        f"DEBUG: Trying embedding candidate {i} with index {emb_idx}"
+                    )
+                    embeddings = interp.get_tensor(emb_idx)
+                    logger.info(
+                        f"DEBUG: Successfully extracted embeddings, "
+                        f"shape: {embeddings.shape}"
+                    )
+                    break
+                except Exception as e:
+                    logger.error(f"DEBUG: Failed to get tensor from candidate {i}: {e}")
+                    continue
+
+        if embeddings is None:
+            # Last resort: try to find any tensor with reasonable embedding dimensions
+            logger.error("DEBUG: No embedding layer found, trying fallback approach...")
+            # For now, raise the original error but with more context
+            raise ValueError(
+                f"Could not find embedding tensor in BirdNet model. "
+                f"Available outputs: {len(out_info)} with shapes: "
+                f"{[detail.get('shape') for detail in out_info]}. "
+                f"This may be a newer BirdNet model format "
+                f"that doesn't expose embeddings."
+            )
         return embeddings.astype(np.float32)
 
     # ------------------------------------------------------------------ #

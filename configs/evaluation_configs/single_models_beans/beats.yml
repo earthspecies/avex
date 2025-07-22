@@ -12,15 +12,18 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: beats_ft
-  run_config: configs/run_configs/pretrained/beats_ft.yml
+  - run_name: sl_beats_animalspeak_real_e10
+    run_config: configs/run_configs/pretrained/beats_ft.yml
     ### which layers to probe for embeddings
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: true
+    pretrained: false
+    # checkpoint_path: runs/aaai/sl_beats_animalspeak_audioset/2025-07-17_05-07-20/checkpoint_epoch_007.pt
+    # checkpoint_path: runs/aaai/sl_beats_animalspeak_two/2025-07-18_06-46-01/checkpoint_epoch_019.pt
+    checkpoint_path: runs/aaai/sl_beats_animalspeak_real/2025-07-20_09-18-31/checkpoint_epoch_015.pt
 
 # Where to save the evaluation results
-save_dir: evaluation_results/beats
+save_dir: evaluation_results/aaai/sl_beats_animalspeak
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv
@@ -33,7 +36,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval
   - clustering
 

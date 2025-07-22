@@ -24,15 +24,15 @@ from esp_data import (
 from representation_learning.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
-
-
 from representation_learning.data.animalspeak_getitem_patch import (
     apply_animalspeak_patches,
 )
+
 # audioset patches
 from representation_learning.data.audioset_getitem_patch import (
     apply_audioset_patches,
 )
+
 # cloudpathlib patches
 from representation_learning.data.cloudpathlib_retry_patch import (
     apply_cloudpathlib_patch,
@@ -59,7 +59,6 @@ from representation_learning.data.augmentations import (  # noqa: E402
     AugmentationProcessor,
     make_item_postprocessor,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -532,16 +531,18 @@ def worker_init_fn(worker_id: int) -> None:
     # Optional: BEANS dataset debug patch (log path + timing) when env var set
     if os.getenv("BEANS_DEBUG", "0") == "1":
         try:
-            from esp_data.datasets.beans import Beans  # type: ignore
             import time
-            import numpy as np
+
             import librosa
+            import numpy as np
+            from esp_data.datasets.beans import Beans  # type: ignore
             from esp_data.io import anypath, audio_stereo_to_mono, read_audio
 
             logger.debug("Worker %d: Applying Beans debug patch", worker_id)
 
-            def _debug_getitem(self, idx):  # noqa: ANN001
+            def _debug_getitem(self, idx) -> dict[str, Any]:  # noqa: ANN001
                 import logging
+
                 dbg = logging.getLogger("beans_debug")
 
                 if idx >= len(self._data):

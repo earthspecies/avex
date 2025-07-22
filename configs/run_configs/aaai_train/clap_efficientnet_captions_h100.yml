@@ -19,7 +19,7 @@ model_spec:
   projection_dim: 512
   temperature: 0.07
 
-dataset_config: configs/data_configs/aaai_train/data_caption_animalspeak.yml
+dataset_config: configs/data_configs/aaai_train/data_caption_all.yml
 
 label_type: text
 

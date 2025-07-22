@@ -58,10 +58,7 @@ class Model(ModelBase):
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
 
-        # Determine which checkpoint to load based on configuration
-        if use_naturelm:
-            beats_checkpoint_path = BEATS_PRETRAINED_PATH_NATURELM
-        elif fine_tuned:
+        if fine_tuned:
             beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
         else:
             beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
@@ -73,7 +70,7 @@ class Model(ModelBase):
         self.fine_tuned = fine_tuned
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
         print(beats_cfg)
-        if use_naturelm:
+        if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
             beats_ckpt_naturelm = universal_torch_load(
                 BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu"
             )
@@ -82,7 +79,7 @@ class Model(ModelBase):
         # beats_ckpt_naturelm = beats_ckpt
         self.backbone = BEATs(beats_cfg)
         self.backbone.to(device)
-        self.backbone.load_state_dict(beats_ckpt_naturelm)
+        self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
 
         # ------------------------------------------------------------------
         # 2.  Optional classifier for supervised training

@@ -12,12 +12,15 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: ssl_eat_all
+  - run_name: ssl_eat_all_probe
     run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
     ### which layers to probe for embeddings
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: true
+    pretrained: false
+    checkpoint_path: runs/aaai/sl_eat_animalspeak_ssl_all/2025-07-18_06-36-15/checkpoint_epoch_019.pt
+    # checkpoint_path: runs/aaai/sl_eat_all_ssl_all_scaleup/2025-07-20_00-33-52/checkpoint_epoch_002.pt
+    # checkpoint_path: runs/aaai/sl_eat_all_ssl_all_scaleup/2025-07-18_08-37-51/checkpoint_epoch_018.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/aaai/eat_all
