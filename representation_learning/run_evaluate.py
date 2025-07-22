@@ -40,7 +40,6 @@ from representation_learning.configs import (
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
     eval_clustering,
-    eval_clustering_multiple_k,
 )
 from representation_learning.evaluation.embedding_utils import (
     EmbeddingDataset,
@@ -92,6 +91,7 @@ class ExperimentResult:
 @dataclass
 class ExperimentResultWithModel:
     """Result that includes model caching information for optimization."""
+
     result: ExperimentResult
     model: Optional[torch.nn.Module]
     model_metadata: Optional[Dict[str, str]]
@@ -289,19 +289,26 @@ def run_experiment(
 
         # Check if we can reuse cached model
         experiment_cfg.checkpoint_path = experiment_cfg.checkpoint_path
-        
-        if (not frozen):
+
+        if not frozen:
             logger.info("Loading fresh model for fine-tuning (frozen=False)")
-            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
-        elif (cached_model is not None and 
-            cached_model_metadata is not None and
-            cached_model_metadata.get("checkpoint_path") == experiment_cfg.checkpoint_path and
-            cached_model_metadata.get("frozen") == str(frozen)):
+            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
+                device
+            )
+        elif (
+            cached_model is not None
+            and cached_model_metadata is not None
+            and cached_model_metadata.get("checkpoint_path")
+            == experiment_cfg.checkpoint_path
+            and cached_model_metadata.get("frozen") == str(frozen)
+        ):
             logger.info("Reusing cached model from previous dataset (frozen=True)")
             base_model = cached_model
         else:
             logger.info("Loading model (cache miss or first dataset)")
-            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
+            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
+                device
+            )
 
             if experiment_cfg.checkpoint_path:
                 ckpt_path = anypath(experiment_cfg.checkpoint_path)
@@ -317,7 +324,7 @@ def run_experiment(
 
         if frozen:
             base_model.eval()
-        
+
         # Update cached model metadata for next iteration
         # Only cache models for frozen evaluation, not for fine-tuning
         if frozen:
@@ -599,7 +606,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     # 3. Run experiments - OPTIMIZED: group by experiment to reuse models
     all_results: List[ExperimentResult] = []
 
-    for eval_set_name, eval_set_data_cfg in evaluation_sets:
+    for eval_set_name, _eval_set_data_cfg in evaluation_sets:
         logger.info(f"Evaluating benchmark set: {eval_set_name}")
     if not evaluation_sets:
         logger.warning(
@@ -611,16 +618,18 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     # Group by experiment to load each model only once
     for exp_cfg in eval_cfg.experiments:
         logger.info(f"Starting experiment: {exp_cfg.run_name}")
-        
+
         # Load model once per experiment (if needed)
         cached_model = None
         model_metadata = None
-        
-        for eval_set_name, eval_set_data_cfg in evaluation_sets:
-            logger.info(f"Evaluating experiment '{exp_cfg.run_name}' on set: {eval_set_name}")
+
+        for eval_set_name, _eval_set_data_cfg in evaluation_sets:
+            logger.info(
+                f"Evaluating experiment '{exp_cfg.run_name}' on set: {eval_set_name}"
+            )
 
             # Extract the test dataset from the evaluation set
-            test_datasets = eval_set_data_cfg.test_datasets or []
+            test_datasets = _eval_set_data_cfg.test_datasets or []
             if not test_datasets:
                 logger.warning(
                     f"No test datasets in evaluation set '{eval_set_name}'. Skipping."
@@ -635,23 +644,14 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
                 eval_set_name
             )
 
-        # For benchmark evaluation sets, we expect exactly one test dataset per set
-        test_ds_cfg = test_datasets[0]
+            # Get the evaluation set object for configuration
+            eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
 
-        # Get metrics from the benchmark evaluation config
-        eval_set_metrics = benchmark_eval_cfg.get_metrics_for_evaluation_set(
-            eval_set_name
-        )
-
-        # Get the evaluation set object for configuration
-        eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
-
-        for exp_cfg in eval_cfg.experiments:
             res = run_experiment(
                 eval_cfg,
                 test_ds_cfg,
                 exp_cfg,
-                eval_set_data_cfg,
+                _eval_set_data_cfg,
                 device,
                 save_dir,
                 eval_set_name,
@@ -661,7 +661,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
                 model_metadata,
             )
             all_results.append(res.result)
-            
+
             # Cache the model for reuse in next dataset
             cached_model = res.model
             model_metadata = res.model_metadata

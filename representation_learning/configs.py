@@ -89,12 +89,18 @@ class TrainingParams(BaseModel):
     second_stage_lr: Optional[float] = Field(
         None,
         ge=0,
-        description="Learning rate to use after unfreezing the backbone. If omitted we default to current lr × 0.1.",
+        description=(
+            "Learning rate to use after unfreezing the backbone. "
+            "If omitted we default to current lr × 0.1."
+        ),
     )
     second_stage_warmup_steps: Optional[int] = Field(
         None,
         ge=0,
-        description="Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided.",
+        description=(
+            "Warm-up steps for the second stage. "
+            "Defaults to scheduler.warmup_steps if not provided."
+        ),
     )
 
     # Skip validation during training
@@ -376,6 +382,7 @@ class BaseCLIConfig(BaseSettings):
         final_values = deep_update(yaml_values(), cli_values())
         return cls.model_validate(final_values)
 
+
 class ClusteringEvalConfig(BaseModel):
     """Configuration for clustering evaluation during training."""
 
@@ -405,10 +412,11 @@ class ClusteringEvalConfig(BaseModel):
 
 
 class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
-# --------------------------------------------------------------------------- #
-#  Clustering evaluation configuration
-# --------------------------------------------------------------------------- #
     """Everything needed for a single *training run*."""
+
+    # --------------------------------------------------------------------------- #
+    #  Clustering evaluation configuration
+    # --------------------------------------------------------------------------- #
 
     # required
     model_spec: ModelSpec
@@ -480,7 +488,6 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         None, description="Configuration for clustering evaluation during training"
     )
 
-
     # Debug mode
     debug_mode: bool = False
 
@@ -496,7 +503,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
                 return yaml.safe_load(f)
         # Otherwise, let normal validation proceed
         return raw
-    
+
     # ------------------------------
     # custom pre‑processing of augments
     # ------------------------------

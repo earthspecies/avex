@@ -4,11 +4,7 @@ Entry‑point script for training experiments.
 
 from __future__ import annotations
 
-<<<<<<< HEAD
-=======
-import argparse
 import json
->>>>>>> origin/david-training4
 import logging
 import multiprocessing as mp
 from datetime import datetime

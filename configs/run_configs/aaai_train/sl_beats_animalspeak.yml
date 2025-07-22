@@ -17,14 +17,13 @@ dataset_config: configs/data_configs/aaai_train/data_animalspeak.yml
 output_dir: "./runs/aaai/sl_beats_animalspeak"
 multilabel: true
 label_type: supervised
-run_name: sl_beats_animalspeak # should be sl_beats_animalspeak
+run_name: sl_beats_animalspeak  # should be sl_beats_animalspeak
 # audio preprocessing (none – handled inside the model)
 preprocessing: null
 
 # Target sample-rate expected by the model
 sr: 16000
 debug_mode: false
-multilabel: true
 # Log training runs to MLflow
 logging: wandb
 

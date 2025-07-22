@@ -692,7 +692,7 @@ evaluation_sets:
   # =====================================================
 
   - name: "bengalese_finch_repertoire_bird0"
-    train: # Dummy train set (using test set for compatibility)
+    train:  # Dummy train set (using test set for compatibility)
       dataset_name: "Bengalese Finch Calls"
       split: "Bird0"
       sample_rate: 16000
@@ -702,7 +702,7 @@ evaluation_sets:
           override: true
           label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
 
-    validation: # Dummy validation set (using test set for compatibility)
+    validation:  # Dummy validation set (using test set for compatibility)
       dataset_name: "Bengalese Finch Calls"
       split: "Bird0"
       sample_rate: 16000
@@ -723,4 +723,3 @@ evaluation_sets:
           label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
 
     metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
-

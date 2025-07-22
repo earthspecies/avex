@@ -18,13 +18,6 @@ train_datasets:
   #   audio_path_col: path
   #   data_root: ../../milad_earthspecies_org/data-migration/marius-highmem/mnt/foundation-model-data/audio_16k/
   #   sample_rate: 16000
-  #   transformations:
-  #     - type: require_features
-  #       # Drop rows where canonical_name is missing or empty
-  #       type: filter
-  #       property: canonical_name
-  #       values: [""]
-  #       mode: exclude
 
   # AudioSet dataset for training (keep original labels field)
   - dataset_name: audioset

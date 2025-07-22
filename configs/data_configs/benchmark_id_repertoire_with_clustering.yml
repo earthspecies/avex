@@ -400,13 +400,10 @@ evaluation_sets:
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
-<<<<<<< HEAD
-=======
   # =====================================================
   # BENGALESE FINCH REPERTOIRE TASKS (CLUSTERING ONLY)
   # =====================================================
 
->>>>>>> origin/david-training4
   - name: "bengalese_finch_repertoire_bird0"
     train:  # Dummy train set (using test set for compatibility)
       dataset_name: "Bengalese Finch Calls"
@@ -440,40 +437,6 @@ evaluation_sets:
 
     metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
-<<<<<<< HEAD
-  - name: "bengalese_finch_repertoire_bird1"
-    train:  # Dummy train set (using test set for compatibility)
-      dataset_name: "Bengalese Finch Calls"
-      split: "Bird1"
-      sample_rate: 16000
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type"
-          override: true
-          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
-
-    validation:  # Dummy validation set (using test set for compatibility)
-      dataset_name: "Bengalese Finch Calls"
-      split: "Bird1"
-      sample_rate: 16000
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type"
-          override: true
-          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
-
-    test:
-      dataset_name: "Bengalese Finch Calls"
-      split: "Bird1"
-      sample_rate: 16000
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type"
-          override: true
-          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
-
-    metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
-=======
   # - name: "bengalese_finch_repertoire_bird1"
   #   train: # Dummy train set (using test set for compatibility)
   #     dataset_name: "Bengalese Finch Calls"
@@ -506,4 +469,3 @@ evaluation_sets:
   #         label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
 
   #   metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
->>>>>>> origin/david-training4

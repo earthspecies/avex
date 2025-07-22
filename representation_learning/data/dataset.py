@@ -20,30 +20,20 @@ from esp_data import (
     dataset_from_config,
 )
 
-# New: trim AnimalSpeak columns to essentials
+# Temporary patch for AnimalSpeak for compatibility
+# with dataset concatenation while relevant issue is raised in esp-data.
 from representation_learning.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
 
-
-from representation_learning.data.animalspeak_getitem_patch import (
-    apply_animalspeak_patches,
-)
-# audioset patches
-from representation_learning.data.audioset_getitem_patch import (
-    apply_audioset_patches,
-)
-# cloudpathlib patches
+# Temporary cloudpathlib retries while we migrate away/fix
 from representation_learning.data.cloudpathlib_retry_patch import (
     apply_cloudpathlib_patch,
 )
 
 apply_cloudpathlib_patch()
-
-# Apply AnimalSpeak column pruning patch (before dataset instantiation)
 apply_animalspeak_column_patch()
 
-apply_audioset_patches()
 
 from torch.utils.data import DataLoader, DistributedSampler  # noqa: E402
 
@@ -58,7 +48,6 @@ from representation_learning.data.augmentations import (  # noqa: E402
     AugmentationProcessor,
     make_item_postprocessor,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -147,14 +136,6 @@ def _build_one_dataset_split(
         ds_list = []
         for ds_cfg in cfg_list:
             ds, metadata = dataset_from_config(ds_cfg)
-
-            # Debug: Save samples from individual datasets
-            from representation_learning.data.data_debug import (
-                conditional_save_debug_samples,
-            )
-
-            conditional_save_debug_samples(ds._data, ds_cfg.dataset_name, "individual")
-
             ds_list.append((ds, metadata))
 
         if concatenate and len(ds_list) > 1:
@@ -162,15 +143,6 @@ def _build_one_dataset_split(
             ds = concatenate_datasets(
                 [d[0] for d in ds_list], merge_level=concatenate_method
             )
-
-            # Debug: Save samples from concatenated dataset
-            from representation_learning.data.data_debug import (
-                conditional_save_debug_samples,
-            )
-
-            dataset_names = [cfg.dataset_name for cfg in cfg_list]
-            concat_name = "_".join(dataset_names)
-            conditional_save_debug_samples(ds._data, concat_name, "concatenated")
 
             return ds, ds_list[0][1]  # return first metadata as representative
 
@@ -206,16 +178,8 @@ def _build_datasets(
     )
 
     if cfg.transformations:
-<<<<<<< HEAD
-        # Apply those on train and update metadata
-        train_metadata = train_ds.apply_transformations(cfg.transformations)
         additional_metadata = train_ds.apply_transformations(cfg.transformations)
         if additional_metadata:
-            # Merge the additional metadata with existing metadata
-=======
-        additional_metadata = train_ds.apply_transformations(cfg.transformations)
-        if additional_metadata:
->>>>>>> origin/david-training4
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
 
@@ -500,126 +464,18 @@ class Collater:
 #  Data-loader helpers
 # --------------------------------------------------------------------------- #
 def worker_init_fn(worker_id: int) -> None:
-    """Initialize a DataLoader worker (seeding, logging, audio-info cache)."""
-    import logging
+    """Initialize a DataLoader worker (seeding for reproducibility)."""
     import random
 
     import numpy as np
     import torch
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format=(
-            "%(asctime)s | %(levelname)s | Worker-%(process)d | %(name)s: %(message)s"
-        ),
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    logger = logging.getLogger("worker_init")
+    # Get the seed that PyTorch already set for this worker
+    worker_seed = torch.initial_seed() % 2**32
 
-    global _worker_init_data
-    if "_worker_init_data" not in globals():
-        logger.warning(
-            f"Worker {worker_id}: No _worker_init_data found. Skipping initialization."
-        )
-        return
-
-    data = _worker_init_data
-    seed = data.get("seed", 42)
-
-    # Per-worker seed for deterministic but varied randomization
-    worker_seed = seed + worker_id
+    # Seed other libraries to ensure reproducibility
     np.random.seed(worker_seed)
     random.seed(worker_seed)
-    torch.manual_seed(worker_seed)
-    logger.debug(f"Worker {worker_id} initialized with seed {worker_seed}")
-
-    # ------------------------------------------------------------------ #
-    #  Re-apply dataset patches inside each worker process
-    # ------------------------------------------------------------------ #
-    # Optional: BEANS dataset debug patch (log path + timing) when env var set
-    if os.getenv("BEANS_DEBUG", "0") == "1":
-        try:
-            from esp_data.datasets.beans import Beans  # type: ignore
-            import time
-            import numpy as np
-            import librosa
-            from esp_data.io import anypath, audio_stereo_to_mono, read_audio
-
-            logger.debug("Worker %d: Applying Beans debug patch", worker_id)
-
-            def _debug_getitem(self, idx):  # noqa: ANN001
-                import logging
-                dbg = logging.getLogger("beans_debug")
-
-                if idx >= len(self._data):
-                    raise IndexError(idx)
-
-                row = self._data.iloc[idx].to_dict()
-
-                dbg.info("[BEANS DEBUG] Sample %d", idx)
-                dbg.info("  local_path = %s", row.get("local_path"))
-                dbg.info("  data_root = %s", self.data_root)
-
-                if self.data_root:
-                    audio_path = anypath(self.data_root) / row["local_path"]
-                else:
-                    audio_path = anypath(row["local_path"])
-
-                dbg.info("  audio_path = %s", audio_path)
-                dbg.info("  audio_path.exists = %s", audio_path.exists())
-
-                t0 = time.perf_counter()
-                audio, sr = read_audio(audio_path)
-                t1 = time.perf_counter()
-                dbg.info("  read_audio took %.3fs (sr=%d)", t1 - t0, sr)
-
-                audio = audio.astype(np.float32)
-                audio = audio_stereo_to_mono(audio, mono_method="average")
-
-                t2 = time.perf_counter()
-                if self.sample_rate is not None and sr != self.sample_rate:
-                    dbg.info("  Resampling from %d to %d", sr, self.sample_rate)
-                    audio = librosa.resample(
-                        y=audio,
-                        orig_sr=sr,
-                        target_sr=self.sample_rate,
-                        scale=True,
-                        res_type="kaiser_best",
-                    )
-                t3 = time.perf_counter()
-                dbg.info("  resample took %.3fs", t3 - t2)
-
-                row["audio"] = audio
-
-                if self.output_take_and_give:
-                    return {
-                        new: row[old] for old, new in self.output_take_and_give.items()
-                    }
-                return row
-
-            Beans.__getitem__ = _debug_getitem  # type: ignore[assignment]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Worker %d: Failed to patch Beans debug: %s", worker_id, exc)
-
-    try:
-        from representation_learning.data.animalspeak_getitem_patch import (
-            apply_animalspeak_patches,
-        )
-
-        # We cannot easily access the model target length here, so we use a
-        # conservative default (30s) which is long enough for most cases and
-        # still enables chunk loading.
-        apply_animalspeak_patches(max_duration_seconds=30.0, chunk_selection="random")
-        # apply_audioset_patches()
-        logger.debug("Worker %d: Re-applied dataset patches successfully", worker_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "Worker %d: Failed to re-apply dataset patches: %s", worker_id, exc
-        )
-
-
-# Will be populated before DataLoader construction
-_worker_init_data: dict[str, Any] = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -683,23 +539,6 @@ def build_dataloaders(
     # CUDA requires "spawn" start method; safe on CPU too - do earlier
     # if device != "cpu":
     #     multiprocessing.set_start_method("spawn", force=True)
-
-    # Apply AnimalSpeak patches with model's target audio length for chunking
-    apply_animalspeak_patches(
-        max_duration_seconds=cfg.model_spec.audio_config.target_length_seconds,
-        chunk_selection="random",
-    )
-
-    # Apply Beans patches to avoid loading full-length (>target) clips
-    try:
-        from representation_learning.data.beans_getitem_patch import apply_beans_patches
-
-        apply_beans_patches(
-            max_duration_seconds=cfg.model_spec.audio_config.target_length_seconds,
-            chunk_selection="start",
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to apply Beans patch: %s", exc)
 
     postprocessors: list[Any] = []
     aug_processor: Optional[AugmentationProcessor] = None
@@ -796,14 +635,12 @@ def build_dataloaders(
     )
 
     # ------------------------------------------------------------------ #
-    # Persist worker init data for deterministic seeding
+    # DataLoaders with proper seeding
     # ------------------------------------------------------------------ #
-    global _worker_init_data
-    _worker_init_data = {"seed": cfg.seed, "aug_processor": aug_processor}
+    # Create generator for reproducible worker seeding
+    g = torch.Generator()
+    g.manual_seed(cfg.seed)
 
-    # ------------------------------------------------------------------ #
-    # DataLoaders
-    # ------------------------------------------------------------------ #
     # Force "spawn" start method even if the global context is already locked
     ctx = multiprocessing.get_context("spawn")
 
@@ -816,6 +653,7 @@ def build_dataloaders(
         collate_fn=collate_fn_train,
         pin_memory=(device != "cpu"),
         worker_init_fn=worker_init_fn,
+        generator=g,
         multiprocessing_context=ctx,
         persistent_workers=(cfg.num_workers > 0),
         drop_last=True,
@@ -829,6 +667,7 @@ def build_dataloaders(
         collate_fn=collate_fn_eval,
         pin_memory=(device != "cpu"),
         worker_init_fn=worker_init_fn,
+        generator=g,
         multiprocessing_context=ctx,
         drop_last=True,
         persistent_workers=(cfg.num_workers > 0),
@@ -841,6 +680,8 @@ def build_dataloaders(
             num_workers=cfg.num_workers,
             collate_fn=collate_fn_test,  # test collater (NEVER has augmentations)
             pin_memory=(device != "cpu"),
+            worker_init_fn=worker_init_fn,
+            generator=g,
             multiprocessing_context=ctx,
         )
     else:
