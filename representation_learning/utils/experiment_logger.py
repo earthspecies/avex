@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Optional, Union
 
@@ -63,7 +65,7 @@ class ExperimentLogger:
         try:
             mlflow = importlib.import_module("mlflow")
         except ModuleNotFoundError:
-            logger.warning("mlflow not installed – logging disabled.")
+            logger.warning("mlflow not installed – logging disabled.")
             return cls(backend="none")
 
         mlflow.set_tracking_uri(uri=logging_uri or "http://localhost:5000")
@@ -72,12 +74,68 @@ class ExperimentLogger:
         return cls(backend="mlflow", handle=mlflow)
 
     @classmethod
+    def _handle_wandb_auth(cls, wandb_module: ModuleType) -> None:
+        """Handle W&B authentication using environment variables or secrets file.
+
+        Parameters
+        ----------
+        wandb_module : ModuleType
+            The imported wandb module
+        """
+        # First try environment variable
+        api_key = os.getenv("WANDB_API_KEY")
+        if api_key:
+            logger.info("Using WANDB_API_KEY from environment variable")
+            wandb_module.login(key=api_key)
+            return
+
+        # Try secrets file
+        secrets_file = Path(".secrets.yaml")
+        if secrets_file.exists():
+            try:
+                import yaml
+
+                with secrets_file.open("r") as f:
+                    secrets = yaml.safe_load(f)
+
+                api_key = secrets.get("wandb_api_key")
+                if api_key:
+                    logger.info("Using WANDB_API_KEY from .secrets.yaml")
+                    wandb_module.login(key=api_key)
+                    return
+            except Exception as e:
+                logger.warning(f"Failed to read secrets file: {e}")
+
+        # Let wandb handle authentication naturally (might already be logged in)
+        try:
+            # Check if already logged in
+            if wandb_module.api.api_key:
+                logger.info("Using existing wandb authentication")
+                return
+        except Exception:
+            pass
+
+        # Try to login without key (will use wandb's default behavior)
+        try:
+            wandb_module.login()
+            logger.info("Successfully authenticated with wandb")
+        except Exception as e:
+            logger.warning(
+                f"wandb authentication failed: {e}. "
+                "Consider setting WANDB_API_KEY environment variable or "
+                "creating a .secrets.yaml file with 'wandb_api_key: your_key_here'"
+            )
+
+    @classmethod
     def _build_wandb(cls, project: str, run_name: Optional[str]) -> "ExperimentLogger":
         try:
             wandb = importlib.import_module("wandb")
         except ModuleNotFoundError:
-            logger.warning("wandb not installed – logging disabled.")
+            logger.warning("wandb not installed – logging disabled.")
             return cls(backend="none")
+
+        # Handle authentication before initializing run
+        cls._handle_wandb_auth(wandb)
 
         handle = wandb.init(project=project, name=run_name, config={})
         logger.info("Weights & Biases run initialised (%s).", run_name)

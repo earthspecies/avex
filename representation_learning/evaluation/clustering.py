@@ -11,7 +11,6 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import (
     adjusted_rand_score,
     normalized_mutual_info_score,
-    silhouette_score,
     v_measure_score,
 )
 
@@ -47,7 +46,6 @@ def eval_clustering(
         - clustering_ari: Adjusted Rand Index
         - clustering_nmi: Normalized Mutual Information
         - clustering_v_measure: V-measure
-        - clustering_silhouette: Silhouette Score
 
     Raises
     ------
@@ -121,18 +119,6 @@ def eval_clustering(
             v_measure_score(labels_np, cluster_labels)
         )
 
-        # Silhouette score (internal clustering quality metric)
-        if embeds_np.shape[0] > n_clusters:  # Need more samples than clusters
-            try:
-                metrics["clustering_silhouette"] = float(
-                    silhouette_score(embeds_np, cluster_labels)
-                )
-            except Exception as e:
-                logger.warning(f"Failed to compute silhouette score: {e}")
-                metrics["clustering_silhouette"] = 0.0
-        else:
-            metrics["clustering_silhouette"] = 0.0
-
         return metrics
 
     except Exception as e:
@@ -149,7 +135,7 @@ def eval_clustering_multiple_k(
     """Evaluate clustering with multiple values of K and return the best metrics.
 
     This function tries different numbers of clusters and returns the best
-    clustering results based on silhouette score.
+    clustering results based on Adjusted Rand Index (silhouette removed for speed).
 
     Parameters
     ----------
@@ -171,7 +157,6 @@ def eval_clustering_multiple_k(
         - clustering_ari_best: Best Adjusted Rand Index
         - clustering_nmi_best: Best Normalized Mutual Information
         - clustering_v_measure_best: Best V-measure
-        - clustering_silhouette_best: Best Silhouette Score
     """
     if embeds.numel() == 0 or labels.numel() == 0:
         logger.warning("Empty embeddings or labels provided to clustering evaluation")
@@ -198,7 +183,7 @@ def eval_clustering_multiple_k(
         k_range = (min_k, max_k)
 
     best_metrics = {}
-    best_silhouette = -1.0
+    best_score = -1.0  # Use ARI as the objective now
     best_k = k_range[0]
 
     for k in range(k_range[0], k_range[1] + 1):
@@ -209,15 +194,14 @@ def eval_clustering_multiple_k(
             embeds, labels, n_clusters=k, random_state=random_state
         )
 
-        if metrics["clustering_silhouette"] > best_silhouette:
-            best_silhouette = metrics["clustering_silhouette"]
+        if metrics["clustering_ari"] > best_score:
+            best_score = metrics["clustering_ari"]
             best_k = k
             best_metrics = {
                 "clustering_best_k": float(best_k),
                 "clustering_ari_best": metrics["clustering_ari"],
                 "clustering_nmi_best": metrics["clustering_nmi"],
                 "clustering_v_measure_best": metrics["clustering_v_measure"],
-                "clustering_silhouette_best": metrics["clustering_silhouette"],
             }
 
     return best_metrics if best_metrics else _get_empty_clustering_best_metrics()
@@ -235,7 +219,6 @@ def _get_empty_clustering_metrics() -> Dict[str, float]:
         "clustering_ari": 0.0,
         "clustering_nmi": 0.0,
         "clustering_v_measure": 0.0,
-        "clustering_silhouette": 0.0,
     }
 
 
@@ -252,5 +235,4 @@ def _get_empty_clustering_best_metrics() -> Dict[str, float]:
         "clustering_ari_best": 0.0,
         "clustering_nmi_best": 0.0,
         "clustering_v_measure_best": 0.0,
-        "clustering_silhouette_best": 0.0,
     }

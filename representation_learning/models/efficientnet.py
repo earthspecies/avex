@@ -128,7 +128,7 @@ class Model(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Extract embeddings from the model.
+        """Extract embeddings from the model with automatic batch splitting.
 
         Parameters
         ----------

@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
+dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
   train_epochs: 300
@@ -18,7 +18,7 @@ experiments:
     layers: model.avgpool
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
-    checkpoint_path: ../representation-learning/runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
+    checkpoint_path: ../representation-learning/runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-15_15-12-13/checkpoint_epoch_049.pt
 
 # Where to save the evaluation results
 save_dir: evaluation_results/efficientnet_beans

@@ -65,6 +65,39 @@ class TrainingParams(BaseModel):
         False, description="Enable gradient checkpointing to save memory"
     )
 
+    # Two-stage fine-tuning parameters
+    freeze_backbone_epochs: int = Field(
+        0,
+        ge=0,
+        description=(
+            "If >0, keep backbone parameters frozen for this many initial epochs "
+            "(train only the classification head). At the end of the freeze "
+            "period the backbone is unfrozen and optimisation restarts with a "
+            "fresh learning-rate schedule."
+        ),
+    )
+    second_stage_lr: Optional[float] = Field(
+        None,
+        ge=0,
+        description=(
+            "Learning rate to use after unfreezing the backbone. "
+            "If omitted we default to current lr × 0.1."
+        ),
+    )
+    second_stage_warmup_steps: Optional[int] = Field(
+        None,
+        ge=0,
+        description=(
+            "Warm-up steps for the second stage. "
+            "Defaults to scheduler.warmup_steps if not provided."
+        ),
+    )
+
+    # Skip validation during training
+    skip_validation: bool = Field(
+        False, description="Skip validation epochs during training (train-only mode)"
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -167,6 +200,29 @@ class ModelSpec(BaseModel):
     pretraining_mode: Optional[bool] = None
     handle_padding: Optional[bool] = None
 
+    # EAT HF specific configuration: TODO handling for model-specific configs
+    fairseq_weights_path: Optional[str] = Field(
+        None, description="Path to fairseq checkpoint for EAT HF model"
+    )
+
+    model_id: Optional[str] = Field(
+        "worstchan/EAT-base_epoch30_pretrain",
+        description=(
+            "HuggingFace model ID for EAT models "
+            "(e.g., 'worstchan/EAT-base_epoch30_finetune_AS2M')"
+        ),
+    )
+
+    # EAT HF audio normalization parameters
+    eat_norm_mean: Optional[float] = Field(
+        -4.268,
+        description="Normalization mean for EAT HF model (default for general audio)",
+    )
+    eat_norm_std: Optional[float] = Field(
+        4.569,
+        description="Normalization std for EAT HF model (default for general audio)",
+    )
+
     # EfficientNet variant configuration
     efficientnet_variant: Literal["b0", "b1"] = Field(
         "b0", description="EfficientNet variant to use (b0 or b1)"
@@ -176,6 +232,14 @@ class ModelSpec(BaseModel):
     # TODO: general approach for model-specific configs
     use_naturelm: Optional[bool] = Field(
         None, description="Whether to use NatureLM for BEATs model"
+    )
+    fine_tuned: Optional[bool] = Field(
+        None, description="Whether to use fine-tuned weights for BEATs model"
+    )
+
+    # BirdNet-specific configuration
+    language: Optional[str] = Field(
+        None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')"
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -311,7 +375,33 @@ class BaseCLIConfig(BaseSettings):
         return cls.model_validate(final_values)
 
 
+class ClusteringEvalConfig(BaseModel):
+    """Configuration for clustering evaluation during training."""
+
+    enabled: bool = Field(False, description="Enable clustering evaluation")
+    frequency: int = Field(5, ge=1, description="Evaluate clustering every N epochs")
+    layers: str = Field(
+        "last_layer", description="Comma-separated layer names for embedding extraction"
+    )
+    use_validation_set: bool = Field(
+        True, description="Use validation set for clustering (else use train set)"
+    )
+    max_samples: Optional[int] = Field(
+        None, ge=100, description="Maximum samples to use (None = use all)"
+    )
+    run_before_training: bool = Field(
+        False, description="Run clustering evaluation before the first epoch"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
+    """Everything needed for a single *training run*."""
+
+    # --------------------------------------------------------------------------- #
+    #  Clustering evaluation configuration
+    # --------------------------------------------------------------------------- #
     """Everything needed for a single *training run*."""
 
     # required
@@ -367,12 +457,22 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         False, description="Whether to use multi-label classification"
     )
 
+    # Metrics to compute during training
+    metrics: List[str] = Field(
+        default_factory=lambda: ["accuracy"],
+        description="List of metrics to compute during training",
+    )
+
     device: str = "cuda"
     seed: int = 42
     num_workers: int = 4
     run_name: Optional[str] = None
     wandb_project: str = "audio‑experiments"
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    # Clustering evaluation configuration
+    clustering_eval: Optional[ClusteringEvalConfig] = Field(
+        None, description="Configuration for clustering evaluation during training"
+    )
 
     # Debug mode
     debug_mode: bool = False

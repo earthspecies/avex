@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import os
+
+# Ensure google-cloud-storage finds a default project when running on compute
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
+
 import logging
 import multiprocessing
 import random
@@ -14,24 +19,35 @@ from esp_data import (
     concatenate_datasets,
     dataset_from_config,
 )
-from esp_data.transforms import LabelFromFeatureConfig, MultiLabelFromFeaturesConfig
-from torch.utils.data import DataLoader, DistributedSampler
 
-from representation_learning.configs import (
+# Temporary patch for AnimalSpeak for compatibility
+# with dataset concatenation while relevant issue is raised in esp-data.
+from representation_learning.data.animalspeak_column_patch import (
+    apply_animalspeak_column_patch,
+)
+
+# Temporary cloudpathlib retries while we migrate away/fix
+from representation_learning.data.cloudpathlib_retry_patch import (
+    apply_cloudpathlib_patch,
+)
+
+apply_cloudpathlib_patch()
+apply_animalspeak_column_patch()
+
+
+from torch.utils.data import DataLoader, DistributedSampler  # noqa: E402
+
+from representation_learning.configs import (  # noqa: E402
     DatasetCollectionConfig,
     RunConfig,
 )
-from representation_learning.data.audio_utils import (
+from representation_learning.data.audio_utils import (  # noqa: E402
     pad_or_window,  # type: ignore
 )
-from representation_learning.data.augmentations import (
+from representation_learning.data.augmentations import (  # noqa: E402
     AugmentationProcessor,
     make_item_postprocessor,
 )
-
-# from representation_learning.preprocessing.activity_detector import (
-#     load_activity_detector
-# )
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +136,6 @@ def _build_one_dataset_split(
         ds_list = []
         for ds_cfg in cfg_list:
             ds, metadata = dataset_from_config(ds_cfg)
-
             ds_list.append((ds, metadata))
 
         if concatenate and len(ds_list) > 1:
@@ -128,6 +143,7 @@ def _build_one_dataset_split(
             ds = concatenate_datasets(
                 [d[0] for d in ds_list], merge_level=concatenate_method
             )
+
             return ds, ds_list[0][1]  # return first metadata as representative
 
         # TODO : Handle case where concatenate is False so you return a list of datasets
@@ -142,7 +158,7 @@ def _build_one_dataset_split(
 
 
 def _build_datasets(
-    cfg: DatasetCollectionConfig, postprocessors: list[Callable]
+    cfg: DatasetCollectionConfig, postprocessors: list[Callable], label_type: str
 ) -> list[AudioDataset]:
     """Build datasets from the provided configuration.
     Parameters
@@ -162,11 +178,8 @@ def _build_datasets(
     )
 
     if cfg.transformations:
-        # Apply those on train and update metadata
-        train_metadata = train_ds.apply_transformations(cfg.transformations)
         additional_metadata = train_ds.apply_transformations(cfg.transformations)
         if additional_metadata:
-            # Merge the additional metadata with existing metadata
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
 
@@ -180,46 +193,14 @@ def _build_datasets(
         cfg.test_datasets, cfg.concatenate_test, cfg.concatenate_method
     )
 
-    # Initialize defaults for label_map and num_classes
+    # Extract label information from transform metadata
     label_map = {}
     num_classes = 0
 
-    # Apply label_from_feature transform to validation/test sets
-    if "label_from_feature" in train_metadata:
-        label_transform_metadata = train_metadata["label_from_feature"]
-        label_map = label_transform_metadata.get("label_map", {})
-        # Prioritize num_classes when available and > 0, fallback to len(label_map)
-        if (
-            "num_classes" in label_transform_metadata
-            and label_transform_metadata["num_classes"] > 0
-        ):
-            num_classes = label_transform_metadata["num_classes"]
-        else:
-            num_classes = len(label_map)
-
-        label_feature = train_metadata["label_from_feature"]["label_feature"]
-
-        # Always set override=True when applying transformations to val/test datasets
-        # since we know we want to replace any existing label features
-        label_transform = LabelFromFeatureConfig(
-            type="label_from_feature",
-            feature=label_feature,
-            output_feature="label",
-            label_map=label_map,
-            override=True,
-        )
-
-        # Apply label transform to val/test datasets
-        if val_ds:
-            val_ds.apply_transformations([label_transform])
-        if test_ds:
-            test_ds.apply_transformations([label_transform])
-
     # Handle multi-label case - check for labels_from_features transform metadata
-    elif "labels_from_features" in train_metadata:
+    if "labels_from_features" in train_metadata:
         label_transform_metadata = train_metadata["labels_from_features"]
         label_map = label_transform_metadata.get("label_map", {})
-        # Prioritize num_classes when available and > 0, fallback to len(label_map)
         if (
             "num_classes" in label_transform_metadata
             and label_transform_metadata["num_classes"] > 0
@@ -228,57 +209,29 @@ def _build_datasets(
         else:
             num_classes = len(label_map)
 
-        # Get the feature name(s) used for labeling
-        label_features = label_transform_metadata.get("label_feature", ["label"])
+        # Apply same transformations to val/test datasets to ensure consistency
+        if val_ds and cfg.transformations:
+            val_ds.apply_transformations(cfg.transformations)
+        if test_ds and cfg.transformations:
+            test_ds.apply_transformations(cfg.transformations)
 
-        # Always set override=True when applying transformations to val/test datasets
-        # since we know we want to replace any existing label features
-        # Use MultiLabelFromFeaturesConfig for multi-label datasets
-        label_transform = MultiLabelFromFeaturesConfig(
-            type="labels_from_features",
-            features=label_features,
-            output_feature="label",
-            label_map=label_map,
-            override=True,
-        )
-
-        # Apply label transform to val/test datasets
-        if val_ds:
-            val_ds.apply_transformations([label_transform])
-        if test_ds:
-            test_ds.apply_transformations([label_transform])
-
-    # Handle legacy multi-label case - check if label_feature is a list
-    # (indicates multi-label)
-    elif "label_feature" in train_metadata and isinstance(
-        train_metadata["label_feature"], list
-    ):
-        label_map = train_metadata.get("label_map", {})
-        # Prioritize num_classes when available and > 0, fallback to len(label_map)
-        if "num_classes" in train_metadata and train_metadata["num_classes"] > 0:
-            num_classes = train_metadata["num_classes"]
+    # Handle single-label case - check for label_from_feature transform metadata
+    elif "label_from_feature" in train_metadata:
+        label_transform_metadata = train_metadata["label_from_feature"]
+        label_map = label_transform_metadata.get("label_map", {})
+        if (
+            "num_classes" in label_transform_metadata
+            and label_transform_metadata["num_classes"] > 0
+        ):
+            num_classes = label_transform_metadata["num_classes"]
         else:
             num_classes = len(label_map)
 
-        # Get the feature name(s) used for labeling
-        label_features = train_metadata["label_feature"]
-
-        # Always set override=True when applying transformations to val/test datasets
-        # since we know we want to replace any existing label features
-        # Use MultiLabelFromFeaturesConfig for multi-label datasets
-        label_transform = MultiLabelFromFeaturesConfig(
-            type="labels_from_features",
-            features=label_features,
-            output_feature="label",
-            label_map=label_map,
-            override=True,
-        )
-
-        # Apply label transform to val/test datasets
-        if val_ds:
-            val_ds.apply_transformations([label_transform])
-        if test_ds:
-            test_ds.apply_transformations([label_transform])
+        # Apply same transformations to val/test datasets to ensure consistency
+        if val_ds and cfg.transformations:
+            val_ds.apply_transformations(cfg.transformations)
+        if test_ds and cfg.transformations:
+            test_ds.apply_transformations(cfg.transformations)
 
     train_ds = AudioDataset(
         train_ds,
@@ -294,7 +247,7 @@ def _build_datasets(
             val_ds,
             postprocessors=postprocessors,
             metadata={
-                "label_map": train_metadata.get("label_map", {}),
+                "label_map": label_map,
                 "num_labels": num_classes,
             },
         )
@@ -304,7 +257,7 @@ def _build_datasets(
             test_ds,
             postprocessors=postprocessors,
             metadata={
-                "label_map": train_metadata.get("label_map", {}),
+                "label_map": label_map,
                 "num_labels": num_classes,
             },
         )
@@ -344,7 +297,6 @@ class Collater:
         self.sr = sr
         self.device = device
         self.batch_aug_processor = batch_aug_processor
-        assert num_labels > 1, "num_labels must be greater than 1"
         self.num_labels = num_labels
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
@@ -355,7 +307,19 @@ class Collater:
             # Use "audio" key which is the standard in esp_data,
             # fallback to "raw_wav" for compatibility
             audio_key = "audio" if "audio" in item else "raw_wav"
-            wav = torch.as_tensor(item[audio_key])  # (T,)
+            wav = torch.as_tensor(item[audio_key])  # (T,) or (C, T)
+
+            # Handle rare corrupted audio without crashing
+            if torch.isnan(wav).any() or torch.isinf(wav).any():
+                logger.warning(
+                    f"Corrupted audio detected (NaN/Inf), "
+                    f"replacing with zeros. Shape: {wav.shape}"
+                )
+                wav = torch.zeros_like(wav)
+
+            # Handle multichannel audio by taking mean across channels
+            if wav.dim() == 2:  # (C, T) multichannel format
+                wav = wav.mean(dim=0)  # Convert to mono by averaging channels
 
             # Step 1: Apply dataset constraint (benchmark limit) if specified
             if self.dataset_audio_max_length_seconds is not None:
@@ -373,39 +337,18 @@ class Collater:
             )
             audios.append(wav)
             masks.append(pad_mask)
-            labels.append(item["label"])
+            # Some pipelines (e.g. CLAP) do not create numeric labels.  Keep the
+            # *length* of the labels list aligned with the batch by inserting a
+            # dummy placeholder when the key is missing.
+            if "label" in item:
+                labels.append(item["label"])
+            else:
+                labels.append(0)  # Placeholder – will turn into dummy tensor later
             if "text_label" in item:
                 txt_lbl = item["text_label"]
                 if isinstance(txt_lbl, list) and len(txt_lbl) > 0:
                     txt_lbl = random.choice(txt_lbl)
                 text_labels.append(txt_lbl)
-
-        # Apply batch-level mixup AFTER all audios are same length
-        if self.batch_aug_processor is not None and audios:
-            # Create temporary batch of uniform-length samples
-            temp_batch = [
-                {
-                    "audio": wav,  # Use standard "audio" key
-                    "label": lbl,
-                    "text_label": txt,
-                }
-                for wav, lbl, txt in zip(
-                    audios,
-                    labels,
-                    text_labels if text_labels else [None] * len(audios),
-                    strict=False,
-                )
-            ]
-            # Now mixup can safely operate on same-sized tensors
-            mixed_batch = self.batch_aug_processor.apply_batch_augmentations(temp_batch)
-            # Extract back to separate lists
-            audios = [item["audio"] for item in mixed_batch]  # Use standard "audio" key
-            labels = [item["label"] for item in mixed_batch]
-            for item in mixed_batch:
-                if "text_label" in item:
-                    text_labels.append(item["text_label"])
-                else:
-                    text_labels.append(None)
 
         # ------------------------------------
         # Stack into tensors (audio + mask)
@@ -416,20 +359,53 @@ class Collater:
         # Handle different label formats (int → long, multi-hot → float32)
         if all(isinstance(lbl, (int, np.integer)) for lbl in labels):
             # Convert integer labels to one-hot vectors for classification
-            label_tensor = torch.nn.functional.one_hot(
-                torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
-            ).float()
+            if self.num_labels > 0:
+                label_tensor = torch.nn.functional.one_hot(
+                    torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
+                ).float()
+            else:
+                # For CLAP models without numeric labels, create dummy tensor
+                label_tensor = torch.zeros((len(labels), 1), dtype=torch.float32)
         else:
             # For multi-label case, convert lists of class indices to one-hot vectors
             label_tensors = []
             for lbl in labels:
                 # Create zero tensor of size num_labels
-                one_hot = torch.zeros(self.num_labels, dtype=torch.float32)
-                # Convert list of indices to tensor and set 1s at those indices
-                indices = torch.tensor(lbl, dtype=torch.long)
-                one_hot[indices] = 1.0
-                label_tensors.append(one_hot)
+                if self.num_labels > 0:
+                    one_hot = torch.zeros(self.num_labels, dtype=torch.float32)
+                    # Convert list of indices to tensor and set 1s at those indices
+                    if isinstance(lbl, torch.Tensor):
+                        indices = lbl.clone().detach().long()
+                    else:
+                        indices = torch.tensor(lbl, dtype=torch.long)
+                    # Ensure indices are within valid range
+                    valid_indices = indices[indices < self.num_labels]
+                    if len(valid_indices) > 0:
+                        one_hot[valid_indices] = 1.0
+
+                    label_tensors.append(one_hot)
+                else:
+                    # For CLAP models without numeric labels, create dummy tensor
+                    label_tensors.append(torch.zeros(1, dtype=torch.float32))
             label_tensor = torch.stack(label_tensors)
+
+        # Apply batch-level mixup AFTER converting labels to consistent tensors
+        if self.batch_aug_processor is not None and audios:
+            # Create temporary batch with uniform-sized tensors
+            temp_batch = [
+                {
+                    "audio": audio_tensor[i],  # Use standard "audio" key
+                    "label": label_tensor[i],
+                    "text_label": text_labels[i] if text_labels else None,
+                }
+                for i in range(len(audios))
+            ]
+            # Now mixup can safely operate on same-sized tensors
+            mixed_batch = self.batch_aug_processor.apply_batch_augmentations(temp_batch)
+            # Extract back to tensors
+            audio_tensor = torch.stack([item["audio"] for item in mixed_batch])
+            label_tensor = torch.stack([item["label"] for item in mixed_batch])
+            text_labels = [item.get("text_label") for item in mixed_batch]
 
         return {
             # Keep raw_wav for backward compatibility with models
@@ -444,42 +420,18 @@ class Collater:
 #  Data-loader helpers
 # --------------------------------------------------------------------------- #
 def worker_init_fn(worker_id: int) -> None:
-    """Initialize a DataLoader worker (seeding, logging, audio-info cache)."""
-    import logging
+    """Initialize a DataLoader worker (seeding for reproducibility)."""
     import random
 
     import numpy as np
     import torch
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format=(
-            "%(asctime)s | %(levelname)s | Worker-%(process)d | %(name)s: %(message)s"
-        ),
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    logger = logging.getLogger("worker_init")
+    # Get the seed that PyTorch already set for this worker
+    worker_seed = torch.initial_seed() % 2**32
 
-    global _worker_init_data
-    if "_worker_init_data" not in globals():
-        logger.warning(
-            f"Worker {worker_id}: No _worker_init_data found. Skipping initialization."
-        )
-        return
-
-    data = _worker_init_data
-    seed = data.get("seed", 42)
-
-    # Per-worker seed for deterministic but varied randomization
-    worker_seed = seed + worker_id
+    # Seed other libraries to ensure reproducibility
     np.random.seed(worker_seed)
     random.seed(worker_seed)
-    torch.manual_seed(worker_seed)
-    logger.debug(f"Worker {worker_id} initialized with seed {worker_seed}")
-
-
-# Will be populated before DataLoader construction
-_worker_init_data: dict[str, Any] = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -540,9 +492,9 @@ def build_dataloaders(
         If the dataset does not have more than one label for classification tasks.
     """
 
-    # CUDA requires "spawn" start method; safe on CPU too
-    if device != "cpu":
-        multiprocessing.set_start_method("spawn", force=True)
+    # CUDA requires "spawn" start method; safe on CPU too - do earlier
+    # if device != "cpu":
+    #     multiprocessing.set_start_method("spawn", force=True)
 
     postprocessors: list[Any] = []
     aug_processor: Optional[AugmentationProcessor] = None
@@ -556,29 +508,31 @@ def build_dataloaders(
         data_config = cfg.dataset_config
 
     ds_train, ds_val, ds_test = _build_datasets(
-        data_config, postprocessors=postprocessors
+        data_config, postprocessors=postprocessors, label_type=cfg.label_type
     )
 
     num_labels = ds_train.metadata.get("num_labels", 0)
 
     # Allow single-class datasets for detection tasks, but require multiple
     # classes for classification
-    if task_type == "detection":
-        # For detection tasks, we need at least 1 class
-        # (binary detection: present/absent)
-        if num_labels < 1:
-            raise ValueError("Detection tasks must have at least one label.")
-    else:
-        # For classification tasks (or unknown task types), require multiple classes
-        if num_labels <= 1:
-            raise ValueError(
-                "Dataset must have more than one label for classification tasks."
-            )
+    if cfg.label_type == "supervised":
+        if task_type == "detection":
+            # For detection tasks, we need at least 1 class
+            # (binary detection: present/absent)
+            if num_labels < 1:
+                raise ValueError("Detection tasks must have at least one label.")
+        else:
+            # For classification tasks (or unknown task types), require multiple classes
+            if num_labels <= 1:
+                raise ValueError(
+                    "Dataset must have more than one label for classification tasks."
+                )
+    # For CLAP/CLIP models (label_type="text"), numeric labels are not required
 
-    # logger.info(f"Train data size : {len(ds_train)} samples")
-    # logger.info(f"Validation data size : {len(ds_val)} samples")
-    # if ds_test is not None:
-    #     logger.info(f"Test data size : {len(ds_test)} samples")
+    logger.info(f"Train data size : {len(ds_train)} samples")
+    logger.info(f"Validation data size : {len(ds_val)} samples")
+    if ds_test is not None:
+        logger.info(f"Test data size : {len(ds_test)} samples")
 
     # Create samplers for distributed training
     train_sampler = None
@@ -637,14 +591,15 @@ def build_dataloaders(
     )
 
     # ------------------------------------------------------------------ #
-    # Persist worker init data for deterministic seeding
+    # DataLoaders with proper seeding
     # ------------------------------------------------------------------ #
-    global _worker_init_data
-    _worker_init_data = {"seed": cfg.seed, "aug_processor": aug_processor}
+    # Create generator for reproducible worker seeding
+    g = torch.Generator()
+    g.manual_seed(cfg.seed)
 
-    # ------------------------------------------------------------------ #
-    # DataLoaders
-    # ------------------------------------------------------------------ #
+    # Force "spawn" start method even if the global context is already locked
+    ctx = multiprocessing.get_context("spawn")
+
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
@@ -654,8 +609,9 @@ def build_dataloaders(
         collate_fn=collate_fn_train,
         pin_memory=(device != "cpu"),
         worker_init_fn=worker_init_fn,
+        generator=g,
+        multiprocessing_context=ctx,
         persistent_workers=(cfg.num_workers > 0),
-        prefetch_factor=2 if cfg.num_workers > 0 else None,
         drop_last=True,
     )
     val_dl = DataLoader(
@@ -667,8 +623,10 @@ def build_dataloaders(
         collate_fn=collate_fn_eval,
         pin_memory=(device != "cpu"),
         worker_init_fn=worker_init_fn,
+        generator=g,
+        multiprocessing_context=ctx,
+        drop_last=True,
         persistent_workers=(cfg.num_workers > 0),
-        prefetch_factor=2 if cfg.num_workers > 0 else None,
     )
     if ds_test is not None:
         test_dl = DataLoader(
@@ -678,6 +636,9 @@ def build_dataloaders(
             num_workers=cfg.num_workers,
             collate_fn=collate_fn_test,  # test collater (NEVER has augmentations)
             pin_memory=(device != "cpu"),
+            worker_init_fn=worker_init_fn,
+            generator=g,
+            multiprocessing_context=ctx,
         )
     else:
         test_dl = None

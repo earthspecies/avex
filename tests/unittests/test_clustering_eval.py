@@ -53,14 +53,12 @@ class TestEvalClustering:
             "clustering_ari",
             "clustering_nmi",
             "clustering_v_measure",
-            "clustering_silhouette",
         }
         assert set(metrics.keys()) == expected_metrics
 
         # For well-separated clusters, metrics should be reasonably high
         assert metrics["clustering_ari"] > MIN_METRIC_THRESHOLD
         assert metrics["clustering_nmi"] > MIN_METRIC_THRESHOLD
-        assert metrics["clustering_silhouette"] > 0.0
 
     def test_custom_n_clusters(self) -> None:
         """Test clustering with custom number of clusters."""
@@ -72,7 +70,8 @@ class TestEvalClustering:
 
         # Should still return all metrics
         assert "clustering_ari" in metrics
-        assert "clustering_silhouette" in metrics
+        assert "clustering_nmi" in metrics
+        assert "clustering_v_measure" in metrics
 
     def test_insufficient_clusters(self) -> None:
         """Test behavior with insufficient number of clusters."""
@@ -224,7 +223,6 @@ class TestEvalClusteringMultipleK:
             "clustering_ari_best",
             "clustering_nmi_best",
             "clustering_v_measure_best",
-            "clustering_silhouette_best",
         }
         assert set(metrics.keys()) == expected_metrics
 

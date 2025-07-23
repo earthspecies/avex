@@ -173,6 +173,13 @@ class AudioProcessor:
             + 1e-8
         )
 
+    @staticmethod
+    def _normalize_zscore(x: Tensor) -> Tensor:
+        x = torch.log(x + 1e-6)
+        mean = x.mean(dim=-1, keepdim=True)  # (B, F, 1)
+        std = x.std(dim=-1, keepdim=True).clamp(1e-5)
+        return (x - mean) / std
+
 
 # --------------------------------------------------------------------------- #
 #  Padding-mask helpers (added for precise mask propagation to frame / patch) #
