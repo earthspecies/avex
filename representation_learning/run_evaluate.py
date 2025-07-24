@@ -127,7 +127,15 @@ def run_experiment(
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
     run_cfg.model_spec.device = str(device)
-    run_cfg.augmentations = []  # disable training-time augs during (most) eval
+
+    # Check for BirdSet dataset early to preserve augmentations if needed
+    is_birdset = (
+        hasattr(dataset_cfg, "dataset_name")
+        and "birdset" in dataset_cfg.dataset_name.lower()
+    )
+
+    if not is_birdset:
+        run_cfg.augmentations = []  # disable training-time augs during (most) eval
 
     if run_cfg.model_spec.audio_config.sample_rate is not None:
         dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
@@ -231,13 +239,7 @@ def run_experiment(
                 f"{run_cfg.model_spec.audio_config.target_length_seconds}s"
             )
 
-        # For BirdSet datasets, augment during eval
-        is_birdset = (
-            hasattr(dataset_cfg, "train")
-            and hasattr(dataset_cfg.train, "dataset_name")
-            and dataset_cfg.train.dataset_name.lower() == "birdset"
-        )
-
+        # For BirdSet datasets, augment during eval (detection done earlier)
         if is_birdset:
             logger.info(
                 f"BirdSet dataset detected ({dataset_name}). "
