@@ -20,10 +20,9 @@ from typing import Any, Dict, List, Literal, Optional, Self, Tuple, Union
 
 import yaml
 from esp_data import DatasetConfig
-from esp_data.transforms import RegisteredTransformConfigs
 
 # --------------------------------------------------------------------------- #
-#  3rd‑party imports
+#  3rd‑party imports}
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.v1.utils import deep_update
@@ -750,7 +749,7 @@ class DatasetCollectionConfig(BaseModel):
             "'soft' to allow any columns to be present in any dataset"
         ),
     )
-    transformations: list[RegisteredTransformConfigs] | None = Field(
+    transformations: list | None = Field(
         None,
         description=(
             "Optional list of transformations to apply to the concatenated dataset. "
