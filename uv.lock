@@ -690,7 +690,7 @@ wheels = [
 
 [[package]]
 name = "esp-data"
-version = "1.2.0"
+version = "1.2.1"
 source = { registry = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" }
 dependencies = [
     { name = "cloudpathlib", extra = ["all"] },
@@ -706,9 +706,9 @@ dependencies = [
     { name = "semver" },
     { name = "soundfile" },
 ]
-sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.0.tar.gz", hash = "sha256:b64c367f27e1a2fa37e021a0e190deec8bb7351206940d1049fa779042586536" }
+sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.1.tar.gz", hash = "sha256:ef0f7c3ae7c132ad33a65dbacda77390fe323170a398f22f82f7959603cbf4de" }
 wheels = [
-    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.0-py3-none-any.whl", hash = "sha256:13783f0e0ab7da33b1c0fecc50c050863e3938e41de99a40feab5ca067994a4f" },
+    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.1-py3-none-any.whl", hash = "sha256:28e4f0561fcb6f2e62287964dd768063c7e13e3db886afa00eee1c5d57145901" },
 ]
 
 [[package]]
@@ -3049,7 +3049,7 @@ requires-dist = [
     { name = "birdnetlib", specifier = ">=0.18.0" },
     { name = "cloudpathlib", specifier = ">=0.21.0" },
     { name = "einops", specifier = ">=0.8.1" },
-    { name = "esp-data", specifier = ">=1.2.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", specifier = ">=1.2.1", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "esp-sweep", specifier = ">=0.2.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "google-cloud-storage", specifier = ">=3.1.0" },
     { name = "gradio", specifier = ">=4.0.0" },

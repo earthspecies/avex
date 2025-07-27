@@ -4,13 +4,15 @@
 #SBATCH --gpus=1
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-eval-birdset"
-#SBATCH --cpus-per-gpu=12
-
+#SBATCH --cpus-per-gpu=8
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+export GOOGLE_APPLICATION_CREDENTIALS=/home/marius_miron_earthspecies_org/.config/gcloud/application_default_credentials.json
+export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 
 cd ~/representation-learning
 uv sync
 
-srun uv run repr-learn evaluate --config configs/evaluation_configs/efficientnet_bio_birdset.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_birdset/sl_efficientnet_bio_birdset_debug.yml
 
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/efficientnet_beans.yml
 

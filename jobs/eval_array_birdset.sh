@@ -7,6 +7,7 @@
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 #SBATCH --job-name="rl-eval-array"
 #SBATCH --cpus-per-gpu=10
+#SBATCH --mem-per-gpu=64G
 
 # Map array task ID to config file
 declare -A configs=(
@@ -36,6 +37,10 @@ fi
 
 echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+export GOOGLE_APPLICATION_CREDENTIALS=/home/marius_miron_earthspecies_org/.config/gcloud/application_default_credentials.json
+export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+
 cd ~/representation-learning
 uv sync
-srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_birdset/$config_file
