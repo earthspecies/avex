@@ -13,7 +13,7 @@ training_params:
 # Which experiments to evaluate
 experiments:
   - run_name: ssl_eat_animalspeak
-    run_config: configs/run_configs/aaai_train/ssl_eat_animalspeak.yml
+    run_config: configs/run_configs/aaai_train/ssl_eat_animalspeak_eval_mode.yml
     ### which layers to probe for embeddings
     layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data

@@ -3,8 +3,10 @@
 model_spec:
   name: eat_hf
   pretrained: true
-  model_id: "worstchan/EAT-base_epoch30_pretrain"
-  # Combined dataset - using default normalization parameters
+  fairseq_weights_path: /home/david_earthspecies_org/EAT/outputs/2025-07-11/04-34-18/eat_animalspeak/checkpoint30.pt
+  # AnimalSpeak-specific normalization parameters
+  eat_norm_mean: -7.343
+  eat_norm_std: 4.412120
   audio_config:
     sample_rate: 16000
     representation: raw
@@ -16,7 +18,6 @@ dataset_config: configs/data_configs/data_base.yml
 
 # How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised
-run_name: eat_hf
 debug_mode: false
 
 # audio preprocessing (e.g. event detection)
@@ -41,7 +42,7 @@ loss_function: cross_entropy
 
 device: cuda
 seed: 42
-num_workers: 10
+num_workers: 8
 
 augmentations:
   # Add background noise at random SNRs
