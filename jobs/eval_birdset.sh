@@ -12,7 +12,7 @@ export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 cd ~/representation-learning
 uv sync
 
-srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_birdset/sl_efficientnet_bio_birdset_debug.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/sl_efficientnet_audioset.yml --patch dataset_config=configs/data_configs/benchmark_birdset.yml
 
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/efficientnet_beans.yml
 
