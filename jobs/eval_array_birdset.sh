@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 #SBATCH --array=1-18%1
-#SBATCH --partition=h100-80
+#SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 #SBATCH --job-name="rl-eval-array"
-#SBATCH --cpus-per-gpu=24
+#SBATCH --cpus-per-gpu=12
 
 # Map array task ID to config file
 # Map array task ID to config file
