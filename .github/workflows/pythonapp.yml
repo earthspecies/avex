@@ -20,20 +20,31 @@ jobs:
                 python-version: [3.12]
         steps:
             - uses: actions/checkout@v2
+
+            - name: Authenticate to Google Cloud
+              uses: "google-github-actions/auth@v2"
+              with:
+                  workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
+                  service_account: ${{ secrets.GH_ACTIONS_SA }}
+
             - name: Enable caching
               uses: astral-sh/setup-uv@v5
               with:
                   enable-cache: true
+
             - name: Set up Python ${{ matrix.python-version }}
               uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python-version }}
+
             - name: Full dependencies
               run: |
                   uv pip install --system -r requirements.txt
                   uv pip install --system -r requirements-dev.txt
+
             - name: Display Python version
               run: python -c "import sys; print(sys.version)"
+
             - name: Consistency tests with pytest
               run: |
                   pytest tests/consistency --base_folder representation_learning
