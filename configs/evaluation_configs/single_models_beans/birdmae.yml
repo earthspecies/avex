@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
+dataset_config: configs/data_configs/benchmark_originals.yml
 
 training_params:
   train_epochs: 900
@@ -12,15 +12,16 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: eat_hf
-    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
+  - run_name: birdmae_huge
+    run_config: configs/run_configs/pretrained/birdmae_huge.yml
     ### which layers to probe for embeddings
-    layers: backbone
+    layers: last_layer
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
+    frozen: true
 
 # Where to save the evaluation results
-save_dir: evaluation_results/eat_hf
+save_dir: evaluation_results/birdmae
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv
@@ -29,11 +30,11 @@ device: cuda
 
 seed: 42
 
-num_workers: 8  # Enable workers for better memory management
+num_workers: 18
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

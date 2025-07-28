@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
+dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
   train_epochs: 900
@@ -12,15 +12,17 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: clap
-    run_config: configs/run_configs/clip_base_beans.yml
+  - run_name: sl_beats_all
+    run_config: configs/run_configs/pretrained/beats_ft.yml
     ### which layers to probe for embeddings
-    layers: audio_projection
+    layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
-    checkpoint_path: runs/clip_caption_16khz_ga/2025-06-18_06-06-48/checkpoints/final_model.pt
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+    # checkpoint_path: runs/beats_ft/2025-06-30_17-21-39/checkpoints/checkpoint_epoch_015.pt
 
 # Where to save the evaluation results
-save_dir: evaluation_results/clap
+save_dir: evaluation_results/aaai/sl_beats_all
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv

@@ -1,0 +1,50 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark.yml
+# dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Which experiments to evaluate
+experiments:
+  - run_name: efficientnet_animalspeak_soundscape
+    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
+    ### which layers to probe for embeddings
+    layers: model.avgpool
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_efficientnet_animalspeak_soundscape.pt
+    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_soundscape/2025-07-26_14-16-16/checkpoint_epoch_049.pt
+    # checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
+    # checkpoint_path: runs/efficientnet_multilabel/2025-06-30_17-36-11/checkpoints/checkpoint_epoch_038.pt
+    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-10_03-15-39/checkpoint_epoch_013.pt
+    # checkpoint_path: runs/efficientnet_audioset/2025-07-13_07-19-26/checkpoint_epoch_021.pt
+    # checkpoint_path: runs/aaai/efficientnet_animalspeak/2025-07-15_15-11-34/checkpoint_epoch_049.pt
+    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-11_11-42-34/checkpoint_epoch_015.pt
+    # checkpoint_path: runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-11_11-42-34/checkpoint_epoch_028.pt
+
+# Where to save the evaluation results
+save_dir: evaluation_results/aaai/efficientnet_animalspeak_soundscape
+
+# Optional: Append results to a global CSV file for cross-model comparison
+results_csv_path: evaluation_results/all_models_results.csv
+
+device: cuda
+
+seed: 42
+
+num_workers: 8  # Enable workers for better memory management
+
+# Evaluation phases
+eval_modes:
+  - linear_probe
+  - retrieval
+  - clustering
+
+overwrite_embeddings: true
