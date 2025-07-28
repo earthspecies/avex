@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
 #SBATCH --partition=h100-80
-#SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=1
+#SBATCH --ntasks-per-node=2
+#SBATCH --gpus-per-node=2
 #SBATCH --output="/home/%u/logs/%A.log"
-#SBATCH --job-name="rl-clap"
+#SBATCH --job-name="rl-wabad"
 #SBATCH --cpus-per-gpu=26
 
-cd ~/representation-learning
+cd ~/rep5
 # uv tool install keyring --with keyrings.google-artifactregistry-auth
 uv sync
 
@@ -27,4 +27,4 @@ export PYTORCH_DISTRIBUTED_BACKEND=nccl
 #keyring
 
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/clap_efficientnet_captions_h100.yml
+srun uv run repr-learn train --config configs/run_configs/aaai_train/sl_efficientnet_animalspeak_wabad_audioset_h100.yml

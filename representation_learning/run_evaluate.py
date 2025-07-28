@@ -15,7 +15,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Seems to prevent a cloudpathlib error
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
@@ -64,6 +64,213 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
 )
+
+
+def is_beans_dataset(dataset_cfg: DatasetConfig) -> bool:
+    """Check if a dataset is a BEANS dataset.
+
+    Parameters
+    ----------
+    dataset_cfg : DatasetConfig
+        Dataset configuration to check
+
+    Returns
+    -------
+    bool
+        True if this is a BEANS dataset (dataset_name == 'beans')
+    """
+    return dataset_cfg.dataset_name == "beans"
+
+
+def should_use_lr_sweep(
+    dataset_cfg: DatasetConfig, experiment_cfg: ExperimentConfig
+) -> bool:
+    """Check if learning rate sweep should be used for this experiment.
+
+    Parameters
+    ----------
+    dataset_cfg : DatasetConfig
+        Dataset configuration
+    experiment_cfg : ExperimentConfig
+        Experiment configuration
+
+    Returns
+    -------
+    bool
+        True if learning rate sweep should be used (unfrozen model on BEANS dataset)
+    """
+    return is_beans_dataset(dataset_cfg) and not experiment_cfg.frozen
+
+
+def train_and_eval_full_fine_tune_with_lr_sweep(
+    train_dl_raw: torch.utils.data.DataLoader,
+    val_dl_raw: torch.utils.data.DataLoader,
+    test_dl_raw: torch.utils.data.DataLoader,
+    base_model: torch.nn.Module,
+    num_labels: int,
+    layer_names: List[str],
+    eval_cfg: EvaluateConfig,
+    device: torch.device,
+    exp_logger: ExperimentLogger,
+    multi_label: bool,
+    dataset_cfg: DatasetConfig,
+    dataset_metrics: Optional[List[str]] = None,
+) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    """Train a model by fine-tuning with learning rate sweep for BEANS datasets.
+
+    This function implements the BEANS fine-tuning protocol:
+    - Sweeps learning rates: [1e-5, 5e-5, 1e-4]
+    - Trains for 50 epochs per learning rate (with early stopping at 15 epochs)
+    - Returns metrics from the best performing learning rate based on validation performance
+
+    Parameters
+    ----------
+    train_dl_raw : torch.utils.data.DataLoader
+        Training dataloader with raw waveforms
+    val_dl_raw : torch.utils.data.DataLoader
+        Validation dataloader with raw waveforms
+    test_dl_raw : torch.utils.data.DataLoader
+        Test dataloader with raw waveforms
+    base_model : torch.nn.Module
+        Base model to fine-tune (used to get checkpoint path and model spec)
+    num_labels : int
+        Number of output classes
+    layer_names : List[str]
+        Names of layers to extract features from
+    eval_cfg : EvaluateConfig
+        Evaluation configuration
+    device : torch.device
+        Device to train on
+    exp_logger : ExperimentLogger
+        Logger for experiment metrics
+    multi_label : bool
+        Whether this is a multi-label classification task
+    dataset_cfg : DatasetConfig
+        Dataset configuration (used to detect BEANS datasets)
+    dataset_metrics : Optional[List[str]]
+        List of metrics to compute for this dataset
+
+    Returns
+    -------
+    Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]
+        • **train_metrics** – best training metrics across all learning rates
+        • **val_metrics**   – best validation metrics across all learning rates
+        • **test_metrics** – test metrics from the best model
+        
+    Raises
+    ------
+    ValueError
+        If there are issues during training or evaluation
+    """
+    # Check if we should use learning rate sweep
+    if not is_beans_dataset(dataset_cfg):
+        # For non-BEANS datasets, use the original single learning rate training
+        return train_and_eval_full_fine_tune(
+            train_dl_raw,
+            val_dl_raw,
+            test_dl_raw,
+            base_model,
+            num_labels,
+            layer_names,
+            eval_cfg,
+            device,
+            exp_logger,
+            multi_label,
+            dataset_metrics,
+        )
+
+    # BEANS fine-tuning protocol: sweep over learning rates
+    beans_learning_rates = [1e-5, 5e-5, 1e-4]
+    beans_epochs = 50
+
+    logger.info(
+        f"Starting BEANS fine-tuning protocol with learning rate sweep: {beans_learning_rates}"
+    )
+    logger.info(
+        f"Each LR will train for {beans_epochs} epochs (early stopping disabled)"
+    )
+
+    best_val_metric = -float("inf")
+    best_train_metrics: Dict[str, float] = {}
+    best_val_metrics: Dict[str, float] = {}
+    best_test_metrics: Dict[str, float] = {}
+    best_lr: Optional[float] = None
+
+    # Get experiment config to extract checkpoint path and model spec
+    # We need to find the experiment config that was used to create base_model
+    experiment_cfgs = eval_cfg.experiments
+    if not experiment_cfgs:
+        raise ValueError("No experiment configurations found")
+
+    # Use the first experiment config (should be the one we're running)
+    exp_cfg = experiment_cfgs[0]
+    model_spec = exp_cfg.run_config.model_spec
+    checkpoint_path = exp_cfg.checkpoint_path
+
+    for lr in beans_learning_rates:
+        logger.info(f"Training with learning rate: {lr}")
+
+        # Create fresh model for this learning rate
+        fresh_model = get_model(model_spec, num_classes=num_labels).to(device)
+        fresh_model.train()  # Ensure training mode
+
+        # Load checkpoint if available
+        if checkpoint_path:
+            ckpt_path = anypath(checkpoint_path)
+            with ckpt_path.open("rb") as f:
+                state = torch.load(f, map_location=device)
+            if "model_state_dict" in state:
+                from representation_learning.utils.utils import _process_state_dict
+
+                state = _process_state_dict(state)
+            fresh_model.load_state_dict(state, strict=False)
+            logger.info(f"Loaded checkpoint from {checkpoint_path} for LR {lr}")
+
+        # Create fresh config for this learning rate (avoid mutation)
+        import copy
+
+        lr_eval_cfg = copy.deepcopy(eval_cfg)
+        lr_eval_cfg.training_params.lr = lr
+        lr_eval_cfg.training_params.train_epochs = beans_epochs
+
+        # Train with this learning rate (early stopping disabled)
+        train_metrics, val_metrics, test_metrics = train_and_eval_full_fine_tune(
+            train_dl_raw,
+            val_dl_raw,
+            test_dl_raw,
+            fresh_model,
+            num_labels,
+            layer_names,
+            lr_eval_cfg,
+            device,
+            exp_logger,
+            multi_label,
+            dataset_metrics,
+        )
+
+        # Check if this is the best performing learning rate
+        primary_metric = dataset_metrics[0] if dataset_metrics else "accuracy"
+        val_metric_value = val_metrics.get(primary_metric, 0.0)
+
+        logger.info(f"Learning rate {lr}: val_{primary_metric}={val_metric_value:.4f}")
+
+        if val_metric_value > best_val_metric:
+            best_val_metric = val_metric_value
+            best_train_metrics = train_metrics.copy()
+            best_val_metrics = val_metrics.copy()
+            best_test_metrics = test_metrics.copy()
+            best_lr = lr
+
+            logger.info(
+                f"New best learning rate: {lr} with val_{primary_metric}={val_metric_value:.4f}"
+            )
+
+    logger.info(
+        f"BEANS fine-tuning completed. Best learning rate: {best_lr} "
+        f"with validation metric: {best_val_metric:.4f}"
+    )
+
+    return best_train_metrics, best_val_metrics, best_test_metrics
 
 
 # -------------------------------------------------------------------- #
@@ -463,23 +670,45 @@ def run_experiment(
                 getattr(dataset_cfg, "type", None) == "detection",
             )
 
-            (
-                train_metrics,
-                val_metrics,
-                probe_test_metrics,
-            ) = train_and_eval_full_fine_tune(
-                train_dl_raw,
-                val_dl_raw,
-                test_dl_raw,
-                base_model,
-                num_labels,
-                layer_names,
-                eval_cfg,
-                device,
-                exp_logger,
-                is_multi_label,
-                dataset_metrics=classification_metrics,
-            )
+            # Check if we should use learning rate sweep for BEANS datasets
+            if should_use_lr_sweep(dataset_cfg, experiment_cfg):
+                logger.info("Using BEANS fine-tuning protocol with learning rate sweep")
+                (
+                    train_metrics,
+                    val_metrics,
+                    probe_test_metrics,
+                ) = train_and_eval_full_fine_tune_with_lr_sweep(
+                    train_dl_raw,
+                    val_dl_raw,
+                    test_dl_raw,
+                    base_model,
+                    num_labels,
+                    layer_names,
+                    eval_cfg,
+                    device,
+                    exp_logger,
+                    is_multi_label,
+                    dataset_cfg,
+                    dataset_metrics=classification_metrics,
+                )
+            else:
+                (
+                    train_metrics,
+                    val_metrics,
+                    probe_test_metrics,
+                ) = train_and_eval_full_fine_tune(
+                    train_dl_raw,
+                    val_dl_raw,
+                    test_dl_raw,
+                    base_model,
+                    num_labels,
+                    layer_names,
+                    eval_cfg,
+                    device,
+                    exp_logger,
+                    is_multi_label,
+                    dataset_metrics=classification_metrics,
+                )
     else:
         logger.info("Linear probe not run because not in eval_modes")
 
@@ -637,34 +866,40 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
             # Get the evaluation set object for configuration
             eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
 
-            res = run_experiment(
-                eval_cfg,
-                test_ds_cfg,
-                exp_cfg,
-                _eval_set_data_cfg,
-                device,
-                save_dir,
-                eval_set_name,
-                eval_set_metrics,
-                eval_set,
-                cached_model,
-                model_metadata,
-            )
-            all_results.append(res.result)
+            try:
+                res = run_experiment(
+                    eval_cfg,
+                    test_ds_cfg,
+                    exp_cfg,
+                    _eval_set_data_cfg,
+                    device,
+                    save_dir,
+                    eval_set_name,
+                    eval_set_metrics,
+                    eval_set,
+                    cached_model,
+                    model_metadata,
+                )
+                all_results.append(res.result)
 
-            # Cache the model for reuse in next dataset
-            cached_model = res.model
-            model_metadata = res.model_metadata
+                # Cache the model for reuse in next dataset
+                cached_model = res.model
+                model_metadata = res.model_metadata
 
-            logger.info(
-                "[%s | %s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
-                eval_set_name,
-                res.result.dataset_name,
-                res.result.experiment_name,
-                res.result.probe_test_metrics,
-                res.result.retrieval_metrics or "n/a",
-                res.result.clustering_metrics or "n/a",
-            )
+                logger.info(
+                    "[%s | %s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
+                    eval_set_name,
+                    res.result.dataset_name,
+                    res.result.experiment_name,
+                    res.result.probe_test_metrics,
+                    res.result.retrieval_metrics or "n/a",
+                    res.result.clustering_metrics or "n/a",
+                )
+            except Exception as e:
+                logger.error(
+                    f"Experiment '{exp_cfg.run_name}' on set '{eval_set_name}' failed: {e}",
+                    exc_info=True,
+                )
 
     # 5. Create and save summary CSV files
     create_experiment_summary_csvs(

@@ -22,6 +22,43 @@ class LinearProbe(torch.nn.Module):
         input_dim: Input dimension when in feature mode. Required if base_model is None.
     """
 
+    def _get_dummy_input_length(self, base_model: ModelBase) -> int:
+        """Get appropriate dummy input length for different audio processor types.
+
+        Args:
+            base_model: The base model with an audio processor
+
+        Returns:
+            int: Length in samples for dummy audio input
+        """
+        audio_processor = base_model.audio_processor
+
+        # Standard AudioProcessor interface
+        if hasattr(audio_processor, "target_length_seconds") and hasattr(
+            audio_processor, "sr"
+        ):
+            return int(audio_processor.target_length_seconds * audio_processor.sr)
+
+        # EAT AudioProcessor interface
+        if hasattr(audio_processor, "target_length") and hasattr(
+            audio_processor, "sample_rate"
+        ):
+            # For EAT models, estimate raw audio length from target frames
+            # EAT uses 10ms frame shift, so roughly target_length * hop_length
+            hop_length = getattr(audio_processor, "hop_length", 160)  # 10ms at 16kHz
+            return audio_processor.target_length * hop_length
+
+        # Alternative AudioProcessor interfaces
+        if hasattr(audio_processor, "target_length_seconds"):
+            # Has target_length_seconds but different sample rate attribute name
+            sample_rate = getattr(
+                audio_processor, "sample_rate", getattr(audio_processor, "sr", 16000)
+            )
+            return int(audio_processor.target_length_seconds * sample_rate)
+
+        # Fallback: Use a reasonable default (5 seconds at 16kHz)
+        return 80000  # 5 seconds at 16kHz
+
     def __init__(
         self,
         base_model: Optional[ModelBase],
@@ -50,10 +87,7 @@ class LinearProbe(torch.nn.Module):
                     )
                 with torch.no_grad():
                     # Derive dim via one dummy forward
-                    target_length = (
-                        base_model.audio_processor.target_length_seconds
-                        * base_model.audio_processor.sr
-                    )
+                    target_length = self._get_dummy_input_length(base_model)
                     dummy = torch.randn(1, target_length, device=device)
                     inferred_dim = base_model.extract_embeddings(
                         dummy, layers=layers
@@ -63,10 +97,7 @@ class LinearProbe(torch.nn.Module):
             if base_model is None:
                 raise ValueError("base_model must be provided when feature_mode=False")
             with torch.no_grad():
-                target_length = (
-                    base_model.audio_processor.target_length_seconds
-                    * base_model.audio_processor.sr
-                )
+                target_length = self._get_dummy_input_length(base_model)
                 dummy = torch.randn(1, target_length, device=device)
                 inferred_dim = base_model.extract_embeddings(
                     dummy, layers=layers

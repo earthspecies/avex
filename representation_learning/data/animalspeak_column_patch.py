@@ -41,6 +41,7 @@ _KEEP_COLUMNS: List[str] = [
     "canonical_name",  # canonical species name used for labels
     "taxonomic_name",  # scientific name (Genus species)
     "source",  # source of the audio
+    "class",  # taxonomic class (e.g., "aves", "mammalia")
 ]
 
 # --------------------------------------------------------------------------- #

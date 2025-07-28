@@ -159,22 +159,37 @@ class AugmentationProcessor:
                 msg = f"Noise directory not found: {dir_str}"
                 raise FileNotFoundError(msg)
 
+            # Search recursively so we also pick up files that are nested one or
+            # more levels deep (e.g. <dir>/urban/plane.wav). ``Path.rglob`` is
+            # supported by both ``pathlib.Path`` and ``cloudpathlib.CloudPath``.
             for ext in (".wav", ".mp3", ".flac", ".ogg"):
-                noise_files = list(dir_path.glob(f"*{ext}"))[:max_noise_samples]
-                noise_paths.extend(noise_files)
+                # Collect **all** matching files first, then cap at the desired
+                # ``max_noise_samples`` so we preserve the original behaviour of
+                # limiting the number of examples *per directory* (and per
+                # extension).
+                recursive_matches = list(dir_path.rglob(f"*{ext}"))
+
+                if max_noise_samples is not None and max_noise_samples > 0:
+                    recursive_matches = recursive_matches[:max_noise_samples]
+
+                noise_paths.extend(recursive_matches)
         logger.info("Found %d noise files", len(noise_paths))
         return noise_paths
 
     # ------------------------------------------------------------------
     # Item-level noise augmentation
     # ------------------------------------------------------------------
-    def _apply_noise(self, wav: torch.Tensor) -> torch.Tensor:
+    def _apply_noise(
+        self, wav: torch.Tensor, item_dict: dict[str, Any] | None = None
+    ) -> torch.Tensor:
         """Apply noise augmentation to a single audio sample.
 
         Parameters
         ----------
         wav : torch.Tensor
             Input audio tensor to augment with noise.
+        item_dict : dict[str, Any] | None, optional
+            Item dictionary containing metadata for logging purposes.
 
         Returns
         -------
@@ -184,9 +199,46 @@ class AugmentationProcessor:
         """
         # Skip noise augmentation if audio has zero length
         if wav.numel() == 0 or wav.shape[-1] == 0:
+            # Try to get identifying information from the item
+            file_info = ""
+            debug_keys = []
+
+            if item_dict:
+                # Look for file path information, filtering out NaN values
+                for key in ["audio_fp", "fn", "path", "local_path"]:
+                    if key in item_dict:
+                        value = item_dict[key]
+                        # Check if value is not NaN/None and is a valid string
+                        if value is not None and str(value) not in [
+                            "nan",
+                            "NaN",
+                            "None",
+                        ]:
+                            file_info = f" File: {value}"
+                            break
+                        debug_keys.append(f"{key}={value}")
+
+                # If no valid file path found, show other identifying info
+                if not file_info:
+                    for key in [
+                        "species_common",
+                        "canonical_name",
+                        "labels",
+                        "target_species",
+                    ]:
+                        if key in item_dict and item_dict[key] is not None:
+                            value = item_dict[key]
+                            if str(value) not in ["nan", "NaN", "None"]:
+                                file_info += f" {key}: {value}"
+                                break
+
+                    # Show what file keys were available for debugging
+                    if debug_keys:
+                        file_info += f" (debug_keys: {', '.join(debug_keys[:3])})"
+
             logger.warning(
                 f"Skipping noise augmentation for audio with zero length: "
-                f"shape={wav.shape}"
+                f"shape={wav.shape}{file_info}"
             )
             return wav
 
@@ -386,7 +438,7 @@ class AugmentationProcessor:
         # Use "audio" key if available, fallback to "raw_wav" for compatibility
         audio_key = "audio" if "audio" in item_dict else "raw_wav"
         wav: torch.Tensor = item_dict[audio_key].to(self.device)
-        aug_item[audio_key] = self._apply_noise(wav)
+        aug_item[audio_key] = self._apply_noise(wav, item_dict)
         return aug_item
 
     # ------------------------------------------------------------------

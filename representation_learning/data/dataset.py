@@ -20,6 +20,9 @@ from esp_data import (
     dataset_from_config,
 )
 
+# Import custom datasets to register them with esp-data
+from representation_learning.data import wabad  # noqa: F401
+
 # Temporary patch for AnimalSpeak for compatibility
 # with dataset concatenation while relevant issue is raised in esp-data.
 from representation_learning.data.animalspeak_column_patch import (
@@ -30,6 +33,8 @@ from representation_learning.data.animalspeak_column_patch import (
 from representation_learning.data.cloudpathlib_retry_patch import (
     apply_cloudpathlib_patch,
 )
+from representation_learning.data.ssw import SSW  # noqa: F401
+from representation_learning.data.vfpa import VFPAKillerWhales  # noqa: F401
 
 apply_cloudpathlib_patch()
 apply_animalspeak_column_patch()
@@ -50,6 +55,31 @@ from representation_learning.data.augmentations import (  # noqa: E402
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _share_label_map_with_sources(dataset: Dataset, label_map: dict) -> None:
+    """Share label_map with source datasets in concatenated datasets.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        The dataset (possibly concatenated) to share the label_map with.
+    label_map : dict
+        The label mapping from species names to integer IDs.
+    """
+    # Check if this is a concatenated dataset with source datasets
+    print("dataset is ", dataset)
+    if hasattr(dataset, "_source_datasets"):
+        # This is a ConcatenatedDataset
+        for source_ds in dataset._source_datasets:
+            if hasattr(source_ds, "set_label_map"):
+                source_ds.set_label_map(label_map)
+                print("setting label map for source dataset", source_ds)
+    elif hasattr(dataset, "set_label_map"):
+        # This is a single dataset with label_map support
+        dataset.set_label_map(label_map)
+    else:
+        print("no label map set for dataset", dataset)
 
 
 class AudioDataset(torch.utils.data.Dataset):
@@ -233,6 +263,12 @@ def _build_datasets(
         if test_ds and cfg.transformations:
             test_ds.apply_transformations(cfg.transformations)
 
+    # Share label_map with source datasets if available
+    if label_map:
+        for ds in [train_ds, val_ds, test_ds]:
+            if ds is not None:
+                _share_label_map_with_sources(ds, label_map)
+
     train_ds = AudioDataset(
         train_ds,
         metadata={
@@ -303,7 +339,7 @@ class Collater:
         # First prepare data with uniform lengths
         audios, masks, labels, text_labels = [], [], [], []
 
-        for item in batch:
+        for batch_idx, item in enumerate(batch):
             # Use "audio" key which is the standard in esp_data,
             # fallback to "raw_wav" for compatibility
             audio_key = "audio" if "audio" in item else "raw_wav"
@@ -311,9 +347,46 @@ class Collater:
 
             # Handle rare corrupted audio without crashing
             if torch.isnan(wav).any() or torch.isinf(wav).any():
+                # Try to get identifying information from the item
+                file_info = ""
+                debug_keys = []
+
+                # Look for file path information, filtering out NaN values
+                for key in ["audio_fp", "fn", "path", "local_path"]:
+                    if key in item:
+                        value = item[key]
+                        # Check if value is not NaN/None and is a valid string
+                        if value is not None and str(value) not in [
+                            "nan",
+                            "NaN",
+                            "None",
+                        ]:
+                            file_info = f" File: {value}"
+                            break
+                        debug_keys.append(f"{key}={value}")
+
+                # If no valid file path found, show other identifying info
+                if not file_info:
+                    for key in [
+                        "species_common",
+                        "canonical_name",
+                        "labels",
+                        "target_species",
+                    ]:
+                        if key in item and item[key] is not None:
+                            value = item[key]
+                            if str(value) not in ["nan", "NaN", "None"]:
+                                file_info += f" {key}: {value}"
+                                break
+
+                    # Show what file keys were available for debugging
+                    if debug_keys:
+                        file_info += f" (debug_keys: {', '.join(debug_keys[:3])})"
+
                 logger.warning(
                     f"Corrupted audio detected (NaN/Inf), "
-                    f"replacing with zeros. Shape: {wav.shape}"
+                    f"replacing with zeros. Shape: {wav.shape}, "
+                    f"Batch index: {batch_idx}{file_info}"
                 )
                 wav = torch.zeros_like(wav)
 

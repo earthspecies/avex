@@ -34,12 +34,23 @@ class FineTuneTrainer:
         num_labels: int,
         multi_label: bool = False,
         dataset_metrics: Optional[List[str]] = None,
+        early_stopping_patience: int | None = None,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.device = device
+
+        # Validate device - if CUDA requested but not available, fall back to CPU
+        if str(device).startswith("cuda") and not torch.cuda.is_available():
+            logger.warning(
+                f"CUDA requested ({device}) but not available, falling back to CPU"
+            )
+            self.device = torch.device("cpu")
+            # Move model to CPU if it was on CUDA
+            self.model = self.model.cpu()
+        else:
+            self.device = device
         self.cfg = cfg
         self.log = exp_logger
         self.num_labels = num_labels
@@ -84,6 +95,11 @@ class FineTuneTrainer:
             self.primary_metric_name: 0.0,
         }
 
+        # Early stopping parameters (None disables early stopping)
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_counter = 0
+        self.best_epoch = 0
+
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
         """
         Run the full fine-tuning loop and return best train/val metrics.
@@ -120,6 +136,8 @@ class FineTuneTrainer:
             # Save best model (higher is better for all our metrics)
             if val_metric > self.best_val_metric:
                 self.best_val_metric = val_metric
+                self.best_epoch = epoch
+                self.early_stopping_counter = 0
                 self._save_checkpoint("best.pt")
                 # Update best metrics
                 self.best_train_metrics = {
@@ -130,6 +148,21 @@ class FineTuneTrainer:
                     "loss": val_loss,
                     self.primary_metric_name: val_metric,
                 }
+            else:
+                self.early_stopping_counter += 1
+
+            # Early stopping check (only if enabled)
+            if (
+                self.early_stopping_patience is not None
+                and self.early_stopping_counter >= self.early_stopping_patience
+            ):
+                logger.info(
+                    f"Early stopping triggered at epoch {epoch}. "
+                    f"No improvement for {self.early_stopping_patience} epochs. "
+                    f"Best epoch was {self.best_epoch} with "
+                    f"{self.primary_metric_name}={self.best_val_metric:.4f}"
+                )
+                break
 
         # Load the best model after training is complete
         self._load_best_checkpoint()
@@ -242,7 +275,13 @@ class FineTuneTrainer:
         logger.info("Saved checkpoint → %s", ckpt_path)
 
     def _load_best_checkpoint(self) -> None:
-        """Load the best model checkpoint from disk."""
+        """Load the best model checkpoint from disk.
+        
+        Raises
+        ------
+        RuntimeError
+            If there are issues loading the checkpoint
+        """
         # Get the path to the best checkpoint
         if self.log is not None and hasattr(self.log, "log_dir"):
             ckpt_dir = Path(self.log.log_dir)
@@ -256,8 +295,27 @@ class FineTuneTrainer:
             )
             return
 
-        # Load the checkpoint
-        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        # Load the checkpoint with robust device mapping
+        # Handle case where checkpoint was saved on CUDA but current system has no CUDA
+        try:
+            if str(self.device).startswith("cuda") and not torch.cuda.is_available():
+                map_location = "cpu"
+                logger.warning(
+                    f"CUDA not available, loading checkpoint to CPU instead of "
+                    f"{self.device}"
+                )
+            else:
+                map_location = self.device
+            checkpoint = torch.load(ckpt_path, map_location=map_location)
+        except RuntimeError as e:
+            if "torch.cuda.device_count() is 0" in str(e):
+                # Fallback to CPU if CUDA device mapping fails
+                logger.warning(
+                    f"Failed to load checkpoint with {self.device}, falling back to CPU"
+                )
+                checkpoint = torch.load(ckpt_path, map_location="cpu")
+            else:
+                raise
         self.model.load_state_dict(checkpoint["model_state_dict"])
         logger.info(
             f"Restored best model from {ckpt_path} "
@@ -279,6 +337,7 @@ def train_and_eval_linear_probe(
     exp_logger: ExperimentLogger,
     multi_label: bool,
     dataset_metrics: Optional[List[str]] = None,
+    early_stopping_patience: int | None = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a linear probe and evaluate it on *cached* test embeddings.
 
@@ -333,6 +392,7 @@ def train_and_eval_linear_probe(
         num_labels=num_labels,
         multi_label=multi_label,
         dataset_metrics=dataset_metrics,
+        early_stopping_patience=early_stopping_patience,
     )
 
     train_metrics, val_metrics = trainer.train(
@@ -388,6 +448,7 @@ def train_and_eval_full_fine_tune(
     exp_logger: ExperimentLogger,
     multi_label: bool,
     dataset_metrics: Optional[List[str]] = None,
+    early_stopping_patience: int | None = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a model by fine-tuning on raw waveforms.
 
@@ -462,6 +523,7 @@ def train_and_eval_full_fine_tune(
         num_labels=num_labels,
         multi_label=multi_label,
         dataset_metrics=dataset_metrics,
+        early_stopping_patience=early_stopping_patience,
     )
 
     # Train
@@ -469,8 +531,8 @@ def train_and_eval_full_fine_tune(
         num_epochs=eval_cfg.training_params.train_epochs
     )
 
-    # Evaluate on test set
-    base_model.eval()
+    # Evaluate on test set using the trained model
+    sft_model.eval()
     test_metrics = {}
 
     # Get metric class based on task type and dataset metrics
@@ -491,7 +553,7 @@ def train_and_eval_full_fine_tune(
                 mask = mask.to(device)
             y = batch["label"].to(device)
 
-            logits = base_model(wav, padding_mask=mask)
+            logits = sft_model(wav, padding_mask=mask)
             for met in metrics:
                 met.update(logits, y)
 
