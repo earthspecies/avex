@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=1-18%4
+#SBATCH --array=1-18%1
 #SBATCH --partition=h100-80
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1

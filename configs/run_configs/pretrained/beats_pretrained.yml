@@ -47,8 +47,6 @@ scheduler:
   warmup_steps: 500
   min_lr: 1e-6
 
-augmentations: []
-
 # Loss for classification
 loss_function: cross_entropy
 
@@ -57,3 +55,39 @@ seed: 42
 num_workers: 10
 
 wandb_project: representation_learning
+
+augmentations:
+  # Add background noise at random SNRs
+  - noise:
+      noise_dirs:
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/\
+          orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+        # - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+        #   foundation-model-storage/foundation-model-data/audio_16k/noise/\
+        #   ssw-detection"
+      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
+      augmentation_prob: 0.5
+    # Mixup augmentation for audio samples
+  - mixup:
+      alpha: 0.4  # Controls the Beta distribution shape
+      n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+      augmentation_prob: 0.5  # Probability of applying mixup to a batch
