@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_base.yml
+dataset_config: configs/data_configs/benchmark_originals.yml
 
 training_params:
   train_epochs: 900
@@ -13,7 +13,7 @@ training_params:
 # Which experiments to evaluate
 experiments:
   - run_name: birdnet
-    run_config: configs/run_configs/pretrained/birdnet_base.yml
+    run_config: configs/run_configs/pretrained/birdnet.yml
     ### which layers to probe for embeddings
     layers: last_layer
     ### whether to use pretrained model or the one we train on bioacoustic data
@@ -30,11 +30,11 @@ device: cuda
 
 seed: 42
 
-num_workers: 8  # Enable workers for better memory management
+num_workers: 18  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

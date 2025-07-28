@@ -259,8 +259,7 @@ class EATHFModel(ModelBase):
         prev_pooling = self.pooling
         self.pooling = pooling
         try:
-            with torch.no_grad():
-                emb = self.forward(wav, padding_mask, return_features_only=True)
+            emb = self.forward(wav, padding_mask, return_features_only=True)
         finally:
             self.pooling = prev_pooling
         return emb

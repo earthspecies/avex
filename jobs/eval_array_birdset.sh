@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 #SBATCH --array=1-25%4
-#SBATCH --partition=h100-0
+#SBATCH --partition=h100-80
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 #SBATCH --job-name="rl-eval-array"
-#SBATCH --cpus-per-gpu=12
+#SBATCH --cpus-per-gpu=24
 
 # Map array task ID to config file
 declare -A configs=(
@@ -19,11 +19,11 @@ declare -A configs=(
     [9]="beats.yml"
     [11]="beats_naturelm.yml"
     [12]="beats_finetuned.yml"
-    [13]="perch.yml"
+    # [13]="perch.yml"
     [14]="sl_efficientnet_audioset.yml"
     [15]="eat_hf.yml"
     [16]="eat_hf_finetuned.yml"
-    [17]="birdnet.yml"
+    # [17]="birdnet.yml"
     [18]="sl_beats_animalspeak.yml"
     [19]="sl_beats_all.yml"
     [20]="sl_eat_all_ssl_all.yml"
@@ -45,14 +45,6 @@ uv tool install keyring --with keyrings.google-artifactregistry-auth
 export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 export GOOGLE_APPLICATION_CREDENTIALS=/home/david_earthspecies_org/.config/gcloud/application_default_credentials.json
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+
 uv sync
-# Check if it's a consolidated config or single model config
-if [[ "$config_file" == consolidated_* ]]; then
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file  --patch dataset_config=configs/data_configs/finch.yml
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
-    srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
-else
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/finch.yml
-    srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
-fi
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
