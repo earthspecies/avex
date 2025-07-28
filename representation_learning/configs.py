@@ -204,14 +204,6 @@ class ModelSpec(BaseModel):
         None, description="Path to fairseq checkpoint for EAT HF model"
     )
 
-    model_id: Optional[str] = Field(
-        "worstchan/EAT-base_epoch30_pretrain",
-        description=(
-            "HuggingFace model ID for EAT models "
-            "(e.g., 'worstchan/EAT-base_epoch30_finetune_AS2M')"
-        ),
-    )
-
     # EAT HF audio normalization parameters
     eat_norm_mean: Optional[float] = Field(
         -4.268,
@@ -239,6 +231,15 @@ class ModelSpec(BaseModel):
     # BirdNet-specific configuration
     language: Optional[str] = Field(
         None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')"
+    )
+
+    # EAT HF model ID for HuggingFace model loading
+    model_id: Optional[str] = Field(
+        "worstchan/EAT-base_epoch30_pretrain",
+        description=(
+            "HuggingFace model repository ID or local path for EAT HF model "
+            "(e.g., 'worstchan/EAT-base_epoch30_pretrain')"
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")

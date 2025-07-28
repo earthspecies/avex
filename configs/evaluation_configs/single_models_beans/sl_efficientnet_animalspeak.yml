@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark.yml
+dataset_config: configs/data_configs/benchmark_birdset.yml
 
 training_params:
   train_epochs: 900
@@ -22,7 +22,7 @@ experiments:
 
 
 # Where to save the evaluation results
-save_dir: evaluation_results/efficientnet_beans
+save_dir: evaluation_results/aaai/efficientnet_animalspeak
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/all_models_results.csv
@@ -35,7 +35,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  # - linear_probe
+  - linear_probe
   - retrieval
   - clustering
 

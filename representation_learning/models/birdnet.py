@@ -54,14 +54,18 @@ class Model(ModelBase):
 
         if num_classes > 0 and num_classes != self.num_species:
             self.classifier = nn.Linear(self.num_species, num_classes)
+            # Move classifier to the specified device
+            if device != "cpu" and torch.cuda.is_available():
+                self.classifier = self.classifier.to(device)
         else:
             self.classifier = None
 
         logger.info(
             "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • "
-            "num_classes = %d",
+            "num_classes = %d • device = %s",
             self.num_species,
             num_classes,
+            device,
         )
 
     # --------------------------------------------------------------------- #
@@ -84,11 +88,17 @@ class Model(ModelBase):
         for clip in wav:
             probs.append(self._infer_clip(clip.numpy()))
 
-        result = torch.stack(probs).to(self.device)  # (B, Nclasses)
+        result = torch.stack(probs)  # (B, Nclasses)
 
-        # Apply additional classification head if specified
+        # Move to appropriate device - BirdNet core runs on CPU,
+        # but classifier might be on GPU
         if self.classifier is not None:
+            # Move to classifier's device for processing
+            result = result.to(next(self.classifier.parameters()).device)
             result = self.classifier(result)
+        else:
+            # No classifier, move to model's device
+            result = result.to(self.device)
 
         return result
 
@@ -119,7 +129,18 @@ class Model(ModelBase):
             emb_np = self._embedding_for_clip(clip.numpy())  # (N,1024)
             emb = torch.from_numpy(emb_np).float()
             batch_out.append(emb.mean(0, keepdim=True) if average_over_time else emb)
-        return torch.cat(batch_out, dim=0).to(self.device)
+
+        result = torch.cat(batch_out, dim=0)
+
+        # Move to appropriate device (BirdNet embeddings are computed on CPU)
+        if self.classifier is not None and hasattr(self.classifier, "weight"):
+            # If we have a classifier, move to its device
+            result = result.to(next(self.classifier.parameters()).device)
+        else:
+            # Otherwise move to model device
+            result = result.to(self.device)
+
+        return result
 
     # ------------------------------------------------------------------ #
     #                          Helper functions                          #
@@ -182,6 +203,50 @@ class Model(ModelBase):
     # ------------------------------------------------------------------ #
     def enable_gradient_checkpointing(self) -> None:
         logger.warning("Gradient checkpointing is not supported for BirdNET.")
+
+    def to(self, device: torch.device | str) -> "Model":
+        """Override to handle device movement properly for BirdNet.
+
+        Returns
+        -------
+        Model
+            Self for method chaining.
+        """
+        # Update internal device tracking
+        self.device = (
+            device if isinstance(device, torch.device) else torch.device(device)
+        )
+
+        # Move PyTorch components (classifier) to the device
+        if self.classifier is not None:
+            if str(device).startswith("cuda") and torch.cuda.is_available():
+                self.classifier = self.classifier.to(device)
+            else:
+                self.classifier = self.classifier.cpu()
+
+        # TensorFlow Lite interpreter stays on CPU - no need to move
+        return self
+
+    def cpu(self) -> "Model":
+        """Move to CPU.
+
+        Returns
+        -------
+        Model
+            Self for method chaining.
+        """
+        return self.to("cpu")
+
+    def cuda(self, device: int | None = None) -> "Model":
+        """Move to CUDA device.
+
+        Returns
+        -------
+        Model
+            Self for method chaining.
+        """
+        device_str = f"cuda:{device}" if device is not None else "cuda"
+        return self.to(device_str)
 
     # ------------------------------------------------------------------ #
     # Convenience to expose BirdNET's species mapping
