@@ -41,7 +41,7 @@ jobs:
               with:
                   python-version: ${{ matrix.python-version }}
 
-            - name: Full dependencies
+            - name: Install dependencies
               run: |
                   uv tool install keyring --with keyrings.google-artifactregistry-auth
                   uv sync
@@ -51,13 +51,13 @@ jobs:
 
             - name: Consistency tests with pytest
               run: |
-                  pytest tests/consistency --base_folder representation_learning
+                  uv run pytest tests/consistency --base_folder representation_learning
             - name: Unittests with pytest
               run: |
-                  pytest tests/unittests
+                  uv run pytest tests/unittests
             - name: Doctests with pytest
               run: |
-                  pytest --doctest-modules representation_learning
+                  uv run pytest --doctest-modules representation_learning
             # - name: Integration tests with pytest
             #  run: |
             #      pytest tests/integration
