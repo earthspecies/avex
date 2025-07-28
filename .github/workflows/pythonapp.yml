@@ -15,6 +15,10 @@ jobs:
     tests:
         name: Tests
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+
         strategy:
             matrix:
                 python-version: [3.12]
