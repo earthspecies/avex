@@ -1,59 +1,59 @@
 benchmark_name: "bioacoustic_benchmark_birdset"
 
 evaluation_sets:
-  # BirdSet Detection Tasks
-  - name: "birdset_uhh_detection"
-    train: &uhh_base
-      dataset_name: birdset
-      split: UHH-train
-      type: detection
-      label_column: labels_as_list
-      audio_path_col: path
-      multi_label: true
-      label_type: supervised
-      audio_max_length_seconds: 5
-      sample_rate: 16000
-      data_root: /home/marius_miron_earthspecies_org/data/16000/
-      transformations:
-        # First split the data into train/validation subsets
-        - type: train_val_split
-          subset: train
-          train_size: 0.8
-          random_state: 42
-          stratify_column: labels_as_list
-        # Then create the label mapping from the resulting subset
-        - type: labels_from_features
-          features:
-            - labels_as_list
-          override: true
-          label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
-    validation:
-      <<: *uhh_base
-      split: UHH-train
-      transformations:
-        # First split the data into train/validation subsets
-        - type: train_val_split
-          subset: validation
-          train_size: 0.8
-          random_state: 42
-          stratify_column: labels_as_list
-        # Then create the label mapping from the resulting subset
-        - type: labels_from_features
-          features:
-            - labels_as_list
-          override: true
-          label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
-    test:
-      <<: *uhh_base
-      split: UHH-test
-      transformations:
-        # Test uses original labels_from_features without train_val_split
-        - type: labels_from_features
-          features:
-            - labels_as_list
-          override: true
-          label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
-    metrics: [mAP]
+  # # BirdSet Detection Tasks
+  # - name: "birdset_uhh_detection"
+  #   train: &uhh_base
+  #     dataset_name: birdset
+  #     split: UHH-train
+  #     type: detection
+  #     label_column: labels_as_list
+  #     audio_path_col: path
+  #     multi_label: true
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     sample_rate: 16000
+  #     data_root: /home/marius_miron_earthspecies_org/data/16000/
+  #     transformations:
+  #       # First split the data into train/validation subsets
+  #       - type: train_val_split
+  #         subset: train
+  #         train_size: 0.8
+  #         random_state: 42
+  #         stratify_column: labels_as_list
+  #       # Then create the label mapping from the resulting subset
+  #       - type: labels_from_features
+  #         features:
+  #           - labels_as_list
+  #         override: true
+  #         label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
+  #   validation:
+  #     <<: *uhh_base
+  #     split: UHH-train
+  #     transformations:
+  #       # First split the data into train/validation subsets
+  #       - type: train_val_split
+  #         subset: validation
+  #         train_size: 0.8
+  #         random_state: 42
+  #         stratify_column: labels_as_list
+  #       # Then create the label mapping from the resulting subset
+  #       - type: labels_from_features
+  #         features:
+  #           - labels_as_list
+  #         override: true
+  #         label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
+  #   test:
+  #     <<: *uhh_base
+  #     split: UHH-test
+  #     transformations:
+  #       # Test uses original labels_from_features without train_val_split
+  #       - type: labels_from_features
+  #         features:
+  #           - labels_as_list
+  #         override: true
+  #         label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
+  #   metrics: [mAP]
 
   - name: "birdset_sne_detection"
     train: &sne_base
@@ -103,3 +103,4 @@ evaluation_sets:
             - labels_as_list
           override: true
           label_map: {'Anseriformes Anatidae Branta canadensis': 0, 'Apodiformes Trochilidae Calypte anna': 1, 'Columbiformes Columbidae Patagioenas fasciata': 2, 'Columbiformes Columbidae Zenaida macroura': 3, 'Galliformes Odontophoridae Oreortyx pictus': 4, 'Passeriformes Cardinalidae Passerina amoena': 5, 'Passeriformes Cardinalidae Pheucticus melanocephalus': 6, 'Passeriformes Cardinalidae Piranga ludoviciana': 7, 'Passeriformes Certhiidae Certhia americana': 8, 'Passeriformes Corvidae Corvus corax': 9, 'Passeriformes Corvidae Cyanocitta stelleri': 10, 'Passeriformes Fringillidae Coccothraustes vespertinus': 11, 'Passeriformes Fringillidae Haemorhous cassinii': 12, 'Passeriformes Fringillidae Haemorhous purpureus': 13, 'Passeriformes Fringillidae Loxia curvirostra': 14, 'Passeriformes Fringillidae Spinus pinus': 15, 'Passeriformes Fringillidae Spinus tristis': 16, 'Passeriformes Icteridae Molothrus ater': 17, 'Passeriformes Paridae Poecile gambeli': 18, 'Passeriformes Paridae Poecile rufescens': 19, 'Passeriformes Parulidae Cardellina pusilla': 20, 'Passeriformes Parulidae Geothlypis tolmiei': 21, 'Passeriformes Parulidae Leiothlypis celata': 22, 'Passeriformes Parulidae Leiothlypis ruficapilla': 23, 'Passeriformes Parulidae Setophaga coronata': 24, 'Passeriformes Parulidae Setophaga nigrescens': 25, 'Passeriformes Parulidae Setophaga occidentalis': 26, 'Passeriformes Parulidae Setophaga townsendi': 27, 'Passeriformes Passerellidae Junco hyemalis': 28, 'Passeriformes Passerellidae Melospiza lincolnii': 29, 'Passeriformes Passerellidae Passerella iliaca': 30, 'Passeriformes Passerellidae Pipilo chlorurus': 31, 'Passeriformes Passerellidae Pipilo maculatus': 32, 'Passeriformes Passerellidae Pooecetes gramineus': 33, 'Passeriformes Passerellidae Zonotrichia leucophrys': 34, 'Passeriformes Regulidae Corthylio calendula': 35, 'Passeriformes Regulidae Regulus satrapa': 36, 'Passeriformes Sittidae Sitta canadensis': 37, 'Passeriformes Troglodytidae Thryomanes bewickii': 38, 'Passeriformes Troglodytidae Troglodytes aedon': 39, 'Passeriformes Turdidae Catharus guttatus': 40, 'Passeriformes Turdidae Catharus ustulatus': 41, 'Passeriformes Turdidae Myadestes townsendi': 42, 'Passeriformes Turdidae Turdus migratorius': 43, 'Passeriformes Tyrannidae Contopus cooperi': 44, 'Passeriformes Tyrannidae Contopus sordidulus': 45, 'Passeriformes Tyrannidae Empidonax difficilis [difficilis Group]': 46, 'Passeriformes Tyrannidae Empidonax hammondii': 47, 'Passeriformes Tyrannidae Empidonax oberholseri': 48, 'Passeriformes Vireonidae Vireo cassinii': 49, 'Passeriformes Vireonidae Vireo gilvus': 50, 'Passeriformes Vireonidae Vireo huttoni': 51, 'Piciformes Picidae Colaptes auratus': 52, 'Piciformes Picidae Dryobates albolarvatus': 53, 'Piciformes Picidae Melanerpes formicivorus': 54, 'Piciformes Picidae Sphyrapicus thyroideus': 55}
+    metrics: [mAP]
