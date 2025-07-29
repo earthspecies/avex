@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 #SBATCH --array=1-18%1
+#SBATCH --qos=aaai-2026
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
