@@ -22,7 +22,7 @@ import yaml
 from esp_data import DatasetConfig
 
 # --------------------------------------------------------------------------- #
-#  3rd‑party imports}
+#  3rd‑party imports
 # --------------------------------------------------------------------------- #
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.v1.utils import deep_update
