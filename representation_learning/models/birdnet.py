@@ -1,7 +1,10 @@
 # representation_learning/models/birdnet.py
+import contextlib
 import logging
+import os
+import sys
 import tempfile
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generator, Optional
 
 import numpy as np
 import soundfile as sf  # lightweight; writes the tmp .wav we feed in
@@ -16,6 +19,29 @@ from birdnetlib.analyzer import Analyzer  # downloads + wraps *.tflite
 from representation_learning.models.base_model import ModelBase  # Add missing import
 
 logger = logging.getLogger(__name__)
+
+# Suppress verbose logging from birdnetlib
+logging.getLogger("birdnetlib").setLevel(logging.WARNING)
+# Also suppress any TensorFlow logging if present
+logging.getLogger("tensorflow").setLevel(logging.WARNING)
+# Suppress any other potential verbose loggers
+for logger_name in ["absl", "h5py", "soundfile"]:
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
+
+
+@contextlib.contextmanager
+def suppress_stdout_stderr() -> Generator[None, None, None]:
+    """Context manager to suppress stdout and stderr."""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        try:
+            sys.stdout = devnull
+            sys.stderr = devnull
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
 
 class Model(ModelBase):
@@ -155,8 +181,9 @@ class Model(ModelBase):
         """
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
-            rec = Recording(self._analyzer, tmp.name, min_conf=0.0)
-            rec.analyze()
+            with suppress_stdout_stderr():
+                rec = Recording(self._analyzer, tmp.name, min_conf=0.0)
+                rec.analyze()
             # build a species-probability vector from detections
             scores = np.zeros(self.num_species, dtype=np.float32)
             for det in rec.detections:
@@ -169,8 +196,20 @@ class Model(ModelBase):
         Directly grabs the **embedding output tensor** from BirdNET's
         underlying TFLite *Interpreter* – the tensor right before logits.
 
-        Returns:
-            np.ndarray: Embedding vector for the audio clip.
+        Parameters
+        ----------
+        mono_wave : np.ndarray
+            Audio waveform data.
+
+        Returns
+        -------
+        np.ndarray
+            Embedding vector for the audio clip.
+
+        Raises
+        ------
+        ValueError
+            If embedding output tensor cannot be found in model.
         """
         # Use the analyzer's built-in embedding extraction method if available
         if hasattr(self._analyzer, "extract_embeddings_for_recording"):
@@ -187,14 +226,33 @@ class Model(ModelBase):
                     pass
 
         interp = self._interpreter
+        interp.allocate_tensors()  # Ensure tensors are allocated
 
-        buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
-        buf.analyze()
+        # Reset the interpreter to clear any previous state
+        interp.reset_all_variables()
 
-        out_info = interp.get_output_details()
-        emb_idx = (
-            out_info[1]["index"] if len(out_info) > 1 else out_info[0]["index"] - 1
-        )
+        # Get output details
+        output_details = interp.get_output_details()
+
+        # Create the buffer and analyze (suppress verbose output)
+        with suppress_stdout_stderr():
+            buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
+            buf.analyze()
+
+        # After analysis, ensure tensors are properly allocated again
+        interp.allocate_tensors()
+
+        # Get the embedding index - more robust approach
+        emb_idx = None
+        for i, detail in enumerate(output_details):
+            if "embedding" in detail["name"].lower() or len(output_details) == 1:
+                emb_idx = i
+                break
+
+        if emb_idx is None:
+            raise ValueError("Could not find embedding output tensor in model")
+
+        # Get the tensor data
         embeddings = interp.get_tensor(emb_idx)  # (Nchunks,1024)
         return embeddings.astype(np.float32)
 

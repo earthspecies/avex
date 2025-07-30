@@ -1,61 +1,47 @@
 ---
-# BEATs backbone with NatureLM for audio classification (masked pooling + linear head)
+# Model configuration
 model_spec:
-  name: beats
-  pretrained: false  # Set to true when loading pretrained BEATs weights
-  device: cuda
-  use_naturelm: true  # Enable NatureLM for BEATs
-  audio_config:  # Still define for completeness; BEATs does its own Fbank conversion
+  name: eat_hf
+  pretrained: true
+  model_id: "worstchan/EAT-base_epoch30_pretrain"
+  # Combined dataset - using default normalization parameters
+  audio_config:
     sample_rate: 16000
-    representation: raw  # BEATs expects raw waveform
+    representation: raw
     normalize: false
     target_length_seconds: 10
     window_selection: random
 
-# Dataset configuration (path to a valid dataset config)
 dataset_config: configs/data_configs/data_base.yml
 
-# Output directory for checkpoints and logs
-output_dir: "./beats_naturelm_baseline_full"
+# How to use the labels (supervised: use class indices, text: use text labels)
 label_type: supervised
-
-# audio preprocessing (none – handled inside the model)
-preprocessing: null
-
-# Target sample-rate expected by the model
-sr: 16000
+run_name: eat_hf
 debug_mode: false
 
-# Log training runs to MLflow
-logging: mlflow
+# audio preprocessing (e.g. event detection)
+preprocessing: null
 
-# Path to checkpoint to resume from (set to null or a path)
-resume_from_checkpoint: null
+# Target sample‑rate expected by the model
+sr: 16000
 
+# Training parameters (for evaluation fine-tuning)
 training_params:
-  train_epochs: 20
-  lr: 0.0001
-  batch_size: 64
+  train_epochs: 100
+  lr: 0.0003
+  batch_size: 16
   optimizer: adamw
   weight_decay: 0.01
-  amp: true
+  amp: false
   amp_dtype: bf16
 
-# Learning rate scheduler configuration
-scheduler:
-  name: cosine
-  warmup_steps: 500
-  min_lr: 1e-6
-
-# Loss for classification
+# Required fields for RunConfig schema
+output_dir: "./runs/eat_hf_baseline"
 loss_function: cross_entropy
 
-# General settings
+device: cuda
 seed: 42
 num_workers: 10
-
-run_name: beats_naturelm_base
-wandb_project: representation_learning
 
 augmentations:
   # Add background noise at random SNRs

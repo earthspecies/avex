@@ -1,0 +1,62 @@
+---
+# BioLingual model for zero-shot audio classification and embedding extraction
+model_spec:
+  name: biolingual
+  pretrained: true  # Use pretrained BioLingual weights
+  device: cuda
+  audio_config:
+    sample_rate: 48000  # CLAP/BioLingual typically uses 48kHz
+    representation: raw  # BioLingual processes raw audio
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+  model_id: "davidrrobinson/BioLingual"
+
+# Dataset configuration (path to a valid dataset config)
+dataset_config: configs/data_configs/data_base.yml
+run_name: biolingual_base
+
+# Output directory for checkpoints and logs
+output_dir: "./biolingual_baseline"
+
+label_type: supervised
+
+# Audio preprocessing
+preprocessing: null
+
+# Target sample-rate expected by the model
+sr: 48000
+debug_mode: false
+
+# Log training runs to MLflow
+logging: mlflow
+
+# Path to checkpoint to resume from (set to null or a path)
+resume_from_checkpoint: null
+
+training_params:
+  train_epochs: 30
+  lr: 0.0001
+  batch_size: 32  # Moderate batch size for BioLingual
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+# Learning rate scheduler configuration
+scheduler:
+  name: cosine
+  warmup_steps: 300
+  min_lr: 1e-6
+
+augmentations: []
+
+# Loss for classification
+loss_function: cross_entropy
+
+# General settings
+device: cuda
+seed: 42
+num_workers: 8
+
+wandb_project: representation_learning

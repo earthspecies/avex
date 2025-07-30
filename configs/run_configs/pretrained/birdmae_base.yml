@@ -1,0 +1,52 @@
+# BirdMAE Base model configuration
+model_spec:
+  name: birdmae
+  pretrained: true
+  device: cuda
+  audio_config:
+    sample_rate: 32000  # BirdMAE expects 32kHz audio
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+    center: true
+  model_id: "DBD-research-group/Bird-MAE-Base"
+
+# Dataset configuration (required field)
+dataset_config: configs/data_configs/data_base.yml
+
+# Training parameters (used during evaluation)
+training_params:
+  train_epochs: 10
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Dataset configuration will be specified by evaluation config
+output_dir: runs/birdmae_base
+run_name: birdmae_base
+logging: none
+label_type: supervised
+loss_function: cross_entropy
+device: cuda
+seed: 42
+num_workers: 4
+sr: 32000  # Target sample rate for BirdMAE
+wandb_project: representation_learning
+
+# Learning rate scheduler configuration
+scheduler:
+  name: none
+  warmup_steps: 0
+  min_lr: 0
+
+# Disable augmentations for pretrained model evaluation
+augmentations: []

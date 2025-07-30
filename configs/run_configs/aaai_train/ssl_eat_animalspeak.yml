@@ -3,7 +3,7 @@
 model_spec:
   name: eat_hf
   pretrained: true
-  fairseq_weights_path: ../../david_earthspecies_org/EAT/outputs/2025-07-11/04-34-18/eat_animalspeak/checkpoint30.pt
+  fairseq_weights_path: /home/david_earthspecies_org/EAT/outputs/2025-07-11/04-34-18/eat_animalspeak/checkpoint30.pt
   # AnimalSpeak-specific normalization parameters
   eat_norm_mean: -7.343
   eat_norm_std: 4.412120
