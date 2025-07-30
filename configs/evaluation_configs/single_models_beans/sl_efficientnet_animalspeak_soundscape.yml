@@ -20,7 +20,7 @@ experiments:
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     checkpoint_path: gs://representation-learning/models/sl_efficientnet_animalspeak_soundscape.pt
-    
+
 # Where to save the evaluation results
 save_dir: evaluation_results/aaai/efficientnet_animalspeak_soundscape
 

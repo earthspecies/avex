@@ -339,7 +339,7 @@ evaluation_sets:
 
   - name: "bengalese_finch_repertoire_bird2"
     train:  # Dummy train set (using test set for compatibility)
-      dataset_name: "Bengalese Finch Calls" 
+      dataset_name: "Bengalese Finch Calls"
       split: "Bird2_train_small"
       sample_rate: 16000
       transformations:
