@@ -4,7 +4,7 @@ model_spec:
   name: eat_hf
   pretrained: true
   # fairseq_weights_path: ../EAT/multirun/2025-07-08/14-54-53/0/eat_animalspeak/checkpoint20.pt
-  fairseq_weights_path: ../../david_earthspecies_org/EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint30.pt
+  fairseq_weights_path: /home/david_earthspecies_org/EAT/multirun/2025-07-04/07-50-52/0/eat_audioset/checkpoint30.pt
   # AudioSet uses default normalization parameters (general audio)
   eat_norm_mean: -4.268
   eat_norm_std: 4.569

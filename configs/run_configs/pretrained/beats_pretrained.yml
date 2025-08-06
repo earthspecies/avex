@@ -1,10 +1,9 @@
 ---
-# BEATs backbone with NatureLM for audio classification (masked pooling + linear head)
+# BEATs backbone for audio classification (masked pooling + linear head)
 model_spec:
   name: beats
   pretrained: false  # Set to true when loading pretrained BEATs weights
   device: cuda
-  use_naturelm: true  # Enable NatureLM for BEATs
   audio_config:  # Still define for completeness; BEATs does its own Fbank conversion
     sample_rate: 16000
     representation: raw  # BEATs expects raw waveform
@@ -16,7 +15,8 @@ model_spec:
 dataset_config: configs/data_configs/data_base.yml
 
 # Output directory for checkpoints and logs
-output_dir: "./beats_naturelm_baseline_full"
+output_dir: "./runs/beats_pretrain"
+run_name: beats_pretrain
 label_type: supervised
 
 # audio preprocessing (none – handled inside the model)
@@ -54,7 +54,6 @@ loss_function: cross_entropy
 seed: 42
 num_workers: 10
 
-run_name: beats_naturelm_base
 wandb_project: representation_learning
 
 augmentations:

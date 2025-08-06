@@ -242,6 +242,11 @@ class ModelSpec(BaseModel):
         ),
     )
 
+    # SurfPerch-specific configuration
+    surfperch_model_path: Optional[str] = Field(
+        None, description="Path to SurfPerch SavedModel directory (e.g., 'SurfPerch_v1.0/savedmodel')"
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("eat_cfg")

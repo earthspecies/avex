@@ -2,21 +2,33 @@ benchmark_name: "individual_id_benchmark"
 
 evaluation_sets:
   - name: "pipit_id_across_year"
-    train:
+    train: &pipit_base
       dataset_name: "pipit_id"
       split: "train_across_year"
       sample_rate: 16000
       transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
           label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
 
     validation:
-      dataset_name: "pipit_id"
-      split: "train_across_year"  # Use same as train
-      sample_rate: 16000
+      <<: *pipit_base
       transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
@@ -35,21 +47,33 @@ evaluation_sets:
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
   - name: "pipit_id_across_year_train_vs_test"
-    train:
+    train: &pipit_retrieval_base
       dataset_name: "pipit_id"
       split: "train_across_year"
       sample_rate: 16000
       transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
           label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
 
     validation:
-      dataset_name: "pipit_id"
-      split: "train_across_year"  # Use same as train
-      sample_rate: 16000
+      <<: *pipit_retrieval_base
       transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
@@ -69,21 +93,33 @@ evaluation_sets:
     retrieval_mode: "train_vs_test"
 
   - name: "chiffchaff_id_across_year"
-    train:
+    train: &chiffchaff_base
       dataset_name: "chiffchaff_id"
       split: "train_across_year"
       sample_rate: 16000
       transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
           label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
 
     validation:
-      dataset_name: "chiffchaff_id"
-      split: "train_across_year"  # Use same as train
-      sample_rate: 16000
+      <<: *chiffchaff_base
       transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
@@ -102,21 +138,33 @@ evaluation_sets:
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
   - name: "chiffchaff_id_across_year_train_vs_test"
-    train:
+    train: &chiffchaff_retrieval_base
       dataset_name: "chiffchaff_id"
       split: "train_across_year"
       sample_rate: 16000
       transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
           label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
 
     validation:
-      dataset_name: "chiffchaff_id"
-      split: "train_across_year"  # Use same as train
-      sample_rate: 16000
+      <<: *chiffchaff_retrieval_base
       transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
@@ -134,6 +182,145 @@ evaluation_sets:
 
     metrics: ["accuracy", "clustering_ari", "clustering_nmi"]
     retrieval_mode: "train_vs_test"
+
+  # =====================================================
+  # WITHIN-YEAR INDIVIDUAL ID TASKS
+  # =====================================================
+
+  - name: "pipit_id_within_year"
+    train: &pipit_within_base
+      dataset_name: "pipit_id"
+      split: "train_within_year"
+      sample_rate: 16000
+      transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    validation:
+      <<: *pipit_within_base
+      transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    test:
+      dataset_name: "pipit_id"
+      split: "test_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {212: 0, 312: 1, 712: 2, 811: 3, 911: 4, 1011: 5, 1211: 6, 1511: 7, 1611: 8, 1711: 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "chiffchaff_id_within_year"
+    train: &chiffchaff_within_base
+      dataset_name: "chiffchaff_id"
+      split: "train_within_year"
+      sample_rate: 16000
+      transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    validation:
+      <<: *chiffchaff_within_base
+      transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    test:
+      dataset_name: "chiffchaff_id"
+      split: "test_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "littleowl_id_within_year"
+    train: &littleowl_within_base
+      dataset_name: "littleowl_id"
+      split: "train_within_year"
+      sample_rate: 16000
+      transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    validation:
+      <<: *littleowl_within_base
+      transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    test:
+      dataset_name: "littleowl_id"
+      split: "test_within_year"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "individual_id"
+          override: true
+          label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
   # =====================================================
   # MACAQUE INDIVIDUAL IDENTIFICATION TASKS
@@ -173,21 +360,33 @@ evaluation_sets:
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
   - name: "littleowl_id_across_year"
-    train:
+    train: &littleowl_base
       dataset_name: "littleowl_id"
       split: "train_across_year"
       sample_rate: 16000
       transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
           label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
 
     validation:
-      dataset_name: "littleowl_id"
-      split: "train_across_year"  # Use same as train
-      sample_rate: 16000
+      <<: *littleowl_base
       transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
@@ -206,21 +405,33 @@ evaluation_sets:
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
   - name: "littleowl_id_across_year_train_vs_test"
-    train:
+    train: &littleowl_retrieval_base
       dataset_name: "littleowl_id"
       split: "train_across_year"
       sample_rate: 16000
       transformations:
+        # First split the data into train/validation subsets
+        - type: "train_val_split"
+          subset: "train"
+          train_size: 0.8
+          random_state: 42
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
           label_map: {'108': 0, '193': 1, '229': 2, '7': 3, '94': 4, 'BRE': 5, 'CER': 6, 'DUB': 7, 'KME': 8, 'LIS': 9, 'MNE': 10, 'PAL': 11, 'RAC': 12, 'RADBF': 13, 'RADK': 14, 'VEV': 15}
 
     validation:
-      dataset_name: "littleowl_id"
-      split: "train_across_year"  # Use same as train
-      sample_rate: 16000
+      <<: *littleowl_retrieval_base
       transformations:
+        # First split the data into train/validation subsets (get validation portion)
+        - type: "train_val_split"
+          subset: "validation"
+          train_size: 0.8
+          random_state: 42  # Same random state to ensure complementary splits
+          stratify_column: "individual_id"
+        # Then create the label mapping from the resulting subset
         - type: "label_from_feature"
           feature: "individual_id"
           override: true
@@ -274,33 +485,6 @@ evaluation_sets:
           feature: "call_type_1"
           override: true
           label_map: {'alarm': 0, 'contact': 1, 'distress': 2, 'nest': 3, 'unknown': 4}
-
-    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
-
-  - name: "zebra_finch_call_type_id"
-    train:
-      <<: *zebra_finch_train
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type_id"
-          override: true
-          label_map: {'01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5, '07': 6, '08': 7, '09': 8, '10': 9, '11': 10, '12': 11, '13': 12, '14': 13, '15': 14, '16': 15, '17': 16, '18': 17, '19': 18, '20': 19, '21': 20, '22': 21, '23': 22, '24': 23, '25': 24, '26': 25, '27': 26, '28': 27, '29': 28, '30': 29, '31': 30, '32': 31, '33': 32, '34': 33, 'Ag': 34, 'Be': 35, 'DC': 36, 'Di': 37, 'LT': 38, 'Ne': 39, 'So': 40, 'Te': 41, 'Th': 42, 'Tu': 43, 'WC': 44, 'Wh': 45}
-
-    validation:
-      <<: *zebra_finch_val
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type_id"
-          override: true
-          label_map: {'01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5, '07': 6, '08': 7, '09': 8, '10': 9, '11': 10, '12': 11, '13': 12, '14': 13, '15': 14, '16': 15, '17': 16, '18': 17, '19': 18, '20': 19, '21': 20, '22': 21, '23': 22, '24': 23, '25': 24, '26': 25, '27': 26, '28': 27, '29': 28, '30': 29, '31': 30, '32': 31, '33': 32, '34': 33, 'Ag': 34, 'Be': 35, 'DC': 36, 'Di': 37, 'LT': 38, 'Ne': 39, 'So': 40, 'Te': 41, 'Th': 42, 'Tu': 43, 'WC': 44, 'Wh': 45}
-
-    test:
-      <<: *zebra_finch_test
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type_id"
-          override: true
-          label_map: {'01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5, '07': 6, '08': 7, '09': 8, '10': 9, '11': 10, '12': 11, '13': 12, '14': 13, '15': 14, '16': 15, '17': 16, '18': 17, '19': 18, '20': 19, '21': 20, '22': 21, '23': 22, '24': 23, '25': 24, '26': 25, '27': 26, '28': 27, '29': 28, '30': 29, '31': 30, '32': 31, '33': 32, '34': 33, 'Ag': 34, 'Be': 35, 'DC': 36, 'Di': 37, 'LT': 38, 'Ne': 39, 'So': 40, 'Te': 41, 'Th': 42, 'Tu': 43, 'WC': 44, 'Wh': 45}
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
@@ -370,9 +554,9 @@ evaluation_sets:
 
     metrics: ["accuracy", "clustering_ari", "clustering_nmi"]
 
-  # =====================================================
-  # VFPA KILLER WHALE VOCAL REPERTOIRE CLASSIFICATION
-  # =====================================================
+  # # =====================================================
+  # # VFPA KILLER WHALE VOCAL REPERTOIRE CLASSIFICATION
+  # # =====================================================
 
   - name: "vfpa_srkw_call_types"
     train:

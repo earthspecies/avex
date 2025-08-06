@@ -4,10 +4,10 @@ dataset_config: configs/data_configs/beans_h100.yml
 training_params:
   train_epochs: 900
   lr: 0.001
-  batch_size: 24
+  batch_size: 16
   optimizer: adamw
   weight_decay: 0.01
-  amp: true
+  amp: false
   amp_dtype: bf16
 
 # Which experiments to evaluate

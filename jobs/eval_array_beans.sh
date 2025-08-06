@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=1-25%4
+#SBATCH --array=1-28%6
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
@@ -17,7 +17,7 @@ declare -A configs=(
     # [6]="ssl_eat_audioset.yml"
     # [7]="bird_aves_bio.yml"
     # [9]="beats.yml"
-    # [11]="beats_naturelm.yml"
+    # [11]="beats_naturelm.yml" 
     # [12]="beats_finetuned.yml"
     # [13]="perch.yml"
     # [14]="sl_efficientnet_audioset.yml"
@@ -28,9 +28,14 @@ declare -A configs=(
     # [19]="sl_beats_all.yml"
     # [20]="sl_eat_all_ssl_all.yml"
     # [21]="sl_eat_animalspeak_ssl_all.yml"
-    [22]="sl_efficientnet_animalspeak_soundscape.yml"
-    [23]="sl_efficientnet_animalspeak_wabad.yml"
+    # [22]="sl_efficientnet_animalspeak_soundscape.yml"
+    # [23]="sl_efficientnet_animalspeak_wabad.yml"
     [24]="sl_efficientnet_animalspeak_nowhales.yml"
+    # [25]="sl_efficientnet_animalspeak_nobirds.yml"
+    [26]="sl_efficientnet_animalspeak_birds.yml"
+    # [25]="consolidated_beans_models_part1.yml"
+    # [26]="consolidated_beans_models_part2.yml"
+    # [27]="consolidated_beans_models_part3.yml"
 )
 
 # Get the config file for this array task
@@ -50,4 +55,4 @@ export GOOGLE_APPLICATION_CREDENTIALS=/home/david_earthspecies_org/.config/gclou
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 uv sync
 # Check if it's a consolidated config or single model config
-srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_single.yml

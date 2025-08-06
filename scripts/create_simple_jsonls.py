@@ -78,31 +78,31 @@ def main():
 
     # Hard-coded list of JSONL files to process
     jsonl_files = [
-        # "evaluation_results/efficientnet_beans/summary_2025-07-18 03:02:32.065485.jsonl",
-        # "evaluation_results/efficientnet_beans/summary_2025-07-18 03:02:32.673098.jsonl",
-        # "evaluation_results/aaai/eat_audioset/summary_2025-07-18 01:47:06.311017.jsonl",
-        # "evaluation_results/aaai/eat_all/summary_2025-07-18 03:20:59.285709.jsonl",
-        # "evaluation_results/aaai/beats_raw/summary_2025-07-18 05:17:32.301897.jsonl",
-        # "evaluation_results/aaai/beats_ft/summary_2025-07-18 05:16:12.360611.jsonl",
-        # "evaluation_results/aaai/bird_aves_bio/summary_2025-07-18 05:05:48.646055.jsonl",
-        # "evaluation_results/aaai/eat_audioset/summary_2025-07-18 04:40:24.685877.jsonl",
-        # "evaluation_results/efficientnet_beans/summary_2025-07-18 03:02:32.673098.jsonl",
-        # "evaluation_results/aaai/beats_raw/summary_2025-07-19 02:54:31.352008.jsonl",
-        # "evaluation_results/aaai/bird_aves_bio/summary_2025-07-19 02:24:47.161734.jsonl",
-        # "evaluation_results/aaai/eat_all/summary_2025-07-18 21:53:21.655903.jsonl", # EAT ALL probe
-        # "evaluation_results/aaai/eat_audioset/summary_2025-07-18 17:50:51.267236.jsonl",
-        # "evaluation_results/efficientnet_beans/summary_2025-07-18 21:42:30.458457.jsonl", # EfficientNet AnimalSpeak probe
-        # "evaluation_results/atst_frame/summary_2025-07-18 21:37:14.555761.jsonl", # Atst Frame probe
-        # "evaluation_results/aaai/eat_audioset/summary_2025-07-20 14:15:06.823734.jsonl", # EAT Audioset probe
-        # "evaluation_results/bird_aves_bio/summary_2025-07-20 15:30:46.762704.jsonl", #Perch probe BEANs
-        # # "evaluation_results/aaai/sl_beats_animalspeak/summary_2025-07-20 14:51:14.551121.jsonl" # BEATs_sl_v0 probe?
-        # "evaluation_results/aaai/beats_naturelm/summary_2025-07-20 19:43:19.374768.jsonl", # BEATs_NatureLM probe
-        # "evaluation_results/aaai/eat_baseline_finetuned/summary_2025-07-20 21:30:17.202169.jsonl", # EAT baseline finetuned probe
-        # "evaluation_results/aaai/eat_baseline/summary_2025-07-20 22:01:58.639929.jsonl", # EAT baseline probe
-        # "evaluation_results/efficientnet_beans/summary_2025-07-20 21:56:01.313972.jsonl", # EfficientNet Audioset probe
-        # "evaluation_results/aaai/sl_beats_animalspeak/summary_2025-07-20 15:25:44.410672.jsonl", # BEATs_sl_v0 probe?
-        # "evaluation_results/aaai/clap_efficientnet_animalspeak/summary_2025-07-21 04:57:08.671140.jsonl", # CLAP-animalspeak probe
-        # "evaluation_results/aaai/clap_efficientnet_animalspeak_audioset/summary_2025-07-21 04:57:42.115547.jsonl", # CLAP-animalspeak-audioset probe
+        "../evaluation_results/efficientnet_beans/summary_2025-07-18 03:02:32.065485.jsonl",
+        "../evaluation_results/efficientnet_beans/summary_2025-07-18 03:02:32.673098.jsonl",
+        "../evaluation_results/aaai/eat_audioset/summary_2025-07-18 01:47:06.311017.jsonl",
+        "../evaluation_results/aaai/eat_all/summary_2025-07-18 03:20:59.285709.jsonl",
+        "../evaluation_results/aaai/beats_raw/summary_2025-07-18 05:17:32.301897.jsonl",
+        "../evaluation_results/aaai/beats_ft/summary_2025-07-18 05:16:12.360611.jsonl",
+        "../evaluation_results/aaai/bird_aves_bio/summary_2025-07-18 05:05:48.646055.jsonl",
+        "../evaluation_results/aaai/eat_audioset/summary_2025-07-18 04:40:24.685877.jsonl",
+        "../evaluation_results/efficientnet_beans/summary_2025-07-18 03:02:32.673098.jsonl",
+        "../evaluation_results/aaai/beats_raw/summary_2025-07-19 02:54:31.352008.jsonl",
+        "../evaluation_results/aaai/bird_aves_bio/summary_2025-07-19 02:24:47.161734.jsonl",
+        "../evaluation_results/aaai/eat_all/summary_2025-07-18 21:53:21.655903.jsonl", # EAT ALL probe
+        "../evaluation_results/aaai/eat_audioset/summary_2025-07-18 17:50:51.267236.jsonl",
+        "../evaluation_results/efficientnet_beans/summary_2025-07-18 21:42:30.458457.jsonl", # EfficientNet AnimalSpeak probe
+        "../evaluation_results/atst_frame/summary_2025-07-18 21:37:14.555761.jsonl", # Atst Frame probe
+        "../evaluation_results/aaai/eat_audioset/summary_2025-07-20 14:15:06.823734.jsonl", # EAT Audioset probe
+        "../evaluation_results/bird_aves_bio/summary_2025-07-20 15:30:46.762704.jsonl", #Perch probe BEANs
+        # "../evaluation_results/aaai/sl_beats_animalspeak/summary_2025-07-20 14:51:14.551121.jsonl" # BEATs_sl_v0 probe?
+        "../evaluation_results/aaai/beats_naturelm/summary_2025-07-20 19:43:19.374768.jsonl", # BEATs_NatureLM probe
+        "../evaluation_results/aaai/eat_baseline_finetuned/summary_2025-07-20 21:30:17.202169.jsonl", # EAT baseline finetuned probe
+        "../evaluation_results/aaai/eat_baseline/summary_2025-07-20 22:01:58.639929.jsonl", # EAT baseline probe
+        "../evaluation_results/efficientnet_beans/summary_2025-07-20 21:56:01.313972.jsonl", # EfficientNet Audioset probe
+        "../evaluation_results/aaai/sl_beats_animalspeak/summary_2025-07-20 15:25:44.410672.jsonl", # BEATs_sl_v0 probe?
+        "../evaluation_results/aaai/clap_efficientnet_animalspeak/summary_2025-07-21 04:57:08.671140.jsonl", # CLAP-animalspeak probe
+        "../evaluation_results/aaai/clap_efficientnet_animalspeak_audioset/summary_2025-07-21 04:57:42.115547.jsonl", # CLAP-animalspeak-audioset probe
         "evaluation_results/aaai/eat_all/summary_2025-07-25 03:51:58.291412.jsonl",  # EAT ALL indv
         "evaluation_results/aaai/eat_audioset/summary_2025-07-25 03:51:59.346372.jsonl",  # EAT AnimalSpeak indv
         "evaluation_results/aaai/eat_audioset/summary_2025-07-25 04:22:23.751059.jsonl",  # EAT Audioset indv
@@ -139,6 +139,20 @@ def main():
         "evaluation_results/consolidated_beans_models_part3/summary_2025-07-28 01:45:47.268183.jsonl",  # Consolidated Finch 3
         "evaluation_results/aaai/efficientnet_animalspeak/summary_2025-07-30 05:25:28.783173.jsonl",  # EfficientNet Animalspeak indv
         "evaluation_results/aaai/efficientnet_animalspeak_audioset/summary_2025-07-30 05:25:23.818181.jsonl",  # EfficientNet Animalspeak Audioset indv
+        "evaluation_results/consolidated_beans_models_part1/summary_2025-07-30 08:57:25.543853.jsonl",  # Consolidated indv part 1 updated
+        "evaluation_results/consolidated_beans_models_part2/summary_2025-07-30 09:11:29.949245.jsonl",  # Consolidated indv part 2 updated
+        "evaluation_results/consolidated_beans_models_part3/summary_2025-07-30 08:36:35.685692.jsonl",  # Consolidated indv part 3 updated
+        "evaluation_results/bird_aves_bio/summary_2025-07-30 10:37:28.414779.jsonl",  # BirdAvesBio indv
+        "evaluation_results/birdnet/summary_2025-07-30 15:39:05.921362.jsonl",  # BirdNet indv
+        "evaluation_results/fish_surfperch/summary_2025-07-30 21:48:16.805448.jsonl",  # SurfPerch BEANS
+        "evaluation_results/fish_surfperch/summary_2025-07-30 16:30:00.858148.jsonl",  # SurfPerch indv
+        "evaluation_results/fish_surfperch/summary_2025-07-31 02:18:07.071202.jsonl",  # SurfPerch BirdSet
+        "evaluation_results/fish_surfperch/summary_2025-07-31 20:39:19.860757.jsonl",  # SurfPerch Gibbon
+        "evaluation_results/fish_surfperch/summary_2025-08-01 04:31:10.968778.jsonl",  # SurfPerch indv full
+        "evaluation_results/aaai/efficientnet_animalspeak_birds/summary_2025-08-04 17:08:17.157086.jsonl",  # EfficientNet Animalspeak Birds
+        # "evaluation_results/aaai/efficientnet_animalspeak_no_birds/summary_2025-08-04 14:24:29.986487.jsonl",  # EfficientNet Animalspeak no birds, beans
+        "evaluation_results/aaai/efficientnet_animalspeak_nowhales/summary_2025-08-04 05:33:00.802975.jsonl",  # EfficientNet Animalspeak no whales, birdset-indv
+        "evaluation_results/aaai/efficientnet_animalspeak_soundscape/summary_2025-08-04 06:35:03.781612.jsonl",  # EfficientNet Animalspeak soundscape, indv
     ]
 
     # Hard-coded list of columns to keep
@@ -147,10 +161,10 @@ def main():
         "experiment_name",
         "evaluation_dataset_name",
         "test_mAP",
-        # "test_multiclass_f1",
+        "../test_multiclass_f1",
         "test_accuracy",
-        # "test_balanced_accuracy",
-        # "accuracy",
+        "../test_balanced_accuracy",
+        "../accuracy",
         "retrieval_roc_auc",
         "retrieval_precision_at_1",
         "clustering_nmi",
@@ -170,7 +184,7 @@ def main():
         all_concatenated_data.extend(processed_data)
 
     # Create concatenated JSONL file
-    concatenated_file = "evaluation_results/all_simple_results_concatenated.jsonl"
+    concatenated_file = "evaluation_results/all_simple_results_concatenated_full.jsonl"
 
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(concatenated_file), exist_ok=True)

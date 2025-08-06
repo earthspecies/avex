@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark.yml
+dataset_config: configs/data_configs/individual_id_h100.yml
 # dataset_config: configs/data_configs/benchmark_id_repertoire_with_clustering.yml
 
 training_params:
@@ -31,11 +31,11 @@ device: cuda
 
 seed: 42
 
-num_workers: 8  # Enable workers for better memory management
+num_workers: 18  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  # - linear_probe
   - retrieval
   - clustering
 

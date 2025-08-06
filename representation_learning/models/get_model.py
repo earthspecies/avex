@@ -7,6 +7,7 @@ from representation_learning.models.efficientnet import (
 )
 from representation_learning.models.perch import Model as PerchModel
 from representation_learning.models.resnet import Model as ResNetModel
+from representation_learning.models.surfperch import Model as SurfPerchModel
 
 
 def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
@@ -19,6 +20,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     - 'efficientnet': Audio classification model
     - 'clip': CLIP-like model for audio-text contrastive learning
     - 'perch': Google's Perch bird audio classification model
+    - 'surfperch': SurfPerch underwater fish audio classification model
     - 'atst': ATST Frame model for timestamp embeddings
     - 'birdmae': Bird-MAE pretrained model for bird audio classification
     - 'biolingual': BioLingual zero-shot audio classification model
@@ -73,6 +75,14 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             num_classes=num_classes,
             device=model_config.device,
             audio_config=model_config.audio_config,
+        )
+    elif model_name == "surfperch":
+        model_path = getattr(model_config, "surfperch_model_path", "SurfPerch_v1.0/savedmodel")
+        return SurfPerchModel(
+            num_classes=num_classes,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            model_path=model_path,
         )
     elif model_name == "atst":
         from representation_learning.models.atst_frame.atst_encoder import (
@@ -208,7 +218,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     else:
         # Fallback
         supported = (
-            "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
+            "'efficientnet', 'clip', 'perch', 'surfperch', 'atst', 'eat', "
             "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', "
             "'birdnet', 'birdmae', 'biolingual', "
         )
