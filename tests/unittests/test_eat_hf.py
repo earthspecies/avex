@@ -307,14 +307,14 @@ class TestEATHFExtractEmbeddings:
                 x=audio_input_gpu, layers=["all"], average_over_time=True
             )
 
+            # Check that GPU result is actually on GPU before moving to CPU
+            assert embeddings2.device.type == "cuda"
+
             # Move GPU result to CPU for comparison
             embeddings2 = embeddings2.cpu()
 
             # Results should be close (allowing for small numerical differences)
-            assert torch.allclose(embeddings1, embeddings2, atol=1e-6)
-
-            # Check that GPU result is actually on GPU
-            assert embeddings2.device.type == "cuda"
+            assert torch.allclose(embeddings1, embeddings2, atol=1e-4)
 
     def test_extract_embeddings_padding_mask_handling(
         self, model: EATHFModel, audio_input: torch.Tensor

@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -26,9 +26,10 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
-        # Store the flag
+        # Store the flag and config
         self.return_features_only = return_features_only
         self.gradient_checkpointing = False
+        self.audio_config = audio_config
 
         # Load the appropriate EfficientNet variant based on configuration
         if efficientnet_variant == "b0":
@@ -39,6 +40,9 @@ class Model(ModelBase):
             raise ValueError(
                 f"Unsupported EfficientNet variant: {efficientnet_variant}"
             )
+
+        # Move model to device
+        self.model = self.model.to(self.device)
 
         # Modify the classifier only if not returning features and num_classes differs.
         if not self.return_features_only and num_classes != 1000:
@@ -143,7 +147,7 @@ class Model(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """Extract embeddings from the model with automatic batch splitting.
 
         Parameters
@@ -160,8 +164,8 @@ class Model(ModelBase):
 
         Returns
         -------
-        torch.Tensor
-            Model embeddings
+        Union[torch.Tensor, List[torch.Tensor]]
+            Model embeddings (tensor if average_over_time=True, list if False)
 
         Raises
         ------
@@ -196,6 +200,19 @@ class Model(ModelBase):
         # Register hooks for requested layers (only if not already registered)
         self._register_hooks_for_layers(target_layers)
 
+        # Store original training state and set to eval for deterministic results
+        was_training = self.training
+        self.eval()
+
+        # Store original gradient checkpointing state and disable it during extraction
+        was_gradient_checkpointing = self.gradient_checkpointing
+        self.gradient_checkpointing = False
+
+        # Set deterministic behavior for CUDA if available
+        if torch.cuda.is_available():
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
         try:
             # Process audio input
             if isinstance(x, dict):
@@ -203,7 +220,7 @@ class Model(ModelBase):
             x = self.process_audio(x)
 
             # Extract features with optional gradient checkpointing
-            if self.gradient_checkpointing and self.training:
+            if self.gradient_checkpointing and was_training:
                 features = self._checkpointed_features(x)
             else:
                 features = self.model.features(x)
@@ -276,9 +293,22 @@ class Model(ModelBase):
                         f"Expected 2, 3, or 4."
                     )
 
-            # Concatenate all flattened embeddings along the last dimension
-            return torch.cat(result, dim=1)
+            if average_over_time:
+                # Concatenate all flattened embeddings along the last dimension
+                return torch.cat(result, dim=1)
+            else:
+                # Return list of embeddings without concatenation
+                return result
 
         finally:
+            # Restore original training state
+            if was_training:
+                self.train()
+            # Restore gradient checkpointing state
+            self.gradient_checkpointing = was_gradient_checkpointing
+            # Restore CUDA settings
+            if torch.cuda.is_available():
+                torch.backends.cudnn.deterministic = False
+                torch.backends.cudnn.benchmark = True
             # Clear hook outputs for next call
             self._clear_hook_outputs()

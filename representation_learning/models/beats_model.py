@@ -163,93 +163,96 @@ class Model(ModelBase):
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
     ) -> torch.Tensor:
-        """Extract embeddings from specified layers of the BEATs model.
+        """Extract embeddings from the model with automatic batch splitting.
 
-        Args:
-            x: Input tensor or dictionary containing 'raw_wav'
-            layers: List of layer names to extract embeddings from. If 'all' is
-                   included, all MLP (fc1 and fc2) layers will be used for
-                   comprehensive representation extraction.
-            padding_mask: Optional padding mask
-            average_over_time: Whether to average embeddings over time dimension
+        Parameters
+        ----------
+        x : torch.Tensor | dict[str, torch.Tensor]
+            Input audio tensor or dictionary containing 'raw_wav'
+        layers : List[str]
+            List of layer names. If 'all' is included, all MLP (fc1/fc2) layers in the
+            model will be automatically found and used.
+        padding_mask : Optional[torch.Tensor]
+            Padding mask for the input (ignored for BEATs)
+        average_over_time : bool
+            Whether to average embeddings over time dimension
 
-        Returns:
-            torch.Tensor: Concatenated embeddings from the requested layers
+        Returns
+        -------
+        torch.Tensor
+            Concatenated embeddings from the requested layers
 
-        Raises:
-            ValueError: If none of the supplied layers are found in the model
+        Raises
+        ------
+        ValueError
+            If input tensor is None or audio tensor is empty
         """
-        # Handle empty layers list - return main features
-        if not layers:
-            if isinstance(x, dict):
-                wav = x["raw_wav"]
-                mask = x.get("padding_mask")
-            else:
-                wav = x
-                mask = padding_mask
+        # Validate input
+        if x is None:
+            raise ValueError("Input tensor cannot be None")
 
-            prev_return_features_only = self._return_features_only
-            self._return_features_only = True
+        # Check for empty audio
+        if isinstance(x, dict):
+            wav = x["raw_wav"]
+        else:
+            wav = x
 
-            with torch.no_grad():
-                emb = self.forward(wav, mask)
+        if wav.numel() == 0 or wav.shape[-1] == 0:
+            raise ValueError("Audio tensor cannot be empty")
 
-            # Restore original settings
-            self._return_features_only = prev_return_features_only
-            return emb
+        # Store original training state and set to eval for deterministic results
+        was_training = self.training
+        self.eval()
 
-        # Clear previous hook outputs
-        self._clear_hook_outputs()
+        # Set deterministic behavior for CUDA if available
+        if torch.cuda.is_available():
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
 
-        # Handle 'all' case - use all MLP (fc1, fc2) layers for comprehensive
-        # representations
-        # If 'all' is not in layers, use the exact layers specified
-        target_layers = layers.copy()
-        if "all" in layers:
-            print(
-                "'all' specified in layers, using pre-discovered MLP (fc1/fc2) "
-                "layers for BEATs model..."
-            )
+        try:
+            # Clear previous hook outputs
+            self._clear_hook_outputs()
 
-            if self._mlp_layer_names:
-                print(f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers")
-                target_layers = [
-                    layer for layer in layers if layer != "all"
-                ] + self._mlp_layer_names
+            # Handle empty layers list - return main features
+            if not layers:
+                if isinstance(x, dict):
+                    wav = x["raw_wav"]
+                    mask = x.get("padding_mask")
+                else:
+                    wav = x
+                    mask = padding_mask
+
+                with torch.no_grad():
+                    return self.forward(wav, mask)
+
+            # Handle 'all' case - use pre-discovered MLP layers
+            target_layers = layers.copy()
+            if "all" in layers:
+                print(
+                    "'all' specified in layers, using pre-discovered MLP (fc1/fc2) "
+                    "layers for BEATs model..."
+                )
+
+                if self._mlp_layer_names:
+                    print(
+                        f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers"
+                    )
+                    # Get specific layers (excluding 'all')
+                    specific_layers = [layer for layer in layers if layer != "all"]
+                    # Combine specific layers with MLP layers, avoiding duplicates
+                    target_layers = list(
+                        dict.fromkeys(specific_layers + self._mlp_layer_names)
+                    )
+                else:
+                    print("No MLP layers found in the model")
+
                 print(
                     f"Target layers after 'all' expansion: {len(target_layers)} layers"
                 )
-            else:
-                print("No MLP (fc1/fc2) layers found in BEATs model")
-                # Fallback to classifier if available
-                if self.classifier is not None:
-                    target_layers = [layer for layer in layers if layer != "all"] + [
-                        "classifier"
-                    ]
-                else:
-                    # For features_only mode, return main features when no MLP
-                    # layers found
-                    if self._return_features_only:
-                        if isinstance(x, dict):
-                            wav = x["raw_wav"]
-                            mask = x.get("padding_mask")
-                        else:
-                            wav = x
-                            mask = padding_mask
 
-                        prev_return_features_only = self._return_features_only
-                        self._return_features_only = True
-                        with torch.no_grad():
-                            emb = self.forward(wav, mask)
-                        self._return_features_only = prev_return_features_only
-                        return emb
-                    else:
-                        target_layers = [layer for layer in layers if layer != "all"]
+            # Register hooks for requested layers
+            self._register_hooks_for_layers(target_layers)
 
-        # Register hooks for requested layers (only if not already registered)
-        self._register_hooks_for_layers(target_layers)
-
-        try:
             # Process input
             if isinstance(x, dict):
                 wav = x["raw_wav"]
@@ -342,6 +345,9 @@ class Model(ModelBase):
         finally:
             # Clear hook outputs for next call
             self._clear_hook_outputs()
+            # Restore original training state
+            if was_training:
+                self.train()
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         audio = super().process_audio(x)

@@ -124,6 +124,7 @@ class EATHFModel(ModelBase):
         fairseq_weights_path: Optional[str] = None,
         norm_mean: float = -4.268,
         norm_std: float = 4.569,
+        return_features_only: bool = False,
     ) -> None:
         """Initialize EATHFModel.
 
@@ -142,6 +143,8 @@ class EATHFModel(ModelBase):
 
         self.pooling = pooling
         self.num_classes = num_classes
+        self.return_features_only = return_features_only
+        self.audio_config = audio_config
 
         # -------------------------------------------------------------- #
         #  Audio pre-processing – Mel FBanks identical to EAT reference  #
@@ -168,6 +171,7 @@ class EATHFModel(ModelBase):
             load_fairseq_weights(self.backbone, fairseq_weights_path)
 
         self.classifier = nn.Linear(768, num_classes)
+        self.classifier = self.classifier.to(self.device)
 
         # -------------------------------------------------------------- #
         #  Pre-discover MLP layers for efficient hook management        #
@@ -181,6 +185,9 @@ class EATHFModel(ModelBase):
         logger.info(
             f"Discovered {len(self._mlp_layer_names)} MLP layers for hook management"
         )
+
+        # For backward compatibility with tests
+        self._mlp_layers = self._mlp_layer_names
 
     # ------------------------------------------------------------------ #
     #  Forward pass                                                    #
@@ -290,7 +297,7 @@ class EATHFModel(ModelBase):
             self.return_features_only = True
 
             with torch.no_grad():
-                emb = self.forward(wav, padding_mask)
+                emb = self.forward(wav, padding_mask, return_features_only=True)
 
             # Restore original settings
             self.pooling = prev_pooling
@@ -314,9 +321,13 @@ class EATHFModel(ModelBase):
                 logger.info(
                     f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers"
                 )
-                target_layers = [
-                    layer for layer in layers if layer != "all"
-                ] + self._mlp_layer_names
+                # Get specific layers (excluding 'all')
+                specific_layers = [layer for layer in layers if layer != "all"]
+                # Combine specific layers with MLP layers, avoiding duplicates
+                all_layers = specific_layers + self._mlp_layer_names
+                target_layers = list(
+                    dict.fromkeys(all_layers)
+                )  # Remove duplicates while preserving order
                 logger.info(
                     f"Target layers after 'all' expansion: {len(target_layers)} layers"
                 )

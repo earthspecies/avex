@@ -132,7 +132,13 @@ class ModelBase(nn.Module):
 
         Returns:
             Processed audio tensor
+
+        Raises:
+            ValueError: If input tensor is None
         """
+        if x is None:
+            raise ValueError("Input tensor cannot be None")
+
         if self.audio_processor is not None:
             x = self.audio_processor(x)
 
