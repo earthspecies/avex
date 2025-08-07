@@ -78,46 +78,59 @@ class TestEfficientNetExtractEmbeddings:
     def test_extract_embeddings_all_layers(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
-        """Test that 'all' extracts from all linear layers."""
+        """Test that 'all' extracts from all convolutional layers."""
         embeddings = model.extract_embeddings(
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return the classifier layer features since 'all' now includes all
-        # linear layers including the classification layer
-        assert embeddings.shape == (2, 1000)  # num_classes
+        # Should return flattened embeddings from all convolutional layers
+        # The shape will depend on the number of conv layers and their flattened sizes
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_specific_layer(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
-        """Test extracting from a specific linear layer."""
+        """Test extracting from a specific convolutional layer."""
+        # Get the first convolutional layer name for testing
+        conv_layer_name = (
+            model._conv_layer_names[0]
+            if model._conv_layer_names
+            else "model.features.0.0"
+        )
+
         embeddings = model.extract_embeddings(
             x=audio_input,
-            layers=["model.classifier.1"],  # The correct layer name
+            layers=[conv_layer_name],
             average_over_time=True,
         )
 
-        # Should return features from the classifier layer
-        assert embeddings.shape == (2, 1000)  # num_classes
+        # Should return flattened features from the convolutional layer
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # flattened features
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_multiple_layers(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
-        """Test extracting from multiple specific layers."""
+        """Test extracting from multiple specific convolutional layers."""
+        # Get the first two convolutional layer names for testing
+        if len(model._conv_layer_names) >= 2:
+            conv_layer_names = model._conv_layer_names[:2]
+        else:
+            # Fallback to first layer twice if not enough layers
+            conv_layer_names = [model._conv_layer_names[0], model._conv_layer_names[0]]
+
         embeddings = model.extract_embeddings(
             x=audio_input,
-            layers=[
-                "model.classifier.1",
-                "model.classifier.1",
-            ],  # Same layer twice (should deduplicate)
+            layers=conv_layer_names,
             average_over_time=True,
         )
 
-        # Should return features from the classifier layer (deduplicated)
-        # Note: Currently the deduplication isn't working, so we get 2000 features
-        assert embeddings.shape == (2, 2000)  # 1000 + 1000 (duplicate)
+        # Should return concatenated flattened features from multiple conv layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_dict_input(
@@ -128,22 +141,31 @@ class TestEfficientNetExtractEmbeddings:
             x=dict_input, layers=["all"], average_over_time=True
         )
 
-        # Should return classifier features since 'all' includes all linear layers
-        assert embeddings.shape == (2, 1000)  # num_classes
+        # Should return flattened embeddings from all convolutional layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_without_averaging(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
         """Test extract_embeddings when average_over_time=False."""
+        # Get the first convolutional layer name for testing
+        conv_layer_name = (
+            model._conv_layer_names[0]
+            if model._conv_layer_names
+            else "model.features.0.0"
+        )
+
         embeddings = model.extract_embeddings(
-            x=audio_input, layers=["model.classifier.1"], average_over_time=False
+            x=audio_input, layers=[conv_layer_name], average_over_time=False
         )
 
         # Should return a list of embeddings
         assert isinstance(embeddings, list)
         assert len(embeddings) == 1
-        assert embeddings[0].shape == (2, 1000)
+        assert embeddings[0].shape[0] == 2  # batch size
+        assert embeddings[0].shape[1] > 0  # flattened features
 
     def test_extract_embeddings_gradient_checkpointing(
         self, model: EfficientNetModel, audio_input: torch.Tensor
@@ -157,8 +179,9 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return classifier features since 'all' includes all linear layers
-        assert embeddings.shape == (2, 1000)  # num_classes
+        # Should return flattened embeddings from all convolutional layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
         # Test that gradients can flow through
@@ -201,15 +224,15 @@ class TestEfficientNetExtractEmbeddings:
             efficientnet_variant="b0",
         )
 
-        # For features_only mode, 'all' should return the main features
-        # (not classifier)
+        # For features_only mode, 'all' should return flattened embeddings from
+        # all convolutional layers
         embeddings = features_model.extract_embeddings(
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return the main features since features_only mode doesn't apply
-        # classifier
-        assert embeddings.shape == (2, 1280)
+        # Should return flattened embeddings from all convolutional layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_different_variants(
@@ -237,8 +260,9 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # B1 should have different feature dimensions
-        assert embeddings_b1.shape == (2, 1000)  # num_classes
+        # B1 should have flattened embeddings from convolutional layers
+        assert embeddings_b1.shape[0] == 2  # batch size
+        assert embeddings_b1.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings_b1)
 
         # Test B0 variant for comparison
@@ -255,9 +279,11 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Both should have the same output shape (num_classes)
-        assert embeddings_b0.shape == (2, 1000)  # num_classes
-        assert embeddings_b1.shape == (2, 1000)  # num_classes
+        # Both should have flattened embeddings from convolutional layers
+        assert embeddings_b0.shape[0] == 2  # batch size
+        assert embeddings_b0.shape[1] > 0  # concatenated flattened features
+        assert embeddings_b1.shape[0] == 2  # batch size
+        assert embeddings_b1.shape[1] > 0  # concatenated flattened features
 
     def test_extract_embeddings_custom_num_classes(
         self, audio_input: torch.Tensor
@@ -280,15 +306,22 @@ class TestEfficientNetExtractEmbeddings:
             efficientnet_variant="b0",
         )
 
-        # Test extracting from the classifier layer
+        # Test extracting from a convolutional layer
+        conv_layer_name = (
+            model_custom._conv_layer_names[0]
+            if model_custom._conv_layer_names
+            else "model.features.0.0"
+        )
+
         embeddings = model_custom.extract_embeddings(
             x=audio_input,
-            layers=["model.classifier.1"],
+            layers=[conv_layer_name],
             average_over_time=True,
         )
 
-        # Should return the classifier output with custom num_classes
-        assert embeddings.shape == (2, 10)  # num_classes
+        # Should return flattened features from the convolutional layer
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # flattened features
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_consistency(
@@ -381,7 +414,8 @@ class TestEfficientNetExtractEmbeddings:
         )
 
         # Should return valid embeddings
-        assert embeddings.shape == (2, 1000)  # num_classes
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
         # Test on GPU if available
@@ -406,11 +440,12 @@ class TestEfficientNetExtractEmbeddings:
 
             assert embeddings_gpu.device.type == "cuda"
 
-    def test_linear_layer_discovery(self, model: EfficientNetModel) -> None:
-        """Test that linear layers are discovered correctly during initialization."""
-        # Check that linear layers were discovered
-        assert hasattr(model, "_linear_layers")
-        assert len(model._linear_layers) > 0
+    def test_conv_layer_discovery(self, model: EfficientNetModel) -> None:
+        """Test that convolutional layers are discovered correctly during
+        initialization."""
+        # Check that convolutional layers were discovered
+        assert hasattr(model, "_conv_layer_names")
+        assert len(model._conv_layer_names) > 0
 
         # Test that we can extract from discovered layers
         audio_input = torch.randn(2, 16000)

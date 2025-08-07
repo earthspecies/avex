@@ -47,14 +47,14 @@ class Model(ModelBase):
         # No need to modify classifier if return_features_only is True
 
         # -------------------------------------------------------------- #
-        #  Pre-discover linear layers for efficient hook management      #
+        #  Pre-discover convolutional layers for efficient hook management #
         # -------------------------------------------------------------- #
-        self._linear_layer_names: List[str] = []
+        self._conv_layer_names: List[str] = []
         for name, module in self.named_modules():
-            if isinstance(module, torch.nn.Linear):
-                self._linear_layer_names.append(name)
+            if isinstance(module, torch.nn.Conv2d):
+                self._conv_layer_names.append(name)
         logger.info(
-            f"Discovered {len(self._linear_layer_names)} linear layers "
+            f"Discovered {len(self._conv_layer_names)} convolutional layers "
             f"for hook management"
         )
 
@@ -151,8 +151,8 @@ class Model(ModelBase):
         x : torch.Tensor | dict[str, torch.Tensor]
             Input audio tensor or dictionary containing 'raw_wav'
         layers : List[str]
-            List of layer names. If 'all' is included, all linear layers in the model
-            will be automatically found and used.
+            List of layer names. If 'all' is included, all convolutional layers in the
+            model will be automatically found and used.
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input (ignored for EfficientNet)
         average_over_time : bool
@@ -171,31 +171,27 @@ class Model(ModelBase):
         # Clear previous hook outputs
         self._clear_hook_outputs()
 
-        # Handle 'all' case - use cached linear layers
+        # Handle 'all' case - use cached convolutional layers
         target_layers = layers.copy()
         if "all" in layers:
-            if not self.return_features_only:
+            logger.info(
+                "'all' specified in layers, using pre-discovered convolutional "
+                "layers..."
+            )
+            if self._conv_layer_names:
                 logger.info(
-                    "'all' specified in layers, using pre-discovered linear layers..."
+                    f"Using {len(self._conv_layer_names)} pre-discovered "
+                    f"convolutional layers"
                 )
-                if self._linear_layer_names:
-                    logger.info(
-                        f"Using {len(self._linear_layer_names)} pre-discovered "
-                        f"linear layers"
-                    )
-                    # Replace 'all' with the actual linear layer names
-                    target_layers = [
-                        layer for layer in layers if layer != "all"
-                    ] + self._linear_layer_names
-                    logger.info(
-                        f"Target layers after 'all' expansion: "
-                        f"{len(target_layers)} layers"
-                    )
-                else:
-                    logger.warning("No linear layers found in the model")
+                # Replace 'all' with the actual convolutional layer names
+                target_layers = [
+                    layer for layer in layers if layer != "all"
+                ] + self._conv_layer_names
+                logger.info(
+                    f"Target layers after 'all' expansion: {len(target_layers)} layers"
+                )
             else:
-                # In features_only mode, 'all' just means the main features
-                target_layers = [layer for layer in layers if layer != "all"]
+                logger.warning("No convolutional layers found in the model")
 
         # Register hooks for requested layers (only if not already registered)
         self._register_hooks_for_layers(target_layers)
@@ -215,23 +211,21 @@ class Model(ModelBase):
             pooled_features = self.model.avgpool(features)
             flattened_features = torch.flatten(pooled_features, 1)
 
-            # If no specific layers requested or only 'all' is requested,
-            # return the main features
-            if not target_layers or (
-                len(target_layers) == 1 and target_layers[0] == "all"
-            ):
+            # If no specific layers requested, return the main features
+            if not target_layers:
                 return flattened_features
 
-            # Otherwise, use hook-based approach for specific layers
+            # Use hook-based approach for specific layers
             logger.debug(f"Starting forward pass with target layers: {target_layers}")
 
-            # Apply classifier if not returning features only (to trigger hooks)
+            # The forward pass through features and classifier will trigger hooks
+            # for both convolutional layers (in features) and linear layers
+            # (in classifier)
             if not self.return_features_only:
                 _ = self.model.classifier(flattened_features)
             else:
-                # In features_only mode, we need to manually trigger the classifier
-                # to get hook outputs
-                # but we don't use the result
+                # In features_only mode, we still need to trigger the classifier
+                # to get hook outputs for any linear layers, but we don't use the result
                 _ = self.model.classifier(flattened_features)
 
             logger.debug(
@@ -260,34 +254,30 @@ class Model(ModelBase):
             if not embeddings:
                 raise ValueError(f"No layers found matching: {target_layers}")
 
-            if average_over_time:
-                result = []
-                for emb in embeddings:
-                    if emb.dim() == 2:
-                        # Already in correct shape, just append
-                        result.append(emb)
-                    elif emb.dim() == 3:
-                        aggregated = torch.mean(emb, dim=1)
-                        result.append(aggregated)
-                    elif emb.dim() == 4:
-                        # Handle 4D tensors (e.g., from avgpool layer)
-                        # Flatten spatial dimensions and then average
-                        # over time if needed
-                        batch_size, channels, height, width = emb.shape
-                        flattened = emb.view(batch_size, channels, -1)  # (B, C, H*W)
-                        if average_over_time:
-                            aggregated = torch.mean(flattened, dim=2)  # (B, C)
-                        else:
-                            aggregated = flattened.mean(dim=2)  # (B, C)
-                        result.append(aggregated)
-                    else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {emb.dim()}. "
-                            f"Expected 2, 3, or 4."
-                        )
-                return torch.cat(result, dim=1)
-            else:
-                return embeddings
+            # Process embeddings - flatten all to same dimension and concatenate
+            result = []
+            for emb in embeddings:
+                if emb.dim() == 2:
+                    # Already flattened, just append
+                    result.append(emb)
+                elif emb.dim() == 3:
+                    # (B, C, T) -> flatten to (B, C*T)
+                    batch_size, channels, time = emb.shape
+                    flattened = emb.view(batch_size, -1)
+                    result.append(flattened)
+                elif emb.dim() == 4:
+                    # (B, C, H, W) -> flatten to (B, C*H*W)
+                    batch_size, channels, height, width = emb.shape
+                    flattened = emb.view(batch_size, -1)
+                    result.append(flattened)
+                else:
+                    raise ValueError(
+                        f"Unexpected embedding dimension: {emb.dim()}. "
+                        f"Expected 2, 3, or 4."
+                    )
+
+            # Concatenate all flattened embeddings along the last dimension
+            return torch.cat(result, dim=1)
 
         finally:
             # Clear hook outputs for next call
