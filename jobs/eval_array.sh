@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=1-9%2
+#SBATCH --array=1-7%3
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
@@ -10,15 +10,20 @@
 
 # Map array task ID to config file
 declare -A configs=(
-    [1]="efficientnet_beans.yml"
-    [2]="eat_hf.yml"
-    [3]="atst_frame.yml"
-    [4]="clap.yml"
-    [5]="beats.yml"
-    [6]="bird_aves_bio.yml"
-    [7]="beats_naturelm.yml"
-    [8]="beats_finetuned.yml"
-    [9]="perch.yml"
+    # [1]="efficientnet_beans.yml"
+    # [2]="eat_hf_bio.yml"
+    # [3]="eat_hf_audioset.yml"
+    # [4]="eat_hf_all.yml"
+    # [5]="sl_efficientnet_audioset.yml"
+    # [6]="efficientnet_bio.yml"
+    [7]="sl_efficientnet_all.yml"
+    # [3]="atst_frame.yml"
+    # [4]="clap.yml"
+    # [5]="beats.yml"
+    # [6]="bird_aves_bio.yml"
+    # [7]="beats_naturelm.yml"
+    # [8]="beats_finetuned.yml"
+    # [9]="perch.yml"
 )
 
 # Get the config file for this array task

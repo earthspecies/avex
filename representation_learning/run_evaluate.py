@@ -12,9 +12,13 @@ Key points
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
+
+# Seems to prevent a cloudpathlib error
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
 
 import pandas as pd
 import torch
@@ -31,7 +35,6 @@ from representation_learning.configs import (
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
     eval_clustering,
-    eval_clustering_multiple_k,
 )
 from representation_learning.evaluation.embedding_utils import (
     EmbeddingDataset,
@@ -80,6 +83,15 @@ class ExperimentResult:
     clustering_metrics: Dict[str, float]
 
 
+@dataclass
+class ExperimentResultWithModel:
+    """Result that includes model caching information for optimization."""
+
+    result: ExperimentResult
+    model: Optional[torch.nn.Module]
+    model_metadata: Optional[Dict[str, str]]
+
+
 # -------------------------------------------------------------------- #
 #  Core routine for one (dataset, experiment) pair
 # -------------------------------------------------------------------- #
@@ -93,7 +105,9 @@ def run_experiment(
     evaluation_dataset_name: Optional[str] = None,
     evaluation_set_metrics: Optional[List[str]] = None,
     evaluation_set: Optional[EvaluationSet] = None,
-) -> ExperimentResult:
+    cached_model: Optional[torch.nn.Module] = None,
+    cached_model_metadata: Optional[Dict[str, str]] = None,
+) -> ExperimentResultWithModel:
     logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
@@ -113,7 +127,15 @@ def run_experiment(
     run_cfg.model_spec.audio_config.window_selection = "start"
     run_cfg.training_params = eval_cfg.training_params
     run_cfg.model_spec.device = str(device)
-    run_cfg.augmentations = []  # disable training-time augs during (most) eval
+
+    # Check for BirdSet dataset early to preserve augmentations if needed
+    is_birdset = (
+        hasattr(dataset_cfg, "dataset_name")
+        and "birdset" in dataset_cfg.dataset_name.lower()
+    )
+
+    if not is_birdset:
+        run_cfg.augmentations = []  # disable training-time augs during (most) eval
 
     if run_cfg.model_spec.audio_config.sample_rate is not None:
         dataset_cfg.sample_rate = run_cfg.model_spec.audio_config.sample_rate
@@ -217,13 +239,7 @@ def run_experiment(
                 f"{run_cfg.model_spec.audio_config.target_length_seconds}s"
             )
 
-        # For BirdSet datasets, augment during eval
-        is_birdset = (
-            hasattr(dataset_cfg, "train")
-            and hasattr(dataset_cfg.train, "dataset_name")
-            and dataset_cfg.train.dataset_name.lower() == "birdset"
-        )
-
+        # For BirdSet datasets, augment during eval (detection done earlier)
         if is_birdset:
             logger.info(
                 f"BirdSet dataset detected ({dataset_name}). "
@@ -268,22 +284,53 @@ def run_experiment(
                 "embeddings or raw dataloaders"
             )
 
-        base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
+        # Check if we can reuse cached model
+        experiment_cfg.checkpoint_path = experiment_cfg.checkpoint_path
 
-        if experiment_cfg.checkpoint_path:
-            ckpt_path = anypath(experiment_cfg.checkpoint_path)
-            if not ckpt_path.exists():
-                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-            with ckpt_path.open("rb") as f:
-                state = torch.load(f, map_location=device)
-            if "model_state_dict" in state:
-                state = _process_state_dict(state)
+        if not frozen:
+            logger.info("Loading fresh model for fine-tuning (frozen=False)")
+            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
+                device
+            )
+        elif (
+            cached_model is not None
+            and cached_model_metadata is not None
+            and cached_model_metadata.get("checkpoint_path")
+            == experiment_cfg.checkpoint_path
+            and cached_model_metadata.get("frozen") == str(frozen)
+        ):
+            logger.info("Reusing cached model from previous dataset (frozen=True)")
+            base_model = cached_model
+        else:
+            logger.info("Loading model (cache miss or first dataset)")
+            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
+                device
+            )
 
-            base_model.load_state_dict(state, strict=False)
-            logger.info("Loaded checkpoint from %s", ckpt_path)
+            if experiment_cfg.checkpoint_path:
+                ckpt_path = anypath(experiment_cfg.checkpoint_path)
+                if not ckpt_path.exists():
+                    raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+                with ckpt_path.open("rb") as f:
+                    state = torch.load(f, map_location=device)
+                if "model_state_dict" in state:
+                    state = _process_state_dict(state)
+
+                base_model.load_state_dict(state, strict=False)
+                logger.info("Loaded checkpoint from %s", ckpt_path)
 
         if frozen:
             base_model.eval()
+
+        # Update cached model metadata for next iteration
+        if frozen:
+            cached_model_metadata = {
+                "checkpoint_path": experiment_cfg.checkpoint_path,
+                "frozen": str(frozen),
+            }
+        else:
+            # Don't cache fine-tuning models since weights get modified
+            cached_model_metadata = None
 
     # ------------------------------------------------------------------ #
     #  Layer selection
@@ -412,7 +459,6 @@ def run_experiment(
             )
         else:
             # For fine-tuning, use raw dataloaders
-            # Get multi-label setting from dataset config, with fallback based on type
             is_multi_label = getattr(
                 dataset_cfg,
                 "multi_label",
@@ -451,18 +497,15 @@ def run_experiment(
                 train_embeds, train_labels, test_embeds, test_labels
             )
         else:
-            # Current behavior: test-vs-test
             retrieval_metrics = eval_retrieval(test_embeds, test_labels)
-        # logger.info("retrieval metrics", retrieval_metrics)
 
     # ------------------------------------------------------------------ #
     #  (3) Clustering (from cached test embeddings)
     # ------------------------------------------------------------------ #
     clustering_metrics: Dict[str, float] = {}
     if "clustering" in eval_cfg.eval_modes:
-        # Use both standard clustering with true K and multiple K search
+        # Only evaluate clustering at the ground-truth K (no best-K sweep)
         clustering_metrics.update(eval_clustering(test_embeds, test_labels))
-        clustering_metrics.update(eval_clustering_multiple_k(test_embeds, test_labels))
         logger.info("Clustering metrics: %s", clustering_metrics)
 
     # Log & finish
@@ -504,15 +547,19 @@ def run_experiment(
         run_config=run_cfg.model_dump(mode="json"),  # Always include run config
     )
 
-    return ExperimentResult(
-        dataset_name=dataset_name,
-        experiment_name=experiment_name,
-        evaluation_dataset_name=evaluation_dataset_name,
-        train_metrics=train_metrics,
-        val_metrics=val_metrics,
-        probe_test_metrics=probe_test_metrics,
-        retrieval_metrics=retrieval_metrics,
-        clustering_metrics=clustering_metrics,
+    return ExperimentResultWithModel(
+        result=ExperimentResult(
+            dataset_name=dataset_name,
+            experiment_name=experiment_name,
+            evaluation_dataset_name=evaluation_dataset_name,
+            train_metrics=train_metrics,
+            val_metrics=val_metrics,
+            probe_test_metrics=probe_test_metrics,
+            retrieval_metrics=retrieval_metrics,
+            clustering_metrics=clustering_metrics,
+        ),
+        model=base_model if frozen else None,  # Only cache frozen models
+        model_metadata=cached_model_metadata,
     )
 
 
@@ -549,53 +596,76 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
 
-    # 3. Run experiments
+    # 3. Run experiments - OPTIMIZED: group by experiment to reuse models
     all_results: List[ExperimentResult] = []
 
-    for eval_set_name, eval_set_data_cfg in evaluation_sets:
+    for eval_set_name, _eval_set_data_cfg in evaluation_sets:
         logger.info(f"Evaluating benchmark set: {eval_set_name}")
-
-        # Extract the test dataset from the evaluation set
-        test_datasets = eval_set_data_cfg.test_datasets or []
-        if not test_datasets:
-            logger.warning(
-                f"No test datasets in evaluation set '{eval_set_name}'. Skipping."
-            )
-            continue
-
-        # For benchmark evaluation sets, we expect exactly one test dataset per set
-        test_ds_cfg = test_datasets[0]
-
-        # Get metrics from the benchmark evaluation config
-        eval_set_metrics = benchmark_eval_cfg.get_metrics_for_evaluation_set(
-            eval_set_name
+    if not evaluation_sets:
+        logger.warning(
+            "No evaluation sets found in BenchmarkEvaluationConfig. "
+            "Nothing to evaluate."
         )
+        return
 
-        # Get the evaluation set object for configuration
-        eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
+    # Group by experiment to load each model only once (saved a lot of time.)
+    for exp_cfg in eval_cfg.experiments:
+        logger.info(f"Starting experiment: {exp_cfg.run_name}")
 
-        for exp_cfg in eval_cfg.experiments:
+        cached_model = None
+        model_metadata = None
+
+        for eval_set_name, _eval_set_data_cfg in evaluation_sets:
+            logger.info(
+                f"Evaluating experiment '{exp_cfg.run_name}' on set: {eval_set_name}"
+            )
+
+            # Extract the test dataset from the evaluation set
+            test_datasets = _eval_set_data_cfg.test_datasets or []
+            if not test_datasets:
+                logger.warning(
+                    f"No test datasets in evaluation set '{eval_set_name}'. Skipping."
+                )
+                continue
+
+            # For benchmark evaluation sets, we expect exactly one test dataset per set
+            test_ds_cfg = test_datasets[0]
+
+            # Get metrics from the benchmark evaluation config
+            eval_set_metrics = benchmark_eval_cfg.get_metrics_for_evaluation_set(
+                eval_set_name
+            )
+
+            # Get the evaluation set object for configuration
+            eval_set = benchmark_eval_cfg.get_evaluation_set(eval_set_name)
+
             res = run_experiment(
                 eval_cfg,
                 test_ds_cfg,
                 exp_cfg,
-                eval_set_data_cfg,
+                _eval_set_data_cfg,
                 device,
                 save_dir,
                 eval_set_name,
                 eval_set_metrics,
                 eval_set,
+                cached_model,
+                model_metadata,
             )
-            all_results.append(res)
+            all_results.append(res.result)
+
+            # Cache the model for reuse in next dataset
+            cached_model = res.model
+            model_metadata = res.model_metadata
 
             logger.info(
                 "[%s | %s | %s]  probe-test: %s | retrieval: %s | clustering: %s",
                 eval_set_name,
-                res.dataset_name,
-                res.experiment_name,
-                res.probe_test_metrics,
-                res.retrieval_metrics or "n/a",
-                res.clustering_metrics or "n/a",
+                res.result.dataset_name,
+                res.result.experiment_name,
+                res.result.probe_test_metrics,
+                res.result.retrieval_metrics or "n/a",
+                res.result.clustering_metrics or "n/a",
             )
 
     # 5. Create and save summary CSV files

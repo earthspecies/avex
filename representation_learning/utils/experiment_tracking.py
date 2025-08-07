@@ -241,13 +241,7 @@ def save_evaluation_metadata(
         # Store run config as JSON string
         metadata["run_config_params"] = json.dumps(run_config)
 
-    # Save metadata as in bucket
-    if run_config is not None:
-        run_id = run_config.get("run_name", _generate_run_id())
-    elif latest_training is not None:
-        run_id = latest_training.get("run_name", _generate_run_id())
-    else:
-        run_id = _generate_run_id()
+    run_id = _generate_run_id()
 
     output_json_path = anypath(_GLOBAL_EXPERIMENT_DIR) / (run_id + ".json")
     with _fs.open(str(output_json_path), "w") as f:
@@ -454,21 +448,39 @@ def create_experiment_summary_csvs(
 
         global_summary_df = pd.DataFrame(global_summary_data)
 
-        # Check if the file exists to determine if we need headers
-        file_exists = results_csv_path.exists()
-
         # Create parent directory if it doesn't exist
         results_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Check if the file exists right before writing to minimize race conditions
+        file_exists = False
+        try:
+            file_exists = (
+                results_csv_path.exists() and results_csv_path.stat().st_size > 0
+            )
+        except (OSError, FileNotFoundError):
+            # If we can't stat the file, treat it as non-existent
+            file_exists = False
+
         # Append to the file (or create it with headers if it doesn't exist)
-        global_summary_df.to_csv(
-            results_csv_path,
-            mode="a" if file_exists else "w",
-            header=not file_exists,
-            index=False,
-            quoting=1,  # QUOTE_ALL to properly escape JSON and other special content
-            escapechar="\\",
-        )
+        try:
+            global_summary_df.to_csv(
+                results_csv_path,
+                mode="a" if file_exists else "w",
+                header=not file_exists,
+                index=False,
+                quoting=1,  # QUOTE_ALL to properly escape JSON
+                escapechar="\\",
+            )
+            logger.info(
+                "%s results to global CSV: %s (mode: %s, headers: %s)",
+                "Appended" if file_exists else "Created",
+                results_csv_path,
+                "append" if file_exists else "write",
+                "no" if file_exists else "yes",
+            )
+        except Exception as e:
+            logger.error("Failed to write global CSV %s: %s", results_csv_path, e)
+            raise
 
         # Also save as JSONL
         results_jsonl_path = results_csv_path.with_suffix(".jsonl")
@@ -498,7 +510,7 @@ def create_experiment_summary_csvs(
     for entry in summary_data:
         simple_entry = {
             "model_name": entry["experiment_name"],
-            "date": entry["end_timestamp"],
+            "date": entry.get("end_timestamp", entry.get("timestamp")),
             "dataset": entry.get("evaluation_dataset_name") or entry["dataset_name"],
         }
 
@@ -512,21 +524,39 @@ def create_experiment_summary_csvs(
     # Create and save simple DataFrame
     simple_summary_df = pd.DataFrame(simple_summary_data)
 
-    # Check if the simple file exists to determine if we need headers
-    simple_file_exists = simple_csv_path.exists()
-
     # Create parent directory if it doesn't exist
     simple_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Check if the simple file exists right before writing to minimize race conditions
+    simple_file_exists = False
+    try:
+        simple_file_exists = (
+            simple_csv_path.exists() and simple_csv_path.stat().st_size > 0
+        )
+    except (OSError, FileNotFoundError):
+        # If we can't stat the file, treat it as non-existent
+        simple_file_exists = False
+
     # Append to the simple file (or create it with headers if it doesn't exist)
-    simple_summary_df.to_csv(
-        simple_csv_path,
-        mode="a" if simple_file_exists else "w",
-        header=not simple_file_exists,
-        index=False,
-        quoting=1,  # QUOTE_ALL
-        escapechar="\\",
-    )
+    try:
+        simple_summary_df.to_csv(
+            simple_csv_path,
+            mode="a" if simple_file_exists else "w",
+            header=not simple_file_exists,
+            index=False,
+            quoting=1,  # QUOTE_ALL
+            escapechar="\\",
+        )
+        logger.info(
+            "%s simple results CSV: %s (mode: %s, headers: %s)",
+            "Appended to" if simple_file_exists else "Created",
+            simple_csv_path,
+            "append" if simple_file_exists else "write",
+            "no" if simple_file_exists else "yes",
+        )
+    except Exception as e:
+        logger.error("Failed to write simple CSV %s: %s", simple_csv_path, e)
+        raise
 
     # Also save as JSONL
     simple_jsonl_path = simple_csv_path.with_suffix(".jsonl")

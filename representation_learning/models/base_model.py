@@ -236,11 +236,7 @@ class ModelBase(nn.Module):
                 # Input provided as dictionary with explicit padding mask
                 raw_wav = x["raw_wav"]
                 p_mask = x["padding_mask"]
-                if self.__class__.__name__ == "CLIPModel":
-                    dummy_text = ["" for _ in range(raw_wav.size(0))]
-                    self(raw_wav, dummy_text, p_mask)
-                else:
-                    self(raw_wav, p_mask)
+                self(raw_wav, p_mask)
             else:
                 # Tensor input – use provided mask if available, otherwise assume
                 # fully-valid signal (all ones).
@@ -248,12 +244,7 @@ class ModelBase(nn.Module):
                     padding_mask = torch.zeros(
                         x.size(0), x.size(1), device=x.device, dtype=torch.bool
                     )
-
-                if self.__class__.__name__ == "CLIPModel":
-                    dummy_text = ["" for _ in range(x.size(0))]
-                    self(x, dummy_text, padding_mask)
-                else:
-                    self(x, padding_mask)
+                self(x, padding_mask)
 
             logger.debug(
                 f"Forward pass completed. Hook outputs: "

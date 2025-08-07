@@ -1,0 +1,289 @@
+benchmark_name: "bioacoustic_benchmark"
+
+evaluation_sets:
+  # Classification Tasks
+  - name: "dog_classification"
+    train: &dogs_base
+      dataset_name: beans
+      split: dogs_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *dogs_base
+      split: dogs_validation
+    test:
+      <<: *dogs_base
+      split: dogs_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+
+  - name: "bat_classification"
+    train: &bats_base
+      dataset_name: beans
+      split: egyptian_fruit_bats_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {111: 0, 210: 1, 211: 2, 215: 3, 216: 4, 220: 5, 226: 6, 228: 7, 230: 8, 231: 9}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *bats_base
+      split: egyptian_fruit_bats_validation
+    test:
+      <<: *bats_base
+      split: egyptian_fruit_bats_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+
+  - name: "mosquito_classification"
+    train: &mosquito_base
+      dataset_name: beans
+      split: humbugdb_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 3
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'ae aegypti': 0, 'an arabiensis': 1, 'an dirus': 2, 'an funestus sl': 3, 'an funestus ss': 4, 'an gambiae ss': 5, 'an harrisoni': 6, 'an maculatus': 7, 'an squamosus': 8, 'culex pipiens complex': 9, 'culex quinquefasciatus': 10, 'ma uniformis': 11, 'non-mosquito': 12, 'others': 13}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *mosquito_base
+      split: humbugdb_validation
+    test:
+      <<: *mosquito_base
+      split: humbugdb_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+
+  - name: "bird_classification"
+    train: &bird_base
+      dataset_name: beans
+      split: cbi_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'aldfly': 0, 'ameavo': 1, 'amebit': 2, 'amecro': 3, 'amegfi': 4, 'amekes': 5, 'amepip': 6, 'amered': 7, 'amerob': 8, 'amewig': 9, 'amewoo': 10, 'amtspa': 11, 'annhum': 12, 'astfly': 13, 'baisan': 14, 'baleag': 15, 'balori': 16, 'banswa': 17, 'barswa': 18, 'bawwar': 19, 'belkin1': 20, 'belspa2': 21, 'bewwre': 22, 'bkbcuc': 23, 'bkbmag1': 24, 'bkbwar': 25, 'bkcchi': 26, 'bkchum': 27, 'bkhgro': 28, 'bkpwar': 29, 'bktspa': 30, 'blkpho': 31, 'blugrb1': 32, 'blujay': 33, 'bnhcow': 34, 'boboli': 35, 'bongul': 36, 'brdowl': 37, 'brebla': 38, 'brespa': 39, 'brncre': 40, 'brnthr': 41, 'brthum': 42, 'brwhaw': 43, 'btbwar': 44, 'btnwar': 45, 'btywar': 46, 'buffle': 47, 'buggna': 48, 'buhvir': 49, 'bulori': 50, 'bushti': 51, 'buwtea': 52, 'buwwar': 53, 'cacwre': 54, 'calgul': 55, 'calqua': 56, 'camwar': 57, 'cangoo': 58, 'canwar': 59, 'canwre': 60, 'carwre': 61, 'casfin': 62, 'caster1': 63, 'casvir': 64, 'cedwax': 65, 'chispa': 66, 'chiswi': 67, 'chswar': 68, 'chukar': 69, 'clanut': 70, 'cliswa': 71, 'comgol': 72, 'comgra': 73, 'comloo': 74, 'commer': 75, 'comnig': 76, 'comrav': 77, 'comred': 78, 'comter': 79, 'comyel': 80, 'coohaw': 81, 'coshum': 82, 'cowscj1': 83, 'daejun': 84, 'doccor': 85, 'dowwoo': 86, 'dusfly': 87, 'eargre': 88, 'easblu': 89, 'easkin': 90, 'easmea': 91, 'easpho': 92, 'eastow': 93, 'eawpew': 94, 'eucdov': 95, 'eursta': 96, 'evegro': 97, 'fiespa': 98, 'fiscro': 99, 'foxspa': 100, 'gadwal': 101, 'gcrfin': 102, 'gnttow': 103, 'gnwtea': 104, 'gockin': 105, 'gocspa': 106, 'goleag': 107, 'grbher3': 108, 'grcfly': 109, 'greegr': 110, 'greroa': 111, 'greyel': 112, 'grhowl': 113, 'grnher': 114, 'grtgra': 115, 'grycat': 116, 'gryfly': 117, 'haiwoo': 118, 'hamfly': 119, 'hergul': 120, 'herthr': 121, 'hoomer': 122, 'hoowar': 123, 'horgre': 124, 'horlar': 125, 'houfin': 126, 'houspa': 127, 'houwre': 128, 'indbun': 129, 'juntit1': 130, 'killde': 131, 'labwoo': 132, 'larspa': 133, 'lazbun': 134, 'leabit': 135, 'leafly': 136, 'leasan': 137, 'lecthr': 138, 'lesgol': 139, 'lesnig': 140, 'lesyel': 141, 'lewwoo': 142, 'linspa': 143, 'lobcur': 144, 'lobdow': 145, 'logshr': 146, 'lotduc': 147, 'louwat': 148, 'macwar': 149, 'magwar': 150, 'mallar3': 151, 'marwre': 152, 'merlin': 153, 'moublu': 154, 'mouchi': 155, 'moudov': 156, 'norcar': 157, 'norfli': 158, 'norhar2': 159, 'normoc': 160, 'norpar': 161, 'norpin': 162, 'norsho': 163, 'norwat': 164, 'nrwswa': 165, 'nutwoo': 166, 'olsfly': 167, 'orcwar': 168, 'osprey': 169, 'ovenbi1': 170, 'palwar': 171, 'pasfly': 172, 'pecsan': 173, 'perfal': 174, 'phaino': 175, 'pibgre': 176, 'pilwoo': 177, 'pingro': 178, 'pinjay': 179, 'pinsis': 180, 'pinwar': 181, 'plsvir': 182, 'prawar': 183, 'purfin': 184, 'pygnut': 185, 'rebmer': 186, 'rebnut': 187, 'rebsap': 188, 'rebwoo': 189, 'redcro': 190, 'redhea': 191, 'reevir1': 192, 'renpha': 193, 'reshaw': 194, 'rethaw': 195, 'rewbla': 196, 'ribgul': 197, 'rinduc': 198, 'robgro': 199, 'rocpig': 200, 'rocwre': 201, 'rthhum': 202, 'ruckin': 203, 'rudduc': 204, 'rufgro': 205, 'rufhum': 206, 'rusbla': 207, 'sagspa1': 208, 'sagthr': 209, 'savspa': 210, 'saypho': 211, 'scatan': 212, 'scoori': 213, 'semplo': 214, 'semsan': 215, 'sheowl': 216, 'shshaw': 217, 'snobun': 218, 'snogoo': 219, 'solsan': 220, 'sonspa': 221, 'sora': 222, 'sposan': 223, 'spotow': 224, 'stejay': 225, 'swahaw': 226, 'swaspa': 227, 'swathr': 228, 'treswa': 229, 'truswa': 230, 'tuftit': 231, 'tunswa': 232, 'veery': 233, 'vesspa': 234, 'vigswa': 235, 'warvir': 236, 'wesblu': 237, 'wesgre': 238, 'weskin': 239, 'wesmea': 240, 'wessan': 241, 'westan': 242, 'wewpew': 243, 'whbnut': 244, 'whcspa': 245, 'whfibi': 246, 'whtspa': 247, 'whtswi': 248, 'wilfly': 249, 'wilsni1': 250, 'wiltur': 251, 'winwre3': 252, 'wlswar': 253, 'wooduc': 254, 'wooscj2': 255, 'woothr': 256, 'y00475': 257, 'yebfly': 258, 'yebsap': 259, 'yehbla': 260, 'yelwar': 261, 'yerwar': 262, 'yetvir': 263}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *bird_base
+      split: cbi_validation
+    test:
+      <<: *bird_base
+      split: cbi_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+
+
+  - name: "marine_mammal_classification"
+    train: &watkins_base
+      dataset_name: beans
+      split: watkins_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 3
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Atlantic_Spotted_Dolphin': 0, 'Bearded_Seal': 1, 'Beluga,_White_Whale': 2, 'Bottlenose_Dolphin': 3, 'Bowhead_Whale': 4, 'Clymene_Dolphin': 5, 'Common_Dolphin': 6, 'False_Killer_Whale': 7, 'Fin,_Finback_Whale': 8, 'Frasers_Dolphin': 9, 'Grampus,_Rissos_Dolphin': 10, 'Harp_Seal': 11, 'Humpback_Whale': 12, 'Killer_Whale': 13, 'Leopard_Seal': 14, 'Long-Finned_Pilot_Whale': 15, 'Melon_Headed_Whale': 16, 'Minke_Whale': 17, 'Narwhal': 18, 'Northern_Right_Whale': 19, 'Pantropical_Spotted_Dolphin': 20, 'Ross_Seal': 21, 'Rough-Toothed_Dolphin': 22, 'Short-Finned_Pacific_Pilot_Whale': 23, 'Southern_Right_Whale': 24, 'Sperm_Whale': 25, 'Spinner_Dolphin': 26, 'Striped_Dolphin': 27, 'Walrus': 28, 'White-beaked_Dolphin': 29, 'White-sided_Dolphin': 30}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *watkins_base
+      split: watkins_validation
+    test:
+      <<: *watkins_base
+      split: watkins_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+
+  - name: "esc50_classification"
+    train: &esc50_base
+      dataset_name: beans
+      split: esc50_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'airplane': 0, 'breathing': 1, 'brushing_teeth': 2, 'can_opening': 3, 'car_horn': 4, 'cat': 5, 'chainsaw': 6, 'chirping_birds': 7, 'church_bells': 8, 'clapping': 9, 'clock_alarm': 10, 'clock_tick': 11, 'coughing': 12, 'cow': 13, 'crackling_fire': 14, 'crickets': 15, 'crow': 16, 'crying_baby': 17, 'dog': 18, 'door_wood_creaks': 19, 'door_wood_knock': 20, 'drinking_sipping': 21, 'engine': 22, 'fireworks': 23, 'footsteps': 24, 'frog': 25, 'glass_breaking': 26, 'hand_saw': 27, 'helicopter': 28, 'hen': 29, 'insects': 30, 'keyboard_typing': 31, 'laughing': 32, 'mouse_click': 33, 'pig': 34, 'pouring_water': 35, 'rain': 36, 'rooster': 37, 'sea_waves': 38, 'sheep': 39, 'siren': 40, 'sneezing': 41, 'snoring': 42, 'thunderstorm': 43, 'toilet_flush': 44, 'train': 45, 'vacuum_cleaner': 46, 'washing_machine': 47, 'water_drops': 48, 'wind': 49}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *esc50_base
+      split: esc50_validation
+    test:
+      <<: *esc50_base
+      split: esc50_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+
+  - name: "enabirds_detection"
+    train: &enabirds_base
+      dataset_name: beans
+      split: enabirds_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'American Crow': 0, 'American Goldfinch': 1, 'American Redstart': 2, 'American Robin': 3, 'Black-and-white Warbler': 4, 'Black-capped Chickadee': 5, 'Black-throated Blue Warbler': 6, 'Black-throated Green Warbler': 7, 'Blue Jay': 8, 'Blue-gray Gnatcatcher': 9, 'Blue-headed Vireo': 10, 'Brown-headed Cowbird': 11, 'Carolina Wren': 12, 'Common Yellowthroat': 13, 'Eastern Towhee': 14, 'Hermit Thrush': 15, 'Hooded Warbler': 16, "Kirtland's Warbler": 17, 'Louisiana Waterthrush': 18, 'None': 19, 'Northern Cardinal': 20, 'Northern Flicker': 21, 'Other Bird': 22, 'Ovenbird': 23, 'Red-bellied Woodpecker': 24, 'Red-eyed Vireo': 25, 'Rose-breasted Grosbeak': 26, 'Ruby-crowned Kinglet': 27, 'Scarlet Tanager': 28, "Swainson's Thrush": 29, 'Tufted Titmouse': 30, 'White-breasted Nuthatch': 31, 'Wild Turkey': 32, 'Wood Thrush': 33, 'Yellow-billed Cuckoo': 34}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+
+    validation:
+      <<: *enabirds_base
+      split: enabirds_validation
+    test:
+      <<: *enabirds_base
+      split: enabirds_test
+    metrics: [mAP]
+
+  # Detection Tasks
+  - name: "rfcx_detection"
+    train: &rfcx_base
+      dataset_name: beans
+      split: rfcx_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        # Convert list labels to multi-label format
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Bananaquit': 0, 'Black-whiskered vireo': 1, 'Bronze coqui': 2, 'Common coqui': 3, 'Cricket coqui': 4, 'Dwarf coqui': 5, 'Elfin woods warbler': 6, 'Grass coqui': 7, "Hedrick's coqui": 8, 'Locust coqui': 9, 'Melodius coqui': 10, 'Mountain Coqui': 11, 'Pearly-eyed thrasher': 12, 'Puerto Rican bullfinch': 13, 'Puerto Rican lizard cuckoo': 14, 'Puerto Rican owl': 15, 'Puerto Rican spindalis': 16, 'Puerto Rican tanager': 17, 'Puerto Rican tody': 18, 'Puerto Rican woodpecker': 19, 'Red-eyed coqui': 20, 'Red-legged thrush': 21, 'Scaly-naped pigeon': 22, 'White-lipped Frog': 23}
+      sample_rate: 16000
+      data_root: /scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/
+    validation:
+      <<: *rfcx_base
+      split: rfcx_validation
+    test:
+      <<: *rfcx_base
+      split: rfcx_test
+    metrics: [mAP]
+
+  - name: "hiceas_detection"
+    train: &hiceas_base
+      dataset_name: beans
+      split: hiceas_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        # Convert list labels to multi-label format
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {"Minke whale": 0}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *hiceas_base
+      split: hiceas_validation
+    test:
+      <<: *hiceas_base
+      split: hiceas_test
+    metrics: [mAP]
+
+  - name: "hainan_gibbons_detection"
+    train: &gibbons_base
+      dataset_name: beans
+      split: hainan_gibbons_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        # Convert list labels to multi-label format
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'Single pulse gibbon call': 2}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *gibbons_base
+      split: hainan_gibbons_validation
+    test:
+      <<: *gibbons_base
+      split: hainan_gibbons_test
+    metrics: [mAP]
+
+  - name: "dcase_detection"
+    train: &dcase_base
+      dataset_name: beans
+      split: dcase_train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      transformations:
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'American Redstart': 0, 'Bay-breasted Warbler': 1, 'Black-throated Blue Warbler': 2, 'Chipping Sparrow': 3, 'Common Yellowthroat': 4, 'Gray-cheeked Thrush': 5, 'Hyena giggle': 6, 'Hyena groan and moo': 7, 'Hyena squitter': 8, 'Jackdaw call': 9, 'Meerkat close call': 10, 'Meerkat short note': 11, 'Other Animal': 12, 'Ovenbird': 13, 'Rose-breasted Grosbeak': 14, 'Savannah Sparrow': 15, "Swainson's Thrush": 16, 'White-throated Sparrow': 17}
+      sample_rate: 16000
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *dcase_base
+      split: dcase_validation
+    test:
+      <<: *dcase_base
+      split: dcase_test
+    metrics: [mAP]

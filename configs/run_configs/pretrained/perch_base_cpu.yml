@@ -14,6 +14,7 @@ model_spec:
 # Required fields for RunConfig validation
 dataset_config: configs/data_configs/benchmark_small.yml
 output_dir: ./runs/perch_base_cpu
+run_name: perch_cpu
 loss_function: cross_entropy
 
 training_params:

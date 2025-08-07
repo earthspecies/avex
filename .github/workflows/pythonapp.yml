@@ -15,34 +15,49 @@ jobs:
     tests:
         name: Tests
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+
         strategy:
             matrix:
                 python-version: [3.12]
         steps:
             - uses: actions/checkout@v2
-            - name: Enable caching
+
+            - name: Authenticate to Google Cloud
+              uses: "google-github-actions/auth@v2"
+              with:
+                  workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
+                  service_account: ${{ secrets.GH_ACTIONS_SA }}
+
+            - name: Install uv
               uses: astral-sh/setup-uv@v5
               with:
                   enable-cache: true
+
             - name: Set up Python ${{ matrix.python-version }}
               uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python-version }}
-            - name: Full dependencies
+
+            - name: Install dependencies
               run: |
-                  uv pip install --system -r requirements.txt
-                  uv pip install --system -r requirements-dev.txt
+                  uv tool install keyring --with keyrings.google-artifactregistry-auth
+                  uv sync
+
             - name: Display Python version
               run: python -c "import sys; print(sys.version)"
+
             - name: Consistency tests with pytest
               run: |
-                  pytest tests/consistency --base_folder representation_learning
+                  uv run pytest tests/consistency --base_folder representation_learning
             - name: Unittests with pytest
               run: |
-                  pytest tests/unittests
+                  uv run pytest tests/unittests
             - name: Doctests with pytest
               run: |
-                  pytest --doctest-modules representation_learning
+                  uv run pytest --doctest-modules representation_learning
             # - name: Integration tests with pytest
             #  run: |
-            #      pytest tests/integration
+            #      uv run pytest tests/integration

@@ -105,8 +105,6 @@ class EATHFModel(ModelBase):
     pooling
         One of ``"cls"`` or ``"mean"`` determining how patch-level features
         are aggregated into a clip-level embedding.
-    return_features_only
-        Force feature mode even when ``num_classes>0``.
     trust_remote_code
         Passed through to :pyfunc:`transformers.AutoModel.from_pretrained`.
     """
@@ -123,7 +121,9 @@ class EATHFModel(ModelBase):
         audio_config: Optional[Dict[str, Any]] = None,
         target_length: int = 1024,
         pooling: str = "cls",
-        return_features_only: bool = True,
+        fairseq_weights_path: Optional[str] = None,
+        norm_mean: float = -4.268,
+        norm_std: float = 4.569,
     ) -> None:
         """Initialize EATHFModel.
 
@@ -134,12 +134,14 @@ class EATHFModel(ModelBase):
             audio_config: Audio configuration (ignored, kept for API compatibility)
             target_length: Required spectrogram length in time frames
             pooling: Pooling method ("cls" or "mean")
-            return_features_only: Whether to return features only
+            fairseq_weights_path: Optional path to fairseq checkpoint
+            norm_mean: Normalization mean for mel spectrograms
+            norm_std: Normalization std for mel spectrograms
         """
         super().__init__(device=device, audio_config=audio_config)
 
         self.pooling = pooling
-        self.return_features_only = return_features_only or num_classes == 0
+        self.num_classes = num_classes
 
         # -------------------------------------------------------------- #
         #  Audio pre-processing – Mel FBanks identical to EAT reference  #
@@ -148,6 +150,8 @@ class EATHFModel(ModelBase):
             sample_rate=16_000,
             target_length=target_length,
             n_mels=128,
+            norm_mean=norm_mean,
+            norm_std=norm_std,
         )
 
         # -------------------------------------------------------------- #
@@ -157,31 +161,13 @@ class EATHFModel(ModelBase):
         self.backbone = AutoModel.from_pretrained(
             model_name, trust_remote_code=True
         ).to(self.device)
-        # load_fairseq_weights(self.backbone, "../EAT/EAT-base_epoch30_pt.pt")
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     # "../EAT/multirun/2025-06-04/05-29-23/0/eat_animalspeak/"
-        #     # "checkpoint_22_920000.pt"
-        #     "../EAT/multirun/2025-06-03/05-59-45/0/eat_animalspeak/
-        #     checkpoint_last.pt",
-        # )
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-05-31/09-19-15/0/eat_animalspeak/checkpoint_last.pt"
-        # )
-        # load_fairseq_weights(
-        #     self.backbone,
-        #     "../EAT/multirun/2025-06-20/05-07-14/0/eat_animalspeak/checkpoint30.pt"
-        # ) # 48khz
 
-        embed_dim = getattr(self.backbone.config, "hidden_size", 768)
+        # Conditionally load fairseq weights if path is provided
+        if fairseq_weights_path is not None:
+            logger.info("Loading fairseq weights from '%s' …", fairseq_weights_path)
+            load_fairseq_weights(self.backbone, fairseq_weights_path)
 
-        # Optional linear classifier for downstream tasks
-        if self.return_features_only:
-            self.classifier = None  # type: ignore[assignment]
-            # self.register_module("classifier", None)  # satisfies mypy
-        else:
-            self.classifier = nn.Linear(embed_dim, num_classes).to(self.device)
+        self.classifier = nn.Linear(768, num_classes)
 
         # -------------------------------------------------------------- #
         #  Pre-discover MLP layers for efficient hook management        #
@@ -204,6 +190,7 @@ class EATHFModel(ModelBase):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
         framewise_embeddings: bool = False,
+        return_features_only: bool = False,
     ) -> torch.Tensor:  # noqa: D401 – keep signature consistent
         """Forward pass through the EAT model.
 
@@ -213,6 +200,11 @@ class EATHFModel(ModelBase):
             Raw waveform tensor of shape ``(B, T)``.
         padding_mask
             Not used (kept for interface compatibility).
+        framewise_embeddings
+            If True, return frame-wise embeddings instead of pooled features.
+        return_features_only
+            If True, return features instead of classification logits.
+            Defaults to False, but automatically True if num_classes=0.
 
         Returns
         -------
@@ -248,7 +240,8 @@ class EATHFModel(ModelBase):
             raise ValueError("pooling must be 'cls' or 'mean'")
 
         # 5) Optional classification head
-        if self.return_features_only:
+        # Return features if explicitly requested or if no classifier exists
+        if return_features_only or self.classifier is None:
             return pooled
         return self.classifier(pooled)
 

@@ -309,39 +309,6 @@ evaluation_sets:
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
     retrieval_mode: "test_vs_test"
 
-  # - name: "giant_otters_individual_id"
-  #   train:
-  #     dataset_name: "giant_otters"
-  #     split: "test"  # Only test split available
-  #     sample_rate: 16000
-  #     transformations:
-  #       - type: "label_from_feature"
-  #         feature: "Individual"
-  #         override: true
-  #         label_map: {'?Firecat?': 0, '?Murcielago?': 1, 'Alua': 2, 'Amana': 3, 'Beni': 4, 'Blanka': 5, 'Chelsea': 6, 'Dagget': 7, 'Diente': 8, 'Firecat': 9, 'Frida': 10, 'Frita': 11, 'Gordito': 12, 'Iny': 13, 'Kurt': 14, 'Loudmouth': 15, 'Madelaine': 16, 'Madidi': 17, 'Maku': 18, 'Maldito': 19, 'Maldonado': 20, 'Maldondado': 21, 'Malfoy': 22, 'Mantis': 23, 'Maria': 24, 'Matias': 25, 'Mordy': 26, 'Murcielago': 27, 'Naipi': 28, 'Norbert': 29, 'Pablo(Pierre)': 30, 'Pauto': 31, 'Perla': 32, 'Roto': 33, 'Sammy': 34, 'Tacutu': 35, 'Tarubo': 36, 'Theo': 37, 'Tina?': 38, 'Tuparro/Felipe': 39, 'Voldemort': 40, 'Ziggy': 41, 'unknown': 42}
-
-  #   validation:
-  #     dataset_name: "giant_otters"
-  #     split: "test"  # Use same as train since only test available
-  #     sample_rate: 16000
-  #     transformations:
-  #       - type: "label_from_feature"
-  #         feature: "Individual"
-  #         override: true
-  #         label_map: {'?Firecat?': 0, '?Murcielago?': 1, 'Alua': 2, 'Amana': 3, 'Beni': 4, 'Blanka': 5, 'Chelsea': 6, 'Dagget': 7, 'Diente': 8, 'Firecat': 9, 'Frida': 10, 'Frita': 11, 'Gordito': 12, 'Iny': 13, 'Kurt': 14, 'Loudmouth': 15, 'Madelaine': 16, 'Madidi': 17, 'Maku': 18, 'Maldito': 19, 'Maldonado': 20, 'Maldondado': 21, 'Malfoy': 22, 'Mantis': 23, 'Maria': 24, 'Matias': 25, 'Mordy': 26, 'Murcielago': 27, 'Naipi': 28, 'Norbert': 29, 'Pablo(Pierre)': 30, 'Pauto': 31, 'Perla': 32, 'Roto': 33, 'Sammy': 34, 'Tacutu': 35, 'Tarubo': 36, 'Theo': 37, 'Tina?': 38, 'Tuparro/Felipe': 39, 'Voldemort': 40, 'Ziggy': 41, 'unknown': 42}
-
-  #   test:
-  #     dataset_name: "giant_otters"
-  #     split: "test"
-  #     sample_rate: 16000
-  #     transformations:
-  #       - type: "label_from_feature"
-  #         feature: "Individual"
-  #         override: true
-  #         label_map: {'?Firecat?': 0, '?Murcielago?': 1, 'Alua': 2, 'Amana': 3, 'Beni': 4, 'Blanka': 5, 'Chelsea': 6, 'Dagget': 7, 'Diente': 8, 'Firecat': 9, 'Frida': 10, 'Frita': 11, 'Gordito': 12, 'Iny': 13, 'Kurt': 14, 'Loudmouth': 15, 'Madelaine': 16, 'Madidi': 17, 'Maku': 18, 'Maldito': 19, 'Maldonado': 20, 'Maldondado': 21, 'Malfoy': 22, 'Mantis': 23, 'Maria': 24, 'Matias': 25, 'Mordy': 26, 'Murcielago': 27, 'Naipi': 28, 'Norbert': 29, 'Pablo(Pierre)': 30, 'Pauto': 31, 'Perla': 32, 'Roto': 33, 'Sammy': 34, 'Tacutu': 35, 'Tarubo': 36, 'Theo': 37, 'Tina?': 38, 'Tuparro/Felipe': 39, 'Voldemort': 40, 'Ziggy': 41, 'unknown': 42}
-
-  #   metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
-
   # =====================================================
   # VOCAL REPERTOIRE CLASSIFICATION TASKS
   # =====================================================
@@ -433,6 +400,10 @@ evaluation_sets:
 
     metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
+  # =====================================================
+  # BENGALESE FINCH REPERTOIRE TASKS (CLUSTERING ONLY)
+  # =====================================================
+
   - name: "bengalese_finch_repertoire_bird0"
     train:  # Dummy train set (using test set for compatibility)
       dataset_name: "Bengalese Finch Calls"
@@ -466,35 +437,35 @@ evaluation_sets:
 
     metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
 
-  - name: "bengalese_finch_repertoire_bird1"
-    train:  # Dummy train set (using test set for compatibility)
-      dataset_name: "Bengalese Finch Calls"
-      split: "Bird1"
-      sample_rate: 16000
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type"
-          override: true
-          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
+  # - name: "bengalese_finch_repertoire_bird1"
+  #   train: # Dummy train set (using test set for compatibility)
+  #     dataset_name: "Bengalese Finch Calls"
+  #     split: "Bird1"
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "call_type"
+  #         override: true
+  #         label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
 
-    validation:  # Dummy validation set (using test set for compatibility)
-      dataset_name: "Bengalese Finch Calls"
-      split: "Bird1"
-      sample_rate: 16000
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type"
-          override: true
-          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
+  #   validation: # Dummy validation set (using test set for compatibility)
+  #     dataset_name: "Bengalese Finch Calls"
+  #     split: "Bird1"
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "call_type"
+  #         override: true
+  #         label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
 
-    test:
-      dataset_name: "Bengalese Finch Calls"
-      split: "Bird1"
-      sample_rate: 16000
-      transformations:
-        - type: "label_from_feature"
-          feature: "call_type"
-          override: true
-          label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
+  #   test:
+  #     dataset_name: "Bengalese Finch Calls"
+  #     split: "Bird1"
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "call_type"
+  #         override: true
+  #         label_map: {'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'a': 10, 'c': 11}
 
-    metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+  #   metrics: ["clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]

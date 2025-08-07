@@ -18,16 +18,30 @@ logger = logging.getLogger(__name__)
 def eval_retrieval(
     embeds: torch.Tensor,
     labels: torch.Tensor,
+    batch_size: int = 2048,
 ) -> Dict[str, float]:
     """Compute retrieval metrics using modular evaluation utilities.
+
+    Parameters
+    ----------
+    embeds : torch.Tensor
+        Embeddings tensor
+    labels : torch.Tensor
+        Labels tensor
+    batch_size : int, optional
+        Batch size for memory-efficient computation (default: 2048)
 
     Returns
     -------
     Dict[str, float]
         ``{"retrieval_roc_auc": value, "retrieval_precision_at_1": value}``.
     """
-    roc_auc = evaluate_auc_roc(embeds.numpy(), labels.numpy())
-    precision_at_1 = evaluate_precision(embeds.numpy(), labels.numpy(), k=1)
+    roc_auc = evaluate_auc_roc_batched(
+        embeds.numpy(), labels.numpy(), batch_size=batch_size
+    )
+    precision_at_1 = evaluate_precision_batched(
+        embeds.numpy(), labels.numpy(), k=1, batch_size=batch_size
+    )
 
     return {
         "retrieval_roc_auc": roc_auc,
@@ -191,6 +205,87 @@ def _binary_relevance_matrix_cross_set(
 # ------------------------------------------------------------------------- #
 
 
+def evaluate_auc_roc_batched(
+    embeddings: np.ndarray,
+    labels: Sequence[int] | np.ndarray,
+    batch_size: int = 2048,
+) -> float:
+    """Compute average ROC-AUC for *instance-level* retrieval using batched processing.
+
+    This is a memory-efficient version of evaluate_auc_roc that processes queries
+    in batches to avoid creating the full N×N similarity matrix. Results are
+    identical to the non-batched version.
+
+    For every query embedding *q* we rank *all* database embeddings by cosine
+    similarity and compute the binary ROC-AUC where positives are items that
+    share the same class label as *q*.  The final score is the mean AUC over
+    all queries for which at least one positive and one negative sample exist;
+    queries without a positive counterpart are skipped.
+
+    Parameters
+    ----------
+    embeddings : np.ndarray, shape (N, D)
+        Feature matrix.
+    labels : Sequence[int] | np.ndarray, shape (N,)
+        Integer class labels.
+    batch_size : int, optional
+        Number of queries to process in each batch (default: 2048).
+
+    Returns
+    -------
+    float
+        Mean ROC-AUC over valid queries (0.0 if none valid).
+
+    Raises
+    ------
+    ValueError
+        If *embeddings* is not 2-D or labels length mismatch.
+    """
+    if embeddings.ndim != 2:
+        raise ValueError("embeddings must be 2-D (N, D)")
+    labels = np.asarray(labels)
+    if labels.shape[0] != embeddings.shape[0]:
+        raise ValueError("labels length must match number of embeddings")
+
+    # Normalize embeddings once
+    normed = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True).clip(1e-12)
+    n = embeddings.shape[0]
+    aucs: list[float] = []
+
+    # Process queries in batches
+    for batch_start in range(0, n, batch_size):
+        batch_end = min(batch_start + batch_size, n)
+
+        # Compute similarities for this batch: batch_size × N
+        sim_batch = np.matmul(normed[batch_start:batch_end], normed.T)
+
+        # Process each query in the batch
+        for i in range(batch_start, batch_end):
+            local_i = i - batch_start
+            y_true = _binary_relevance_matrix(labels, i)
+
+            # Skip queries without at least one positive *other* than itself.
+            if y_true.sum() <= 1:
+                continue
+
+            y_score = sim_batch[local_i]
+
+            # Remove self-match
+            mask = np.ones(n, dtype=bool)
+            mask[i] = False
+
+            try:
+                auc = roc_auc_score(y_true[mask], y_score[mask])
+                aucs.append(float(auc))
+            except ValueError as v:  # pragma: no cover – extremely rare but safe-guard
+                logger.warning(
+                    "ROC-AUC computation failed for query %d (reason: %s)", i, v
+                )
+                continue
+
+    return float(np.mean(aucs)) if aucs else 0.0
+
+
 def evaluate_auc_roc(
     embeddings: np.ndarray, labels: Sequence[int] | np.ndarray
 ) -> float:
@@ -330,6 +425,95 @@ def evaluate_auc_roc_cross_set(
 # ----------------------------------------------------------------------------- #
 # Precision@k
 # ----------------------------------------------------------------------------- #
+
+
+def evaluate_precision_batched(
+    embeddings: np.ndarray,
+    labels: Sequence[int] | np.ndarray,
+    k: int = 1,
+    batch_size: int = 2048,
+) -> float:
+    """Compute mean precision@k for *instance-level* retrieval using batched processing.
+
+    This is a memory-efficient version of evaluate_precision that processes queries
+    in batches to avoid creating the full N×N similarity matrix. Results are
+    identical to the non-batched version.
+
+    For every query embedding *q* we rank **all** database embeddings by cosine
+    similarity (excluding the query itself) and compute the precision@k where
+    positives are items that share the same class label as *q*.
+
+    Parameters
+    ----------
+    embeddings : np.ndarray, shape (N, D)
+        Feature matrix.
+    labels : Sequence[int] | np.ndarray, shape (N,)
+        Integer class labels.
+    k : int, optional
+        Number of top elements to consider (default: 1).
+    batch_size : int, optional
+        Number of queries to process in each batch (default: 2048).
+
+    Returns
+    -------
+    float
+        Mean precision@k over all queries.
+
+    Raises
+    ------
+    ValueError
+        If *embeddings* is not 2-D or if label length mismatches the number of
+        embeddings.
+    """
+    if embeddings.ndim != 2:
+        raise ValueError("embeddings must be 2-D (N, D)")
+    labels = np.asarray(labels)
+    if labels.shape[0] != embeddings.shape[0]:
+        raise ValueError("labels length must match number of embeddings")
+
+    n = embeddings.shape[0]
+    if n <= 1:
+        return 0.0
+
+    # Normalize embeddings once
+    normed = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True).clip(1e-12)
+    k = min(k, n - 1)  # Can't retrieve more than n-1 items
+    precisions: list[float] = []
+
+    # Process queries in batches
+    for batch_start in range(0, n, batch_size):
+        batch_end = min(batch_start + batch_size, n)
+
+        # Compute similarities for this batch: batch_size × N
+        sim_batch = np.matmul(normed[batch_start:batch_end], normed.T)
+
+        # Set self-similarities to -inf
+        for i in range(batch_start, batch_end):
+            local_i = i - batch_start
+            sim_batch[local_i, i] = -np.inf
+
+        # Process each query in the batch
+        for i in range(batch_start, batch_end):
+            local_i = i - batch_start
+            y_true = _binary_relevance_matrix(labels, i)
+
+            # Skip queries without at least one positive *other* than itself
+            if y_true.sum() <= 1:
+                continue
+
+            # Identify indices of the top-k most similar items
+            if k == 1:
+                # Fast path for k=1 using argmax
+                topk_idx = [int(np.argmax(sim_batch[local_i]))]
+            else:
+                # Use argpartition for efficiency when k>1
+                topk_idx = np.argpartition(-sim_batch[local_i], k)[:k]
+
+            # Precision is the fraction of relevant items among the retrieved top-k.
+            precision_i = float(np.mean(y_true[topk_idx]))
+            precisions.append(precision_i)
+
+    return float(np.mean(precisions)) if precisions else 0.0
 
 
 def evaluate_precision(

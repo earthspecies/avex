@@ -1,0 +1,36 @@
+# Example configuration demonstrating TrainValSplitTransform usage
+#
+# This configuration shows how to use the custom TrainValSplitTransform
+# to split a dataset into train and validation portions and select
+# either the train or validation subset.
+
+# For training - get the train portion (80% of the data)
+train_datasets:
+  - dataset_name: animalspeak
+    split: train
+    transformations:
+      - type: train_val_split
+        subset: train
+        train_size: 0.8
+        random_state: 42
+        stratify_column: label  # Optional: for stratified splitting
+
+# For validation - get the validation portion (20% of the data)
+val_datasets:
+  - dataset_name: animalspeak
+    split: train  # Use the same original split
+    transformations:
+      - type: train_val_split
+        subset: validation
+        train_size: 0.8
+        random_state: 42  # Same random state to ensure complementary splits
+        stratify_column: label  # Optional: for stratified splitting
+
+# Test datasets can remain unchanged if you have a separate test split
+test_datasets:
+  - dataset_name: animalspeak
+    split: test
+
+concatenate_train: false
+concatenate_val: false
+concatenate_test: false

@@ -20,6 +20,8 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     - 'clip': CLIP-like model for audio-text contrastive learning
     - 'perch': Google's Perch bird audio classification model
     - 'atst': ATST Frame model for timestamp embeddings
+    - 'birdmae': Bird-MAE pretrained model for bird audio classification
+    - 'biolingual': BioLingual zero-shot audio classification model
 
     Args:
         model_config: Model configuration object containing:
@@ -132,6 +134,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         )
 
         use_naturelm = getattr(model_config, "use_naturelm", False)
+        fine_tuned = getattr(model_config, "fine_tuned", False)
 
         return BeatsModel(
             num_classes=num_classes,
@@ -139,6 +142,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
             use_naturelm=use_naturelm,
+            fine_tuned=fine_tuned,
         )
     elif model_name == "eat_hf":
         from representation_learning.models.eat_hf import (
@@ -147,13 +151,10 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
 
         target_length = getattr(model_config, "target_length", 1024)
         pooling = getattr(model_config, "pooling", "cls")
-        model_id = getattr(
-            model_config,
-            "model_id",
-            # "worstchan/EAT-base_epoch30_pretrain",
-            "worstchan/EAT-base_epoch30_finetune_AS2M",
-        )
-        return_features_only = getattr(model_config, "return_features_only", True)
+        model_id = model_config.model_id or "worstchan/EAT-base_epoch30_pretrain"
+        fairseq_weights_path = getattr(model_config, "fairseq_weights_path", None)
+        norm_mean = getattr(model_config, "eat_norm_mean", -4.268)
+        norm_std = getattr(model_config, "eat_norm_std", 4.569)
 
         return EATHFModel(
             model_name=model_id,
@@ -162,13 +163,54 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
             target_length=target_length,
             pooling=pooling,
-            return_features_only=return_features_only,
+            fairseq_weights_path=fairseq_weights_path,
+            norm_mean=norm_mean,
+            norm_std=norm_std,
+        )
+    elif model_name == "birdnet":
+        from representation_learning.models.birdnet import (
+            Model as BirdNetModel,  # Local import to avoid TF deps when unused
+        )
+
+        return BirdNetModel(
+            num_classes=num_classes,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
+    elif model_name == "birdmae":
+        from representation_learning.models.birdmae import (
+            Model as BirdMAEModel,  # Local import to avoid transformers deps
+        )
+
+        model_id = getattr(model_config, "model_id", "DBD-research-group/Bird-MAE-Base")
+
+        return BirdMAEModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            model_id=model_id,
+        )
+    elif model_name == "biolingual":
+        from representation_learning.models.biolingual import (
+            Model as BioLingualModel,  # Local import to avoid transformers deps
+        )
+
+        model_id = getattr(model_config, "model_id", "davidrrobinson/BioLingual")
+
+        return BioLingualModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            model_id=model_id,
         )
     else:
         # Fallback
         supported = (
             "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
-            "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', 'dummy_model'"
+            "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', "
+            "'birdnet', 'birdmae', 'biolingual', "
         )
         raise NotImplementedError(
             f"Model '{model_name}' is not implemented. Supported models: {supported}"
