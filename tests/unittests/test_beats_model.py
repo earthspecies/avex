@@ -339,3 +339,103 @@ class TestBEATsModelEmbeddingExtraction:
 
         # State should be preserved
         assert beats_model.training == initial_state
+
+    def test_extract_embeddings_aggregation_mean(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with mean aggregation (default)."""
+        embeddings = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="mean"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_max(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with max aggregation."""
+        embeddings = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="max"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_none(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with no aggregation."""
+        embeddings = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="none"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        # (since they have different sizes, they can't be stacked)
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_cls_token(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with cls_token aggregation."""
+        embeddings = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="cls_token"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_invalid(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with invalid aggregation method."""
+        with pytest.raises(
+            ValueError, match="Unknown aggregation method: invalid_method"
+        ):
+            beats_model.extract_embeddings(
+                sample_audio, ["all"], aggregation="invalid_method"
+            )
+
+    def test_extract_embeddings_aggregation_consistency(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test that different aggregation methods produce consistent shapes."""
+        # Test with mean aggregation
+        embeddings_mean = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="mean"
+        )
+
+        # Test with max aggregation
+        embeddings_max = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="max"
+        )
+
+        # Test with cls_token aggregation
+        embeddings_cls = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="cls_token"
+        )
+
+        # All should have the same shape (concatenated)
+        assert embeddings_mean.shape == embeddings_max.shape
+        assert embeddings_mean.shape == embeddings_cls.shape
+
+        # Test with none aggregation (should be different shape)
+        embeddings_none = beats_model.extract_embeddings(
+            sample_audio, ["all"], aggregation="none"
+        )
+
+        # None aggregation should produce a different shape than other methods
+        # since it preserves full sequence information while others average over time
+        assert embeddings_none.shape != embeddings_mean.shape
+        assert embeddings_none.shape[0] == embeddings_mean.shape[0]  # batch size same
+        assert (
+            embeddings_none.shape[1] > embeddings_mean.shape[1]
+        )  # more features due to sequence preservation

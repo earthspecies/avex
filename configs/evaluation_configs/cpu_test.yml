@@ -76,7 +76,7 @@ num_workers: 0  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
 
 overwrite_embeddings: true

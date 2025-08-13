@@ -33,7 +33,7 @@ num_workers: 12  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
   - clustering
 

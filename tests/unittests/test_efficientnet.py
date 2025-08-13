@@ -78,16 +78,22 @@ class TestEfficientNetExtractEmbeddings:
     def test_extract_embeddings_all_layers(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
-        """Test that 'all' extracts from all convolutional layers."""
+        """Test that 'all' extracts from top 3 convolutional layers."""
         embeddings = model.extract_embeddings(
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return flattened embeddings from all convolutional layers
-        # The shape will depend on the number of conv layers and their flattened sizes
+        # Should return flattened embeddings from top 3 convolutional layers
+        # The shape will depend on the top 3 conv layers and their flattened sizes
         assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert torch.is_tensor(embeddings)
+
+        # Verify that we're getting embeddings from a reasonable number of layers
+        # Top 3 layers should result in much smaller dimensions than all layers
+        assert embeddings.shape[1] < 100000  # Should be much smaller than 17M+
 
     def test_extract_embeddings_specific_layer(
         self, model: EfficientNetModel, audio_input: torch.Tensor
@@ -141,9 +147,11 @@ class TestEfficientNetExtractEmbeddings:
             x=dict_input, layers=["all"], average_over_time=True
         )
 
-        # Should return flattened embeddings from all convolutional layers
+        # Should return flattened embeddings from top 3 convolutional layers
         assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_without_averaging(
@@ -179,9 +187,11 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return flattened embeddings from all convolutional layers
+        # Should return flattened embeddings from top 3 convolutional layers
         assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert torch.is_tensor(embeddings)
 
         # Test that gradients can flow through
@@ -225,14 +235,16 @@ class TestEfficientNetExtractEmbeddings:
         )
 
         # For features_only mode, 'all' should return flattened embeddings from
-        # all convolutional layers
+        # top 3 convolutional layers
         embeddings = features_model.extract_embeddings(
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return flattened embeddings from all convolutional layers
+        # Should return flattened embeddings from top 3 convolutional layers
         assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert torch.is_tensor(embeddings)
 
     def test_extract_embeddings_different_variants(
@@ -260,9 +272,11 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # B1 should have flattened embeddings from convolutional layers
+        # B1 should have flattened embeddings from top 3 convolutional layers
         assert embeddings_b1.shape[0] == 2  # batch size
-        assert embeddings_b1.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings_b1.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert torch.is_tensor(embeddings_b1)
 
         # Test B0 variant for comparison
@@ -279,11 +293,15 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Both should have flattened embeddings from convolutional layers
+        # Both should have flattened embeddings from top 3 convolutional layers
         assert embeddings_b0.shape[0] == 2  # batch size
-        assert embeddings_b0.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings_b0.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert embeddings_b1.shape[0] == 2  # batch size
-        assert embeddings_b1.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings_b1.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
 
     def test_extract_embeddings_custom_num_classes(
         self, audio_input: torch.Tensor
@@ -341,6 +359,9 @@ class TestEfficientNetExtractEmbeddings:
 
         # Results should be identical
         assert torch.allclose(embeddings1, embeddings2, atol=1e-6)
+
+        # Verify that we're getting embeddings from top 3 layers (reasonable dimensions)
+        assert embeddings1.shape[1] < 100000  # Should be much smaller than 17M+
 
     def test_extract_embeddings_device_consistency(
         self, audio_input: torch.Tensor
@@ -400,6 +421,10 @@ class TestEfficientNetExtractEmbeddings:
             # Results should be close (allowing for small numerical differences)
             assert torch.allclose(embeddings1, embeddings2, atol=1e-4)
 
+            # Verify that we're getting embeddings from top 3 layers (reasonable
+            # dimensions)
+            assert embeddings1.shape[1] < 100000  # Should be much smaller than 17M+
+
     def test_extract_embeddings_padding_mask_handling(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
@@ -419,10 +444,13 @@ class TestEfficientNetExtractEmbeddings:
             x=dict_input, layers=["all"], average_over_time=True
         )
 
-        # Should return valid embeddings
+        # Should return valid embeddings from top 3 convolutional layers
         assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # concatenated flattened features
+        assert (
+            embeddings.shape[1] > 0
+        )  # concatenated flattened features from top 3 layers
         assert torch.is_tensor(embeddings)
+        assert embeddings.shape[1] < 100000  # Should be much smaller than 17M+
 
         # Test on GPU if available
         if torch.cuda.is_available():
@@ -445,6 +473,8 @@ class TestEfficientNetExtractEmbeddings:
             )
 
             assert embeddings_gpu.device.type == "cuda"
+            # Verify GPU embeddings also have reasonable dimensions
+            assert embeddings_gpu.shape[1] < 100000  # Should be much smaller than 17M+
 
     def test_conv_layer_discovery(self, model: EfficientNetModel) -> None:
         """Test that convolutional layers are discovered correctly during
@@ -459,8 +489,151 @@ class TestEfficientNetExtractEmbeddings:
             x=audio_input, layers=["all"], average_over_time=True
         )
 
-        # Should return valid embeddings
+        # Should return valid embeddings from top 3 convolutional layers
         assert torch.is_tensor(embeddings)
+        assert embeddings.shape[1] < 100000  # Should be much smaller than 17M+
+
+    def test_all_layers_uses_top_3_only(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test that 'all' specifically uses only the top 3 convolutional layers."""
+        # Get the total number of convolutional layers
+        total_conv_layers = len(model._conv_layer_names)
+        assert total_conv_layers >= 3, (
+            "Model should have at least 3 convolutional layers"
+        )
+
+        # Extract embeddings using 'all'
+        embeddings_all = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True
+        )
+
+        # Extract embeddings using only the top 3 layers explicitly
+        top_3_layers = model._conv_layer_names[-3:]
+        embeddings_top_3 = model.extract_embeddings(
+            x=audio_input, layers=top_3_layers, average_over_time=True
+        )
+
+        # Both should produce identical results
+        assert torch.allclose(embeddings_all, embeddings_top_3, atol=1e-6)
+
+        # Verify dimensions are reasonable (much smaller than the previous 17M+)
+        assert embeddings_all.shape[1] < 100000, (
+            f"Embedding dimension {embeddings_all.shape[1]} should be much smaller "
+            f"than 17M+"
+        )
+
+        # Log the actual dimensions for debugging
+        print(f"Total conv layers: {total_conv_layers}")
+        print(f"Top 3 layers used: {top_3_layers}")
+        print(f"Embedding dimension: {embeddings_all.shape[1]}")
+
+    def test_extract_embeddings_aggregation_mean(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with mean aggregation (default)."""
+        embeddings = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="mean"
+        )
+
+        # Should return concatenated embeddings from top 3 convolutional layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+        assert torch.is_tensor(embeddings)
+
+    def test_extract_embeddings_aggregation_max(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with max aggregation."""
+        embeddings = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="max"
+        )
+
+        # Should return concatenated embeddings from top 3 convolutional layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+        assert torch.is_tensor(embeddings)
+
+    def test_extract_embeddings_aggregation_none(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with no aggregation."""
+        embeddings = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="none"
+        )
+
+        # Should return concatenated embeddings from top 3 convolutional layers
+        # (since they have different sizes, they can't be stacked)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+        assert torch.is_tensor(embeddings)
+
+    def test_extract_embeddings_aggregation_cls_token(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with cls_token aggregation."""
+        embeddings = model.extract_embeddings(
+            x=audio_input,
+            layers=["all"],
+            average_over_time=True,
+            aggregation="cls_token",
+        )
+
+        # Should return concatenated embeddings from top 3 convolutional layers
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+        assert torch.is_tensor(embeddings)
+
+    def test_extract_embeddings_aggregation_invalid(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with invalid aggregation method."""
+        with pytest.raises(
+            ValueError, match="Unknown aggregation method: invalid_method"
+        ):
+            model.extract_embeddings(
+                x=audio_input,
+                layers=["all"],
+                average_over_time=True,
+                aggregation="invalid_method",
+            )
+
+    def test_extract_embeddings_aggregation_consistency(
+        self, model: EfficientNetModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test that different aggregation methods produce consistent shapes."""
+        # Test with mean aggregation
+        embeddings_mean = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="mean"
+        )
+
+        # Test with max aggregation
+        embeddings_max = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="max"
+        )
+
+        # Test with cls_token aggregation
+        embeddings_cls = model.extract_embeddings(
+            x=audio_input,
+            layers=["all"],
+            average_over_time=True,
+            aggregation="cls_token",
+        )
+
+        # All should have the same shape (concatenated)
+        assert embeddings_mean.shape == embeddings_max.shape
+        assert embeddings_mean.shape == embeddings_cls.shape
+
+        # Test with none aggregation (should be different shape)
+        embeddings_none = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="none"
+        )
+
+        # None aggregation should produce the same shape as other methods
+        # since the embeddings have different sizes and can't be stacked
+        assert embeddings_none.shape == embeddings_mean.shape
+        assert embeddings_none.shape[0] == 2  # batch size
+        assert embeddings_none.shape[1] > 0  # concatenated features
 
 
 if __name__ == "__main__":

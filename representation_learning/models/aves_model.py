@@ -137,6 +137,7 @@ class Model(ModelBase):
         padding_mask: torch.Tensor | None = None,  # noqa: ANN401
         masked_mean: bool = False,
         average_over_time: bool = True,
+        aggregation: str = "mean",
     ) -> torch.Tensor:
         """Extract embeddings from specified layers of the AVES model.
 
@@ -148,6 +149,8 @@ class Model(ModelBase):
             padding_mask: Optional padding mask
             masked_mean: Whether to use masked mean pooling (kept for compatibility)
             average_over_time: Whether to average embeddings over time dimension
+            aggregation: Aggregation method for multiple layers ('mean', 'max',
+                         'cls_token', 'none')
 
         Returns:
             torch.Tensor: Concatenated embeddings from the requested layers
@@ -291,14 +294,60 @@ class Model(ModelBase):
                         if emb.shape[0] != expected_batch_size:
                             # Transpose to batch-first format
                             emb = emb.transpose(0, 1)
-                        aggregated = torch.mean(emb, dim=1)
+
+                        # Apply aggregation method
+                        if aggregation == "mean":
+                            aggregated = torch.mean(emb, dim=1)
+                        elif aggregation == "max":
+                            aggregated = torch.max(emb, dim=1)[0]
+                        elif aggregation == "cls_token":
+                            # For transformer models, take first token
+                            aggregated = emb[:, 0, :]
+                        elif aggregation == "none":
+                            # Keep full sequence
+                            aggregated = emb
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregation method: {aggregation}"
+                            )
                         result.append(aggregated)
                     else:
                         raise ValueError(
                             f"Unexpected embedding dimension: {emb.dim()}. "
                             f"Expected 2 or 3."
                         )
-                return torch.cat(result, dim=1)
+
+                # Apply aggregation across layers
+                if len(result) > 1:
+                    if aggregation == "mean":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "max":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "cls_token":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "none":
+                        # For 'none', we need to handle multiple layers differently
+                        # Try to stack, but if sizes don't match, fall back to
+                        # concatenation
+                        try:
+                            return torch.stack(result, dim=1)
+                        except RuntimeError:
+                            # If stacking fails due to different sizes, flatten and
+                            # concatenate instead
+                            flattened_results = []
+                            for emb in result:
+                                if emb.dim() == 3:
+                                    # Flatten the 3D tensor to 2D
+                                    batch_size, seq_len, features = emb.shape
+                                    flattened = emb.reshape(batch_size, -1)
+                                    flattened_results.append(flattened)
+                                else:
+                                    flattened_results.append(emb)
+                            return torch.cat(flattened_results, dim=1)
+                    else:
+                        raise ValueError(f"Unknown aggregation method: {aggregation}")
+                else:
+                    return result[0]
             else:
                 # For non-averaged case, also transpose time-first tensors
                 result = []

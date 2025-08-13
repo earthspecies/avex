@@ -139,6 +139,7 @@ class CLIPModel(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
+        aggregation: str = "mean",
     ) -> torch.Tensor:
         """Extract audio embeddings from the CLIP model.
 
@@ -151,6 +152,8 @@ class CLIPModel(ModelBase):
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input
         average_over_time : bool
+            Kept for interface compatibility but ignored
+        aggregation : str
             Kept for interface compatibility but ignored
 
         Returns

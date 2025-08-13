@@ -57,7 +57,7 @@ class Model(ModelBase):
         for name, module in self.named_modules():
             if isinstance(module, torch.nn.Conv2d):
                 self._conv_layer_names.append(name)
-        logger.info(
+        logger.debug(
             f"Discovered {len(self._conv_layer_names)} convolutional layers "
             f"for hook management"
         )
@@ -147,6 +147,7 @@ class Model(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
+        aggregation: str = "mean",
     ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """Extract embeddings from the model with automatic batch splitting.
 
@@ -161,6 +162,8 @@ class Model(ModelBase):
             Padding mask for the input (ignored for EfficientNet)
         average_over_time : bool
             Whether to average embeddings over time dimension
+        aggregation : str
+            Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none')
 
         Returns
         -------
@@ -178,20 +181,25 @@ class Model(ModelBase):
         # Handle 'all' case - use cached convolutional layers
         target_layers = layers.copy()
         if "all" in layers:
-            logger.info(
-                "'all' specified in layers, using pre-discovered convolutional "
-                "layers..."
+            logger.debug(
+                "'all' specified in layers, using top 3 convolutional layers "
+                "to avoid excessive embedding dimensions..."
             )
             if self._conv_layer_names:
-                logger.info(
-                    f"Using {len(self._conv_layer_names)} pre-discovered "
-                    f"convolutional layers"
+                # Use only the top 3 layers to keep embedding dimensions manageable
+                top_layers = (
+                    self._conv_layer_names[-3:]
+                    if len(self._conv_layer_names) >= 3
+                    else self._conv_layer_names
                 )
-                # Replace 'all' with the actual convolutional layer names
+                logger.debug(
+                    f"Using top {len(top_layers)} convolutional layers: {top_layers}"
+                )
+                # Replace 'all' with the top 3 convolutional layer names
                 target_layers = [
                     layer for layer in layers if layer != "all"
-                ] + self._conv_layer_names
-                logger.info(
+                ] + top_layers
+                logger.debug(
                     f"Target layers after 'all' expansion: {len(target_layers)} layers"
                 )
             else:
@@ -294,11 +302,37 @@ class Model(ModelBase):
                     )
 
             if average_over_time:
-                # Concatenate all flattened embeddings along the last dimension
-                return torch.cat(result, dim=1)
+                # Apply aggregation across layers
+                if len(result) > 1:
+                    if aggregation == "mean":
+                        # Concatenate all flattened embeddings along the last dimension
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "max":
+                        # Concatenate all flattened embeddings along the last dimension
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "cls_token":
+                        # Concatenate all flattened embeddings along the last dimension
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "none":
+                        # Try to stack, but if sizes don't match, fall back to
+                        # concatenation
+                        try:
+                            return torch.stack(result, dim=1)
+                        except RuntimeError:
+                            # If stacking fails due to different sizes, concatenate
+                            # instead
+                            return torch.cat(result, dim=1)
+                    else:
+                        raise ValueError(f"Unknown aggregation method: {aggregation}")
+                else:
+                    return result[0]
             else:
                 # Return list of embeddings without concatenation
-                return result
+                if len(result) > 1 and aggregation == "none":
+                    # Stack along a new dimension to preserve layer information
+                    return torch.stack(result, dim=1)
+                else:
+                    return result
 
         finally:
             # Restore original training state

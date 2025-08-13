@@ -33,5 +33,5 @@ num_workers: 0  # keep single-process I/O for simplicity
 
 # Evaluation modes to execute
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval

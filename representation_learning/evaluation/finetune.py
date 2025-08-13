@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig
 from representation_learning.metrics.metric_factory import get_metric_class
-from representation_learning.models.linear_probe import LinearProbe
+from representation_learning.models.probes import get_probe
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.utils import ExperimentLogger
 
@@ -299,9 +299,20 @@ def train_and_eval_linear_probe(
     first_batch = next(iter(torch.utils.data.DataLoader(train_ds, batch_size=1)))
     input_dim = first_batch["embed"].shape[1]
 
-    probe = LinearProbe(
+    # Create a default linear probe configuration for backward compatibility
+    from representation_learning.configs import ProbeConfig
+
+    probe_config = ProbeConfig(
+        name="legacy_linear_probe",
+        probe_type="linear",
+        aggregation="mean",
+        input_processing="pooled",
+        target_layers=layer_names,
+    )
+
+    probe = get_probe(
+        probe_config=probe_config,
         base_model=None,
-        layers=layer_names,
         num_classes=num_labels,
         device=device,
         feature_mode=True,
@@ -433,9 +444,20 @@ def train_and_eval_full_fine_tune(
     for p in base_model.parameters():
         p.requires_grad = True
 
-    sft_model = LinearProbe(
+    # Create a default linear probe configuration for fine-tuning
+    from representation_learning.configs import ProbeConfig
+
+    probe_config = ProbeConfig(
+        name="fine_tune_linear_probe",
+        probe_type="linear",
+        aggregation="mean",
+        input_processing="pooled",
+        target_layers=layer_names,
+    )
+
+    sft_model = get_probe(
+        probe_config=probe_config,
         base_model=base_model,
-        layers=layer_names,
         num_classes=num_labels,
         device=device,
         feature_mode=False,

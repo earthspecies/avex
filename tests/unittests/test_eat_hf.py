@@ -486,6 +486,115 @@ class TestEATHFExtractEmbeddings:
         # Should return valid embeddings
         assert torch.is_tensor(embeddings)
 
+    def test_extract_embeddings_aggregation_mean(
+        self, model: EATHFModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with mean aggregation (default)."""
+        embeddings = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="mean"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_max(
+        self, model: EATHFModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with max aggregation."""
+        embeddings = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="max"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_none(
+        self, model: EATHFModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with no aggregation."""
+        embeddings = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="none"
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        # (since they have different sizes, they can't be stacked)
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_cls_token(
+        self, model: EATHFModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with cls_token aggregation."""
+        embeddings = model.extract_embeddings(
+            x=audio_input,
+            layers=["all"],
+            average_over_time=True,
+            aggregation="cls_token",
+        )
+
+        # Should return concatenated embeddings from MLP layers
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # concatenated features
+
+    def test_extract_embeddings_aggregation_invalid(
+        self, model: EATHFModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test extract_embeddings with invalid aggregation method."""
+        with pytest.raises(
+            ValueError, match="Unknown aggregation method: invalid_method"
+        ):
+            model.extract_embeddings(
+                x=audio_input,
+                layers=["all"],
+                average_over_time=True,
+                aggregation="invalid_method",
+            )
+
+    def test_extract_embeddings_aggregation_consistency(
+        self, model: EATHFModel, audio_input: torch.Tensor
+    ) -> None:
+        """Test that different aggregation methods produce consistent shapes."""
+        # Test with mean aggregation
+        embeddings_mean = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="mean"
+        )
+
+        # Test with max aggregation
+        embeddings_max = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="max"
+        )
+
+        # Test with cls_token aggregation
+        embeddings_cls = model.extract_embeddings(
+            x=audio_input,
+            layers=["all"],
+            average_over_time=True,
+            aggregation="cls_token",
+        )
+
+        # All should have the same shape (concatenated)
+        assert embeddings_mean.shape == embeddings_max.shape
+        assert embeddings_mean.shape == embeddings_cls.shape
+
+        # Test with none aggregation (should be different shape)
+        embeddings_none = model.extract_embeddings(
+            x=audio_input, layers=["all"], average_over_time=True, aggregation="none"
+        )
+
+        # None aggregation should produce a different shape than other methods
+        # since it preserves full sequence information while others average over time
+        assert embeddings_none.shape != embeddings_mean.shape
+        assert embeddings_none.shape[0] == embeddings_mean.shape[0]  # batch size same
+        assert (
+            embeddings_none.shape[1] > embeddings_mean.shape[1]
+        )  # more features due to sequence preservation
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

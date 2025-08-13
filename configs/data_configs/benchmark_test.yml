@@ -1,0 +1,41 @@
+benchmark_name: "bioacoustic_benchmark"
+
+evaluation_sets:
+  # Classification Tasks
+  - name: "dog_classification"
+    train: &dogs_base
+      dataset_name: beans
+      split: dogs_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
+        - type: uniform_sample
+          property: label
+          ratio: 0.2
+
+      sample_rate: 16000
+    validation:
+      <<: *dogs_base
+      split: dogs_validation
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
+    test:
+      <<: *dogs_base
+      split: dogs_test
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]

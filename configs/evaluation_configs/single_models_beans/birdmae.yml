@@ -34,7 +34,7 @@ num_workers: 18
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
   - clustering
 

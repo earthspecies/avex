@@ -263,6 +263,7 @@ class EATHFModel(ModelBase):
         padding_mask: Optional[torch.Tensor] = None,
         pooling: str = "cls",
         average_over_time: bool = True,
+        aggregation: str = "mean",
     ) -> torch.Tensor:  # type: ignore[override]
         """Extract embeddings from specified layers of the EAT model.
 
@@ -275,6 +276,8 @@ class EATHFModel(ModelBase):
             padding_mask: Optional padding mask (unused)
             pooling: Pooling method ("cls" or "mean")
             average_over_time: Whether to average embeddings over time dimension
+            aggregation: Aggregation method for multiple layers ('mean', 'max',
+                         'cls_token', 'none')
 
         Returns:
             torch.Tensor: Concatenated embeddings from the requested layers
@@ -304,14 +307,29 @@ class EATHFModel(ModelBase):
             self.return_features_only = prev_return_features_only
             return emb
 
+        # Handle 'last_layer' replacement
+        target_layers = []
+        for layer_name in layers:
+            if layer_name == "last_layer":
+                # Get the last linear layer name
+                linear_layers = self._get_all_linear_layers()
+                if linear_layers:
+                    resolved_name = linear_layers[-1]
+                    logger.info(f"Replacing 'last_layer' with '{resolved_name}'")
+                    target_layers.append(resolved_name)
+                else:
+                    logger.warning("No linear layers found, using 'last_layer' as-is")
+                    target_layers.append(layer_name)
+            else:
+                target_layers.append(layer_name)
+
         # Clear previous hook outputs
         self._clear_hook_outputs()
 
         # Handle 'all' case - use MLP layers (fc1 and fc2 outputs) for rich
         # representations
         # If 'all' is not in layers, use the exact layers specified
-        target_layers = layers.copy()
-        if "all" in layers:
+        if "all" in target_layers:
             logger.info(
                 "'all' specified in layers, using pre-discovered MLP layers "
                 "for EAT model..."
@@ -322,7 +340,7 @@ class EATHFModel(ModelBase):
                     f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers"
                 )
                 # Get specific layers (excluding 'all')
-                specific_layers = [layer for layer in layers if layer != "all"]
+                specific_layers = [layer for layer in target_layers if layer != "all"]
                 # Combine specific layers with MLP layers, avoiding duplicates
                 all_layers = specific_layers + self._mlp_layer_names
                 target_layers = list(
@@ -335,9 +353,9 @@ class EATHFModel(ModelBase):
                 logger.warning("No MLP layers found in EAT model")
                 # Fallback to classifier if available
                 if self.classifier is not None:
-                    target_layers = [layer for layer in layers if layer != "all"] + [
-                        "classifier"
-                    ]
+                    target_layers = [
+                        layer for layer in target_layers if layer != "all"
+                    ] + ["classifier"]
                 else:
                     # For features_only mode, return main features when no MLP
                     # layers found
@@ -354,7 +372,9 @@ class EATHFModel(ModelBase):
                         self.pooling = prev_pooling
                         return emb
                     else:
-                        target_layers = [layer for layer in layers if layer != "all"]
+                        target_layers = [
+                            layer for layer in target_layers if layer != "all"
+                        ]
 
         # Register hooks for requested layers (only if not already registered)
         self._register_hooks_for_layers(target_layers)
@@ -412,16 +432,64 @@ class EATHFModel(ModelBase):
                         # Already in correct shape, just append
                         result.append(emb)
                     elif emb.dim() == 3:
-                        aggregated = torch.mean(emb, dim=1)
+                        # Apply aggregation method
+                        if aggregation == "mean":
+                            aggregated = torch.mean(emb, dim=1)
+                        elif aggregation == "max":
+                            aggregated = torch.max(emb, dim=1)[0]
+                        elif aggregation == "cls_token":
+                            # For transformer models, take first token
+                            aggregated = emb[:, 0, :]
+                        elif aggregation == "none":
+                            # Keep full sequence
+                            aggregated = emb
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregation method: {aggregation}"
+                            )
                         result.append(aggregated)
                     else:
                         raise ValueError(
                             f"Unexpected embedding dimension: {emb.dim()}. "
                             f"Expected 2 or 3."
                         )
-                return torch.cat(result, dim=1)
+
+                # Apply aggregation across layers
+                if len(result) > 1:
+                    if aggregation == "mean":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "max":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "cls_token":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "none":
+                        # For 'none', we need to handle multiple layers differently
+                        # Try to stack, but if sizes don't match, fall back to
+                        # concatenation
+                        try:
+                            return torch.stack(result, dim=1)
+                        except RuntimeError:
+                            # If stacking fails due to different sizes, flatten and
+                            # concatenate instead
+                            flattened_results = []
+                            for emb in result:
+                                if emb.dim() == 3:
+                                    # Flatten the 3D tensor to 2D
+                                    batch_size, seq_len, features = emb.shape
+                                    flattened = emb.reshape(batch_size, -1)
+                                    flattened_results.append(flattened)
+                                else:
+                                    flattened_results.append(emb)
+                            return torch.cat(flattened_results, dim=1)
+                else:
+                    return result[0]
             else:
-                return embeddings
+                # Apply aggregation across layers
+                if len(embeddings) > 1 and aggregation == "none":
+                    # Stack along a new dimension to preserve layer information
+                    return torch.stack(embeddings, dim=1)
+                else:
+                    return embeddings
 
         finally:
             # Clear hook outputs for next call

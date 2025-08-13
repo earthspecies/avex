@@ -15,11 +15,23 @@ experiments:
   - run_name: efficientnet_animalspeak
     run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml
     ### which layers to probe for embeddings
-    layers: model.avgpool
+    layers: all
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak.pt
 
+# Streaming embedding extraction configuration
+# Enable streaming for memory-efficient extraction when using "all" layers
+use_streaming_embeddings: true
+streaming_chunk_size: 5000
+hdf5_compression: gzip
+hdf5_compression_level: 4
+auto_chunk_size: true
+max_chunk_size: 5000
+min_chunk_size: 1000
+# Hybrid approach: number of batches to process before writing to disk
+# Higher values reduce I/O overhead but use more memory
+batch_chunk_size: 100
 
 # Where to save the evaluation results
 save_dir: evaluation_results/aaai/efficientnet_animalspeak

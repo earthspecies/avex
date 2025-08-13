@@ -66,7 +66,24 @@ class ModelBase(nn.Module):
 
     def _register_hooks_for_layers(self, layer_names: List[str]) -> None:
         """Register hooks for the specified layers if not already registered."""
+        # Handle 'last_layer' replacement
+        resolved_layer_names = []
         for layer_name in layer_names:
+            if layer_name == "last_layer":
+                # Get the last linear layer name
+                linear_layers = self._get_all_linear_layers()
+                if linear_layers:
+                    resolved_name = linear_layers[-1]
+                    logger.info(f"Replacing 'last_layer' with '{resolved_name}'")
+                    resolved_layer_names.append(resolved_name)
+                else:
+                    logger.warning("No linear layers found, using 'last_layer' as-is")
+                    resolved_layer_names.append(layer_name)
+            else:
+                resolved_layer_names.append(layer_name)
+
+        # Register hooks for resolved layer names
+        for layer_name in resolved_layer_names:
             if layer_name not in self._hooks:
                 # Find the module
                 module = None
@@ -190,6 +207,7 @@ class ModelBase(nn.Module):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
+        aggregation: str = "mean",
     ) -> torch.Tensor:
         """
         Extract embeddings from specified layers of the model.
@@ -201,6 +219,8 @@ class ModelBase(nn.Module):
                    found and used.
             padding_mask: Optional padding mask tensor
             average_over_time: Whether to average embeddings over time dimension
+            aggregation: Aggregation method for multiple layers ('mean', 'max',
+                         'cls_token', 'none')
 
         Returns
         -------
@@ -285,16 +305,63 @@ class ModelBase(nn.Module):
                         # Already in correct shape, just append
                         result.append(emb)
                     elif emb.dim() == 3:
-                        aggregated = torch.mean(emb, dim=1)
+                        # Apply aggregation method
+                        if aggregation == "mean":
+                            aggregated = torch.mean(emb, dim=1)
+                        elif aggregation == "max":
+                            aggregated = torch.max(emb, dim=1)[0]
+                        elif aggregation == "cls_token":
+                            # For transformer models, take first token
+                            aggregated = emb[:, 0, :]
+                        elif aggregation == "none":
+                            # Keep full sequence
+                            aggregated = emb
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregation method: {aggregation}"
+                            )
                         result.append(aggregated)
                     else:
                         raise ValueError(
                             f"Unexpected embedding dimension: {emb.dim()}. "
                             f"Expected 2 or 3."
                         )
-                return torch.cat(result, dim=1)
+
+                # Apply aggregation across layers
+                if len(result) > 1:
+                    if aggregation == "mean":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "max":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "cls_token":
+                        return torch.cat(result, dim=1)
+                    elif aggregation == "none":
+                        # For 'none', we need to handle multiple layers differently
+                        # Try to stack, but if sizes don't match, fall back to
+                        # concatenation
+                        try:
+                            return torch.stack(result, dim=1)
+                        except RuntimeError:
+                            # If stacking fails due to different sizes, flatten and
+                            # concatenate instead
+                            flattened_results = []
+                            for emb in result:
+                                if emb.dim() == 3:
+                                    # Flatten the 3D tensor to 2D
+                                    batch_size, seq_len, features = emb.shape
+                                    flattened = emb.view(batch_size, -1)
+                                    flattened_results.append(flattened)
+                                else:
+                                    flattened_results.append(emb)
+                            return torch.cat(flattened_results, dim=1)
+                else:
+                    return result[0]
             else:
-                return embeddings
+                if len(embeddings) > 1 and aggregation == "none":
+                    # Stack along a new dimension to preserve layer information
+                    return torch.stack(embeddings, dim=1)
+                else:
+                    return embeddings
 
         finally:
             # Clear hook outputs for next call

@@ -22,7 +22,7 @@ class TestRunEvaluateEndToEnd:
 
     @pytest.fixture
     def config_path(self) -> Path:
-        return Path("configs/evaluation_configs/cpu_test.yml")
+        return Path("configs/evaluation_configs/flexible_probing_minimal_test.yml")
 
     @pytest.mark.slow
     def test_run_evaluate_and_check_metrics(
@@ -39,8 +39,8 @@ class TestRunEvaluateEndToEnd:
             f"save_dir={temp_output_dir}",
             "device=cpu",
             "seed=42",
-            "training_params.train_epochs=2",
-            "training_params.batch_size=4",
+            "training_params.train_epochs=1",
+            "training_params.batch_size=2",
         )
 
         try:

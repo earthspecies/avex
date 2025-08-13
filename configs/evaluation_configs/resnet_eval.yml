@@ -26,5 +26,5 @@ num_workers: 0
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval

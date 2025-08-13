@@ -34,6 +34,6 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
 
 overwrite_embeddings: false

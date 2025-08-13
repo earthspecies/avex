@@ -111,7 +111,7 @@ def run_experiment(
     logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
-    frozen = experiment_cfg.frozen
+    frozen = experiment_cfg.is_frozen()
 
     logger.info(
         "Running experiment '%s' on dataset '%s' with frozen: %s",
@@ -167,7 +167,7 @@ def run_experiment(
     test_path = emb_base_dir / "embedding_test.h5"
 
     # Flags to determine which embeddings we need
-    need_probe = "linear_probe" in eval_cfg.eval_modes
+    need_probe = "probe" in eval_cfg.eval_modes
     need_retrieval = "retrieval" in eval_cfg.eval_modes
     need_clustering = "clustering" in eval_cfg.eval_modes
 
@@ -222,9 +222,9 @@ def run_experiment(
     if need_raw_dataloaders:
         eval_data_collection_cfg = DatasetCollectionConfig(
             train_datasets=data_collection_cfg.train_datasets
-            or ([dataset_cfg] if "linear_probe" in eval_cfg.eval_modes else None),
+            or ([dataset_cfg] if "probe" in eval_cfg.eval_modes else None),
             val_datasets=data_collection_cfg.val_datasets
-            or ([dataset_cfg] if "linear_probe" in eval_cfg.eval_modes else None),
+            or ([dataset_cfg] if "probe" in eval_cfg.eval_modes else None),
             test_datasets=[dataset_cfg],  # Always use the current dataset for testing
         )
 
@@ -336,15 +336,7 @@ def run_experiment(
     #  Layer selection
     # ------------------------------------------------------------------ #
     if base_model is not None:
-        if experiment_cfg.layers == "last_layer":
-            linear_layers = [
-                n
-                for n, m in base_model.named_modules()
-                if isinstance(m, torch.nn.Linear)
-            ]
-            layer_names = [linear_layers[-1]]
-        else:
-            layer_names = experiment_cfg.layers.split(",")
+        layer_names = experiment_cfg.get_target_layers()
     else:
         # When base_model is None, we don't need layer names
         layer_names = []
@@ -356,6 +348,9 @@ def run_experiment(
     train_embeds: torch.Tensor | None = None
     train_labels: torch.Tensor | None = None
 
+    # Get aggregation method from probe configuration
+    aggregation_method = experiment_cfg.get_aggregation_method()
+
     # ------------------- embeddings for linear probe ------------------- #
     if need_probe and frozen:
         if not need_recompute_embeddings_train:
@@ -364,16 +359,90 @@ def run_experiment(
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
-            train_embeds, train_labels = extract_embeddings_for_split(
-                base_model, train_dl_raw, layer_names, device
-            )
-            val_embeds, val_labels = extract_embeddings_for_split(
-                base_model, val_dl_raw, layer_names, device
+
+            # Use streaming approach for memory efficiency when extracting from many
+            # layers. This prevents OOM issues when using "all" layers in EfficientNet
+            use_streaming = eval_cfg.use_streaming_embeddings and (
+                len(layer_names) > 5 or "all" in layer_names
             )
 
-            # Persist to disk
-            save_embeddings_arrays(train_embeds, train_labels, train_path, num_labels)
-            save_embeddings_arrays(val_embeds, val_labels, val_path, num_labels)
+            if use_streaming:
+                logger.info(
+                    f"Using streaming approach for memory-efficient embedding "
+                    f"extraction (layers: {len(layer_names)}, streaming enabled: "
+                    f"{eval_cfg.use_streaming_embeddings})"
+                )
+                train_embeds, train_labels = extract_embeddings_for_split(
+                    base_model,
+                    train_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    save_path=train_path,
+                    chunk_size=eval_cfg.streaming_chunk_size,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                    auto_chunk_size=eval_cfg.auto_chunk_size,
+                    max_chunk_size=eval_cfg.max_chunk_size,
+                    min_chunk_size=eval_cfg.min_chunk_size,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+                val_embeds, val_labels = extract_embeddings_for_split(
+                    base_model,
+                    val_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    save_path=val_path,
+                    chunk_size=eval_cfg.streaming_chunk_size,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                    auto_chunk_size=eval_cfg.auto_chunk_size,
+                    max_chunk_size=eval_cfg.max_chunk_size,
+                    min_chunk_size=eval_cfg.min_chunk_size,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+            else:
+                logger.info(
+                    f"Using standard in-memory embedding extraction "
+                    f"(layers: {len(layer_names)}, streaming disabled: "
+                    f"{eval_cfg.use_streaming_embeddings})"
+                )
+                train_embeds, train_labels = extract_embeddings_for_split(
+                    base_model,
+                    train_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+                val_embeds, val_labels = extract_embeddings_for_split(
+                    base_model,
+                    val_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+
+                # Persist to disk if aggregation allows caching
+                if aggregation_method in ["mean", "max"]:
+                    save_embeddings_arrays(
+                        train_embeds,
+                        train_labels,
+                        train_path,
+                        num_labels,
+                        compression=eval_cfg.hdf5_compression,
+                        compression_level=eval_cfg.hdf5_compression_level,
+                    )
+                    save_embeddings_arrays(
+                        val_embeds,
+                        val_labels,
+                        val_path,
+                        num_labels,
+                        compression=eval_cfg.hdf5_compression,
+                        compression_level=eval_cfg.hdf5_compression_level,
+                    )
 
         train_ds = EmbeddingDataset(train_embeds, train_labels)
         val_ds = EmbeddingDataset(val_embeds, val_labels)
@@ -386,11 +455,58 @@ def run_experiment(
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
-            train_embeds, train_labels = extract_embeddings_for_split(
-                base_model, train_dl_raw, layer_names, device
+
+            # Use streaming approach for memory efficiency when extracting from many
+            # layers
+            use_streaming = eval_cfg.use_streaming_embeddings and (
+                len(layer_names) > 5 or "all" in layer_names
             )
-            # Persist to disk
-            save_embeddings_arrays(train_embeds, train_labels, train_path, num_labels)
+
+            if use_streaming:
+                logger.info(
+                    f"Using streaming approach for memory-efficient embedding "
+                    f"extraction (retrieval) (layers: {len(layer_names)}, streaming "
+                    f"enabled: {eval_cfg.use_streaming_embeddings})"
+                )
+                train_embeds, train_labels = extract_embeddings_for_split(
+                    base_model,
+                    train_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    save_path=train_path,
+                    chunk_size=eval_cfg.streaming_chunk_size,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                    auto_chunk_size=eval_cfg.auto_chunk_size,
+                    max_chunk_size=eval_cfg.max_chunk_size,
+                    min_chunk_size=eval_cfg.min_chunk_size,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+            else:
+                logger.info(
+                    f"Using standard in-memory embedding extraction (retrieval) "
+                    f"(layers: {len(layer_names)}, streaming disabled: "
+                    f"{eval_cfg.use_streaming_embeddings})"
+                )
+                train_embeds, train_labels = extract_embeddings_for_split(
+                    base_model,
+                    train_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+                # Persist to disk if aggregation allows caching
+                if aggregation_method in ["mean", "max"]:
+                    save_embeddings_arrays(
+                        train_embeds,
+                        train_labels,
+                        train_path,
+                        num_labels,
+                        compression=eval_cfg.hdf5_compression,
+                        compression_level=eval_cfg.hdf5_compression_level,
+                    )
 
     # ------------------- embeddings for retrieval and clustering -------- #
     if need_retrieval or need_probe or need_clustering:
@@ -402,10 +518,57 @@ def run_experiment(
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
-            test_embeds, test_labels = extract_embeddings_for_split(
-                base_model, test_dl_raw, layer_names, device
+
+            # Use streaming approach for memory efficiency when extracting from many
+            # layers
+            use_streaming = eval_cfg.use_streaming_embeddings and (
+                len(layer_names) > 5 or "all" in layer_names
             )
-            save_embeddings_arrays(test_embeds, test_labels, test_path, num_labels)
+
+            if use_streaming:
+                logger.info(
+                    f"Using streaming approach for memory-efficient embedding "
+                    f"extraction (test) (layers: {len(layer_names)}, streaming "
+                    f"enabled: {eval_cfg.use_streaming_embeddings})"
+                )
+                test_embeds, test_labels = extract_embeddings_for_split(
+                    base_model,
+                    test_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    save_path=test_path,
+                    chunk_size=eval_cfg.streaming_chunk_size,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                    auto_chunk_size=eval_cfg.auto_chunk_size,
+                    max_chunk_size=eval_cfg.max_chunk_size,
+                    min_chunk_size=eval_cfg.min_chunk_size,
+                )
+            else:
+                logger.info(
+                    f"Using standard in-memory embedding extraction (test) "
+                    f"(layers: {len(layer_names)}, streaming disabled: "
+                    f"{eval_cfg.use_streaming_embeddings})"
+                )
+                test_embeds, test_labels = extract_embeddings_for_split(
+                    base_model,
+                    test_dl_raw,
+                    layer_names,
+                    device,
+                    aggregation=aggregation_method,
+                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                )
+                # Persist to disk if aggregation allows caching
+                if aggregation_method in ["mean", "max"]:
+                    save_embeddings_arrays(
+                        test_embeds,
+                        test_labels,
+                        test_path,
+                        num_labels,
+                        compression=eval_cfg.hdf5_compression,
+                        compression_level=eval_cfg.hdf5_compression_level,
+                    )
 
         num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 
@@ -424,7 +587,7 @@ def run_experiment(
     val_metrics: Dict[str, float] = {}
     probe_test_metrics: Dict[str, float] = {}
 
-    if "linear_probe" in eval_cfg.eval_modes:
+    if "probe" in eval_cfg.eval_modes:
         dataset_metrics = evaluation_set_metrics or getattr(
             dataset_cfg, "metrics", None
         )

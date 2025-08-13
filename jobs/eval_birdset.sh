@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 
 #SBATCH --partition=a100-40
-#SBATCH --qos=aaai-2026
 #SBATCH --gpus=1
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-eval-birdset"
 #SBATCH --cpus-per-gpu=14
-uv tool install keyring --with keyrings.google-artifactregistry-auth
+#uv tool install keyring --with keyrings.google-artifactregistry-auth
 # export GOOGLE_APPLICATION_CREDENTIALS=/home/marius_miron_earthspecies_org/.config/gcloud/application_default_credentials.json
 # export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 
@@ -15,7 +14,7 @@ uv sync
 echo $UV_PROJECT_ENVIRONMENT
 export PYTHONBUFFERED=1
 
-srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/perch.yml --patch dataset_config=configs/data_configs/benchmark_birdset_gs.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/sl_efficientnet_animalspeak_alllayers.yml  --patch dataset_config=configs/data_configs/benchmark_birdset_debug.yml
 
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/efficientnet_beans.yml
 
