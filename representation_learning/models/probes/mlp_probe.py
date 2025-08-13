@@ -5,44 +5,50 @@ from typing import List, Optional
 import torch
 import torch.nn as nn
 
-from representation_learning.models.probes.base_probe import BaseProbe
+from representation_learning.models.base_model import ModelBase
 
 
-class MLPProbe(BaseProbe):
+class MLPProbe(torch.nn.Module):
     """MLP probe for classification tasks.
 
     Args:
-        input_dim: Input dimension
-        output_dim: Output dimension (number of classes)
-        base_model: Optional base model for feature extraction
+        base_model: Frozen backbone network to pull embeddings from. Can be None if
+            feature_mode=True.
+        layers: List of layer names to extract embeddings from.
+        num_classes: Number of output classes.
+        device: Device to run on.
         feature_mode: Whether to use the input directly as embeddings.
-        input_dim: Input dimension when in feature mode. Required if base_model is None.
+        input_dim: Input dimension when in feature_mode=True.
+            Required if base_model is None.
         aggregation: How to aggregate multiple layer embeddings ('mean', 'max',
                     'concat').
         hidden_dims: List of hidden layer dimensions.
         dropout_rate: Dropout rate for regularization.
         activation: Activation function to use.
+        use_positional_encoding: Whether to add positional encoding.
     """
 
     def __init__(
         self,
-        input_dim: int,
-        output_dim: int,
-        base_model: Optional[nn.Module] = None,
+        base_model: Optional[ModelBase],
+        layers: List[str],
+        num_classes: int,
+        device: str = "cuda",
         feature_mode: bool = False,
+        input_dim: Optional[int] = None,
         aggregation: str = "mean",
         hidden_dims: Optional[List[int]] = None,
         dropout_rate: float = 0.1,
         activation: str = "relu",
         use_positional_encoding: bool = False,
     ) -> None:
-        super().__init__(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            base_model=base_model,
-            feature_mode=feature_mode,
-            aggregation=aggregation,
-        )
+        super().__init__()
+
+        self.device = device
+        self.base_model = base_model
+        self.layers = layers
+        self.feature_mode = feature_mode
+        self.aggregation = aggregation
 
         if hidden_dims is None:
             hidden_dims = [512, 256]
@@ -54,17 +60,57 @@ class MLPProbe(BaseProbe):
         # Determine classifier input dimension
         if self.feature_mode:
             # Embeddings will be fed directly – base_model may be None.
-            inferred_dim = input_dim
+            if input_dim is not None:
+                inferred_dim = input_dim
+            else:
+                if base_model is None:
+                    raise ValueError(
+                        "input_dim must be provided when feature_mode=True "
+                        "and base_model is None"
+                    )
+                with torch.no_grad():
+                    # Derive dim via one dummy forward
+                    # Handle different audio processor types
+                    if hasattr(base_model.audio_processor, "target_length_seconds"):
+                        target_length = (
+                            base_model.audio_processor.target_length_seconds
+                            * base_model.audio_processor.sr
+                        )
+                    elif hasattr(base_model.audio_processor, "target_length"):
+                        # For processors like EAT that use target_length in frames
+                        target_length = base_model.audio_processor.target_length
+                    else:
+                        # Fallback: use a reasonable default
+                        target_length = 16000  # 1 second at 16kHz
+
+                    dummy = torch.randn(1, target_length, device=device)
+                    inferred_dim = base_model.extract_embeddings(
+                        dummy, layers=layers
+                    ).shape[1]
         else:
             # We will compute embeddings inside forward – need base_model.
             if base_model is None:
                 raise ValueError("base_model must be provided when feature_mode=False")
-            # For now, use a default dimension - this should be updated based on
-            # actual usage
-            inferred_dim = input_dim
+            with torch.no_grad():
+                # Handle different audio processor types
+                if hasattr(base_model.audio_processor, "target_length_seconds"):
+                    target_length = (
+                        base_model.audio_processor.target_length_seconds
+                        * base_model.audio_processor.sr
+                    )
+                elif hasattr(base_model.audio_processor, "target_length"):
+                    # For processors like EAT that use target_length in frames
+                    target_length = base_model.audio_processor.target_length
+                else:
+                    # Fallback: use a reasonable default
+                    target_length = 16000  # 1 second at 16kHz
+                dummy = torch.randn(1, target_length, device=device)
+                inferred_dim = base_model.extract_embeddings(
+                    dummy, layers=layers
+                ).shape[1]
 
         # Build MLP layers
-        self.mlp = self._build_mlp(inferred_dim, output_dim)
+        self.mlp = self._build_mlp(inferred_dim, num_classes)
 
     def _build_mlp(self, input_dim: int, output_dim: int) -> nn.Module:
         """Build the MLP architecture.
@@ -137,7 +183,7 @@ class MLPProbe(BaseProbe):
             embeddings = x  # type: ignore[arg-type]
         else:
             if self.base_model is None:
-                raise ValueError("base_model must be provided when not in feature mode")
+                raise ValueError("base_model must be provided when feature_mode=False")
             embeddings = self.base_model.extract_embeddings(
                 x, self.layers, padding_mask=padding_mask
             )

@@ -1235,6 +1235,18 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         ),
     )
 
+    # Hybrid approach: number of batches to process before writing to disk
+    # Higher values reduce I/O overhead but use more memory
+    batch_chunk_size: int = Field(
+        10,
+        ge=1,
+        description=(
+            "Number of batches to process in memory before writing to disk when "
+            "using streaming embedding extraction. Higher values reduce I/O overhead "
+            "but use more memory. Default is 10 for a good balance."
+        ),
+    )
+
     # Optional path to append all results to a single CSV file
     results_csv_path: Optional[str] = Field(
         None,

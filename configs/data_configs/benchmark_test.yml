@@ -20,7 +20,6 @@ evaluation_sets:
         - type: uniform_sample
           property: label
           ratio: 0.2
-
       sample_rate: 16000
     validation:
       <<: *dogs_base

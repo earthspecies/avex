@@ -110,13 +110,13 @@ class LinearProbe(torch.nn.Module):
         Returns:
             Classification logits of shape (batch_size, num_classes)
         Raises:
-            ValueError: If base_model is None when not in feature mode
+            ValueError: If base_model is None when feature_mode=False
         """
         if self.feature_mode:
             embeddings = x  # type: ignore[arg-type]
         else:
             if self.base_model is None:
-                raise ValueError("base_model must be provided when not in feature mode")
+                raise ValueError("base_model must be provided when feature_mode=False")
             embeddings = self.base_model.extract_embeddings(
                 x, self.layers, padding_mask=padding_mask
             )
