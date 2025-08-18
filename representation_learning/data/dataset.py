@@ -8,7 +8,7 @@ os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
 import logging
 import multiprocessing
 import random
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Generator, Optional, Tuple
 
 import numpy as np
 import torch
@@ -95,6 +95,41 @@ class AudioDataset(torch.utils.data.Dataset):
                 sample = postprocessor(sample)
 
         return sample
+
+
+class AudioIterableDataset(torch.utils.data.IterableDataset):
+    """A wrapper around a Dataset instance for audio data.
+    Allows for post-processing of audio samples after retrieval.
+    """
+
+    def __init__(
+        self, ds: Dataset, metadata: dict, postprocessors: Optional[list[Any]] = None
+    ) -> None:
+        """Initialize the AudioDataset with a Dataset instance."""
+        self.ds = ds
+        self.metadata = metadata
+        self.postprocessors = postprocessors or []
+
+    def __iter__(self) -> Generator[dict[str, Any], None, None]:
+        """Get a specific sample from the dataset.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to retrieve.
+
+        Yields
+        ------
+        dict[str, Any]
+            A dictionary containing the audio data, text label, label, and path.
+        """
+        for sample in self.ds:
+            # Apply postprocessors to each sample
+            if self.postprocessors:
+                for postprocessor in self.postprocessors:
+                    sample = postprocessor(sample)
+
+            yield sample
 
 
 def _build_one_dataset_split(
@@ -233,34 +268,54 @@ def _build_datasets(
         if test_ds and cfg.transformations:
             test_ds.apply_transformations(cfg.transformations)
 
-    train_ds = AudioDataset(
-        train_ds,
-        metadata={
-            "label_map": label_map,
-            "num_labels": num_classes,
-        },
-        postprocessors=postprocessors,
-    )
-
-    if val_ds:
-        val_ds = AudioDataset(
-            val_ds,
-            postprocessors=postprocessors,
+    # Determine if train_ds is an IterableDataset or not
+    if hasattr(train_ds, "streaming") and train_ds.streaming:
+        # If it's an IterableDataset, we need to wrap it
+        train_ds = AudioIterableDataset(
+            train_ds, metadata=train_metadata, postprocessors=postprocessors
+        )
+    else:
+        # Otherwise, we can use AudioDataset directly
+        train_ds = AudioDataset(
+            train_ds,
             metadata={
                 "label_map": label_map,
                 "num_labels": num_classes,
             },
+            postprocessors=postprocessors,
         )
 
-    if test_ds:
-        test_ds = AudioDataset(
-            test_ds,
-            postprocessors=postprocessors,
-            metadata={
-                "label_map": label_map,
-                "num_labels": num_classes,
-            },
-        )
+    if val_ds is not None:
+        if hasattr(val_ds, "streaming") and val_ds.streaming:
+            # If it's an IterableDataset, we need to wrap it
+            val_ds = AudioIterableDataset(
+                val_ds, metadata=train_metadata, postprocessors=postprocessors
+            )
+        else:
+            val_ds = AudioDataset(
+                val_ds,
+                postprocessors=postprocessors,
+                metadata={
+                    "label_map": train_metadata.get("label_map", {}),
+                    "num_labels": num_classes,
+                },
+            )
+
+    if test_ds is not None:
+        if hasattr(test_ds, "streaming") and test_ds.streaming:
+            # If it's an IterableDataset, we need to wrap it
+            test_ds = AudioIterableDataset(
+                test_ds, metadata=train_metadata, postprocessors=postprocessors
+            )
+        else:
+            test_ds = AudioDataset(
+                test_ds,
+                postprocessors=postprocessors,
+                metadata={
+                    "label_map": train_metadata.get("label_map", {}),
+                    "num_labels": num_classes,
+                },
+            )
 
     return train_ds, val_ds, test_ds
 

@@ -1,0 +1,31 @@
+train_datasets:
+  - dataset_name: tar_dataset
+    data_root: gs://representation-learning/sharded_datasets/animalspeak_audioset/train/16KHz
+    split: animalspeak_audioset_train  # doesn't matter, just a placeholder
+    output_take_and_give: null
+    sample_rate: null
+    shard_pattern: "*.tar"
+    within_shard_shuffle: false
+    within_shard_shuffle_size: 1000
+    across_shard_shuffle: true
+    across_shard_shuffle_size: 1000
+    seed: 42
+    split_by_worker: false
+
+val_datasets:
+  - dataset_name: tar_dataset
+    data_root: gs://representation-learning/sharded_datasets/animalspeak_audioset/val/16KHz
+    split: validation
+    output_take_and_give: null
+    sample_rate: null
+    shard_pattern: "*.tar"
+    within_shard_shuffle: false
+    within_shard_shuffle_size: 1000
+    across_shard_shuffle: true
+    across_shard_shuffle_size: 1000
+    seed: 42
+    split_by_worker: false
+
+concatenate_train: false
+concatenate_val: false
+concatenate_method: soft
