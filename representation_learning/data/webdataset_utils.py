@@ -296,6 +296,8 @@ class TarDatasetConfig(DatasetConfig):
 class TarDataset(Dataset):
     info = DatasetInfo(
         name="tar_dataset",
+        owner="repr-learning",
+        version="0.1.0",
         description="A dataset for loading tar files with audio data.",
         split_paths={},
         sources="unknown",
@@ -309,13 +311,12 @@ class TarDataset(Dataset):
         output_take_and_give: dict[str, str] | None = None,
         sample_rate: int | None = None,
         data_processor: Callable | None = audio_decoder,
-        file_pattern: str = "*.tar",
-        shuffle_size: int | None = None,
-        batch_size: int | None = None,
-        shard_shuffle: bool = False,
-        shard_shuffle_size: int = 1000,
+        shard_pattern: str = "*.tar",
+        within_shard_shuffle: bool = False,
+        within_shard_shuffle_size: int = 1000,
+        across_shard_shuffle: bool = False,
+        across_shard_shuffle_size: int = 1000,
         split_by_worker: bool = False,
-        batch_collate_fn: Callable | None = None,
         seed: int | None = 42,
     ) -> None:
         """Initialize the TarDataset.
@@ -337,14 +338,13 @@ class TarDataset(Dataset):
         self.split = split
         self._data: wds.WebDataset = load_webdataset(
             path=data_root,
-            file_pattern=file_pattern,
+            file_pattern=shard_pattern,
             data_processor=data_processor,
-            shuffle_size=shuffle_size,
-            batch_size=batch_size,
-            shard_shuffle=shard_shuffle,
-            shard_shuffle_size=shard_shuffle_size,
+            shuffle_size=within_shard_shuffle_size if within_shard_shuffle else None,
+            batch_size=None,
+            shard_shuffle=across_shard_shuffle,
+            shard_shuffle_size=across_shard_shuffle_size,
             split_by_worker=split_by_worker,
-            batch_collate_fn=batch_collate_fn,
             seed=seed,
         )
         self.data_root = anypath(data_root)
@@ -364,6 +364,9 @@ class TarDataset(Dataset):
     def available_splits(self) -> list[str]:
         """Return the available splits of the dataset."""
         return list(self.info.split_paths.keys())
+
+    def _load(self) -> None:
+        pass
 
     @classmethod
     def from_config(
@@ -393,7 +396,7 @@ class TarDataset(Dataset):
             "data_root": cfg.get("data_root"),
         }
         if "shard_pattern" in cfg:
-            kwargs["file_pattern"] = cfg["shard_pattern"]
+            kwargs["shard_pattern"] = cfg["shard_pattern"]
         if "within_shard_shuffle" in cfg:
             kwargs["within_shard_shuffle"] = cfg["within_shard_shuffle"]
         if "within_shard_shuffle_size" in cfg:

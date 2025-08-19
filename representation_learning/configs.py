@@ -770,6 +770,41 @@ class DatasetCollectionConfig(BaseModel):
             )
         return self
 
+    @classmethod
+    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> Self:
+        """
+        Create a RunConfig object from a YAML file and CLI arguments. If there are any
+        conflicts, the CLI arguments will take precedence over the YAML file.
+
+        Parameters
+        ----------
+        yaml_file : str | Path
+            Path to the YAML configuration file
+        cli_args : tuple[str, ...]
+            Tuple of CLI arguments to override the YAML file
+
+        Returns
+        -------
+        RunConfig
+            Validated configuration object
+
+        Raises
+        ------
+        FileNotFoundError
+            If the configuration file does not exist
+        """
+
+        yaml_file = Path(yaml_file)
+        if not yaml_file.exists():
+            raise FileNotFoundError(f"Config file {yaml_file} does not exist")
+
+        yaml_values = YamlConfigSettingsSource(cls, yaml_file=yaml_file)
+        cli_values = CliSettingsSource(
+            cls, cli_parse_args=["--" + opt for opt in cli_args]
+        )
+        final_values = deep_update(yaml_values(), cli_values())
+        return cls.model_validate(final_values)
+
 
 class EvaluationSet(BaseModel):
     """Configuration for a single evaluation set (train/val/test triplet)."""

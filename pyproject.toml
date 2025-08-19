@@ -44,6 +44,7 @@ dependencies = [
   "esp-sweep>=0.2.0",
   "wandb>=0.21.0",
   "birdnetlib>=0.18.0",
+  "webdataset>=1.0.2",
 ]
 
 [dependency-groups]
