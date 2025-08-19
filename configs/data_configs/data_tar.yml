@@ -5,12 +5,12 @@ train_datasets:
     output_take_and_give: null
     sample_rate: null
     shard_pattern: "*.tar"
-    within_shard_shuffle: false
+    within_shard_shuffle: true
     within_shard_shuffle_size: 1000
     across_shard_shuffle: true
     across_shard_shuffle_size: 1000
     seed: 42
-    split_by_worker: false
+    split_by_worker: false  # if true, each worker will get a different split of the dataset, might be faster ?
 
 val_datasets:
   - dataset_name: tar_dataset
@@ -21,7 +21,7 @@ val_datasets:
     shard_pattern: "*.tar"
     within_shard_shuffle: false
     within_shard_shuffle_size: 1000
-    across_shard_shuffle: true
+    across_shard_shuffle: false
     across_shard_shuffle_size: 1000
     seed: 42
     split_by_worker: false
