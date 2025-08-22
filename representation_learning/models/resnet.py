@@ -1,5 +1,6 @@
-# ResNet audio classifier integrated with the common **ModelBase** interface
-# so it can be used transparently by the training / evaluation utilities.
+"""ResNet audio classifier integrated with the common **ModelBase** interface
+so it can be used transparently by the training / evaluation utilities.
+"""
 
 from __future__ import annotations
 

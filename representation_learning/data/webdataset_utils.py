@@ -1,3 +1,5 @@
+"""Utility functions for working with WebDataset and Tar archives"""
+
 import io
 import json
 from typing import Any, Callable, Iterator
@@ -294,6 +296,8 @@ class TarDatasetConfig(DatasetConfig):
 
 @register_dataset
 class TarDataset(Dataset):
+    """A convenience class for loading tar files with audio data."""
+
     info = DatasetInfo(
         name="tar_dataset",
         owner="repr-learning",
@@ -332,6 +336,22 @@ class TarDataset(Dataset):
             The root directory for the dataset. This is required!
         data_processor : Callable, optional
             Function to process the data. Defaults to audio_decoder.
+        shard_pattern : str, default="*.tar"
+            The pattern to match the shard files in the dataset directory.
+        within_shard_shuffle : bool, default=False
+            Whether to shuffle the samples within each shard.
+        within_shard_shuffle_size : int, default=1000
+            Size of the shuffle buffer for within-shard shuffling.
+        across_shard_shuffle : bool, default=False
+            Whether to shuffle the shards themselves.
+        across_shard_shuffle_size : int, default=1000
+            Size of the shuffle buffer for across-shard shuffling.
+        split_by_worker : bool, default=False
+            Whether to split the dataset by worker. If True, each worker will
+            only see a subset of the dataset.
+        seed : int | None, default=42
+            Seed for shuffling. If None, no shuffling will be applied.
+            Defaults to 42.
         """
         super().__init__(output_take_and_give)
 

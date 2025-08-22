@@ -1,3 +1,5 @@
+"""AVES model wrapper for representation learning."""
+
 from typing import List, Optional
 
 import torch
@@ -8,6 +10,8 @@ from representation_learning.models.base_model import ModelBase
 
 
 class AVESConfig:
+    """Configuration for the AVES model."""
+
     def __init__(self, cfg: Optional[dict] = None) -> None:
         # Extractor configuration
         self.extractor_mode: str = "group_norm"  # mode for feature extractor

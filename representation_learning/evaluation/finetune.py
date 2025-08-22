@@ -1,3 +1,5 @@
+"""Fine-tuning utilities for training and evaluating linear probes or full models."""
+
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -18,10 +20,35 @@ logging.basicConfig(
 )
 
 
-# -------------------------------------------------------------------- #
-#  FineTuneTrainer
-# -------------------------------------------------------------------- #
 class FineTuneTrainer:
+    """Fine-tuning trainer for training and evaluating models on audio tasks.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model to fine-tune.
+    optimizer : torch.optim.Optimizer
+        Optimizer for updating model parameters.
+    train_loader : torch.utils.data.DataLoader
+        DataLoader for training data.
+    val_loader : torch.utils.data.DataLoader
+        DataLoader for validation data.
+    device : torch.device
+        Device to run the model on (e.g., 'cuda', 'cpu').
+    cfg : EvaluateConfig
+        Configuration object containing evaluation parameters.
+    exp_logger : ExperimentLogger
+        Logger for tracking experiment metrics.
+    num_labels : int
+        Number of output classes for the model.
+    multi_label : bool, optional
+        Whether the task is multi-label classification (default: False) or multi-class
+    dataset_metrics : Optional[List[str]], optional
+        List of metrics to compute for the dataset. If not provided, defaults to
+        accuracy for single-label classification tasks. For multi-label tasks,
+        explicit metrics must be provided.
+    """
+
     def __init__(
         self,
         model: torch.nn.Module,

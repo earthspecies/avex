@@ -18,6 +18,10 @@ from sklearn.metrics import (
 
 
 class Accuracy:
+    """Compute accuracy for classification tasks.
+    Accuracy = (TP + TN) / (TP + TN + FP + FN)
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_pred = []
@@ -60,6 +64,11 @@ class Accuracy:
 
 
 class BinaryF1Score:
+    """Compute F1 score for binary classification tasks.
+    F1 score is the harmonic mean of precision and recall.
+    F1 = 2 * (precision * recall) / (precision + recall)
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_pred = []
@@ -111,6 +120,11 @@ class BinaryF1Score:
 
 
 class MulticlassBinaryF1Score:
+    """Compute macro-averaged F1 score for multi-class classification tasks.
+    This implementation handles multi-class classification by treating each class
+    as a separate binary classification problem and averaging the F1 scores.
+    """
+
     def __init__(self, num_classes: int) -> None:
         self.num_classes = num_classes
         self.y_true = []
@@ -157,6 +171,11 @@ class MulticlassBinaryF1Score:
 
 
 class AveragePrecision:
+    """Compute average precision (AP) for multi-label classification tasks.
+    This implementation collects predictions and ground truth labels and computes
+    average precision using scikit-learn's `average_precision_score`.
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_scores = []
@@ -214,6 +233,11 @@ class AveragePrecision:
 
 
 class MeanAveragePrecision:
+    """Compute mean average precision (mAP) for multi-label classification tasks.
+    This implementation aggregates average precision scores across all classes
+    and returns the mean value.
+    """
+
     def __init__(self) -> None:
         self.ap = AveragePrecision()
 
@@ -251,6 +275,10 @@ class MeanAveragePrecision:
 
 
 class BalancedAccuracy:
+    """Compute balanced accuracy for classification tasks.
+    It is defined as the average of recall obtained on each class.
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_pred = []

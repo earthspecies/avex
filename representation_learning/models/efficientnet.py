@@ -1,3 +1,7 @@
+"""EfficientNet (B0/B1) model implementation for audio processing.
+Paper: https://arxiv.org/abs/1905.11946
+"""
+
 from typing import List, Optional
 
 import torch
@@ -11,6 +15,28 @@ from representation_learning.models.base_model import ModelBase
 
 # EfficientNet (B0/B1). Each class should be called "Model."
 class Model(ModelBase):
+    """EfficientNet model for audio processing.
+    Conv net based classifier with optimized depth and width
+    B0 and B1 are variants.
+
+    Can return both features or logits based on initialization flag.
+
+    Parameters
+    ----------
+    num_classes : int, optional
+        Number of output classes (default is 1000 for ImageNet)
+    pretrained : bool, optional
+        Whether to load pretrained weights (default is True)
+    device : str, optional
+        Device to run the model on (default is "cuda")
+    audio_config : Optional[AudioConfig], optional
+        Audio configuration for processing (default is None)
+    return_features_only : bool, optional
+        If True, returns features instead of logits (default is False)
+    efficientnet_variant : str, optional
+        Variant of EfficientNet to use ("b0" or "b1", default is "b0")
+    """
+
     def __init__(
         self,
         num_classes: int = 1000,

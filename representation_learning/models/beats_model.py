@@ -1,3 +1,5 @@
+"""BEATs model wrapper for representation learning."""
+
 from typing import List, Optional
 
 import torch

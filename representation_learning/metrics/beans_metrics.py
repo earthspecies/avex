@@ -266,6 +266,10 @@ class AveragePrecision:
 
 
 class MeanAveragePrecision:
+    """Mean Average Precision (mAP) metric for multi-label classification.
+    averages Average Precision across classes.
+    """
+
     def __init__(self) -> None:
         self.ap = AveragePrecision()
 

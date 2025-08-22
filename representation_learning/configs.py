@@ -106,6 +106,8 @@ class TrainingParams(BaseModel):
 
 
 class NoiseAugment(BaseModel):
+    """Configuration for noise augmentation."""
+
     kind: Literal["noise"] = "noise"
     noise_dirs: List[str]
     snr_db_range: Tuple[int, int] = Field(..., min_length=2, max_length=2)
@@ -121,6 +123,10 @@ class NoiseAugment(BaseModel):
 
 
 class MixupAugment(BaseModel):
+    """Configuration for mixup augmentation.
+    This applies linear interpolation between pairs of audio samples.
+    """
+
     kind: Literal["mixup"] = "mixup"
     alpha: float = Field(..., gt=0)
     n_mixup: int = Field(1, ge=1, description="Number of mixup pairs per batch")
@@ -138,6 +144,10 @@ Augment = Union[NoiseAugment, MixupAugment]
 
 
 class AudioConfig(BaseModel):
+    """Configuration for audio preprocessing like resampling and windowing
+    and feature extraction like computing spectrograms or mel-spectrograms.
+    """
+
     sample_rate: int = 16000
     n_fft: int = 2048
     hop_length: Optional[int] = None

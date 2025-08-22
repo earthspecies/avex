@@ -7,6 +7,8 @@ Header info specific to ESP
 import os
 import re
 
+FOLDERS_TO_DROP = ["representation_learning/models/eat"]
+
 
 def extractName(s: str, search_class: bool = False) -> str:
     """Extracts the names of the function or classes in the input string.
@@ -188,6 +190,10 @@ def get_all_files(
     for entry in listOfFile:
         # Create full path
         fullPath = os.path.join(dirName, entry)
+
+        # if entry matches the FOLDERS_TO_DROP then skip it
+        if any(folder in fullPath for folder in FOLDERS_TO_DROP):
+            continue
 
         # If entry is a directory then get the list of files in this directory
         if os.path.isdir(fullPath):

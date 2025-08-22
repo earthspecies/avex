@@ -1,4 +1,5 @@
-# representation_learning/models/birdnet.py
+"""BirdNet model wrapper for PyTorch."""
+
 import contextlib
 import logging
 import os

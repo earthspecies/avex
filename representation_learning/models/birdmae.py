@@ -1,3 +1,7 @@
+"""BirdMAE model implementation.
+Paper: https://arxiv.org/abs/2504.12880
+"""
+
 from typing import List, Optional
 
 import torch
@@ -9,6 +13,27 @@ from representation_learning.models.base_model import ModelBase
 
 
 class Model(ModelBase):
+    """BirdMAE model for audio processing.
+    This model extracts features from audio based on a MaskedAutoencoder architecture
+    and can be used for classification tasks, if num_classes is specified.
+
+    Parameters
+    ----------
+    num_classes : int, optional
+        Number of output classes (default is 1000 for ImageNet)
+    pretrained : bool, optional
+        Whether to load pretrained weights (default is True)
+    device : str, optional
+        Device to run the model on (default is "cuda")
+    audio_config : Optional[AudioConfig], optional
+        Audio configuration for processing (default is None)
+    return_features_only : bool, optional
+        If True, returns features instead of logits (default is False)
+    model_id : str, optional
+        Hugging Face model ID for BirdMAE
+        (default is "DBD-research-group/Bird-MAE-huge")
+    """
+
     def __init__(
         self,
         num_classes: int = 1000,

@@ -1,3 +1,5 @@
+"""Utility functions for extracting and saving embeddings from a model."""
+
 from __future__ import annotations
 
 import logging
@@ -198,6 +200,8 @@ def load_embeddings_from_disk(save_dir: Path, split: str) -> torch.utils.data.Da
     """
 
     class HDF5EmbeddingDataset(torch.utils.data.Dataset):
+        """Torch Dataset for loading embeddings and labels from an HDF5 file."""
+
         def __init__(self, h5_path: Path) -> None:
             self.h5_path = h5_path
             self.h5_file = h5py.File(h5_path, "r")

@@ -1,3 +1,7 @@
+"""Base Model Class for Representation Learning.
+All models should inherit from this class.
+"""
+
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +15,20 @@ logger = logging.getLogger(__name__)
 
 
 class ModelBase(nn.Module):
+    """
+    Base class for all representation learning models.
+    This class provides common functionality for model preparation,
+    audio processing, and embedding extraction.
+
+    Parameters
+    ----------
+    device: str
+        The device on which the model will be run (e.g., 'cuda', 'cpu').
+    audio_config: Optional[Dict[str, Any]]
+        AudioConfig dictionary containing parameters for audio processing.
+        If None, no audio processing will be applied.
+    """
+
     def __init__(
         self, device: str, audio_config: Optional[Dict[str, Any]] = None
     ) -> None:

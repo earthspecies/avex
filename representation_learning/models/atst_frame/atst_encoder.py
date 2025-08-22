@@ -1,3 +1,5 @@
+"""ATST Frame model encoder implementation."""
+
 from typing import List, Optional
 
 import torch

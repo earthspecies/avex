@@ -71,6 +71,8 @@ logging.basicConfig(
 # -------------------------------------------------------------------- #
 @dataclass
 class ExperimentResult:
+    """Final result of an experiment run."""
+
     dataset_name: str
     experiment_name: str
     evaluation_dataset_name: Optional[
