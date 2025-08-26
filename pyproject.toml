@@ -1,9 +1,3 @@
-# TODO (OSS): change [project]`, `[dependency-groups]`,
-# `[project.urls]`, and `[tool.hatch.build.targets.wheel]
-# According to your needs.
-# #  "pysoundfile>=0.9.0.post1",
-
-
 [project]
 name = "representation-learning"
 version = "1.0.0"
@@ -55,7 +49,6 @@ dev = [
   "ruff<=0.11.2",
   "click<=8.1.7",
   "isort<=5.13.2",
-  "pytest<=7.4.0",
   "yamllint<=1.35.1",
   "ipykernel>=6.29.5",
 ]
@@ -70,7 +63,6 @@ explicit = true
 
 [tool.uv.sources]
 esp-data = { index = "esp-pypi" }
-#esp-data = { path = "./esp_data_reference" }
 esp-sweep = { index = "esp-pypi" }
 # esp_data package - using local reference
 # Original remote configuration (commented out):
@@ -94,7 +86,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["representation_learning"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.pytest.ini_options]
+pythonpath = [
+  ".", "representation_learning",
+]
 python_files = [
     "test_*.py",
     "check_*.py",

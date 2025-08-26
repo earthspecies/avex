@@ -137,7 +137,7 @@ class EATAudioProcessor:
                 mel = (mel - self.norm_mean) / (self.norm_std * 2)
 
             # Transpose so final shape is (n_mels, T)
-            fbanks.append(mel)
+            fbanks.append(mel.transpose(0, 1))
 
         fbanks_batch = torch.stack(fbanks, dim=0)  # (B, n_mels, T)
         return fbanks_batch.to(original_device)

@@ -71,7 +71,7 @@ def mock_config() -> RunConfig:
             optimizer="adamw",
             weight_decay=0.01,
         ),
-        dataset_config="test_dataset.yml",
+        dataset_config="tests/samples/test_data_config.yml",
         output_dir="test_output",
         loss_function="cross_entropy",
         scheduler=SchedulerConfig(),

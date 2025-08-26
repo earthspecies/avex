@@ -83,7 +83,7 @@ def universal_torch_load(
         f = path
 
     with open(f, "rb") as opened_file:
-        return torch.load(opened_file, **kwargs)
+        return torch.load(opened_file, weights_only=True, **kwargs)
 
 
 # -------------------------------------------------------------------- #

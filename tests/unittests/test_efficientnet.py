@@ -1,6 +1,8 @@
 import torch
 
-from representation_learning.models.base_model import EfficientNet
+from representation_learning.models.efficientnet import (
+    Model as EfficientNet,
+)
 
 
 def test_efficientnet() -> None:
@@ -17,7 +19,7 @@ def test_efficientnet() -> None:
     dummy_input = torch.randn(8, 3, 224, 224).to(device)
 
     # Perform a forward pass
-    outputs = model(dummy_input)
+    outputs = model(dummy_input, padding_mask=None)
     print("Output shape:", outputs.shape)
 
 

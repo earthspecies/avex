@@ -129,7 +129,7 @@ class PretrainingLoss(nn.Module):
         losses: dict[str, torch.Tensor] = {}
 
         l_d2v = self.d2v_loss(student_feat, teacher_feat)
-        losses["d2v_loss"] = l_d2v * self.d2v_w
+        losses["d2v_loss"] = l_d2v.mean() * self.d2v_w
 
         if self.recon_w and decoder_out is not None and local_feat is not None:
             l_r = self.recon_loss(decoder_out, local_feat)

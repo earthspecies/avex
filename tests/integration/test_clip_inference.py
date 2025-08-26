@@ -5,9 +5,9 @@ from pathlib import Path
 
 import torch
 
-from representation_learning.configs import load_config
+from representation_learning.configs import DatasetCollectionConfig, RunConfig
 from representation_learning.data.audio_utils import pad_or_window
-from representation_learning.data.dataset import get_dataset_dummy
+from representation_learning.data.dataset import _build_datasets
 from representation_learning.models.get_model import get_model
 
 
@@ -24,8 +24,8 @@ def test_clip_mini_inference() -> None:
     # ------------------------------------------------------------------
     # Load run-config & model (pre-trained weights)
     # ------------------------------------------------------------------
-    cfg_path = Path("configs/run_configs/clip_base.yml")
-    run_cfg = load_config(cfg_path, config_type="run")
+    cfg_path = Path("test/")
+    run_cfg = RunConfig.from_sources(cfg_path, cli_args=())
 
     # Ensure no training-time augmentations, just deterministic centre crop
     run_cfg.augmentations = []
@@ -55,9 +55,11 @@ def test_clip_mini_inference() -> None:
     # ------------------------------------------------------------------
     # Load AnimalSpeak validation split
     # ------------------------------------------------------------------
-    data_cfg = load_config("configs/data_configs/data_base.yml", config_type="data")
-    ds_val = get_dataset_dummy(data_cfg, split="valid")
-
+    # data_cfg = load_config("configs/data_configs/data_base.yml", config_type="data")
+    # ds_val = get_dataset_dummy(data_cfg, split="valid")
+    config_path = "tests/samples/test_data_config.yml"
+    cfg = DatasetCollectionConfig.from_sources(config_path, cli_args=())
+    _, ds_val, _ = _build_datasets(cfg, postprocessors=[], label_type="category")
     assert len(ds_val) > 0, "Dataset appears empty – check CSV path/GCS creds."
 
     sample_indices = random.sample(range(len(ds_val)), k=5)
