@@ -44,14 +44,15 @@ class TestExtractEmbeddingsAllLayers:
         """Test that 'all' correctly finds and extracts from all linear layers."""
         model = SimpleTestModel(device="cpu")
 
+        # Register hooks for all layers
+        model.register_hooks_for_layers(["all"])
+
         # Create dummy input
         batch_size = 2
         input_tensor = torch.randn(batch_size, 10)
 
         # Extract embeddings using 'all'
-        embeddings = model.extract_embeddings(
-            x=input_tensor, layers=["all"], average_over_time=True
-        )
+        embeddings = model.extract_embeddings(x=input_tensor, aggregation="mean")
 
         # Should have embeddings from 3 linear layers (linear1, linear2, linear3)
         # final_layer is excluded as it's the classification layer
@@ -62,6 +63,9 @@ class TestExtractEmbeddingsAllLayers:
         """Test that 'all' works in combination with specific layer names."""
         model = SimpleTestModel(device="cpu")
 
+        # Register hooks for all layers
+        model.register_hooks_for_layers(["all"])
+
         # Create dummy input
         batch_size = 2
         input_tensor = torch.randn(batch_size, 10)
@@ -69,8 +73,7 @@ class TestExtractEmbeddingsAllLayers:
         # Extract embeddings using both 'all' and a specific layer
         embeddings = model.extract_embeddings(
             x=input_tensor,
-            layers=["all", "linear1"],  # 'linear1' will be included once (deduplicated)
-            average_over_time=True,
+            aggregation="mean",
         )
 
         # Should have embeddings from 3 linear layers (linear1 appears once)
@@ -91,7 +94,9 @@ class TestExtractEmbeddingsAllLayers:
                 self.relu = nn.ReLU()
 
             def forward(
-                self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
+                self,
+                x: torch.Tensor,
+                padding_mask: Optional[torch.Tensor] = None,
             ) -> torch.Tensor:
                 x = x.unsqueeze(1)  # Add channel dimension
                 x = self.conv(x)
@@ -99,26 +104,24 @@ class TestExtractEmbeddingsAllLayers:
                 return x.squeeze(1)
 
         model = NoLinearModel(device="cpu")
-        input_tensor = torch.randn(2, 10)
 
-        # Should raise ValueError when no layers are found
-        with pytest.raises(ValueError, match="No layers found matching"):
-            model.extract_embeddings(
-                x=input_tensor, layers=["all"], average_over_time=True
-            )
+        # Should raise ValueError when trying to register hooks for non-existent layers
+        with pytest.raises(ValueError, match="Layer.*not found in model"):
+            model.register_hooks_for_layers(["nonexistent_layer"])
 
     def test_extract_without_averaging(self) -> None:
-        """Test that 'all' works correctly when average_over_time=False."""
+        """Test that 'all' works correctly when aggregation='none'."""
         model = SimpleTestModel(device="cpu")
+
+        # Register hooks for all layers
+        model.register_hooks_for_layers(["all"])
 
         # Create dummy input
         batch_size = 2
         input_tensor = torch.randn(batch_size, 10)
 
         # Extract embeddings without averaging
-        embeddings = model.extract_embeddings(
-            x=input_tensor, layers=["all"], average_over_time=False
-        )
+        embeddings = model.extract_embeddings(x=input_tensor, aggregation="none")
 
         # Should return a list of embeddings
         assert isinstance(embeddings, list)
@@ -135,14 +138,15 @@ class TestExtractEmbeddingsAllLayers:
         """Test that the final classification layer is properly excluded."""
         model = SimpleTestModel(device="cpu")
 
+        # Register hooks for all layers
+        model.register_hooks_for_layers(["all"])
+
         # Create dummy input
         batch_size = 2
         input_tensor = torch.randn(batch_size, 10)
 
         # Extract embeddings using 'all'
-        embeddings = model.extract_embeddings(
-            x=input_tensor, layers=["all"], average_over_time=True
-        )
+        embeddings = model.extract_embeddings(x=input_tensor, aggregation="mean")
 
         # Verify that final_layer (classification layer) is not included
         # The embeddings should only come from linear1, linear2, linear3
@@ -150,15 +154,16 @@ class TestExtractEmbeddingsAllLayers:
         assert embeddings.shape == (batch_size, expected_features)
 
         # Test that explicitly including final_layer works
+        # Register hooks for all layers plus the final layer
+        model.register_hooks_for_layers(["all", "final_layer"])
         embeddings_with_final = model.extract_embeddings(
             x=input_tensor,
-            layers=[
-                "all",
-                "final_layer",
-            ],  # Explicitly include the classification layer
-            average_over_time=True,
+            aggregation="mean",
         )
 
         # Should now include the final layer
         expected_features_with_final = 20 + 15 + 8 + 5  # 48 features total
-        assert embeddings_with_final.shape == (batch_size, expected_features_with_final)
+        assert embeddings_with_final.shape == (
+            batch_size,
+            expected_features_with_final,
+        )

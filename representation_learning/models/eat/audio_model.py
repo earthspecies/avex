@@ -72,7 +72,8 @@ class AudioWithLength:
             AudioWithLength: New instance with moved tensors
         """
         return AudioWithLength(
-            self.tensor.to(*args, **kwargs), self.original_lengths.to(*args, **kwargs)
+            self.tensor.to(*args, **kwargs),
+            self.original_lengths.to(*args, **kwargs),
         )
 
 
@@ -277,7 +278,9 @@ class Model(ModelBase):
         patch_mask = None
         if self.handle_padding and original_lengths is not None:
             patch_mask = self.padding_handler.compute_patch_mask(
-                original_lengths, target_frames=spec.size(1), n_mels=spec.size(2)
+                original_lengths,
+                target_frames=spec.size(1),
+                n_mels=spec.size(2),
             )
 
         # Invert patch mask for transformer attention: True -> padded
@@ -437,7 +440,9 @@ class Model(ModelBase):
         patch_mask = None
         if self.handle_padding and original_lengths is not None:
             patch_mask = self.padding_handler.compute_patch_mask(
-                original_lengths, target_frames=spec.size(1), n_mels=spec.size(2)
+                original_lengths,
+                target_frames=spec.size(1),
+                n_mels=spec.size(2),
             )
 
         # Invert patch mask for transformer attention (True -> padded)

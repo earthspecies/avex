@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 from tqdm import tqdm
 
-from representation_learning.configs import EvaluateConfig
+from representation_learning.configs import EvaluateConfig, ExperimentConfig
 from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.models.probes import get_probe
 from representation_learning.training.optimisers import get_optimizer
@@ -58,7 +58,7 @@ class FineTuneTrainer:
                 "epochs": cfg.training_params.train_epochs,
                 "lr": cfg.training_params.lr,
                 "batch_size": cfg.training_params.batch_size,
-                "loss_fn": "bce_with_logits" if self.multi_label else "cross_entropy",
+                "loss_fn": ("bce_with_logits" if self.multi_label else "cross_entropy"),
             }
         )
 
@@ -175,7 +175,9 @@ class FineTuneTrainer:
             ) from e
 
         for batch in tqdm(
-            loader, desc=f"{'Train' if train else 'Eval '} Epoch {epoch}", leave=False
+            loader,
+            desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+            leave=False,
         ):
             if "embed" in batch:
                 z = batch["embed"].to(self.device)
@@ -268,7 +270,7 @@ class FineTuneTrainer:
 # -------------------------------------------------------------------- #
 #  Linear-probe helper
 # -------------------------------------------------------------------- #
-def train_and_eval_linear_probe(
+def train_and_eval_offline(
     train_ds: torch.utils.data.Dataset,
     val_ds: torch.utils.data.Dataset,
     test_embed_ds: torch.utils.data.Dataset,
@@ -279,6 +281,8 @@ def train_and_eval_linear_probe(
     exp_logger: ExperimentLogger,
     multi_label: bool,
     dataset_metrics: Optional[List[str]] = None,
+    experiment_cfg: Optional[ExperimentConfig] = None,
+    target_length: Optional[int] = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a linear probe and evaluate it on *cached* test embeddings.
 
@@ -299,16 +303,16 @@ def train_and_eval_linear_probe(
     first_batch = next(iter(torch.utils.data.DataLoader(train_ds, batch_size=1)))
     input_dim = first_batch["embed"].shape[1]
 
-    # Create a default linear probe configuration for backward compatibility
-    from representation_learning.configs import ProbeConfig
-
-    probe_config = ProbeConfig(
-        name="legacy_linear_probe",
-        probe_type="linear",
-        aggregation="mean",
-        input_processing="pooled",
-        target_layers=layer_names,
-    )
+    # Use experiment's probe configuration if available, otherwise create default
+    if experiment_cfg and experiment_cfg.probe_config:
+        probe_config = experiment_cfg.probe_config
+        logger.info("Using experiment probe configuration")
+    else:
+        # Require explicit probe configuration for consistent behavior
+        raise ValueError(
+            "Probe configuration is required. Please provide experiment_cfg with "
+            "probe_config to ensure proper probe settings and behavior."
+        )
 
     probe = get_probe(
         probe_config=probe_config,
@@ -317,9 +321,11 @@ def train_and_eval_linear_probe(
         device=device,
         feature_mode=True,
         input_dim=input_dim,
+        target_length=target_length,
     )
     logger.info(
-        "Linear probe → %d parameters", sum(p.numel() for p in probe.parameters())
+        "Offline probe → %d parameters",
+        sum(p.numel() for p in probe.parameters()),
     )
     probe.train()
 
@@ -387,7 +393,7 @@ def train_and_eval_linear_probe(
 # -------------------------------------------------------------------- #
 #  Full fine-tune helper
 # -------------------------------------------------------------------- #
-def train_and_eval_full_fine_tune(
+def train_and_eval_online(
     train_dl_raw: torch.utils.data.DataLoader,
     val_dl_raw: torch.utils.data.DataLoader,
     test_dl_raw: torch.utils.data.DataLoader,
@@ -399,6 +405,8 @@ def train_and_eval_full_fine_tune(
     exp_logger: ExperimentLogger,
     multi_label: bool,
     dataset_metrics: Optional[List[str]] = None,
+    experiment_cfg: Optional[ExperimentConfig] = None,
+    target_length: Optional[int] = None,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Train a model by fine-tuning on raw waveforms.
 
@@ -426,6 +434,10 @@ def train_and_eval_full_fine_tune(
         Whether this is a multi-label classification task
     dataset_metrics : Optional[List[str]]
         List of metrics to compute for this dataset
+    experiment_cfg : Optional[ExperimentConfig]
+        Experiment configuration containing probe settings
+    target_length : Optional[int]
+        Target length in samples for audio processing
 
     Returns
     -------
@@ -439,21 +451,17 @@ def train_and_eval_full_fine_tune(
     ValueError
         If no dataset metrics are provided in the evaluation configuration
     """
-    # Enable training mode
-    base_model.train()
-    for p in base_model.parameters():
-        p.requires_grad = True
-
-    # Create a default linear probe configuration for fine-tuning
-    from representation_learning.configs import ProbeConfig
-
-    probe_config = ProbeConfig(
-        name="fine_tune_linear_probe",
-        probe_type="linear",
-        aggregation="mean",
-        input_processing="pooled",
-        target_layers=layer_names,
-    )
+    # Use experiment's probe configuration if available, otherwise create default
+    if experiment_cfg and experiment_cfg.probe_config:
+        probe_config = experiment_cfg.probe_config
+        logger.info("Using experiment probe configuration for online training")
+    else:
+        # Require explicit probe configuration for online training
+        raise ValueError(
+            "Online training requires experiment configuration with probe_config. "
+            "No fallback to default configuration is allowed to ensure proper "
+            "probe behavior and settings."
+        )
 
     sft_model = get_probe(
         probe_config=probe_config,
@@ -462,9 +470,11 @@ def train_and_eval_full_fine_tune(
         device=device,
         feature_mode=False,
         input_dim=None,
+        frozen=probe_config.freeze_backbone,
+        target_length=target_length,
     )
     logger.info(
-        "Fully fine-tuned model → %d parameters",
+        "Online training model → %d parameters",
         sum(p.numel() for p in sft_model.parameters()),
     )
     sft_model.train()
@@ -492,7 +502,7 @@ def train_and_eval_full_fine_tune(
     )
 
     # Evaluate on test set
-    base_model.eval()
+    sft_model.eval()  # Use the trained fine-tuned model, not the base model
     test_metrics = {}
 
     # Get metric class based on task type and dataset metrics
@@ -513,7 +523,9 @@ def train_and_eval_full_fine_tune(
                 mask = mask.to(device)
             y = batch["label"].to(device)
 
-            logits = base_model(wav, padding_mask=mask)
+            logits = sft_model(
+                wav, padding_mask=mask
+            )  # Use sft_model instead of base_model
             for met in metrics:
                 met.update(logits, y)
 

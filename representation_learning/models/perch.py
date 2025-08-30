@@ -224,7 +224,6 @@ class PerchModel(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
-        aggregation: str = "mean",
     ) -> torch.Tensor:  # type: ignore[override]
         """Return Perch embeddings irrespective of *layers* argument.
 
@@ -239,7 +238,6 @@ class PerchModel(ModelBase):
             layers: Layer names (ignored for Perch model)
             padding_mask: Optional padding mask (unused)
             average_over_time: Kept for interface compatibility but ignored
-            aggregation: Kept for interface compatibility but ignored
 
         Returns:
             torch.Tensor: Extracted embeddings from the Perch backbone

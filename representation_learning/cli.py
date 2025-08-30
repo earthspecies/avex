@@ -5,12 +5,17 @@ This module provides a unified CLI for both training and evaluation tasks.
 """
 
 import logging
+import os
 from pathlib import Path
 
 import click
 
+# Get log level from environment variable, default to INFO
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+numeric_level = getattr(logging, log_level, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=numeric_level,
     format="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )

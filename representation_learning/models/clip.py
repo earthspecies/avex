@@ -102,7 +102,11 @@ class CLIPModel(ModelBase):
         """
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, max_length=70, return_tensors="pt"
+            text,
+            padding=True,
+            truncation=True,
+            max_length=70,
+            return_tensors="pt",
         ).to(current_device)
 
         outputs = self.text_encoder(**tokens)
@@ -139,7 +143,6 @@ class CLIPModel(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
-        aggregation: str = "mean",
     ) -> torch.Tensor:
         """Extract audio embeddings from the CLIP model.
 
@@ -152,8 +155,6 @@ class CLIPModel(ModelBase):
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input
         average_over_time : bool
-            Kept for interface compatibility but ignored
-        aggregation : str
             Kept for interface compatibility but ignored
 
         Returns

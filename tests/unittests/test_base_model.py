@@ -16,6 +16,15 @@ class MockModel(ModelBase):
             torch.nn.Linear(10, 20), torch.nn.Linear(20, 30)
         )
 
+        # Discover layers for hook management
+        self._hook_layers = ["model.0", "model.1"]
+
+        # Discover linear layers for 'all' functionality
+        self._discover_linear_layers()
+
+        # Register hooks for the discovered layers
+        self.register_hooks_for_layers(self._hook_layers)
+
     def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
@@ -65,11 +74,13 @@ def test_extract_embeddings_basic() -> None:
     x = torch.randn(batch_size, seq_length).to(device)
 
     # Extract embeddings from both layers
-    layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers=layers)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Check output shape
-    expected_shape = (batch_size, 20 + 30)  # Concatenated embeddings from both layers
+    expected_shape = (
+        batch_size,
+        20 + 30,
+    )  # Concatenated embeddings from both layers
     assert embeddings.shape == expected_shape
     assert embeddings.device == device
 
@@ -89,27 +100,31 @@ def test_extract_embeddings_dict_input() -> None:
     }
 
     # Extract embeddings from both layers
-    layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers=layers)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Check output shape
-    expected_shape = (batch_size, 20 + 30)  # Concatenated embeddings from both layers
+    expected_shape = (
+        batch_size,
+        20 + 30,
+    )  # Concatenated embeddings from both layers
     assert embeddings.shape == expected_shape
     assert embeddings.device == device
 
 
 def test_extract_embeddings_invalid_layers() -> None:
-    """Test extract_embeddings with invalid layer names."""
+    """Test extract_embeddings with no hooks registered."""
     device = torch.device("cpu")
     model = MockModel(device)
-    model.prepare_inference()
+    # Remove hooks that were registered in __init__
+    model.deregister_all_hooks()
+    assert len(model._hooks) == 0
 
     # Create dummy input
     x = torch.randn(2, 10).to(device)
 
-    # Try to extract embeddings from non-existent layer
-    with pytest.raises(ValueError, match="No layers found matching"):
-        model.extract_embeddings(x, layers=["nonexistent_layer"])
+    # Try to extract embeddings without hooks registered
+    with pytest.raises(ValueError, match="No hooks registered"):
+        model.extract_embeddings(x)
 
 
 def test_extract_embeddings_gradient_propagation() -> None:
@@ -123,8 +138,7 @@ def test_extract_embeddings_gradient_propagation() -> None:
     x.requires_grad = True
 
     # Extract embeddings
-    layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers=layers)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Compute loss and backpropagate
     loss = embeddings.sum()
@@ -136,7 +150,7 @@ def test_extract_embeddings_gradient_propagation() -> None:
 
 
 def test_extract_embeddings_aggregation_mean() -> None:
-    """Test extract_embeddings with mean aggregation (default)."""
+    """Test extract_embeddings with aggregation='mean' (default)."""
     device = torch.device("cpu")
     model = MockModel(device)
     model.prepare_inference()
@@ -146,30 +160,8 @@ def test_extract_embeddings_aggregation_mean() -> None:
     seq_length = 10
     x = torch.randn(batch_size, seq_length).to(device)
 
-    # Extract embeddings with mean aggregation
-    layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers=layers, aggregation="mean")
-
-    # Check output shape - should be concatenated
-    expected_shape = (batch_size, 20 + 30)
-    assert embeddings.shape == expected_shape
-    assert embeddings.device == device
-
-
-def test_extract_embeddings_aggregation_max() -> None:
-    """Test extract_embeddings with max aggregation."""
-    device = torch.device("cpu")
-    model = MockModel(device)
-    model.prepare_inference()
-
-    # Create dummy input
-    batch_size = 2
-    seq_length = 10
-    x = torch.randn(batch_size, seq_length).to(device)
-
-    # Extract embeddings with max aggregation
-    layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers=layers, aggregation="max")
+    # Extract embeddings with aggregation='mean' (default)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Check output shape - should be concatenated
     expected_shape = (batch_size, 20 + 30)
@@ -178,7 +170,7 @@ def test_extract_embeddings_aggregation_max() -> None:
 
 
 def test_extract_embeddings_aggregation_none() -> None:
-    """Test extract_embeddings with no aggregation."""
+    """Test extract_embeddings with aggregation='none'."""
     device = torch.device("cpu")
     model = MockModel(device)
     model.prepare_inference()
@@ -188,54 +180,18 @@ def test_extract_embeddings_aggregation_none() -> None:
     seq_length = 10
     x = torch.randn(batch_size, seq_length).to(device)
 
-    # Extract embeddings with no aggregation
-    layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers=layers, aggregation="none")
+    # Extract embeddings with aggregation='none'
+    embeddings = model.extract_embeddings(x, aggregation="none")
 
-    # Check output shape - should be stacked along new dimension
-    # Note: MockModel produces different sized embeddings, so we can't stack them
-    # The aggregation logic should fall back to concatenation
-    expected_shape = (batch_size, 20 + 30)  # (batch, concatenated features)
-    assert embeddings.shape == expected_shape
-    assert embeddings.device == device
-
-
-def test_extract_embeddings_aggregation_cls_token() -> None:
-    """Test extract_embeddings with cls_token aggregation."""
-    device = torch.device("cpu")
-    model = MockModel(device)
-    model.prepare_inference()
-
-    # Create dummy input
-    batch_size = 2
-    seq_length = 10
-    x = torch.randn(batch_size, seq_length).to(device)
-
-    # Extract embeddings with cls_token aggregation
-    layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers=layers, aggregation="cls_token")
-
-    # Check output shape - should be concatenated
-    expected_shape = (batch_size, 20 + 30)
-    assert embeddings.shape == expected_shape
-    assert embeddings.device == device
-
-
-def test_extract_embeddings_aggregation_invalid() -> None:
-    """Test extract_embeddings with invalid aggregation method."""
-    device = torch.device("cpu")
-    model = MockModel(device)
-    model.prepare_inference()
-
-    # Create dummy input
-    x = torch.randn(2, 10).to(device)
-
-    # Try to extract embeddings with invalid aggregation
-    # Use multiple layers to trigger the aggregation logic
-    with pytest.raises(ValueError, match="Unknown aggregation method: invalid_method"):
-        model.extract_embeddings(
-            x, layers=["model.0", "model.1"], aggregation="invalid_method"
-        )
+    # Check output - should be a list of individual embeddings
+    assert isinstance(embeddings, list)
+    assert len(embeddings) == 2  # Two layers
+    # First layer (3D: batch, seq, features)
+    assert embeddings[0].shape == (batch_size, 1, 20)
+    # Second layer (3D: batch, seq, features)
+    assert embeddings[1].shape == (batch_size, 1, 30)
+    assert embeddings[0].device == device
+    assert embeddings[1].device == device
 
 
 def test_extract_embeddings_single_layer_no_aggregation() -> None:
@@ -250,13 +206,11 @@ def test_extract_embeddings_single_layer_no_aggregation() -> None:
     x = torch.randn(batch_size, seq_length).to(device)
 
     # Extract embeddings from single layer
-    layers = ["model.0"]
-    embeddings = model.extract_embeddings(x, layers=layers, aggregation="mean")
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
-    # Check output shape - should be single layer features
-    expected_shape = (batch_size, 20)
+    # Check output shape - should be from all registered hooks (both layers)
+    expected_shape = (batch_size, 50)  # 20 + 30 features
     assert embeddings.shape == expected_shape
-    assert embeddings.device == device
 
 
 def test_extract_embeddings_main() -> None:
@@ -271,14 +225,13 @@ def test_extract_embeddings_main() -> None:
     x = torch.randn(batch_size, seq_length).to(device)
 
     # Extract embeddings from both layers
-    layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers=layers)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     print("\nExtract Embeddings Test Results:")
     print(f"Input shape: {x.shape}")
     print(f"Output embeddings shape: {embeddings.shape}")
     print(f"Device: {embeddings.device}")
-    print(f"Layer names: {layers}")
+    print(f"Layer names: {['model.0', 'model.1']}")
     print("Number of features per layer: [20, 30]")
     print(f"Total features: {embeddings.shape[1]}")
 

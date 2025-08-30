@@ -14,30 +14,25 @@ experiments:
     run_config: "configs/run_configs/example_run.yml"
     pretrained: true
     probe_config:
-      name: "mlp_probe"
       probe_type: "mlp"
       aggregation: "mean"
       input_processing: "pooled"
       target_layers: ["layer_8", "layer_12"]
       freeze_backbone: true
-      learning_rate: 5e-4  # Override global learning rate
       hidden_dims: [512, 256]
       dropout_rate: 0.2
       activation: "gelu"
-      batch_size: 4  # Override global batch size
 
   # LSTM probe for sequence modeling
   - run_name: "lstm_sequence_probe"
     run_config: "configs/run_configs/example_run.yml"
     pretrained: true
     probe_config:
-      name: "lstm_probe"
       probe_type: "lstm"
       aggregation: "none"
       input_processing: "sequence"
       target_layers: ["layer_6", "layer_8", "layer_10", "layer_12"]
       freeze_backbone: true
-      learning_rate: 1e-3
       lstm_hidden_size: 256
       num_layers: 2
       bidirectional: true
@@ -49,13 +44,11 @@ experiments:
     run_config: "configs/run_configs/example_run.yml"
     pretrained: true
     probe_config:
-      name: "attention_probe"
       probe_type: "attention"
       aggregation: "none"
       input_processing: "sequence"
       target_layers: ["layer_6", "layer_10"]
       freeze_backbone: true
-      learning_rate: 2e-4
       num_heads: 8
       attention_dim: 512
       num_layers: 2
@@ -67,13 +60,11 @@ experiments:
     run_config: "configs/run_configs/example_run.yml"
     pretrained: true
     probe_config:
-      name: "transformer_probe"
       probe_type: "transformer"
       aggregation: "none"
       input_processing: "sequence"
       target_layers: ["layer_4", "layer_6", "layer_8", "layer_10", "layer_12"]
       freeze_backbone: true
-      learning_rate: 1e-4
       num_heads: 12
       attention_dim: 768
       num_layers: 4
@@ -86,13 +77,11 @@ experiments:
     run_config: "configs/run_configs/example_run.yml"
     pretrained: true
     probe_config:
-      name: "concat_mlp"
       probe_type: "mlp"
       aggregation: "concat"  # Concatenate multiple layer embeddings
       input_processing: "pooled"
       target_layers: ["layer_6", "layer_8", "layer_10", "layer_12"]
       freeze_backbone: true
-      learning_rate: 3e-4
       hidden_dims: [1024, 512, 256]  # Larger network to handle concatenated features
       dropout_rate: 0.15
       activation: "relu"
@@ -102,17 +91,14 @@ experiments:
     run_config: "configs/run_configs/example_run.yml"
     pretrained: true
     probe_config:
-      name: "fine_tune_mlp"
       probe_type: "mlp"
       aggregation: "mean"
       input_processing: "pooled"
       target_layers: ["layer_12"]
       freeze_backbone: false  # Fine-tune the backbone
-      learning_rate: 1e-5  # Lower learning rate for fine-tuning
       hidden_dims: [256, 128]
       dropout_rate: 0.1
       activation: "relu"
-      weight_decay: 0.01  # Override global weight decay
 
 # Global evaluation configuration
 dataset_config: "configs/data_configs/example_benchmark.yml"

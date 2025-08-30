@@ -130,7 +130,8 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                 job_port = port + job_id % 1000
             except ValueError:
                 logger.warning(
-                    "Could not parse SLURM_JOB_ID: %s. Using default port.", job_id_str
+                    "Could not parse SLURM_JOB_ID: %s. Using default port.",
+                    job_id_str,
                 )
                 job_port = port
             os.environ["MASTER_PORT"] = str(job_port)
@@ -324,7 +325,7 @@ def gather_metrics_from_all_ranks(
             )
         else:
             avg_acc = total_correct / total_samples if total_samples > 0 else 0.0
-        return total_loss / total_samples if total_samples > 0 else 0.0, avg_acc
+        return (total_loss / total_samples if total_samples > 0 else 0.0), avg_acc
 
     # Synchronize metrics across ranks
     total_loss_sync = synchronize_scalar(total_loss, device)

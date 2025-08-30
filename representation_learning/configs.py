@@ -24,9 +24,19 @@ from esp_data import DatasetConfig
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic.v1.utils import deep_update
-from pydantic_settings import BaseSettings, CliSettingsSource, YamlConfigSettingsSource
+from pydantic_settings import (
+    BaseSettings,
+    CliSettingsSource,
+    YamlConfigSettingsSource,
+)
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -94,7 +104,8 @@ class TrainingParams(BaseModel):
 
     # Skip validation during training
     skip_validation: bool = Field(
-        False, description="Skip validation epochs during training (train-only mode)"
+        False,
+        description="Skip validation epochs during training (train-only mode)",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -325,18 +336,17 @@ class ProbeConfig(BaseModel):
     linear probes, MLPs, attention mechanisms, and sequence models.
     """
 
-    name: str = Field(..., description="Name of this probe configuration")
+    probe_type: Literal[
+        "linear", "mlp", "attention", "attention_minimal", "lstm", "transformer"
+    ] = Field("linear", description="Type of probe to use")
 
-    probe_type: Literal["linear", "mlp", "attention", "lstm", "transformer"] = Field(
-        "linear", description="Type of probe to use"
-    )
-
-    aggregation: Literal["mean", "max", "cls_token", "none", "concat"] = Field(
-        "mean", description="How to aggregate multiple layer embeddings"
+    aggregation: Literal["mean", "max", "cls_token", "none"] = Field(
+        "mean", description="How to aggregate multiple dimensional embeddings"
     )
 
     input_processing: Literal["flatten", "sequence", "pooled", "none"] = Field(
-        "pooled", description="How to process input embeddings before feeding to probe"
+        "pooled",
+        description="How to process input embeddings before feeding to probe",
     )
 
     target_layers: List[str] = Field(
@@ -345,41 +355,6 @@ class ProbeConfig(BaseModel):
 
     freeze_backbone: bool = Field(
         True, description="Whether to freeze the backbone model during probing"
-    )
-
-    learning_rate: float = Field(
-        1e-3,
-        gt=0,
-        description="Learning rate for the probe (overrides global lr if specified)",
-    )
-
-    # Probe-specific parameters
-    probe_specific_params: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional parameters specific to the probe type",
-    )
-
-    # Training configuration overrides
-    batch_size: Optional[int] = Field(
-        None,
-        ge=1,
-        description="Batch size override for this probe (uses global if None)",
-    )
-
-    train_epochs: Optional[int] = Field(
-        None,
-        ge=1,
-        description="Training epochs override for this probe (uses global if None)",
-    )
-
-    optimizer: Optional[Literal["adamw", "adam", "adamw8bit"]] = Field(
-        None, description="Optimizer override for this probe (uses global if None)"
-    )
-
-    weight_decay: Optional[float] = Field(
-        None,
-        ge=0,
-        description="Weight decay override for this probe (uses global if None)",
     )
 
     # MLP-specific parameters
@@ -419,28 +394,39 @@ class ProbeConfig(BaseModel):
 
     # Sequence processing parameters
     max_sequence_length: Optional[int] = Field(
-        None, ge=1, description="Maximum sequence length for sequence-based probes"
+        None,
+        ge=1,
+        description="Maximum sequence length for sequence-based probes",
     )
 
     use_positional_encoding: bool = Field(
-        False, description="Whether to add positional encoding for sequence probes"
+        False,
+        description="Whether to add positional encoding for sequence probes",
+    )
+
+    # Target length configuration
+    target_length: Optional[int] = Field(
+        None,
+        ge=1,
+        description=(
+            "Target length in samples for audio processing. If None, will be "
+            "computed from base_model.audio_processor"
+        ),
+    )
+
+    # Training mode configuration
+    online_training: Optional[bool] = Field(
+        None,
+        description=(
+            "Whether to train online (using raw audio) or offline (using "
+            "pre-computed embeddings). If None, automatically determined based "
+            "on aggregation method: 'mean'/'max' -> offline, 'none'/'cls_token' "
+            "-> online. Online training is required for sequence-"
+            "based probes (LSTM, attention, transformer)."
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
-
-    @field_validator("probe_specific_params")
-    @classmethod
-    def validate_probe_specific_params(cls, v: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate probe-specific parameters based on probe type.
-
-        Returns
-        -------
-        Dict[str, Any]
-            The validated probe-specific parameters.
-        """
-        # This validation will be done in the model_validator since we need access to
-        # probe_type
-        return v
 
     @model_validator(mode="after")
     def validate_probe_configuration(self) -> "ProbeConfig":
@@ -487,37 +473,41 @@ class ProbeConfig(BaseModel):
             if self.num_layers is None:
                 raise ValueError("LSTM probe requires num_layers to be specified")
 
-        # Validate aggregation and input_processing compatibility
-        if self.aggregation == "cls_token" and self.input_processing != "sequence":
-            raise ValueError("cls_token aggregation requires sequence input_processing")
-
-        if self.aggregation == "none" and self.input_processing == "pooled":
-            raise ValueError(
-                "none aggregation is incompatible with pooled input_processing"
-            )
-
-        # Validate that sequence-based probes have appropriate input processing
-        if self.probe_type in ["lstm", "transformer"]:
-            if self.input_processing not in ["sequence", "none"]:
-                raise ValueError(
-                    f"{self.probe_type} probe requires sequence or none "
-                    f"input_processing"
-                )
-
         return self
+
+    def get_training_mode(self) -> bool:
+        """Determine whether to use online training based on configuration.
+
+        Returns
+        -------
+        bool
+            True for online training (raw audio), False for offline training "
+            "(embeddings)"
+        """
+        # If explicitly set, use that value
+        if self.online_training is not None:
+            return self.online_training
+
+        # If backbone is not frozen, we must train online (fine-tuning)
+        if not self.freeze_backbone:
+            return True
+
+        # Auto-determine based on aggregation method
+        if self.aggregation in ["mean", "max", "cls_token"]:
+            return False  # Offline training with pre-computed embeddings
+        else:
+            return True  # Online training with raw audio (required for sequence probes)
 
 
 # Predefined probe configurations for common use cases
 PROBE_CONFIGS = {
     "simple_linear": ProbeConfig(
-        name="simple_linear",
         probe_type="linear",
         aggregation="mean",
         input_processing="pooled",
         target_layers=["layer_12"],
     ),
     "sequence_lstm": ProbeConfig(
-        name="sequence_lstm",
         probe_type="lstm",
         aggregation="none",
         input_processing="sequence",
@@ -527,7 +517,6 @@ PROBE_CONFIGS = {
         bidirectional=True,
     ),
     "attention_probe": ProbeConfig(
-        name="attention_probe",
         probe_type="attention",
         aggregation="none",
         input_processing="sequence",
@@ -537,7 +526,6 @@ PROBE_CONFIGS = {
         num_layers=2,
     ),
     "mlp_probe": ProbeConfig(
-        name="mlp_probe",
         probe_type="mlp",
         aggregation="mean",
         input_processing="pooled",
@@ -547,7 +535,6 @@ PROBE_CONFIGS = {
         activation="gelu",
     ),
     "transformer_probe": ProbeConfig(
-        name="transformer_probe",
         probe_type="transformer",
         aggregation="none",
         input_processing="sequence",
@@ -556,16 +543,6 @@ PROBE_CONFIGS = {
         attention_dim=512,
         num_layers=3,
         use_positional_encoding=True,
-    ),
-    "multi_layer_concat": ProbeConfig(
-        name="multi_layer_concat",
-        probe_type="mlp",
-        aggregation="concat",
-        input_processing="pooled",
-        target_layers=["layer_12"],
-        hidden_dims=[1024, 512],
-        dropout_rate=0.1,
-        activation="relu",
     ),
 }
 
@@ -638,10 +615,12 @@ class ClusteringEvalConfig(BaseModel):
     enabled: bool = Field(False, description="Enable clustering evaluation")
     frequency: int = Field(5, ge=1, description="Evaluate clustering every N epochs")
     layers: str = Field(
-        "last_layer", description="Comma-separated layer names for embedding extraction"
+        "last_layer",
+        description="Comma-separated layer names for embedding extraction",
     )
     use_validation_set: bool = Field(
-        True, description="Use validation set for clustering (else use train set)"
+        True,
+        description="Use validation set for clustering (else use train set)",
     )
     max_samples: Optional[int] = Field(
         None, ge=100, description="Maximum samples to use (None = use all)"
@@ -692,7 +671,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         ),
     )
     distributed_backend: Literal["nccl"] = Field(
-        "nccl", description="Backend for distributed training (nccl for GPU training)"
+        "nccl",
+        description="Backend for distributed training (nccl for GPU training)",
     )
     distributed_port: int = Field(
         29500, description="Base port for distributed training communication"
@@ -728,7 +708,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     # Clustering evaluation configuration
     clustering_eval: Optional[ClusteringEvalConfig] = Field(
-        None, description="Configuration for clustering evaluation during training"
+        None,
+        description="Configuration for clustering evaluation during training",
     )
 
     # Debug mode
@@ -913,12 +894,11 @@ class ExperimentConfig(BaseModel):
 
             # Create a default linear probe configuration
             default_config = ProbeConfig(
-                name=f"{self.run_name}_legacy_linear",
                 probe_type="linear",
                 aggregation="mean",
                 input_processing="pooled",
                 target_layers=self.layers.split(","),
-                freeze_backbone=self.frozen if self.frozen is not None else True,
+                freeze_backbone=(self.frozen if self.frozen is not None else True),
             )
 
             self.probe_config = default_config
@@ -957,45 +937,6 @@ class ExperimentConfig(BaseModel):
                 )
 
         return self
-
-    def get_effective_training_params(
-        self, global_training_params: TrainingParams
-    ) -> TrainingParams:
-        """Get effective training parameters considering probe-specific overrides.
-
-        Parameters
-        ----------
-        global_training_params : TrainingParams
-            Global training parameters from the evaluation configuration
-
-        Returns
-        -------
-        TrainingParams
-            Effective training parameters with probe-specific overrides applied
-        """
-        if self.probe_config is None:
-            return global_training_params
-
-        # Create a copy of global params to modify
-        effective_params = global_training_params.model_copy(deep=True)
-
-        # Apply probe-specific overrides
-        if self.probe_config.learning_rate is not None:
-            effective_params.lr = self.probe_config.learning_rate
-
-        if self.probe_config.batch_size is not None:
-            effective_params.batch_size = self.probe_config.batch_size
-
-        if self.probe_config.train_epochs is not None:
-            effective_params.train_epochs = self.probe_config.train_epochs
-
-        if self.probe_config.optimizer is not None:
-            effective_params.optimizer = self.probe_config.optimizer
-
-        if self.probe_config.weight_decay is not None:
-            effective_params.weight_decay = self.probe_config.weight_decay
-
-        return effective_params
 
     def get_target_layers(self) -> List[str]:
         """Get the target layers for this experiment.
@@ -1087,9 +1028,6 @@ class ExperimentConfig(BaseModel):
                     self.probe_config.use_positional_encoding
                 )
 
-            # Add the generic probe_specific_params
-            params.update(self.probe_config.probe_specific_params)
-
             return params
         else:
             return {}  # No probe-specific parameters for legacy configuration
@@ -1100,7 +1038,7 @@ class ExperimentConfig(BaseModel):
         Returns
         -------
         str
-            The aggregation method (e.g., 'mean', 'max', 'cls_token', 'none', 'concat')
+            The aggregation method (e.g., 'mean', 'max', 'cls_token', 'none')
         """
         if self.probe_config is not None:
             return self.probe_config.aggregation
@@ -1119,6 +1057,23 @@ class ExperimentConfig(BaseModel):
             return self.probe_config.input_processing
         else:
             return "pooled"  # Default to pooled for backward compatibility
+
+    def get_training_mode(self) -> bool:
+        """Get the training mode for this experiment.
+
+        Returns
+        -------
+        bool
+            True for online training (raw audio), False for offline training "
+            "(embeddings)"
+        """
+        if self.probe_config is not None:
+            return self.probe_config.get_training_mode()
+        else:
+            # Legacy mode: determine based on frozen status
+            # If not frozen, we're fine-tuning (online)
+            # If frozen, we're doing linear probing (offline)
+            return not self.is_frozen()
 
 
 class EvaluateConfig(BaseCLIConfig, extra="forbid"):
@@ -1361,7 +1316,8 @@ class EvaluationSet(BaseModel):
     """Configuration for a single evaluation set (train/val/test triplet)."""
 
     name: str = Field(
-        ..., description="Name of this evaluation set (e.g., 'dog_classification')"
+        ...,
+        description="Name of this evaluation set (e.g., 'dog_classification')",
     )
     train: DatasetConfig = Field(..., description="Training dataset configuration")
     validation: DatasetConfig = Field(
@@ -1468,7 +1424,9 @@ class BenchmarkEvaluationConfig(BaseModel):
             f"'{self.benchmark_name}'"
         )
 
-    def get_all_evaluation_sets(self) -> List[Tuple[str, DatasetCollectionConfig]]:
+    def get_all_evaluation_sets(
+        self,
+    ) -> List[Tuple[str, DatasetCollectionConfig]]:
         """Get all evaluation sets as (name, DatasetCollectionConfig) pairs.
 
         This is the main interface for evaluation loops - it provides each evaluation

@@ -17,11 +17,17 @@ from esp_data.io.paths import GSPath, R2Path, anypath
 
 from representation_learning.configs import RunConfig
 from representation_learning.training.distributed import is_main_process
-from representation_learning.utils.experiment_logger import get_active_mlflow_run_name
+from representation_learning.utils.experiment_logger import (
+    get_active_mlflow_run_name,
+)
 
 if TYPE_CHECKING:
-    from representation_learning.utils.experiment_logger import ExperimentLogger
-from representation_learning.utils.experiment_tracking import save_experiment_metadata
+    from representation_learning.utils.experiment_logger import (
+        ExperimentLogger,
+    )
+from representation_learning.utils.experiment_tracking import (
+    save_experiment_metadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +108,7 @@ class CheckpointManager:
             "epoch": epoch,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
+            "scheduler_state_dict": (scheduler.state_dict() if scheduler else None),
             "scaler_state_dict": scaler.state_dict() if scaler else None,
             "best_val_acc": best_val_acc,
         }

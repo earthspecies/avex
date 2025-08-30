@@ -522,7 +522,11 @@ class ModalitySpecificEncoder(nn.Module):
                     padding_mask = padding_mask.repeat_interleave(clone, 0)
 
             x, info = self.compute_mask(
-                x, padding_mask, seed, apply=True, precomputed_mask=precomputed_mask
+                x,
+                padding_mask,
+                seed,
+                apply=True,
+                precomputed_mask=precomputed_mask,
             )
         else:
             info = None

@@ -1,0 +1,33 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark_single.yml
+
+training_params:
+  train_epochs: 10
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Which experiments to evaluate
+experiments:
+  - run_name: efficientnet_esc50_test
+    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml
+    pretrained: true
+    layers: model.features.8
+
+# Where to save the evaluation results
+save_dir: evaluation_results/esc50_test
+
+device: cuda
+
+seed: 42
+
+num_workers: 8
+
+# Evaluation phases
+eval_modes:
+  - probe
+
+overwrite_embeddings: true

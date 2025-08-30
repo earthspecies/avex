@@ -150,7 +150,9 @@ def test_get_dataset_dummy(tmp_path: Path) -> None:
 
     # Load dataset
     dataset = get_dataset_dummy(
-        data_config=run_config.dataset_config, transform=None, preprocessor=None
+        data_config=run_config.dataset_config,
+        transform=None,
+        preprocessor=None,
     )
 
     # Check dataset properties
@@ -221,7 +223,9 @@ def test_dataset_transforms(tmp_path: Path) -> None:
 
     # Load dataset
     dataset = get_dataset_dummy(
-        data_config=run_config.dataset_config, transform=None, preprocessor=None
+        data_config=run_config.dataset_config,
+        transform=None,
+        preprocessor=None,
     )
 
     # Check that subsampling was applied

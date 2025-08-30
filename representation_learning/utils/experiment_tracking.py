@@ -607,7 +607,9 @@ def parse_training_params_string(training_params_str: str) -> Dict[str, Any]:
         return {}
 
 
-def parse_run_config_params_string(run_config_params_str: str) -> Dict[str, Any]:
+def parse_run_config_params_string(
+    run_config_params_str: str,
+) -> Dict[str, Any]:
     """Parse run config parameters string back to a dictionary.
 
     Parameters

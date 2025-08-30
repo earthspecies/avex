@@ -20,23 +20,16 @@ experiments:
   - run_name: linear_probe_max
     run_config: configs/run_configs/pretrained/eat_base.yml
     probe_config:
-      name: linear_max
       probe_type: linear
       aggregation: max
       input_processing: pooled
       target_layers: [last_layer]
       freeze_backbone: true
-      learning_rate: 0.001
-      batch_size: 1
-      train_epochs: 1
-      optimizer: adam
-      weight_decay: 0.0001
     pretrained: true
 
   - run_name: mlp_probe_mean
     run_config: configs/run_configs/pretrained/eat_base.yml
     probe_config:
-      name: mlp_mean
       probe_type: mlp
       aggregation: mean
       input_processing: pooled
@@ -45,27 +38,16 @@ experiments:
       hidden_dims: [256, 128]
       dropout_rate: 0.1
       activation: relu
-      learning_rate: 0.001
-      batch_size: 1
-      train_epochs: 1
-      optimizer: adam
-      weight_decay: 0.0001
     pretrained: true
 
   - run_name: finetune_linear
     run_config: configs/run_configs/pretrained/eat_base.yml
     probe_config:
-      name: finetune_linear
       probe_type: linear
       aggregation: mean
       input_processing: pooled
       target_layers: [last_layer]
       freeze_backbone: false
-      learning_rate: 0.0001
-      batch_size: 1
-      train_epochs: 1
-      optimizer: adam
-      weight_decay: 0.0001
     pretrained: true
 
   # BEATs model experiments

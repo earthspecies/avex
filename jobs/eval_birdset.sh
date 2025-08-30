@@ -12,9 +12,10 @@
 cd ~/code/representation-learning
 uv sync
 echo $UV_PROJECT_ENVIRONMENT
-export PYTHONBUFFERED=1
-
-srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/sl_efficientnet_animalspeak_alllayers.yml  --patch dataset_config=configs/data_configs/benchmark_birdset_debug.yml
+# export PYTHONBUFFERED=1
+# export LOG_LEVEL=DEBUG
+# export PYTHONLOGLEVEL=DEBUG
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/sl_efficientnet_animalspeak_alllayers.yml  --patch dataset_config=configs/data_configs/benchmark_single.yml
 
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/efficientnet_beans.yml
 

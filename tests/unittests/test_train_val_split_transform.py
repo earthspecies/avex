@@ -25,7 +25,10 @@ class TestTrainValSplitTransform:
 
         # Create transform config for train subset
         config = TrainValSplitConfig(
-            type="train_val_split", subset="train", train_size=0.8, random_state=42
+            type="train_val_split",
+            subset="train",
+            train_size=0.8,
+            random_state=42,
         )
 
         # Create and apply transform
@@ -59,7 +62,10 @@ class TestTrainValSplitTransform:
 
         # Create transform config for validation subset
         config = TrainValSplitConfig(
-            type="train_val_split", subset="validation", train_size=0.8, random_state=42
+            type="train_val_split",
+            subset="validation",
+            train_size=0.8,
+            random_state=42,
         )
 
         # Create and apply transform
@@ -132,7 +138,10 @@ class TestTrainValSplitTransform:
 
         # Test 90/10 split
         config = TrainValSplitConfig(
-            type="train_val_split", subset="train", train_size=0.9, random_state=42
+            type="train_val_split",
+            subset="train",
+            train_size=0.9,
+            random_state=42,
         )
 
         transform = TrainValSplitTransform.from_config(config)
@@ -151,7 +160,10 @@ class TestTrainValSplitTransform:
         )
 
         config = TrainValSplitConfig(
-            type="train_val_split", subset="train", train_size=0.7, random_state=123
+            type="train_val_split",
+            subset="train",
+            train_size=0.7,
+            random_state=123,
         )
 
         # Apply transform twice
@@ -182,7 +194,9 @@ class TestTrainValSplitTransform:
         )
 
         config = TrainValSplitConfig(
-            type="train_val_split", subset="train", stratify_column="nonexistent_column"
+            type="train_val_split",
+            subset="train",
+            stratify_column="nonexistent_column",
         )
 
         transform = TrainValSplitTransform.from_config(config)
@@ -204,14 +218,20 @@ class TestTrainValSplitTransform:
 
         # Get train subset
         train_config = TrainValSplitConfig(
-            type="train_val_split", subset="train", train_size=0.8, random_state=42
+            type="train_val_split",
+            subset="train",
+            train_size=0.8,
+            random_state=42,
         )
         train_transform = TrainValSplitTransform.from_config(train_config)
         train_data, _ = train_transform(data)
 
         # Get validation subset
         val_config = TrainValSplitConfig(
-            type="train_val_split", subset="validation", train_size=0.8, random_state=42
+            type="train_val_split",
+            subset="validation",
+            train_size=0.8,
+            random_state=42,
         )
         val_transform = TrainValSplitTransform.from_config(val_config)
         val_data, _ = val_transform(data)

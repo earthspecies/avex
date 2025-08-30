@@ -16,7 +16,9 @@ from birdnetlib import Recording, RecordingBuffer
 #   pip install birdnetlib tflite-runtime
 from birdnetlib.analyzer import Analyzer  # downloads + wraps *.tflite
 
-from representation_learning.models.base_model import ModelBase  # Add missing import
+from representation_learning.models.base_model import (
+    ModelBase,
+)  # Add missing import
 
 logger = logging.getLogger(__name__)
 

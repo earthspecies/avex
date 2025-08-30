@@ -15,12 +15,16 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from representation_learning.configs import RunConfig
-from representation_learning.training.checkpoint_manager import CheckpointManager
+from representation_learning.training.checkpoint_manager import (
+    CheckpointManager,
+)
 
 # Remove distributed coordinator - using functions directly from distributed.py
 from representation_learning.training.losses import build_criterion
 from representation_learning.training.metrics_tracker import MetricsTracker
-from representation_learning.training.training_strategies import StrategyFactory
+from representation_learning.training.training_strategies import (
+    StrategyFactory,
+)
 
 # Import will be done in the method to avoid circular imports
 from representation_learning.utils import ExperimentLogger

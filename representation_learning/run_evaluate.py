@@ -43,8 +43,8 @@ from representation_learning.evaluation.embedding_utils import (
     save_embeddings_arrays,
 )
 from representation_learning.evaluation.finetune import (
-    train_and_eval_full_fine_tune,
-    train_and_eval_linear_probe,
+    train_and_eval_offline,
+    train_and_eval_online,
 )
 from representation_learning.evaluation.retrieval import (
     eval_retrieval,
@@ -60,10 +60,6 @@ from representation_learning.utils.experiment_tracking import (
 from representation_learning.utils.utils import _process_state_dict
 
 logger = logging.getLogger("run_finetune")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
-)
 
 
 # -------------------------------------------------------------------- #
@@ -171,6 +167,39 @@ def run_experiment(
     need_retrieval = "retrieval" in eval_cfg.eval_modes
     need_clustering = "clustering" in eval_cfg.eval_modes
 
+    # Get training mode and aggregation method from probe configuration
+    # Note: online_training and offline_training are mutually exclusive by design
+    online_training = need_probe and experiment_cfg.get_training_mode()
+    offline_training = need_probe and not experiment_cfg.get_training_mode()
+    aggregation_method = experiment_cfg.get_aggregation_method()
+
+    # For online training (LSTM probes), we don't need to extract embeddings for
+    # training
+    # For offline training (linear probes), we extract embeddings for training
+    need_embedding_extraction_train = (
+        need_probe or need_retrieval or need_clustering
+    ) and not online_training
+
+    # For retrieval and clustering, we always need test embeddings
+    # Use "mean" aggregation for evaluation even when training online with LSTM
+    need_embedding_extraction_test = need_retrieval or need_clustering
+
+    logger.info(
+        f"Need to write embeddings for train: {need_embedding_extraction_train} "
+        f"and test: {need_embedding_extraction_test}"
+    )
+
+    if online_training:
+        logger.info("Training online.")
+    elif offline_training:
+        logger.info("Training offline.")
+    else:
+        logger.info("Not training.")
+
+    logger.info(f"Need to probe: {need_probe}")
+    logger.info(f"Need to retrieve: {need_retrieval}")
+    logger.info(f"Need to cluster: {need_clustering}")
+
     # Determine retrieval mode for this evaluation set
     retrieval_mode = (
         evaluation_set.retrieval_mode
@@ -179,36 +208,57 @@ def run_experiment(
     )
 
     overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
-    need_recompute_embeddings_train = (
-        overwrite
-        or (need_probe and not (train_path.exists() and val_path.exists()))
-        or (
+
+    # Determine what embeddings need to be recomputed
+    if overwrite:
+        # When overwrite=True, only recompute what we actually need
+        need_recompute_embeddings_train = need_embedding_extraction_train
+        need_recompute_embeddings_test = need_embedding_extraction_test
+
+        if need_recompute_embeddings_train or need_recompute_embeddings_test:
+            logger.info(
+                f"Forcing overwrite of embeddings: "
+                f"train={need_recompute_embeddings_train}, "
+                f"test={need_recompute_embeddings_test} due to "
+                f"overwrite_embeddings=True"
+            )
+
+            # Remove existing files that we're going to recompute
+            paths_to_remove = []
+            if need_recompute_embeddings_train:
+                paths_to_remove.extend([train_path, val_path])
+            if need_recompute_embeddings_test:
+                paths_to_remove.append(test_path)
+
+            for path in paths_to_remove:
+                if path.exists():
+                    try:
+                        path.unlink()
+                        logger.info(f"Removed existing embedding file: {path}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove {path}: {e}")
+    else:
+        # Normal logic: check file existence
+        need_recompute_embeddings_train = (
+            need_probe and not (train_path.exists() and val_path.exists())
+        ) or (
             need_retrieval
             and retrieval_mode == "train_vs_test"
             and not train_path.exists()
         )
-    )
-    need_recompute_embeddings_test = overwrite or (
-        (need_retrieval or need_probe or need_clustering) and not test_path.exists()
-    )
+        need_recompute_embeddings_test = (
+            need_retrieval or need_probe or need_clustering
+        ) and not test_path.exists()
     logger.info(
         "Need to recompute embeddings for train: %s and test: %s",
         need_recompute_embeddings_train,
         need_recompute_embeddings_test,
     )
 
-    need_base_model = (
-        need_recompute_embeddings_train
-        or need_recompute_embeddings_test
-        or (not frozen and "linear_probe" in eval_cfg.eval_modes)
-    )
+    need_base_model = online_training or need_recompute_embeddings_train
     logger.info(f"Need to load base model: {need_base_model}")
 
-    need_raw_dataloaders = (
-        need_recompute_embeddings_train
-        or need_recompute_embeddings_test
-        or (not frozen and "linear_probe" in eval_cfg.eval_modes)
-    )
+    need_raw_dataloaders = online_training or need_recompute_embeddings_train
     logger.info(f"Need to build raw dataloaders: {need_raw_dataloaders}")
 
     # ------------------------------------------------------------------ #
@@ -341,6 +391,25 @@ def run_experiment(
         # When base_model is None, we don't need layer names
         layer_names = []
 
+    # ------------------------------------------------------------------ #
+    #  Calculate target_length for probes
+    # ------------------------------------------------------------------ #
+    target_length = None
+    if dataset_audio_max_length is not None:
+        # Convert audio_max_length_seconds to samples using the model's sample rate
+        target_length = int(
+            dataset_audio_max_length * run_cfg.model_spec.audio_config.sample_rate
+        )
+        logger.info(
+            f"Using dataset-specific target_length: {target_length} samples "
+            f"({dataset_audio_max_length}s * "
+            f"{run_cfg.model_spec.audio_config.sample_rate} Hz)"
+        )
+    else:
+        logger.info(
+            "No dataset audio_max_length_seconds specified, using default target_length"
+        )
+
     train_ds: EmbeddingDataset | None = None  # will remain None if not needed
     val_ds: EmbeddingDataset | None = None
     test_embeds: torch.Tensor | None = None
@@ -348,11 +417,8 @@ def run_experiment(
     train_embeds: torch.Tensor | None = None
     train_labels: torch.Tensor | None = None
 
-    # Get aggregation method from probe configuration
-    aggregation_method = experiment_cfg.get_aggregation_method()
-
     # ------------------- embeddings for linear probe ------------------- #
-    if need_probe and frozen:
+    if offline_training:
         if not need_recompute_embeddings_train:
             train_embeds, train_labels, num_labels = load_embeddings_arrays(train_path)
             val_embeds, val_labels, _ = load_embeddings_arrays(val_path)
@@ -370,7 +436,8 @@ def run_experiment(
                 logger.info(
                     f"Using streaming approach for memory-efficient embedding "
                     f"extraction (layers: {len(layer_names)}, streaming enabled: "
-                    f"{eval_cfg.use_streaming_embeddings})"
+                    f"{eval_cfg.use_streaming_embeddings}) - "
+                    f"Computing embeddings for train and val"
                 )
                 train_embeds, train_labels = extract_embeddings_for_split(
                     base_model,
@@ -406,7 +473,8 @@ def run_experiment(
                 logger.info(
                     f"Using standard in-memory embedding extraction "
                     f"(layers: {len(layer_names)}, streaming disabled: "
-                    f"{eval_cfg.use_streaming_embeddings})"
+                    f"{eval_cfg.use_streaming_embeddings}) - "
+                    f"Computing embeddings for train and val"
                 )
                 train_embeds, train_labels = extract_embeddings_for_split(
                     base_model,
@@ -425,24 +493,22 @@ def run_experiment(
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                 )
 
-                # Persist to disk if aggregation allows caching
-                if aggregation_method in ["mean", "max"]:
-                    save_embeddings_arrays(
-                        train_embeds,
-                        train_labels,
-                        train_path,
-                        num_labels,
-                        compression=eval_cfg.hdf5_compression,
-                        compression_level=eval_cfg.hdf5_compression_level,
-                    )
-                    save_embeddings_arrays(
-                        val_embeds,
-                        val_labels,
-                        val_path,
-                        num_labels,
-                        compression=eval_cfg.hdf5_compression,
-                        compression_level=eval_cfg.hdf5_compression_level,
-                    )
+                save_embeddings_arrays(
+                    train_embeds,
+                    train_labels,
+                    train_path,
+                    num_labels,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                )
+                save_embeddings_arrays(
+                    val_embeds,
+                    val_labels,
+                    val_path,
+                    num_labels,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                )
 
         train_ds = EmbeddingDataset(train_embeds, train_labels)
         val_ds = EmbeddingDataset(val_embeds, val_labels)
@@ -462,18 +528,30 @@ def run_experiment(
                 len(layer_names) > 5 or "all" in layer_names
             )
 
+            # We need to force aggregation method to "mean" for retrieval if it's
+            # different from "mean" or "max"
+            if aggregation_method not in ["mean", "max"]:
+                aggregation_method_retrieval = "mean"
+                logger.info(
+                    f"Forcing aggregation method to 'mean' for retrieval "
+                    f"(aggregation_method: {aggregation_method_retrieval})"
+                )
+            else:
+                aggregation_method_retrieval = aggregation_method
+
             if use_streaming:
                 logger.info(
                     f"Using streaming approach for memory-efficient embedding "
                     f"extraction (retrieval) (layers: {len(layer_names)}, streaming "
-                    f"enabled: {eval_cfg.use_streaming_embeddings})"
+                    f"enabled: {eval_cfg.use_streaming_embeddings}) - "
+                    f"Computing embeddings for train and val"
                 )
                 train_embeds, train_labels = extract_embeddings_for_split(
                     base_model,
                     train_dl_raw,
                     layer_names,
                     device,
-                    aggregation=aggregation_method,
+                    aggregation=aggregation_method_retrieval,
                     save_path=train_path,
                     chunk_size=eval_cfg.streaming_chunk_size,
                     compression=eval_cfg.hdf5_compression,
@@ -494,19 +572,18 @@ def run_experiment(
                     train_dl_raw,
                     layer_names,
                     device,
-                    aggregation=aggregation_method,
+                    aggregation=aggregation_method_retrieval,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                 )
-                # Persist to disk if aggregation allows caching
-                if aggregation_method in ["mean", "max"]:
-                    save_embeddings_arrays(
-                        train_embeds,
-                        train_labels,
-                        train_path,
-                        num_labels,
-                        compression=eval_cfg.hdf5_compression,
-                        compression_level=eval_cfg.hdf5_compression_level,
-                    )
+
+                save_embeddings_arrays(
+                    train_embeds,
+                    train_labels,
+                    train_path,
+                    num_labels,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                )
 
     # ------------------- embeddings for retrieval and clustering -------- #
     if need_retrieval or need_probe or need_clustering:
@@ -525,18 +602,30 @@ def run_experiment(
                 len(layer_names) > 5 or "all" in layer_names
             )
 
+            # We need to force aggregation method to "mean" for retrieval if it's
+            # different from "mean" or "max"
+            if aggregation_method not in ["mean", "max"]:
+                aggregation_method_retrieval = "mean"
+                logger.info(
+                    f"Forcing aggregation method to 'mean' for retrieval "
+                    f"(aggregation_method: {aggregation_method_retrieval})"
+                )
+            else:
+                aggregation_method_retrieval = aggregation_method
+
             if use_streaming:
                 logger.info(
                     f"Using streaming approach for memory-efficient embedding "
                     f"extraction (test) (layers: {len(layer_names)}, streaming "
-                    f"enabled: {eval_cfg.use_streaming_embeddings})"
+                    f"enabled: {eval_cfg.use_streaming_embeddings}) - "
+                    f"Computing embeddings for test"
                 )
                 test_embeds, test_labels = extract_embeddings_for_split(
                     base_model,
                     test_dl_raw,
                     layer_names,
                     device,
-                    aggregation=aggregation_method,
+                    aggregation=aggregation_method_retrieval,
                     save_path=test_path,
                     chunk_size=eval_cfg.streaming_chunk_size,
                     compression=eval_cfg.hdf5_compression,
@@ -549,26 +638,26 @@ def run_experiment(
                 logger.info(
                     f"Using standard in-memory embedding extraction (test) "
                     f"(layers: {len(layer_names)}, streaming disabled: "
-                    f"{eval_cfg.use_streaming_embeddings})"
+                    f"{eval_cfg.use_streaming_embeddings}) - "
+                    f"Computing embeddings for test"
                 )
                 test_embeds, test_labels = extract_embeddings_for_split(
                     base_model,
                     test_dl_raw,
                     layer_names,
                     device,
-                    aggregation=aggregation_method,
+                    aggregation=aggregation_method_retrieval,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                 )
-                # Persist to disk if aggregation allows caching
-                if aggregation_method in ["mean", "max"]:
-                    save_embeddings_arrays(
-                        test_embeds,
-                        test_labels,
-                        test_path,
-                        num_labels,
-                        compression=eval_cfg.hdf5_compression,
-                        compression_level=eval_cfg.hdf5_compression_level,
-                    )
+
+                save_embeddings_arrays(
+                    test_embeds,
+                    test_labels,
+                    test_path,
+                    num_labels,
+                    compression=eval_cfg.hdf5_compression,
+                    compression_level=eval_cfg.hdf5_compression_level,
+                )
 
         num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 
@@ -597,7 +686,8 @@ def run_experiment(
             m for m in dataset_metrics if not m.startswith("clustering_")
         ]
 
-        if frozen:
+        if offline_training:
+            logger.info("Training offline")
             # Get multi-label setting from dataset config, with fallback based on type
             is_multi_label = getattr(
                 dataset_cfg,
@@ -608,7 +698,7 @@ def run_experiment(
                 train_metrics,
                 val_metrics,
                 probe_test_metrics,
-            ) = train_and_eval_linear_probe(
+            ) = train_and_eval_offline(
                 train_ds,
                 val_ds,
                 EmbeddingDataset(test_embeds, test_labels),
@@ -619,8 +709,11 @@ def run_experiment(
                 exp_logger,
                 is_multi_label,
                 dataset_metrics=classification_metrics,
+                experiment_cfg=experiment_cfg,
+                target_length=target_length,
             )
         else:
+            logger.info("Training online")
             # For fine-tuning, use raw dataloaders
             is_multi_label = getattr(
                 dataset_cfg,
@@ -632,7 +725,7 @@ def run_experiment(
                 train_metrics,
                 val_metrics,
                 probe_test_metrics,
-            ) = train_and_eval_full_fine_tune(
+            ) = train_and_eval_online(
                 train_dl_raw,
                 val_dl_raw,
                 test_dl_raw,
@@ -644,9 +737,11 @@ def run_experiment(
                 exp_logger,
                 is_multi_label,
                 dataset_metrics=classification_metrics,
+                experiment_cfg=experiment_cfg,
+                target_length=target_length,
             )
     else:
-        logger.info("Linear probe not run because not in eval_modes")
+        logger.info("Probe not run because not in eval_modes")
 
     # ------------------------------------------------------------------ #
     #  (2) Retrieval (from cached test embeddings)
@@ -697,9 +792,11 @@ def run_experiment(
         output_dir=save_dir,
         dataset_name=metadata_dataset_name,
         experiment_name=experiment_name,
-        checkpoint_name=Path(experiment_cfg.checkpoint_path).name
-        if experiment_cfg.checkpoint_path
-        else "None",
+        checkpoint_name=(
+            Path(experiment_cfg.checkpoint_path).name
+            if experiment_cfg.checkpoint_path
+            else "None"
+        ),
         train_metrics=train_metrics,
         val_metrics=val_metrics,
         probe_test_metrics=probe_test_metrics,

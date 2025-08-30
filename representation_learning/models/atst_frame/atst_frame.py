@@ -9,7 +9,7 @@ import argparse
 import math
 import warnings
 from functools import partial
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -644,7 +644,10 @@ def _no_grad_trunc_normal_(
 
 
 def get_num_patches(
-    height: int = 64, width: int = 1001, patch_height: int = 16, patch_width: int = 16
+    height: int = 64,
+    width: int = 1001,
+    patch_height: int = 16,
+    patch_width: int = 16,
 ) -> int:
     """Calculate number of patches for given dimensions.
 
@@ -736,7 +739,9 @@ class PatchEmbed_v2(nn.Module):
         self.patch_height = patch_height
         self.patch_width = patch_width
         self.patch_maker = Rearrange(
-            "b c (h p1) (w p2) -> b (w h) (p1 p2 c)", p1=patch_height, p2=patch_width
+            "b c (h p1) (w p2) -> b (w h) (p1 p2 c)",
+            p1=patch_height,
+            p2=patch_width,
         )
         self.patch_embed = nn.Linear(patch_height * patch_width * input_dim, embed_dim)
 
@@ -1052,7 +1057,10 @@ class FrameAST(nn.Module):
         w0, h0 = w0 + 0.1, h0 + 0.1
         patch_pos_embed = nn.functional.interpolate(
             patch_pos_embed.reshape(
-                1, self.spec_h // self.patch_h, self.spec_w // self.patch_w, dim
+                1,
+                self.spec_h // self.patch_h,
+                self.spec_w // self.patch_w,
+                dim,
             ).permute(0, 3, 1, 2),
             scale_factor=(
                 h0 / (self.spec_h // self.patch_h),
@@ -1091,7 +1099,11 @@ class FrameAST(nn.Module):
                 # return attention of the last block
 
     def get_intermediate_layers(
-        self, x: torch.Tensor, length: torch.Tensor, n: int = 1, scene: bool = True
+        self,
+        x: torch.Tensor,
+        length: torch.Tensor,
+        n: int = 1,
+        scene: bool = True,
     ) -> List[torch.Tensor]:
         """Get intermediate layer representations.
 
@@ -1121,7 +1133,8 @@ class FrameAST(nn.Module):
                         x.device
                     ) < patch_length.unsqueeze(1)
                     avg = torch.sum(
-                        norm_x[:, self.nprompt :] * length_mask.unsqueeze(-1), dim=1
+                        norm_x[:, self.nprompt :] * length_mask.unsqueeze(-1),
+                        dim=1,
                     ) / (patch_length.unsqueeze(-1) + 1e-6)
                     output.append(avg)
                     if self.nprompt > 0:
@@ -1133,7 +1146,11 @@ class FrameAST(nn.Module):
 
 
 def build_mlp(
-    num_layers: int, input_dim: int, mlp_dim: int, output_dim: int, last_bn: bool = True
+    num_layers: int,
+    input_dim: int,
+    mlp_dim: int,
+    output_dim: int,
+    last_bn: bool = True,
 ) -> nn.Sequential:
     """Build multi-layer perceptron.
 
@@ -1397,7 +1414,10 @@ class FrameATST(nn.Module):
             )
             self.teacher = MultiCropWrapper(
                 encoder_fn(
-                    pos_type=pos_type, patch_embed=patch_embed, avg_blocks=8, **kwargs
+                    pos_type=pos_type,
+                    patch_embed=patch_embed,
+                    avg_blocks=8,
+                    **kwargs,
                 ),
                 embed_dim,
                 projector=None,
@@ -1526,7 +1546,10 @@ def get_params_groups(model: nn.Module) -> List[dict]:
             not_regularized.append(param)
         else:
             regularized.append(param)
-    return [{"params": regularized}, {"params": not_regularized, "weight_decay": 0.0}]
+    return [
+        {"params": regularized},
+        {"params": not_regularized, "weight_decay": 0.0},
+    ]
 
 
 def bool_flag(s: Union[str, bool]) -> bool:
@@ -1620,7 +1643,10 @@ class FrameATSTLightningModule(LightningModule):
         self.log("std_frm_tea", std_frm_tea, prog_bar=True, logger=True)
         self.log("std_frm_stu", std_frm_stu, prog_bar=True, logger=True)
         self.log(
-            "ema", self.ema_scheduler[self.global_step], prog_bar=True, logger=True
+            "ema",
+            self.ema_scheduler[self.global_step],
+            prog_bar=True,
+            logger=True,
         )
         self.log("step", self.global_step, prog_bar=True, logger=True)
 
@@ -1639,7 +1665,12 @@ class FrameATSTLightningModule(LightningModule):
             if i == 0:  # only the first group is regularized
                 param_group["weight_decay"] = self.wd_scheduler[self.global_step]
 
-        self.log("wd", self.wd_scheduler[self.global_step], prog_bar=True, logger=True)
+        self.log(
+            "wd",
+            self.wd_scheduler[self.global_step],
+            prog_bar=True,
+            logger=True,
+        )
         self.log("lr", param_group["lr"], prog_bar=True, logger=True)
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
@@ -1736,7 +1767,9 @@ class FrameATSTLightningModule(LightningModule):
         return parent_parser
 
 
-def FrameAST_small(patch_h: int = 64, patch_w: int = 4, **kwargs: Any) -> FrameAST:  # noqa: ANN401
+def FrameAST_small(
+    patch_h: int = 64, patch_w: int = 4, **kwargs: Dict[str, Any]
+) -> FrameAST:
     """Create small FrameAST model.
 
     Args:
@@ -1759,7 +1792,9 @@ def FrameAST_small(patch_h: int = 64, patch_w: int = 4, **kwargs: Any) -> FrameA
     )
 
 
-def FrameAST_base(patch_h: int = 64, patch_w: int = 4, **kwargs: Any) -> FrameAST:  # noqa: ANN401
+def FrameAST_base(
+    patch_h: int = 64, patch_w: int = 4, **kwargs: Dict[str, Any]
+) -> FrameAST:
     """Create base FrameAST model.
 
     Args:
@@ -1782,7 +1817,7 @@ def FrameAST_base(patch_h: int = 64, patch_w: int = 4, **kwargs: Any) -> FrameAS
     )
 
 
-def FrameAST_large(patch_h: int, patch_w: int, **kwargs: Any) -> FrameAST:  # noqa: ANN401
+def FrameAST_large(patch_h: int, patch_w: int, **kwargs: Dict[str, Any]) -> FrameAST:
     """Create large FrameAST model.
 
     Args:
@@ -1805,7 +1840,7 @@ def FrameAST_large(patch_h: int, patch_w: int, **kwargs: Any) -> FrameAST:  # no
     )
 
 
-def load_model(model_path: str, device: str, ssl_model: bool = False) -> Any:  # noqa: ANN401
+def load_model(model_path: str, device: str, ssl_model: bool = False) -> nn.Module:
     """Load pretrained model.
 
     Args:
@@ -1854,7 +1889,7 @@ def load_model(model_path: str, device: str, ssl_model: bool = False) -> Any:  #
     return pretrained_encoder
 
 
-def get_scene_embedding(audio: torch.Tensor, model: Any) -> torch.Tensor:  # noqa: ANN401
+def get_scene_embedding(audio: torch.Tensor, model: nn.Module) -> torch.Tensor:
     """Extract scene (clip-level) embedding from an audio clip.
 
     Args:
@@ -1899,7 +1934,7 @@ def get_scene_embedding(audio: torch.Tensor, model: Any) -> torch.Tensor:  # noq
 
 def get_timestamp_embedding(
     audio: torch.Tensor,
-    model: Any,  # noqa: ANN401
+    model: nn.Module,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Extract frame-level embeddings from an audio clip.
 

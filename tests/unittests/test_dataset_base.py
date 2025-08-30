@@ -61,7 +61,9 @@ def test_list_registered_datasets() -> None:
 def test_load_dataset() -> None:
     """Test if the load_dataset function loads the dataset correctly."""
     cfg = DatasetConfig(
-        dataset_name="animalspeak", split="validation", audio_path_col="gs_path"
+        dataset_name="animalspeak",
+        split="validation",
+        audio_path_col="gs_path",
     )
     dataset = dataset_from_config(cfg)
     assert dataset is not None

@@ -114,6 +114,7 @@ def _extract_embeddings_in_memory(
     Tuple[torch.Tensor, torch.Tensor]
         (embeddings, labels) stacked on CPU.
     """
+
     embeds: list[torch.Tensor] = []
     labels: list[torch.Tensor] = []
 
@@ -126,28 +127,32 @@ def _extract_embeddings_in_memory(
 
     logger.info(f"Extracting embeddings for {len(dataloader)} batches (in-memory mode)")
 
-    with torch.no_grad():
-        for _idx, batch in progress:
-            wav = batch["raw_wav"].to(device)
-            mask = batch.get("padding_mask")
-            if mask is not None:
-                mask = mask.to(device)
-            if mask is None:
-                emb = model.extract_embeddings(
-                    wav, layers=layer_names, aggregation=aggregation
-                )
-            else:
-                inp = {"raw_wav": wav, "padding_mask": mask}
-                emb = model.extract_embeddings(
-                    inp, layers=layer_names, aggregation=aggregation
-                )
+    try:
+        with torch.no_grad():
+            # Register hooks for the specified layers outside the loop
+            model.register_hooks_for_layers(layer_names)
 
-            embeds.append(emb.cpu())
-            labels.append(batch["label"].cpu())
+            for _idx, batch in progress:
+                wav = batch["raw_wav"].to(device)
+                mask = batch.get("padding_mask")
+                if mask is not None:
+                    mask = mask.to(device)
+                if mask is None:
+                    emb = model.extract_embeddings(wav, aggregation=aggregation)
+                else:
+                    inp = {"raw_wav": wav, "padding_mask": mask}
+                    emb = model.extract_embeddings(inp, aggregation=aggregation)
 
-    logger.info(f"Extracted {len(embeds)} embeddings")
+                embeds.append(emb.cpu())
+                labels.append(batch["label"].cpu())
 
-    return torch.cat(embeds), torch.cat(labels)
+        logger.info(f"Extracted {len(embeds)} embeddings")
+
+        return torch.cat(embeds), torch.cat(labels)
+
+    finally:
+        # Always deregister hooks when done
+        model.deregister_all_hooks()
 
 
 def _extract_embeddings_streaming(
@@ -180,6 +185,9 @@ def _extract_embeddings_streaming(
     ValueError
         If invalid parameters are provided.
     """
+    # Register hooks for the specified layers outside the loop
+    model.register_hooks_for_layers(layer_names)
+
     logger.info(
         f"Extracting embeddings using optimized streaming approach to {save_path}"
     )
@@ -198,14 +206,10 @@ def _extract_embeddings_streaming(
         mask = mask.to(device)
 
     if mask is None:
-        sample_emb = model.extract_embeddings(
-            wav, layers=layer_names, aggregation=aggregation
-        )
+        sample_emb = model.extract_embeddings(wav, aggregation=aggregation)
     else:
         inp = {"raw_wav": wav, "padding_mask": mask}
-        sample_emb = model.extract_embeddings(
-            inp, layers=layer_names, aggregation=aggregation
-        )
+        sample_emb = model.extract_embeddings(inp, aggregation=aggregation)
 
     embedding_dim = sample_emb.shape[1]
     total_samples = len(dataloader.dataset)
@@ -271,45 +275,51 @@ def _extract_embeddings_streaming(
         )
         chunk_size = total_samples
 
-    # Create HDF5 file with streaming approach
-    if save_path_obj.is_cloud:
-        with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
-            _create_and_fill_h5_datasets_hybrid(
-                h5f,
-                total_samples,
-                embedding_dim,
-                chunk_size,
-                compression,
-                compression_level,
-                model,
-                dataloader,
-                layer_names,
-                device,
-                first_batch,
-                batch_chunk_size,
-                aggregation,
-            )
-    else:
-        with h5py.File(str(save_path_obj), "w") as h5f:
-            _create_and_fill_h5_datasets_hybrid(
-                h5f,
-                total_samples,
-                embedding_dim,
-                chunk_size,
-                compression,
-                compression_level,
-                model,
-                dataloader,
-                layer_names,
-                device,
-                first_batch,
-                batch_chunk_size,
-                aggregation,
-            )
+    try:
+        # Create HDF5 file with streaming approach
+        if save_path_obj.is_cloud:
+            with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
+                _create_and_fill_h5_datasets_hybrid(
+                    h5f,
+                    total_samples,
+                    embedding_dim,
+                    chunk_size,
+                    compression,
+                    compression_level,
+                    model,
+                    dataloader,
+                    layer_names,
+                    device,
+                    first_batch,
+                    batch_chunk_size,
+                    aggregation,
+                )
+        else:
+            with h5py.File(str(save_path_obj), "w") as h5f:
+                _create_and_fill_h5_datasets_hybrid(
+                    h5f,
+                    total_samples,
+                    embedding_dim,
+                    chunk_size,
+                    compression,
+                    compression_level,
+                    model,
+                    dataloader,
+                    layer_names,
+                    device,
+                    first_batch,
+                    batch_chunk_size,
+                    aggregation,
+                )
 
-    # Load the saved embeddings back into memory
-    logger.info("Loading saved embeddings back into memory")
-    return load_embeddings_arrays(save_path)
+        # Load the saved embeddings back into memory
+        logger.info("Loading saved embeddings back into memory")
+        embeddings, labels, _ = load_embeddings_arrays(save_path)
+        return embeddings, labels
+
+    finally:
+        # Always deregister hooks when done
+        model.deregister_all_hooks()
 
 
 def _create_and_fill_h5_datasets_hybrid(
@@ -440,14 +450,10 @@ def _create_and_fill_h5_datasets_hybrid(
             mask = mask.to(device)
 
         if mask is None:
-            embeddings = model.extract_embeddings(
-                wav, layers=layer_names, aggregation=aggregation
-            )
+            embeddings = model.extract_embeddings(wav, aggregation=aggregation)
         else:
             inp = {"raw_wav": wav, "padding_mask": mask}
-            embeddings = model.extract_embeddings(
-                inp, layers=layer_names, aggregation=aggregation
-            )
+            embeddings = model.extract_embeddings(inp, aggregation=aggregation)
 
         batch_size = len(embeddings)
 
@@ -506,14 +512,10 @@ def _create_and_fill_h5_datasets_hybrid(
                 mask = mask.to(device)
 
             if mask is None:
-                embeddings = model.extract_embeddings(
-                    wav, layers=layer_names, aggregation=aggregation
-                )
+                embeddings = model.extract_embeddings(wav, aggregation=aggregation)
             else:
                 inp = {"raw_wav": wav, "padding_mask": mask}
-                embeddings = model.extract_embeddings(
-                    inp, layers=layer_names, aggregation=aggregation
-                )
+                embeddings = model.extract_embeddings(inp, aggregation=aggregation)
 
             batch_size = len(embeddings)
 
@@ -665,6 +667,7 @@ def save_embeddings_to_disk(
     layer_names: List[str],
     save_dir: Path,
     split: str,
+    aggregation: str = "mean",
 ) -> None:
     """
     Save embeddings for all samples in a dataloader to disk using HDF5 format.
@@ -675,6 +678,8 @@ def save_embeddings_to_disk(
         layer_names: List of layer names to extract embeddings from
         save_dir: Directory to save embeddings
         split: Dataset split name (e.g., 'train' or 'val')
+        aggregation: Aggregation method for embeddings ('mean', 'max', 'cls_token',
+            'none')
     """
     save_dir = save_dir / "embeddings"
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -699,73 +704,86 @@ def save_embeddings_to_disk(
     except Exception as e:
         logger.warning(f"Could not get file descriptor limits: {e}")
 
-    with h5py.File(h5_path, "w", libver="latest") as h5f:
-        # Get first batch to determine shapes
-        first_batch = next(iter(dataloader))
-        sample_embeddings = model.extract_embeddings(first_batch[0], layers=layer_names)
-        embedding_dim = sample_embeddings.shape[1]
-        total_samples = len(dataloader.dataset)
+    # Register hooks for the specified layers outside the loop
+    if hasattr(model, "register_hooks_for_layers"):
+        model.register_hooks_for_layers(layer_names)
 
-        # Calculate optimal chunk size based on available memory
-        available_memory = (
-            torch.cuda.get_device_properties(0).total_memory
-            if torch.cuda.is_available()
-            else 8 * 1024 * 1024 * 1024
-        )  # 8GB default
-        chunk_size = min(
-            100, max(1, int(available_memory / (embedding_dim * 4 * 1024 * 1024)))
-        )  # 4 bytes per float32
+    try:
+        with h5py.File(h5_path, "w", libver="latest") as h5f:
+            # Get first batch to determine shapes
+            first_batch = next(iter(dataloader))
+            sample_embeddings = model.extract_embeddings(
+                first_batch[0], aggregation=aggregation
+            )
+            embedding_dim = sample_embeddings.shape[1]
+            total_samples = len(dataloader.dataset)
 
-        logger.info(f"Embedding dimension: {embedding_dim}")
-        logger.info(f"Chunk size: {chunk_size}")
+            # Calculate optimal chunk size based on available memory
+            available_memory = (
+                torch.cuda.get_device_properties(0).total_memory
+                if torch.cuda.is_available()
+                else 8 * 1024 * 1024 * 1024
+            )  # 8GB default
+            chunk_size = min(
+                100,
+                max(1, int(available_memory / (embedding_dim * 4 * 1024 * 1024))),
+            )  # 4 bytes per float32
 
-        # Create resizable datasets with compression
-        embeddings_dset = h5f.create_dataset(
-            "embeddings",
-            shape=(total_samples, embedding_dim),
-            maxshape=(None, embedding_dim),
-            dtype=np.float32,
-            chunks=(chunk_size, embedding_dim),
-            compression="gzip",
-            compression_opts=4,
-        )
-        labels_dset = h5f.create_dataset(
-            "labels",
-            shape=(total_samples,),
-            maxshape=(None,),
-            dtype=np.int64,
-            chunks=(chunk_size,),
-            compression="gzip",
-            compression_opts=4,
-        )
+            logger.info(f"Embedding dimension: {embedding_dim}")
+            logger.info(f"Chunk size: {chunk_size}")
 
-        # Save embeddings and labels in chunks
-        start_idx = 0
-        with torch.no_grad():
-            for batch_idx, (x, y) in enumerate(
-                tqdm(dataloader, desc=f"Saving {split} embeddings")
-            ):
-                # Log progress every 10 batches
-                if batch_idx % 10 == 0:
-                    logger.info(f"Processing batch {batch_idx}/{len(dataloader)}")
+            # Create resizable datasets with compression
+            embeddings_dset = h5f.create_dataset(
+                "embeddings",
+                shape=(total_samples, embedding_dim),
+                maxshape=(None, embedding_dim),
+                dtype=np.float32,
+                chunks=(chunk_size, embedding_dim),
+                compression="gzip",
+                compression_opts=4,
+            )
+            labels_dset = h5f.create_dataset(
+                "labels",
+                shape=(total_samples,),
+                maxshape=(None,),
+                dtype=np.int64,
+                chunks=(chunk_size,),
+                compression="gzip",
+                compression_opts=4,
+            )
 
-                embeddings = model.extract_embeddings(x, layers=layer_names)
-                batch_size = len(embeddings)
-                # Write to HDF5
-                embeddings_dset[start_idx : start_idx + batch_size] = (
-                    embeddings.cpu().numpy()
-                )
-                labels_dset[start_idx : start_idx + batch_size] = y.numpy()
+            # Save embeddings and labels in chunks
+            start_idx = 0
+            with torch.no_grad():
+                for batch_idx, (x, y) in enumerate(
+                    tqdm(dataloader, desc=f"Saving {split} embeddings")
+                ):
+                    # Log progress every 10 batches
+                    if batch_idx % 10 == 0:
+                        logger.info(f"Processing batch {batch_idx}/{len(dataloader)}")
 
-                start_idx += batch_size
+                    embeddings = model.extract_embeddings(x, aggregation=aggregation)
+                    batch_size = len(embeddings)
+                    # Write to HDF5
+                    embeddings_dset[start_idx : start_idx + batch_size] = (
+                        embeddings.cpu().numpy()
+                    )
+                    labels_dset[start_idx : start_idx + batch_size] = y.numpy()
 
-                # Clear memory
-                del embeddings
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    start_idx += batch_size
 
-                # Force flush to disk periodically
-                if batch_idx % 100 == 0:
-                    h5f.flush()
+                    # Clear memory
+                    del embeddings
+                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+                    # Force flush to disk periodically
+                    if batch_idx % 100 == 0:
+                        h5f.flush()
+
+    finally:
+        # Always deregister hooks when done
+        if hasattr(model, "deregister_all_hooks"):
+            model.deregister_all_hooks()
 
 
 def load_embeddings_from_disk(save_dir: Path, split: str) -> torch.utils.data.Dataset:
@@ -879,7 +897,9 @@ def save_embeddings_arrays(
             h5f.attrs["num_labels"] = num_labels
 
 
-def load_embeddings_arrays(path: Path) -> Tuple[torch.Tensor, torch.Tensor, int]:
+def load_embeddings_arrays(
+    path: Path,
+) -> Tuple[torch.Tensor, torch.Tensor, int]:
     """Load embeddings & labels previously saved by *save_embeddings_arrays*.
 
     Parameters

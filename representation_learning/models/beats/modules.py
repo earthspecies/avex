@@ -198,7 +198,9 @@ def gelu(x: torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.gelu(x.float()).type_as(x)
 
 
-def get_activation_fn(activation: str) -> Callable[[torch.Tensor], torch.Tensor]:
+def get_activation_fn(
+    activation: str,
+) -> Callable[[torch.Tensor], torch.Tensor]:
     """Get activation function by name.
 
     Args:
@@ -217,7 +219,8 @@ def get_activation_fn(activation: str) -> Callable[[torch.Tensor], torch.Tensor]
         return gelu
     elif activation == "gelu_fast":
         warnings.warn(
-            "--activation-fn=gelu_fast has been renamed to gelu_accurate", stacklevel=2
+            "--activation-fn=gelu_fast has been renamed to gelu_accurate",
+            stacklevel=2,
         )
         return gelu_accurate
     elif activation == "gelu_accurate":
@@ -233,7 +236,9 @@ def get_activation_fn(activation: str) -> Callable[[torch.Tensor], torch.Tensor]
 
 
 def quant_noise(
-    module: Union[nn.Linear, nn.Embedding, nn.Conv2d], p: float, block_size: int
+    module: Union[nn.Linear, nn.Embedding, nn.Conv2d],
+    p: float,
+    block_size: int,
 ) -> Union[nn.Linear, nn.Embedding, nn.Conv2d]:
     """Apply quantization noise to module weights.
 
@@ -304,7 +309,8 @@ def quant_noise(
 
                 # split weight matrix into blocks and randomly drop selected blocks
                 mask = torch.zeros(
-                    in_features // block_size * out_features, device=weight.device
+                    in_features // block_size * out_features,
+                    device=weight.device,
                 )
                 mask.bernoulli_(p)
                 mask = mask.repeat_interleave(block_size, -1).view(-1, in_features)
@@ -318,7 +324,8 @@ def quant_noise(
                 # split weight matrix into blocks and randomly drop selected blocks
                 if mod.kernel_size == (1, 1):
                     mask = torch.zeros(
-                        in_channels // block_size * out_channels, device=weight.device
+                        in_channels // block_size * out_channels,
+                        device=weight.device,
                     )
                     mask.bernoulli_(p)
                     mask = mask.repeat_interleave(block_size, -1).view(

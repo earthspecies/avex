@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
 from transformers import AutoModel
 
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.eat.audio_processor import EATAudioProcessor
+from representation_learning.models.eat.audio_processor import (
+    EATAudioProcessor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -176,18 +178,35 @@ class EATHFModel(ModelBase):
         # -------------------------------------------------------------- #
         #  Pre-discover MLP layers for efficient hook management        #
         # -------------------------------------------------------------- #
-        self._mlp_layer_names: List[str] = []
-        for name, module in self.named_modules():
-            if isinstance(module, torch.nn.Linear) and (
-                "mlp.fc1" in name or "mlp.fc2" in name
-            ):
-                self._mlp_layer_names.append(name)
-        logger.info(
-            f"Discovered {len(self._mlp_layer_names)} MLP layers for hook management"
-        )
+        # MLP layers will be discovered in _discover_linear_layers override
 
-        # For backward compatibility with tests
-        self._mlp_layers = self._mlp_layer_names
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache all linear layer names including MLP layers.
+
+        This overrides the base class method to discover EAT-specific layers
+        beyond just nn.Linear layers.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # Discover standard linear layers
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            # Discover additional EAT-specific layers (MLP layers from
+            # transformer blocks)
+            # These are typically named like "encoder.layers.0.mlp.fc1",
+            # "encoder.layers.0.mlp.fc2"
+            for name, _module in self.named_modules():
+                if "mlp.fc1" in name or "mlp.fc2" in name:
+                    if name not in self._layer_names:
+                        self._layer_names.append(name)
+
+            logger.debug(
+                f"Discovered {len(self._layer_names)} hookable layers in EAT model: "
+                f"{self._layer_names}"
+            )
 
     # ------------------------------------------------------------------ #
     #  Forward pass                                                    #
@@ -258,126 +277,35 @@ class EATHFModel(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
         pooling: str = "cls",
-        average_over_time: bool = True,
-        aggregation: str = "mean",
-    ) -> torch.Tensor:  # type: ignore[override]
-        """Extract embeddings from specified layers of the EAT model.
+        aggregation: str = "none",
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:  # type: ignore[override]
+        """Extract embeddings from all registered hooks in the EAT model.
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav'
-            layers: List of layer names to extract embeddings from. If 'all' is
-                   included, MLP layers (fc1 and fc2 outputs) will be used as they
-                   provide rich intermediate representations from the transformer
-                   blocks.
             padding_mask: Optional padding mask (unused)
             pooling: Pooling method ("cls" or "mean")
-            average_over_time: Whether to average embeddings over time dimension
             aggregation: Aggregation method for multiple layers ('mean', 'max',
-                         'cls_token', 'none')
+                'cls_token', 'none')
 
         Returns:
-            torch.Tensor: Concatenated embeddings from the requested layers
+            Union[torch.Tensor, List[torch.Tensor]]: Model embeddings (tensor if
+                aggregation!="none", list if False)
 
         Raises:
-            ValueError: If none of the supplied layers are found in the model
+            ValueError: If no hooks are registered or no outputs are captured
         """
-        # Handle empty layers list - return main features
-        if not layers:
-            if isinstance(x, dict):
-                wav = x["raw_wav"]
-            else:
-                wav = x
-
-            prev_pooling = self.pooling
-            self.pooling = pooling
-
-            # Temporarily set return_features_only to get main features
-            prev_return_features_only = self.return_features_only
-            self.return_features_only = True
-
-            with torch.no_grad():
-                emb = self.forward(wav, padding_mask, return_features_only=True)
-
-            # Restore original settings
-            self.pooling = prev_pooling
-            self.return_features_only = prev_return_features_only
-            return emb
-
-        # Handle 'last_layer' replacement
-        target_layers = []
-        for layer_name in layers:
-            if layer_name == "last_layer":
-                # Get the last linear layer name
-                linear_layers = self._get_all_linear_layers()
-                if linear_layers:
-                    resolved_name = linear_layers[-1]
-                    logger.info(f"Replacing 'last_layer' with '{resolved_name}'")
-                    target_layers.append(resolved_name)
-                else:
-                    logger.warning("No linear layers found, using 'last_layer' as-is")
-                    target_layers.append(layer_name)
-            else:
-                target_layers.append(layer_name)
+        # Check if hooks are registered
+        if not self._hooks:
+            raise ValueError("No hooks are registered in the model.")
 
         # Clear previous hook outputs
         self._clear_hook_outputs()
 
-        # Handle 'all' case - use MLP layers (fc1 and fc2 outputs) for rich
-        # representations
-        # If 'all' is not in layers, use the exact layers specified
-        if "all" in target_layers:
-            logger.info(
-                "'all' specified in layers, using pre-discovered MLP layers "
-                "for EAT model..."
-            )
-
-            if self._mlp_layer_names:
-                logger.info(
-                    f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers"
-                )
-                # Get specific layers (excluding 'all')
-                specific_layers = [layer for layer in target_layers if layer != "all"]
-                # Combine specific layers with MLP layers, avoiding duplicates
-                all_layers = specific_layers + self._mlp_layer_names
-                target_layers = list(
-                    dict.fromkeys(all_layers)
-                )  # Remove duplicates while preserving order
-                logger.info(
-                    f"Target layers after 'all' expansion: {len(target_layers)} layers"
-                )
-            else:
-                logger.warning("No MLP layers found in EAT model")
-                # Fallback to classifier if available
-                if self.classifier is not None:
-                    target_layers = [
-                        layer for layer in target_layers if layer != "all"
-                    ] + ["classifier"]
-                else:
-                    # For features_only mode, return main features when no MLP
-                    # layers found
-                    if self.return_features_only:
-                        if isinstance(x, dict):
-                            wav = x["raw_wav"]
-                        else:
-                            wav = x
-
-                        prev_pooling = self.pooling
-                        self.pooling = pooling
-                        with torch.no_grad():
-                            emb = self.forward(wav, padding_mask)
-                        self.pooling = prev_pooling
-                        return emb
-                    else:
-                        target_layers = [
-                            layer for layer in target_layers if layer != "all"
-                        ]
-
-        # Register hooks for requested layers (only if not already registered)
-        self._register_hooks_for_layers(target_layers)
+        # Hooks are already registered in __init__ via base class
 
         try:
             # Process input
@@ -389,8 +317,6 @@ class EATHFModel(ModelBase):
             # Store original pooling method
             prev_pooling = self.pooling
             self.pooling = pooling
-
-            logger.debug(f"Starting forward pass with target layers: {target_layers}")
 
             # Forward pass to trigger hooks
             with torch.no_grad():
@@ -406,91 +332,54 @@ class EATHFModel(ModelBase):
 
             # Collect embeddings from hook outputs
             embeddings = []
-            logger.debug(
-                f"Collecting embeddings from {len(target_layers)} target layers"
-            )
-            for layer_name in target_layers:
-                if layer_name in self._hook_outputs:
-                    embeddings.append(self._hook_outputs[layer_name])
-                    logger.debug(
-                        f"Found embedding for {layer_name}: "
-                        f"{self._hook_outputs[layer_name].shape}"
-                    )
-                else:
-                    logger.warning(f"No output captured for layer: {layer_name}")
+
+            for layer_name in self._hook_outputs.keys():
+                embeddings.append(self._hook_outputs[layer_name])
+                logger.debug(
+                    f"Found embedding for {layer_name}: "
+                    f"{self._hook_outputs[layer_name].shape}"
+                )
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(f"No layers found matching: {target_layers}")
+                raise ValueError(
+                    f"No layers found matching: {self._hook_outputs.keys()}"
+                )
 
-            if average_over_time:
-                result = []
-                for emb in embeddings:
-                    if emb.dim() == 2:
-                        # Already in correct shape, just append
-                        result.append(emb)
-                    elif emb.dim() == 3:
-                        # Apply aggregation method
+            # Process embeddings based on average_over_time parameter
+            if aggregation == "none":
+                return embeddings
+            else:
+                for i in range(len(embeddings)):
+                    if embeddings[i].dim() == 2:
+                        # Already in correct shape
+                        pass
+                    elif embeddings[i].dim() == 3:
                         if aggregation == "mean":
-                            aggregated = torch.mean(emb, dim=1)
+                            embeddings[i] = torch.mean(embeddings[i], dim=1)
                         elif aggregation == "max":
-                            aggregated = torch.max(emb, dim=1)[0]
+                            embeddings[i] = torch.max(embeddings[i], dim=1)[
+                                0
+                            ]  # max returns (values, indices)
                         elif aggregation == "cls_token":
-                            # For transformer models, take first token
-                            aggregated = emb[:, 0, :]
-                        elif aggregation == "none":
-                            # Keep full sequence
-                            aggregated = emb
+                            embeddings[i] = embeddings[i][:, 0, :]
                         else:
                             raise ValueError(
-                                f"Unknown aggregation method: {aggregation}"
+                                f"Unsupported aggregation method: {aggregation}"
                             )
-                        result.append(aggregated)
                     else:
                         raise ValueError(
-                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
                             f"Expected 2 or 3."
                         )
 
-                # Apply aggregation across layers
-                if len(result) > 1:
-                    if aggregation == "mean":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "max":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "cls_token":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "none":
-                        # For 'none', we need to handle multiple layers differently
-                        # Try to stack, but if sizes don't match, fall back to
-                        # concatenation
-                        try:
-                            return torch.stack(result, dim=1)
-                        except RuntimeError:
-                            # If stacking fails due to different sizes, flatten and
-                            # concatenate instead
-                            flattened_results = []
-                            for emb in result:
-                                if emb.dim() == 3:
-                                    # Flatten the 3D tensor to 2D
-                                    batch_size, seq_len, features = emb.shape
-                                    flattened = emb.reshape(batch_size, -1)
-                                    flattened_results.append(flattened)
-                                else:
-                                    flattened_results.append(emb)
-                            return torch.cat(flattened_results, dim=1)
+                # Concatenate all embeddings
+                if len(embeddings) == 1:
+                    return embeddings[0]
                 else:
-                    return result[0]
-            else:
-                # Apply aggregation across layers
-                if len(embeddings) > 1 and aggregation == "none":
-                    # Stack along a new dimension to preserve layer information
-                    return torch.stack(embeddings, dim=1)
-                else:
-                    return embeddings
-
+                    return torch.cat(embeddings, dim=1)
         finally:
             # Clear hook outputs for next call
             self._clear_hook_outputs()

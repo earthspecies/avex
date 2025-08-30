@@ -1,4 +1,5 @@
-from typing import List, Optional
+import logging
+from typing import List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -7,6 +8,8 @@ from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.beats.beats import BEATs, BEATsConfig
 from representation_learning.utils import universal_torch_load
+
+logger = logging.getLogger(__name__)
 
 BEATS_PRETRAINED_PATH_FT = (
     "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
@@ -93,17 +96,35 @@ class Model(ModelBase):
         # ------------------------------------------------------------------
         # 3.  Pre-discover MLP (fc1, fc2) layers for efficient hook management
         # ------------------------------------------------------------------
-        self._mlp_layer_names: List[str] = []
-        self._linear_layer_names: List[str] = []  # For backward compatibility
-        for name, module in self.named_modules():
-            if isinstance(module, torch.nn.Linear):
-                self._linear_layer_names.append(name)
+        # MLP layers will be discovered in _discover_linear_layers override
+
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache all linear layer names including MLP layers.
+
+        This overrides the base class method to discover BEATs-specific layers
+        beyond just nn.Linear layers.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # Discover standard linear layers
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            # Discover additional BEATs-specific layers (MLP layers from
+            # transformer blocks)
+            # These are typically named like "encoder.layers.0.fc1",
+            # "encoder.layers.0.fc2"
+            for name, _module in self.named_modules():
                 if name.endswith("fc1") or name.endswith("fc2"):
-                    self._mlp_layer_names.append(name)
-        print(
-            f"Discovered {len(self._mlp_layer_names)} MLP (fc1/fc2) layers "
-            f"for hook management"
-        )
+                    if name not in self._layer_names:
+                        self._layer_names.append(name)
+
+            logger.debug(
+                f"Discovered {len(self._layer_names)} hookable layers in BEATs model: "
+                f"{self._layer_names}"
+            )
 
     # ----------------------------------------------------------------------
     #  Public API
@@ -158,32 +179,25 @@ class Model(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
-        aggregation: str = "mean",
-    ) -> torch.Tensor:
-        """Extract embeddings from the model with automatic batch splitting.
+        aggregation: str = "none",
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Extract embeddings from all registered hooks in the BEATs model.
 
         Parameters
         ----------
         x : torch.Tensor | dict[str, torch.Tensor]
             Input audio tensor or dictionary containing 'raw_wav'
-        layers : List[str]
-            List of layer names. If 'all' is included, all MLP (fc1/fc2) layers in the
-            model will be automatically found and used.
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input (ignored for BEATs)
-        average_over_time : bool
-            Whether to average embeddings over time dimension
         aggregation : str
             Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none')
 
         Returns
         -------
-        torch.Tensor
-            Concatenated embeddings from the requested layers
+        Union[torch.Tensor, List[torch.Tensor]]
+            Model embeddings (tensor if aggregation!="none", list if False)
 
         Raises
         ------
@@ -203,6 +217,10 @@ class Model(ModelBase):
         if wav.numel() == 0 or wav.shape[-1] == 0:
             raise ValueError("Audio tensor cannot be empty")
 
+        # Check if hooks are registered
+        if not self._hooks:
+            raise ValueError("No hooks are registered in the model.")
+
         # Store original training state and set to eval for deterministic results
         was_training = self.training
         self.eval()
@@ -216,45 +234,7 @@ class Model(ModelBase):
             # Clear previous hook outputs
             self._clear_hook_outputs()
 
-            # Handle empty layers list - return main features
-            if not layers:
-                if isinstance(x, dict):
-                    wav = x["raw_wav"]
-                    mask = x.get("padding_mask")
-                else:
-                    wav = x
-                    mask = padding_mask
-
-                with torch.no_grad():
-                    return self.forward(wav, mask)
-
-            # Handle 'all' case - use pre-discovered MLP layers
-            target_layers = layers.copy()
-            if "all" in layers:
-                print(
-                    "'all' specified in layers, using pre-discovered MLP (fc1/fc2) "
-                    "layers for BEATs model..."
-                )
-
-                if self._mlp_layer_names:
-                    print(
-                        f"Using {len(self._mlp_layer_names)} pre-discovered MLP layers"
-                    )
-                    # Get specific layers (excluding 'all')
-                    specific_layers = [layer for layer in layers if layer != "all"]
-                    # Combine specific layers with MLP layers, avoiding duplicates
-                    target_layers = list(
-                        dict.fromkeys(specific_layers + self._mlp_layer_names)
-                    )
-                else:
-                    print("No MLP layers found in the model")
-
-                print(
-                    f"Target layers after 'all' expansion: {len(target_layers)} layers"
-                )
-
-            # Register hooks for requested layers
-            self._register_hooks_for_layers(target_layers)
+            # Hooks are already registered in __init__ via base class
 
             # Process input
             if isinstance(x, dict):
@@ -264,136 +244,64 @@ class Model(ModelBase):
                 wav = x
                 mask = padding_mask
 
-            print(f"Starting forward pass with target layers: {target_layers}")
-
             # Forward pass to trigger hooks
             with torch.no_grad():
                 self.forward(wav, mask)
 
-            print(
+            logger.debug(
                 f"Forward pass completed. Hook outputs: "
                 f"{list(self._hook_outputs.keys())}"
             )
 
             # Collect embeddings from hook outputs
             embeddings = []
-            print(f"Collecting embeddings from {len(target_layers)} target layers")
-            for layer_name in target_layers:
-                if layer_name in self._hook_outputs:
-                    embeddings.append(self._hook_outputs[layer_name])
-                    print(
-                        f"Found embedding for {layer_name}: "
-                        f"{self._hook_outputs[layer_name].shape}"
-                    )
-                else:
-                    print(f"No output captured for layer: {layer_name}")
+            for layer_name in self._hook_outputs.keys():
+                embeddings.append(self._hook_outputs[layer_name])
+                logger.debug(
+                    f"Found embedding for {layer_name}: "
+                    f"{self._hook_outputs[layer_name].shape}"
+                )
 
-            print(f"Collected {len(embeddings)} embeddings")
+            logger.debug(f"Collected {len(embeddings)} embeddings")
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(f"No layers found matching: {target_layers}")
+                raise ValueError(
+                    f"No layers found matching: {self._hook_outputs.keys()}"
+                )
 
-            if average_over_time:
-                result = []
-                # Determine expected batch size from input
-                if isinstance(x, dict):
-                    expected_batch_size = x["raw_wav"].shape[0]
-                else:
-                    expected_batch_size = x.shape[0]
-
-                for emb in embeddings:
-                    if emb.dim() == 2:
-                        # Already in correct shape, just append
-                        result.append(emb)
-                    elif emb.dim() == 3:
-                        # Check if tensor is in time-first format
-                        # (time, batch, features)
-                        if emb.shape[0] != expected_batch_size:
-                            # Transpose to batch-first format
-                            emb = emb.transpose(0, 1)
-
-                        # Apply aggregation method
+            # Process embeddings based on average_over_time parameter
+            if aggregation == "none":
+                return embeddings
+            else:
+                for i in range(len(embeddings)):
+                    if embeddings[i].dim() == 2:
+                        # Already in correct shape
+                        pass
+                    elif embeddings[i].dim() == 3:
                         if aggregation == "mean":
-                            aggregated = torch.mean(emb, dim=1)
+                            embeddings[i] = torch.mean(embeddings[i], dim=1)
                         elif aggregation == "max":
-                            aggregated = torch.max(emb, dim=1)[0]
+                            embeddings[i] = torch.max(embeddings[i], dim=1)[
+                                0
+                            ]  # max returns (values, indices)
                         elif aggregation == "cls_token":
-                            # For transformer models, take first token
-                            aggregated = emb[:, 0, :]
-                        elif aggregation == "none":
-                            # Keep full sequence
-                            aggregated = emb
+                            embeddings[i] = embeddings[i][:, 0, :]
                         else:
                             raise ValueError(
-                                f"Unknown aggregation method: {aggregation}"
+                                f"Unsupported aggregation method: {aggregation}"
                             )
-                        result.append(aggregated)
                     else:
                         raise ValueError(
-                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
                             f"Expected 2 or 3."
                         )
 
-                # Apply aggregation across layers
-                if len(result) > 1:
-                    if aggregation == "mean":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "max":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "cls_token":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "none":
-                        # For 'none', we need to handle multiple layers differently
-                        # Try to stack, but if sizes don't match, fall back to
-                        # concatenation
-                        try:
-                            return torch.stack(result, dim=1)
-                        except RuntimeError:
-                            # If stacking fails due to different sizes, flatten and
-                            # concatenate instead
-                            flattened_results = []
-                            for emb in result:
-                                if emb.dim() == 3:
-                                    # Flatten the 3D tensor to 2D
-                                    batch_size, seq_len, features = emb.shape
-                                    flattened = emb.reshape(batch_size, -1)
-                                    flattened_results.append(flattened)
-                                else:
-                                    flattened_results.append(emb)
-                            return torch.cat(flattened_results, dim=1)
+                # Concatenate all embeddings
+                if len(embeddings) == 1:
+                    return embeddings[0]
                 else:
-                    return result[0]
-            else:
-                # For non-averaged case, also transpose time-first tensors
-                result = []
-                # Determine expected batch size from input
-                if isinstance(x, dict):
-                    expected_batch_size = x["raw_wav"].shape[0]
-                else:
-                    expected_batch_size = x.shape[0]
-
-                for emb in embeddings:
-                    if emb.dim() == 2:
-                        result.append(emb)
-                    elif emb.dim() == 3:
-                        # Check if tensor is in time-first format
-                        if emb.shape[0] != expected_batch_size:
-                            # Transpose to batch-first format
-                            emb = emb.transpose(0, 1)
-                        result.append(emb)
-                    else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {emb.dim()}. "
-                            f"Expected 2 or 3."
-                        )
-
-                # Apply aggregation across layers
-                if len(result) > 1 and aggregation == "none":
-                    # Stack along a new dimension to preserve layer information
-                    return torch.stack(result, dim=1)
-                else:
-                    return result
+                    return torch.cat(embeddings, dim=1)
 
         finally:
             # Clear hook outputs for next call

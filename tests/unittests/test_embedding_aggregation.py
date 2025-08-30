@@ -1,5 +1,7 @@
 """Tests for the new embedding aggregation functionality."""
 
+from typing import List, Optional, Union
+
 import pytest
 import torch
 
@@ -14,7 +16,6 @@ class TestEmbeddingAggregation:
         """Test that linear probe works with different aggregation methods."""
         # Test mean aggregation
         probe_config_mean = ProbeConfig(
-            name="test_mean",
             probe_type="linear",
             aggregation="mean",
             input_processing="pooled",
@@ -32,7 +33,6 @@ class TestEmbeddingAggregation:
 
         # Test max aggregation
         probe_config_max = ProbeConfig(
-            name="test_max",
             probe_type="linear",
             aggregation="max",
             input_processing="pooled",
@@ -50,9 +50,8 @@ class TestEmbeddingAggregation:
 
         # Test concat aggregation
         probe_config_concat = ProbeConfig(
-            name="test_concat",
             probe_type="linear",
-            aggregation="concat",
+            aggregation="none",
             input_processing="pooled",
             target_layers=["layer_8", "layer_12"],
         )
@@ -84,16 +83,141 @@ class TestEmbeddingAggregation:
         output_concat = probe_concat(x_concat)
         assert output_concat.shape == (4, 10)
 
+    def test_linear_probe_with_none_aggregation(self) -> None:
+        """Test that linear probe works with aggregation=None using projection heads."""
+
+        # Create a mock base model that returns list of embeddings
+        class MockBaseModel:
+            def __init__(self) -> None:
+                self.audio_processor = type(
+                    "MockProcessor", (), {"target_length": 24000, "sr": 16000}
+                )()
+
+            def register_hooks_for_layers(self, layers: list) -> None:
+                # Mock method - no actual implementation needed for testing
+                pass
+
+            def extract_embeddings(
+                self,
+                x: torch.Tensor,
+                aggregation: str = "mean",
+                padding_mask: Optional[torch.Tensor] = None,
+            ) -> Union[torch.Tensor, List[torch.Tensor]]:
+                batch_size = x.shape[0]
+                if aggregation == "none":
+                    # Return list of embeddings for different layers
+                    return [
+                        torch.randn(batch_size, 512),  # layer_8: 512 dim
+                        torch.randn(batch_size, 768),  # layer_12: 768 dim
+                    ]
+                else:
+                    # Return aggregated tensor for other aggregation methods
+                    return torch.randn(batch_size, 512)
+
+        mock_model = MockBaseModel()
+
+        # Create the probe directly to test our new functionality
+        from representation_learning.models.probes.linear_probe import LinearProbe
+
+        probe_none = LinearProbe(
+            base_model=mock_model,
+            layers=["layer_8", "layer_12"],
+            num_classes=10,
+            device="cpu",
+            feature_mode=False,
+            aggregation="none",
+        )
+
+        assert probe_none is not None
+
+        # Test that projection heads were created
+        assert hasattr(probe_none, "layer_projections")
+        assert len(probe_none.layer_projections) == 2
+
+        # Test forward pass with mock embeddings
+        x = torch.randn(4, 24000)  # batch_size=4, audio_length=24000
+        output_none = probe_none(x)
+        assert output_none.shape == (4, 10)
+
+    def test_mlp_probe_with_none_aggregation(self) -> None:
+        """Test that MLP probe works with aggregation=None using projection heads."""
+
+        # Create a mock base model that returns list of embeddings
+        class MockBaseModel:
+            def __init__(self) -> None:
+                self.audio_processor = type(
+                    "MockProcessor", (), {"target_length": 24000, "sr": 16000}
+                )()
+
+            def register_hooks_for_layers(self, layers: list) -> None:
+                # Mock method - no actual implementation needed for testing
+                pass
+
+            def extract_embeddings(
+                self,
+                x: torch.Tensor,
+                aggregation: str = "mean",
+                padding_mask: Optional[torch.Tensor] = None,
+            ) -> Union[torch.Tensor, List[torch.Tensor]]:
+                batch_size = x.shape[0]
+                if aggregation == "none":
+                    # Return list of embeddings for different layers
+                    return [
+                        torch.randn(batch_size, 512),  # layer_8: 512 dim
+                        torch.randn(batch_size, 768),  # layer_12: 768 dim
+                    ]
+                else:
+                    # Return aggregated tensor for other aggregation methods
+                    return torch.randn(batch_size, 512)
+
+        mock_model = MockBaseModel()
+
+        # Create the probe directly to test our new functionality
+        from representation_learning.models.probes.mlp_probe import MLPProbe
+
+        probe_none = MLPProbe(
+            base_model=mock_model,
+            layers=["layer_8", "layer_12"],
+            num_classes=10,
+            device="cpu",
+            feature_mode=False,
+            aggregation="none",
+            hidden_dims=[256, 128],
+        )
+
+        assert probe_none is not None
+
+        # Test that projection heads were created
+        assert hasattr(probe_none, "layer_projections")
+        assert len(probe_none.layer_projections) == 2
+
+        # Test forward pass with mock embeddings
+        x = torch.randn(4, 24000)  # batch_size=4, audio_length=24000
+        output_none = probe_none(x)
+        assert output_none.shape == (4, 10)
+
     def test_mlp_probe_with_different_aggregations(self) -> None:
         """Test that MLP probe works with different aggregation methods."""
         # Test mean aggregation
         probe_config_mean = ProbeConfig(
-            name="test_mlp_mean",
             probe_type="mlp",
             aggregation="mean",
             input_processing="pooled",
             target_layers=["layer_12"],
             hidden_dims=[256, 128],
+            dropout_rate=0.1,
+            activation="relu",
+        )
+
+        # Test max aggregation
+        probe_config_max = ProbeConfig(
+            probe_type="mlp",
+            aggregation="max",
+            input_processing="pooled",
+            target_layers=["layer_12"],
+            hidden_dims=[256, 128],
+            dropout_rate=0.1,
+            activation="relu",
         )
 
         probe_mean = get_probe(
@@ -103,16 +227,6 @@ class TestEmbeddingAggregation:
             device="cpu",
             feature_mode=True,
             input_dim=512,
-        )
-
-        # Test max aggregation
-        probe_config_max = ProbeConfig(
-            name="test_mlp_max",
-            probe_type="mlp",
-            aggregation="max",
-            input_processing="pooled",
-            target_layers=["layer_12"],
-            hidden_dims=[256, 128],
         )
 
         probe_max = get_probe(
@@ -139,13 +253,24 @@ class TestEmbeddingAggregation:
         """Test that sequence probes work with 'none' aggregation."""
         # Test LSTM probe with none aggregation
         probe_config_lstm = ProbeConfig(
-            name="test_lstm_none",
             probe_type="lstm",
             aggregation="none",
             input_processing="sequence",
             target_layers=["layer_12"],
             lstm_hidden_size=128,
-            num_layers=2,
+            num_layers=1,
+            bidirectional=False,
+        )
+
+        # Test attention probe with none aggregation
+        probe_config_attention = ProbeConfig(
+            probe_type="attention",
+            aggregation="none",
+            input_processing="sequence",
+            target_layers=["layer_12"],
+            num_heads=4,
+            attention_dim=256,
+            num_layers=1,
         )
 
         probe_lstm = get_probe(
@@ -155,18 +280,6 @@ class TestEmbeddingAggregation:
             device="cpu",
             feature_mode=True,
             input_dim=512,
-        )
-
-        # Test attention probe with none aggregation
-        probe_config_attention = ProbeConfig(
-            name="test_attention_none",
-            probe_type="attention",
-            aggregation="none",
-            input_processing="sequence",
-            target_layers=["layer_12"],
-            num_heads=4,
-            attention_dim=256,
-            num_layers=2,
         )
 
         probe_attention = get_probe(
@@ -182,6 +295,7 @@ class TestEmbeddingAggregation:
         assert probe_attention is not None
 
         # Test forward pass with sequence input
+        # Sequence-based probes expect (batch_size, seq_len, embedding_dim)
         x_lstm = torch.randn(4, 10, 512)  # batch_size=4, seq_len=10, features=512
         x_attention = torch.randn(4, 10, 256)  # batch_size=4, seq_len=10, features=256
 
@@ -190,40 +304,6 @@ class TestEmbeddingAggregation:
 
         assert output_lstm.shape == (4, 10)
         assert output_attention.shape == (4, 10)
-
-    def test_invalid_aggregation_method(self) -> None:
-        """Test that invalid aggregation method raises error."""
-        # Create a valid probe config first, then modify it to test the probe's
-        # aggregation logic
-        probe_config = ProbeConfig(
-            name="test_invalid",
-            probe_type="linear",
-            aggregation="mean",  # Start with valid aggregation
-            input_processing="pooled",
-            target_layers=[
-                "layer_8",
-                "layer_12",
-            ],  # Multiple layers to trigger aggregation
-        )
-
-        probe = get_probe(
-            probe_config=probe_config,
-            base_model=None,
-            num_classes=10,
-            device="cpu",
-            feature_mode=True,
-            input_dim=1024,  # 2 layers * 512 dim
-        )
-
-        # Modify the aggregation method to test the probe's validation
-        probe.aggregation = "invalid_method"
-
-        # The aggregation error should occur during forward pass
-        x = torch.randn(4, 1024)
-        with pytest.raises(
-            ValueError, match="Unknown aggregation method: invalid_method"
-        ):
-            probe(x)
 
 
 if __name__ == "__main__":

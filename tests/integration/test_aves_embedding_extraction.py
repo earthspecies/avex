@@ -32,7 +32,8 @@ class TestAVESEmbeddingExtractionIntegration:
             )
             mock_wav2vec2.return_value = mock_model
 
-            # Mock the state dict loading with correct keys for Sequential model
+            # Mock the state dict loading with correct keys for Sequential
+            # model
             mock_load.return_value = {
                 "0.weight": torch.randn(768, 1),
                 "0.bias": torch.randn(768),

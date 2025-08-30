@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -23,19 +23,24 @@ class ModelBase(nn.Module):
         # Initialize hook management
         self._hooks: Dict[str, torch.utils.hooks.RemovableHandle] = {}
         self._hook_outputs: Dict[str, torch.Tensor] = {}
-        self._linear_layer_names: List[str] = []
-        # Note: _discover_linear_layers() will be called lazily when needed
+        self._layer_names: List[str] = []
+        self._hook_layers: List[str] = []  # Standardized property name for all models
 
     def _discover_linear_layers(self) -> None:
-        """Discover and cache all linear layer names in the model."""
-        self._linear_layer_names = []
-        for name, module in self.named_modules():
-            if isinstance(module, nn.Linear):
-                self._linear_layer_names.append(name)
-        logger.debug(
-            f"Discovered {len(self._linear_layer_names)} linear layers: "
-            f"{self._linear_layer_names}"
-        )
+        """Discover and cache all linear layer names in the model.
+
+        This method can be overridden by subclasses to discover additional
+        layer types beyond just nn.Linear layers.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+            for name, module in self.named_modules():
+                if isinstance(module, nn.Linear):
+                    self._layer_names.append(name)
+            logger.debug(
+                f"Discovered {len(self._layer_names)} linear layers: "
+                f"{self._layer_names}"
+            )
 
     def _create_hook_fn(self, layer_name: str) -> callable:
         """Create a hook function for a specific layer.
@@ -64,46 +69,113 @@ class ModelBase(nn.Module):
 
         return hook_fn
 
-    def _register_hooks_for_layers(self, layer_names: List[str]) -> None:
-        """Register hooks for the specified layers if not already registered."""
-        # Handle 'last_layer' replacement
-        resolved_layer_names = []
-        for layer_name in layer_names:
-            if layer_name == "last_layer":
-                # Get the last linear layer name
-                linear_layers = self._get_all_linear_layers()
-                if linear_layers:
-                    resolved_name = linear_layers[-1]
-                    logger.info(f"Replacing 'last_layer' with '{resolved_name}'")
-                    resolved_layer_names.append(resolved_name)
-                else:
-                    logger.warning("No linear layers found, using 'last_layer' as-is")
-                    resolved_layer_names.append(layer_name)
+    def register_hooks_for_layers(self, layer_names: List[str]) -> None:
+        """Register forward hooks for the specified layers.
+
+        Parameters
+        ----------
+        layer_names : List[str]
+            List of layer names to register hooks for.
+            Special values:
+            - 'all': Register hooks for all discoverable layers
+            - 'last_layer': Register hooks for only the last (non-classification) layer
+
+        Raises
+        ------
+        ValueError
+            If a layer name is not found in the model.
+        """
+        # Discover layers if not already done
+        if len(self._layer_names) == 0:
+            self._discover_linear_layers()
+
+        # Handle special cases
+        if "all" in layer_names:
+            # Replace 'all' with all discoverable layers, excluding the final
+            # classification layer
+            all_layers = self._layer_names.copy()
+            # Remove the final classification layer if it exists
+            if len(all_layers) > 0:
+                # Assume the last layer is the classification layer and exclude it
+                all_layers = all_layers[:-1]
+            # Remove 'all' from the list and add all discoverable layers
+            layer_names = [name for name in layer_names if name != "all"]
+            layer_names.extend(all_layers)
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_layers = []
+            for name in layer_names:
+                if name not in seen:
+                    seen.add(name)
+                    unique_layers.append(name)
+            layer_names = unique_layers
+
+        if "last_layer" in layer_names:
+            # Replace 'last_layer' with the last non-classification layer
+            last_layer = self._get_last_non_classification_layer()
+
+            if last_layer:
+                # Replace 'last_layer' with the actual layer name
+                layer_names = [
+                    name if name != "last_layer" else last_layer for name in layer_names
+                ]
             else:
-                resolved_layer_names.append(layer_name)
+                raise ValueError("No layers available for 'last_layer'")
 
-        # Register hooks for resolved layer names
-        for layer_name in resolved_layer_names:
-            if layer_name not in self._hooks:
-                # Find the module
-                module = None
-                for name, mod in self.named_modules():
-                    if name == layer_name:
-                        module = mod
-                        break
+        # Clear existing hooks
+        self.deregister_all_hooks()
 
-                if module is not None:
-                    hook_fn = self._create_hook_fn(layer_name)
-                    self._hooks[layer_name] = module.register_forward_hook(hook_fn)
-                    logger.debug(
-                        f"Registered hook for layer: {layer_name} on module: {module}"
-                    )
-                else:
-                    logger.warning(f"Layer '{layer_name}' not found in model")
+        # Store the target layers
+        self._hook_layers = layer_names
 
-    def _clear_hook_outputs(self) -> None:
-        """Clear cached hook outputs."""
+        # Register hooks for each layer
+        for layer_name in layer_names:
+            try:
+                module = self.get_submodule(layer_name)
+                hook_handle = module.register_forward_hook(
+                    self._create_hook_fn(layer_name)
+                )
+                self._hooks[layer_name] = hook_handle
+            except AttributeError as err:
+                raise ValueError(f"Layer '{layer_name}' not found in model") from err
+
+    def deregister_all_hooks(self) -> None:
+        """Remove all registered hooks and clear outputs."""
+        for hook in self._hooks.values():
+            hook.remove()
+        self._hooks.clear()
         self._hook_outputs.clear()
+        # Don't clear _hook_layers here as it's used to track which layers
+        # should have hooks registered
+        logger.debug("All hooks deregistered")
+
+    def _get_last_non_classification_layer(self) -> Optional[str]:
+        """Get the last non-classification layer name.
+
+        Returns:
+            Optional[str]: Name of the last non-classification layer, or None if
+                not found
+        """
+        if not self._layer_names:
+            return None
+
+        # Look for the last layer that's not a classification head
+        # Start from the second-to-last layer (assuming last is classifier)
+        for i in range(len(self._layer_names) - 2, -1, -1):
+            name = self._layer_names[i]
+            # Skip classification head layers (common patterns)
+            if not any(
+                skip in name.lower() for skip in ["classifier", "head", "fc", "linear"]
+            ):
+                return name
+
+        # If we can't find a non-classification layer, return the second-to-last layer
+        # (assuming the last layer is the classifier)
+        if len(self._layer_names) >= 2:
+            return self._layer_names[-2]
+
+        # Fallback to the last layer if only one layer exists
+        return self._layer_names[-1]
 
     def _get_all_linear_layers(self) -> List[str]:
         """Get all linear layer names including the classification layer.
@@ -111,18 +183,15 @@ class ModelBase(nn.Module):
         Returns:
             List[str]: List of linear layer names.
         """
-        # Discover linear layers if not already done
-        if not self._linear_layer_names:
-            self._discover_linear_layers()
+        return self._layer_names
 
-        return self._linear_layer_names
+    def _clear_hook_outputs(self) -> None:
+        """Clear cached hook outputs without removing hooks."""
+        self._hook_outputs.clear()
 
     def _cleanup_hooks(self) -> None:
         """Remove all registered hooks."""
-        for hook in self._hooks.values():
-            hook.remove()
-        self._hooks.clear()
-        self._hook_outputs.clear()
+        self.deregister_all_hooks()
 
     def __del__(self) -> None:
         """Cleanup hooks when the model is destroyed."""
@@ -189,7 +258,10 @@ class ModelBase(nn.Module):
         """
         embeds: List[torch.Tensor] = []
         for batch in tqdm(
-            batched_samples, desc=" processing batches", position=0, leave=False
+            batched_samples,
+            desc=" processing batches",
+            position=0,
+            leave=False,
         ):
             # Process audio if needed
             batch = self.process_audio(batch)
@@ -203,166 +275,100 @@ class ModelBase(nn.Module):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
-        aggregation: str = "mean",
-    ) -> torch.Tensor:
-        """
-        Extract embeddings from specified layers of the model.
+        aggregation: str = "none",
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Extract embeddings from all registered hooks in the model.
 
         Args:
-            x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
-            layers: List of layer names to extract embeddings from. If 'all' is
-                   included, all linear layers in the model will be automatically
-                   found and used.
-            padding_mask: Optional padding mask tensor
-            average_over_time: Whether to average embeddings over time dimension
+            x: Input tensor or dictionary containing 'raw_wav'
+            padding_mask: Optional padding mask for the input
             aggregation: Aggregation method for multiple layers ('mean', 'max',
-                         'cls_token', 'none')
+                'cls_token', 'none')
 
-        Returns
-        -------
-        torch.Tensor
-            Concatenated embeddings from the requested layers.
+        Returns:
+            Union[torch.Tensor, List[torch.Tensor]]: Model embeddings (tensor if
+                aggregation!="none", list if False)
 
-        Raises
-        ------
-        ValueError
-            If none of the supplied *layers* are found in the model.
+        Raises:
+            ValueError: If no hooks are registered or no outputs are captured
         """
         # Clear previous hook outputs
         self._clear_hook_outputs()
 
-        # Handle 'all' case - use cached linear layers
-        target_layers = layers.copy()
-        if "all" in layers:
-            logger.info("'all' specified in layers, using cached linear layers...")
-            linear_layer_names = self._get_all_linear_layers()
-
-            if not linear_layer_names:
-                logger.warning("No linear layers found in the model")
-            else:
-                logger.info(f"Using linear layers: {linear_layer_names}")
-
-            # Replace 'all' with the actual linear layer names
-            target_layers = [
-                layer for layer in layers if layer != "all"
-            ] + linear_layer_names
-            logger.info(f"Target layers after 'all' expansion: {target_layers}")
-
-        # Register hooks for requested layers (only if not already registered)
-        self._register_hooks_for_layers(target_layers)
+        # Check if hooks are registered
+        if not self._hooks:
+            raise ValueError(
+                "No hooks registered. Call register_hooks_for_layers() first."
+            )
 
         try:
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)
-            logger.debug(f"Starting forward pass with target layers: {target_layers}")
             if isinstance(x, dict):
                 # Input provided as dictionary with explicit padding mask
-                raw_wav = x["raw_wav"]
-                p_mask = x["padding_mask"]
-                self(raw_wav, p_mask)
+                wav = x["raw_wav"]
+                mask = x.get("padding_mask")
             else:
-                # Tensor input – use provided mask if available, otherwise assume
-                # fully-valid signal (all ones).
-                if padding_mask is None:
-                    padding_mask = torch.zeros(
-                        x.size(0), x.size(1), device=x.device, dtype=torch.bool
-                    )
-                self(x, padding_mask)
+                # Input provided as tensor, no padding mask
+                wav = x
+                mask = padding_mask
 
-            logger.debug(
-                f"Forward pass completed. Hook outputs: "
-                f"{list(self._hook_outputs.keys())}"
-            )
+            # Forward pass to trigger hooks
+            self.forward(wav, mask)
 
             # Collect embeddings from hook outputs
             embeddings = []
-            logger.debug(
-                f"Collecting embeddings from {len(target_layers)} target layers"
-            )
-            for layer_name in target_layers:
-                if layer_name in self._hook_outputs:
-                    embeddings.append(self._hook_outputs[layer_name])
-                    logger.debug(
-                        f"Found embedding for {layer_name}: "
-                        f"{self._hook_outputs[layer_name].shape}"
-                    )
-                else:
-                    logger.warning(f"No output captured for layer: {layer_name}")
+
+            for layer_name in self._hook_outputs.keys():
+                embeddings.append(self._hook_outputs[layer_name])
+                logger.debug(
+                    f"Found embedding for {layer_name}: "
+                    f"{self._hook_outputs[layer_name].shape}"
+                )
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(f"No layers found matching: {target_layers}")
+                raise ValueError(
+                    f"No layers found matching: {self._hook_outputs.keys()}"
+                )
 
-            if average_over_time:
-                result = []
-                for emb in embeddings:
-                    if emb.dim() == 2:
-                        # Already in correct shape, just append
-                        result.append(emb)
-                    elif emb.dim() == 3:
-                        # Apply aggregation method
+            # Process embeddings based on aggregation parameter
+            if aggregation == "none":
+                return embeddings
+            else:
+                # Average over time dimension if embeddings are 3D and concatenate
+                for i in range(len(embeddings)):
+                    if embeddings[i].dim() == 2:
+                        # Already in correct shape
+                        pass
+                    elif embeddings[i].dim() == 3:
                         if aggregation == "mean":
-                            aggregated = torch.mean(emb, dim=1)
+                            embeddings[i] = embeddings[i].mean(dim=1)
                         elif aggregation == "max":
-                            aggregated = torch.max(emb, dim=1)[0]
+                            embeddings[i] = embeddings[i].max(dim=1)[
+                                0
+                            ]  # max returns (values, indices)
                         elif aggregation == "cls_token":
-                            # For transformer models, take first token
-                            aggregated = emb[:, 0, :]
-                        elif aggregation == "none":
-                            # Keep full sequence
-                            aggregated = emb
+                            embeddings[i] = embeddings[i][:, 0, :]
                         else:
                             raise ValueError(
-                                f"Unknown aggregation method: {aggregation}"
+                                f"Unsupported aggregation method: {aggregation}"
                             )
-                        result.append(aggregated)
                     else:
                         raise ValueError(
-                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
                             f"Expected 2 or 3."
                         )
 
-                # Apply aggregation across layers
-                if len(result) > 1:
-                    if aggregation == "mean":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "max":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "cls_token":
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "none":
-                        # For 'none', we need to handle multiple layers differently
-                        # Try to stack, but if sizes don't match, fall back to
-                        # concatenation
-                        try:
-                            return torch.stack(result, dim=1)
-                        except RuntimeError:
-                            # If stacking fails due to different sizes, flatten and
-                            # concatenate instead
-                            flattened_results = []
-                            for emb in result:
-                                if emb.dim() == 3:
-                                    # Flatten the 3D tensor to 2D
-                                    batch_size, seq_len, features = emb.shape
-                                    flattened = emb.view(batch_size, -1)
-                                    flattened_results.append(flattened)
-                                else:
-                                    flattened_results.append(emb)
-                            return torch.cat(flattened_results, dim=1)
+                # Concatenate all embeddings
+                if len(embeddings) == 1:
+                    return embeddings[0]
                 else:
-                    return result[0]
-            else:
-                if len(embeddings) > 1 and aggregation == "none":
-                    # Stack along a new dimension to preserve layer information
-                    return torch.stack(embeddings, dim=1)
-                else:
-                    return embeddings
+                    return torch.cat(embeddings, dim=1)
 
         finally:
-            # Clear hook outputs for next call
+            # Always clear hook outputs after extraction
             self._clear_hook_outputs()

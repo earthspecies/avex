@@ -2,7 +2,6 @@ import logging
 from typing import List, Optional, Union
 
 import torch
-import torch.nn as nn
 import torch.utils.checkpoint
 from torchvision.models import efficientnet_b0, efficientnet_b1
 
@@ -44,23 +43,36 @@ class Model(ModelBase):
         # Move model to device
         self.model = self.model.to(self.device)
 
-        # Modify the classifier only if not returning features and num_classes differs.
-        if not self.return_features_only and num_classes != 1000:
-            in_features = self.model.classifier[1].in_features
-            self.model.classifier[1] = nn.Linear(in_features, num_classes)
-        # No need to modify classifier if return_features_only is True
-
         # -------------------------------------------------------------- #
         #  Pre-discover convolutional layers for efficient hook management #
         # -------------------------------------------------------------- #
-        self._conv_layer_names: List[str] = []
-        for name, module in self.named_modules():
-            if isinstance(module, torch.nn.Conv2d):
-                self._conv_layer_names.append(name)
-        logger.debug(
-            f"Discovered {len(self._conv_layer_names)} convolutional layers "
-            f"for hook management"
-        )
+        # Convolutional layers will be discovered in _discover_linear_layers override
+
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache all linear layer names including convolutional layers.
+
+        This overrides the base class method to discover EfficientNet-specific layers
+        beyond just nn.Linear layers.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # Discover standard linear layers
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            # Discover additional EfficientNet-specific layers (convolutional layers)
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Conv2d):
+                    if name not in self._layer_names:
+                        self._layer_names.append(name)
+
+            logger.debug(
+                f"Discovered {len(self._layer_names)} hookable layers in "
+                f"EfficientNet model: "
+                f"{self._layer_names}"
+            )
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """Process audio input and adapt it for EfficientNet's 3-channel input.
@@ -143,127 +155,58 @@ class Model(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
-        aggregation: str = "mean",
+        aggregation: str = "none",
     ) -> Union[torch.Tensor, List[torch.Tensor]]:
-        """Extract embeddings from the model with automatic batch splitting.
+        """Extract embeddings from all registered hooks in the EfficientNet model.
 
         Parameters
         ----------
         x : torch.Tensor | dict[str, torch.Tensor]
             Input audio tensor or dictionary containing 'raw_wav'
-        layers : List[str]
-            List of layer names. If 'all' is included, all convolutional layers in the
-            model will be automatically found and used.
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input (ignored for EfficientNet)
-        average_over_time : bool
-            Whether to average embeddings over time dimension
         aggregation : str
-            Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none')
+            Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none').
+            When 'none', 4D embeddings (B, C, H, W) are reshaped to 3D (B, H, C*W)
+            for sequence probe compatibility.
 
         Returns
         -------
         Union[torch.Tensor, List[torch.Tensor]]
-            Model embeddings (tensor if average_over_time=True, list if False)
+            Model embeddings (tensor if aggregated, list of 3D tensors if
+            aggregation='none')
 
         Raises
         ------
         ValueError
-            If no layers are found matching the specified layer names.
+            If no hooks are registered or no outputs are captured
         """
+        # Check if hooks are registered
+        if not self._hooks:
+            raise ValueError("No hooks are registered in the model.")
+
         # Clear previous hook outputs
         self._clear_hook_outputs()
 
-        # Handle 'all' case - use cached convolutional layers
-        target_layers = layers.copy()
-        if "all" in layers:
-            logger.debug(
-                "'all' specified in layers, using top 3 convolutional layers "
-                "to avoid excessive embedding dimensions..."
-            )
-            if self._conv_layer_names:
-                # Use only the top 3 layers to keep embedding dimensions manageable
-                top_layers = (
-                    self._conv_layer_names[-3:]
-                    if len(self._conv_layer_names) >= 3
-                    else self._conv_layer_names
-                )
-                logger.debug(
-                    f"Using top {len(top_layers)} convolutional layers: {top_layers}"
-                )
-                # Replace 'all' with the top 3 convolutional layer names
-                target_layers = [
-                    layer for layer in layers if layer != "all"
-                ] + top_layers
-                logger.debug(
-                    f"Target layers after 'all' expansion: {len(target_layers)} layers"
-                )
-            else:
-                logger.warning("No convolutional layers found in the model")
-
-        # Register hooks for requested layers (only if not already registered)
-        self._register_hooks_for_layers(target_layers)
-
-        # Store original training state and set to eval for deterministic results
-        was_training = self.training
-        self.eval()
-
-        # Store original gradient checkpointing state and disable it during extraction
-        was_gradient_checkpointing = self.gradient_checkpointing
-        self.gradient_checkpointing = False
-
-        # Set deterministic behavior for CUDA if available
-        if torch.cuda.is_available():
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-
         try:
-            # Process audio input
+            # Process input
             if isinstance(x, dict):
-                x = x["raw_wav"]
-            x = self.process_audio(x)
-
-            # Extract features with optional gradient checkpointing
-            if self.gradient_checkpointing and was_training:
-                features = self._checkpointed_features(x)
+                wav = x["raw_wav"]
             else:
-                features = self.model.features(x)
+                wav = x
 
-            pooled_features = self.model.avgpool(features)
-            flattened_features = torch.flatten(pooled_features, 1)
-
-            # If no specific layers requested, return the main features
-            if not target_layers:
-                return flattened_features
-
-            # Use hook-based approach for specific layers
-            logger.debug(f"Starting forward pass with target layers: {target_layers}")
-
-            # The forward pass through features and classifier will trigger hooks
-            # for both convolutional layers (in features) and linear layers
-            # (in classifier)
-            if not self.return_features_only:
-                _ = self.model.classifier(flattened_features)
-            else:
-                # In features_only mode, we still need to trigger the classifier
-                # to get hook outputs for any linear layers, but we don't use the result
-                _ = self.model.classifier(flattened_features)
-
-            logger.debug(
-                f"Forward pass completed. Hook outputs: "
-                f"{list(self._hook_outputs.keys())}"
-            )
+            # Forward pass to trigger hooks
+            with torch.no_grad():
+                self.forward(wav, padding_mask)
 
             # Collect embeddings from hook outputs
             embeddings = []
             logger.debug(
-                f"Collecting embeddings from {len(target_layers)} target layers"
+                f"Collecting embeddings from {len(self._hook_outputs)} registered hooks"
             )
-            for layer_name in target_layers:
+            for layer_name in self._hook_outputs:
                 if layer_name in self._hook_outputs:
                     embeddings.append(self._hook_outputs[layer_name])
                     logger.debug(
@@ -277,72 +220,78 @@ class Model(ModelBase):
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(f"No layers found matching: {target_layers}")
+                raise ValueError("No outputs were captured from registered hooks.")
 
-            # Process embeddings - flatten all to same dimension and concatenate
-            result = []
-            for emb in embeddings:
-                if emb.dim() == 2:
-                    # Already flattened, just append
-                    result.append(emb)
-                elif emb.dim() == 3:
-                    # (B, C, T) -> flatten to (B, C*T)
-                    batch_size, channels, time = emb.shape
-                    flattened = emb.view(batch_size, -1)
-                    result.append(flattened)
-                elif emb.dim() == 4:
-                    # (B, C, H, W) -> flatten to (B, C*H*W)
-                    batch_size, channels, height, width = emb.shape
-                    flattened = emb.view(batch_size, -1)
-                    result.append(flattened)
-                else:
-                    raise ValueError(
-                        f"Unexpected embedding dimension: {emb.dim()}. "
-                        f"Expected 2, 3, or 4."
-                    )
-
-            if average_over_time:
-                # Apply aggregation across layers
-                if len(result) > 1:
-                    if aggregation == "mean":
-                        # Concatenate all flattened embeddings along the last dimension
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "max":
-                        # Concatenate all flattened embeddings along the last dimension
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "cls_token":
-                        # Concatenate all flattened embeddings along the last dimension
-                        return torch.cat(result, dim=1)
-                    elif aggregation == "none":
-                        # Try to stack, but if sizes don't match, fall back to
-                        # concatenation
-                        try:
-                            return torch.stack(result, dim=1)
-                        except RuntimeError:
-                            # If stacking fails due to different sizes, concatenate
-                            # instead
-                            return torch.cat(result, dim=1)
+            logger.debug(f" Aggregation: {aggregation}")
+            # Process embeddings based on aggregation parameter
+            if aggregation == "none":
+                logger.debug(
+                    f"Reshaping embeddings based on aggregation: {aggregation}"
+                )
+                # For sequence probes, reshape 4D embeddings (B, C, H, W) to 3D
+                # (B, H, C*W) in place. This allows sequence probes to process
+                # spatial information as temporal sequence
+                for i, emb in enumerate(embeddings):
+                    if emb.dim() == 4:  # (B, C, H, W)
+                        batch_size, channels, height, width = emb.shape
+                        logger.debug(f"Processing 4D embedding {i}: {emb.shape}")
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Ensure proper memory layout for cuDNN
+                        reshaped_emb = (
+                            emb.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        # Ensure the tensor is contiguous and properly aligned for cuDNN
+                        embeddings[i] = reshaped_emb.contiguous()
+                        logger.debug(
+                            f"Reshaped embedding {i}: {embeddings[i].shape} "
+                            f"for sequence probe compatibility"
+                        )
+                    elif emb.dim() == 3:  # (B, H, W) - already 3D
+                        logger.debug(f"Embedding {i} already 3D: {emb.shape}")
+                    elif emb.dim() == 2:  # (B, features) - already 2D
+                        logger.debug(f"Embedding {i} already 2D: {emb.shape}")
                     else:
-                        raise ValueError(f"Unknown aggregation method: {aggregation}")
-                else:
-                    return result[0]
+                        raise ValueError(
+                            f"Unexpected embedding dimension: {emb.dim()}. "
+                            f"Expected 2, 3, or 4D for EfficientNet."
+                        )
+
+                logger.debug(f"Returning {len(embeddings)} reshaped embeddings")
+                return embeddings
             else:
-                # Return list of embeddings without concatenation
-                if len(result) > 1 and aggregation == "none":
-                    # Stack along a new dimension to preserve layer information
-                    return torch.stack(result, dim=1)
-                else:
-                    return result
+                logger.debug(f"Using aggregation method: {aggregation}")
+                # Average over time and concatenate
+                for i in range(len(embeddings)):
+                    if embeddings[i].dim() == 2:
+                        pass
+                    else:
+                        if aggregation == "mean":
+                            embeddings[i] = embeddings[i].mean(dim=-1)
+                        elif aggregation == "max":
+                            embeddings[i] = embeddings[i].max(dim=-1)[
+                                0
+                            ]  # max returns (values, indices)
+                        elif aggregation == "cls_token":
+                            embeddings[i] = embeddings[i][:, 0, :]
+                        else:
+                            raise ValueError(
+                                f"Unsupported aggregation method: {aggregation}"
+                            )
+                        if embeddings[i].dim() == 3:
+                            batch_size, channels, width = embeddings[i].shape
+                            embeddings[i] = embeddings[i].view(batch_size, -1)
+                        else:
+                            raise ValueError(
+                                f"Unexpected embedding dimension: "
+                                f"{embeddings[i].dim()}. Expected 2, 3, or 4."
+                            )
+                # Concatenate all embeddings
+                embeddings = torch.cat(embeddings, dim=1)
+                logger.debug(f"Returning concatenated embeddings: {embeddings.shape}")
+                return embeddings
 
         finally:
-            # Restore original training state
-            if was_training:
-                self.train()
-            # Restore gradient checkpointing state
-            self.gradient_checkpointing = was_gradient_checkpointing
-            # Restore CUDA settings
-            if torch.cuda.is_available():
-                torch.backends.cudnn.deterministic = False
-                torch.backends.cudnn.benchmark = True
             # Clear hook outputs for next call
             self._clear_hook_outputs()
