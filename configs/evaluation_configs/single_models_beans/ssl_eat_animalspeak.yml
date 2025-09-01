@@ -14,10 +14,16 @@ training_params:
 experiments:
   - run_name: ssl_eat_animalspeak
     run_config: configs/run_configs/aaai_train/ssl_eat_animalspeak_eval_mode.yml
-    ### which layers to probe for embeddings
-    layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
+    probe_config:
+      type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
 
 # Where to save the evaluation results
 save_dir: evaluation_results/aaai/eat_audioset

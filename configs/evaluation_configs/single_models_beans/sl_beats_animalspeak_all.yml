@@ -14,8 +14,13 @@ training_params:
 experiments:
   - run_name: sl_beats_animalspeak
     run_config: configs/run_configs/pretrained/beats_ft.yml
-    ### which layers to probe for embeddings
-    layers: all
+    probe_config:
+      type: linear
+      target_layers: ["all"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     checkpoint_path: gs://representation-learning/models/sl_beats_animalspeak.pt

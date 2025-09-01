@@ -15,7 +15,13 @@ experiments:
   - run_name: efficientnet_esc50_test
     run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml
     pretrained: true
-    layers: model.features.8
+    probe_config:
+      type: linear
+      target_layers: ["model.features.8"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
 
 # Where to save the evaluation results
 save_dir: evaluation_results/esc50_test
