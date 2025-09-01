@@ -314,6 +314,11 @@ def train_and_eval_offline(
             "probe_config to ensure proper probe settings and behavior."
         )
 
+    logger.info(
+        f"Creating offline probe: type={probe_config.probe_type}, "
+        f"input_dim={input_dim}, target_length={target_length}"
+    )
+
     probe = get_probe(
         probe_config=probe_config,
         base_model=None,
@@ -462,6 +467,11 @@ def train_and_eval_online(
             "No fallback to default configuration is allowed to ensure proper "
             "probe behavior and settings."
         )
+
+    logger.info(
+        f"Creating online training model: type={probe_config.probe_type}, "
+        f"frozen={probe_config.freeze_backbone}, target_length={target_length}"
+    )
 
     sft_model = get_probe(
         probe_config=probe_config,

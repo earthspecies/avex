@@ -3,6 +3,7 @@
 import logging
 from typing import List, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -127,6 +128,12 @@ class LSTMProbe(torch.nn.Module):
                         # For sequence probes, we expect 3D embeddings
                         # (batch_size, sequence_length, embedding_dim)
                         inferred_dim = dummy_embeddings.shape[-1]
+                        lstm_true_hidden_size = int(
+                            np.maximum(
+                                int(dummy_embeddings.shape[1] / 4),
+                                self.lstm_hidden_size,
+                            )
+                        )
                     else:
                         raise ValueError(
                             f"LSTM probe expects 3D embeddings (batch_size, "
@@ -166,6 +173,7 @@ class LSTMProbe(torch.nn.Module):
 
                     # For sequence probes, we expect 3D embeddings
                     # Check that all embeddings are 3D
+                    time_dims = []
                     for i, emb in enumerate(dummy_embeddings):
                         if emb.dim() != 3:
                             raise ValueError(
@@ -173,13 +181,18 @@ class LSTMProbe(torch.nn.Module):
                                 f"sequence_length, embedding_dim), got shape "
                                 f"{emb.shape} for layer {i}"
                             )
+                        time_dims.append(emb.shape[1])
+
+                    lstm_true_hidden_size = int(
+                        np.maximum(int(min(time_dims) / 4), lstm_hidden_size)
+                    )
 
                     # Create LSTM projection heads for each layer
                     self.layer_projections = nn.ModuleList(
                         [
                             nn.LSTM(
                                 input_size=emb.shape[-1],
-                                hidden_size=self.lstm_hidden_size,
+                                hidden_size=lstm_true_hidden_size,
                                 num_layers=self.num_layers,
                                 bidirectional=self.bidirectional,
                                 dropout=self.dropout_rate if self.num_layers > 1 else 0,
@@ -201,7 +214,8 @@ class LSTMProbe(torch.nn.Module):
                         f"LSTMProbe init (feature_mode=False, aggregation='none'): "
                         f"dummy_embeddings: list of {len(dummy_embeddings)} tensors, "
                         f"layers: {layers}, aggregation: {self.aggregation}, "
-                        f"inferred_dim: {inferred_dim}"
+                        f"inferred_dim: {inferred_dim}, "
+                        f"lstm_true_hidden_size: {lstm_true_hidden_size}"
                     )
                 else:
                     # Single tensor case
@@ -218,9 +232,16 @@ class LSTMProbe(torch.nn.Module):
                         # For sequence probes, we expect 3D embeddings
                         # (batch_size, sequence_length, embedding_dim)
                         inferred_dim = dummy_embeddings.shape[-1]
+                        lstm_true_hidden_size = int(
+                            np.maximum(
+                                int(dummy_embeddings.shape[1] / 4),
+                                self.lstm_hidden_size,
+                            )
+                        )
                         logger.debug(
                             f"LSTM probe: Using 3D tensor with "
-                            f"inferred_dim: {inferred_dim}"
+                            f"inferred_dim: {inferred_dim}, "
+                            f"lstm_true_hidden_size: {lstm_true_hidden_size}"
                         )
                     else:
                         logger.error(
@@ -239,7 +260,7 @@ class LSTMProbe(torch.nn.Module):
         # using projection heads)
         self.lstm = nn.LSTM(
             input_size=inferred_dim,
-            hidden_size=lstm_hidden_size,
+            hidden_size=lstm_true_hidden_size,
             num_layers=num_layers,
             bidirectional=bidirectional,
             dropout=dropout_rate if num_layers > 1 else 0,
@@ -378,7 +399,7 @@ class LSTMProbe(torch.nn.Module):
                     projected_embeddings.append(projected_emb)
 
                 # Concatenate along the feature dimension
-                embeddings = torch.cat(projected_embeddings, dim=-1)
+                lstm_out = torch.cat(projected_embeddings, dim=-1)
 
                 # When using projection heads, embeddings are already processed
                 # No need to pass through main LSTM - go directly to classifier
@@ -388,7 +409,7 @@ class LSTMProbe(torch.nn.Module):
 
                 # Skip main LSTM since we already processed each layer with
                 # individual LSTMs
-                lstm_out = embeddings.unsqueeze(1)  # Add sequence dimension for
+                # lstm_out = embeddings.unsqueeze(1)  # Add sequence dimension for
                 # consistency
             else:
                 # Single tensor case - ensure it's 3D
@@ -409,20 +430,20 @@ class LSTMProbe(torch.nn.Module):
                 embeddings = embeddings.contiguous()
 
                 # Pass through main LSTM
-                # Note: Using regular LSTM instead of packed sequences "
-                "to avoid cuDNN issues"
+                # Note: Using regular LSTM instead of packed sequences
+                # to avoid cuDNN issues
                 lstm_out, _ = self.lstm(embeddings)
+
+                # Take the last output for classification
+                # For bidirectional LSTM, this captures information from both directions
+                lstm_out = lstm_out.mean(dim=1)
 
         # Apply dropout if enabled
         if self.dropout is not None:
             lstm_out = self.dropout(lstm_out)
 
-        # Take the last output for classification
-        # For bidirectional LSTM, this captures information from both directions
-        last_output = lstm_out[:, -1, :]
-
         # Classify
-        logits = self.classifier(last_output)
+        logits = self.classifier(lstm_out)
 
         return logits
 

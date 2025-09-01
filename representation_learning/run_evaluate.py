@@ -173,6 +173,24 @@ def run_experiment(
     offline_training = need_probe and not experiment_cfg.get_training_mode()
     aggregation_method = experiment_cfg.get_aggregation_method()
 
+    # Log probe configuration details
+    if need_probe:
+        probe_type = experiment_cfg.get_probe_type()
+        target_layers = experiment_cfg.get_target_layers()
+        input_processing = experiment_cfg.get_input_processing_method()
+        probe_specific_params = experiment_cfg.get_probe_specific_params()
+
+        logger.info(
+            f"Probe configuration: type={probe_type}, "
+            f"layers={target_layers}, "
+            f"aggregation={aggregation_method}, "
+            f"input_processing={input_processing}, "
+            f"training_mode={'online' if online_training else 'offline'}"
+        )
+
+        if probe_specific_params:
+            logger.info(f"Probe-specific parameters: {probe_specific_params}")
+
     # For online training (LSTM probes), we don't need to extract embeddings for
     # training
     # For offline training (linear probes), we extract embeddings for training
@@ -871,6 +889,22 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     # Group by experiment to load each model only once (saved a lot of time.)
     for exp_cfg in eval_cfg.experiments:
         logger.info(f"Starting experiment: {exp_cfg.run_name}")
+
+        # Log experiment probe configuration
+        if exp_cfg.probe_config:
+            logger.info(
+                f"Experiment '{exp_cfg.run_name}' probe config: "
+                f"type={exp_cfg.probe_config.probe_type}, "
+                f"layers={exp_cfg.probe_config.target_layers}, "
+                f"aggregation={exp_cfg.probe_config.aggregation}, "
+                f"input_processing={exp_cfg.probe_config.input_processing}, "
+                f"freeze_backbone={exp_cfg.probe_config.freeze_backbone}, "
+                f"online_training={exp_cfg.probe_config.online_training}"
+            )
+        else:
+            logger.info(
+                f"Experiment '{exp_cfg.run_name}' using legacy probe configuration"
+            )
 
         cached_model = None
         model_metadata = None

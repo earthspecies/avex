@@ -1,5 +1,6 @@
 """Factory function to obtain probe instances based on configuration."""
 
+import logging
 from typing import Optional
 
 import torch
@@ -18,6 +19,8 @@ from representation_learning.models.probes.mlp_probe import MLPProbe
 from representation_learning.models.probes.transformer_probe import (
     TransformerProbe,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def prune_model_to_layer(
@@ -257,6 +260,12 @@ def get_probe(
     layers = probe_config.target_layers
     aggregation = probe_config.aggregation
     input_processing = probe_config.input_processing
+
+    # Log probe creation details
+    logger.info(
+        f"Creating {probe_type} probe: layers={layers}, "
+        f"aggregation={aggregation}, input_processing={input_processing}"
+    )
 
     # Validate input processing compatibility
     if input_processing == "sequence" and probe_type not in [

@@ -208,7 +208,8 @@ class AttentionProbe(torch.nn.Module):
                             )
 
                     # Create attention projection heads for each layer
-                    self.layer_projections = nn.ModuleList()
+                    self.attention_layers = nn.ModuleList()
+                    self.layer_norms = nn.ModuleList()
 
                     for i, emb in enumerate(dummy_embeddings):
                         # Find the optimal number of heads that the embedding "
@@ -240,7 +241,8 @@ class AttentionProbe(torch.nn.Module):
                             dropout=self.dropout_rate,
                             batch_first=True,
                         )
-                        self.layer_projections.append(attention_proj)
+                        self.attention_layers.append(attention_proj)
+                        self.layer_norms.append(nn.LayerNorm(embed_dim))
 
                         logger.debug(
                             f"Created attention projection head {i}: "
@@ -276,14 +278,13 @@ class AttentionProbe(torch.nn.Module):
                             f"{dummy_embeddings.shape}"
                         )
 
-                    self.attention_layers = nn.ModuleList()
-                    # Find the optimal number of heads that the embedding "
-                    "dimension can be divisible by"
+                    # Find the optimal number of heads that the embedding
+                    # dimension can be divisible by
                     embed_dim = inferred_dim
 
-                    # Find all divisors of embed_dim that are reasonable for "
-                    "attention heads. We want heads that result in head_dim >= 64 "
-                    "(PyTorch recommendation)"
+                    # Find all divisors of embed_dim that are reasonable for
+                    # attention heads. We want heads that result in head_dim >= 64
+                    # (PyTorch recommendation)
                     valid_heads = []
                     for n in range(1, min(num_heads + 1, embed_dim + 1)):
                         if embed_dim % n == 0 and embed_dim // n >= 64:
@@ -306,34 +307,19 @@ class AttentionProbe(torch.nn.Module):
                         f"original inferred_dim={inferred_dim}"
                     )
 
-                    for _ in range(num_layers):
-                        attention_layer = nn.MultiheadAttention(
-                            embed_dim=embed_dim,
-                            num_heads=adjusted_num_heads,
-                            dropout=dropout_rate,
-                            batch_first=True,
-                        )
-                        self.attention_layers.append(attention_layer)
+                    self.attention_layers = nn.MultiheadAttention(
+                        embed_dim=embed_dim,
+                        num_heads=adjusted_num_heads,
+                        dropout=dropout_rate,
+                        batch_first=True,
+                    )
 
                     # Layer normalization
-                    self.layer_norms = nn.ModuleList(
-                        [nn.LayerNorm(embed_dim) for _ in range(num_layers)]
-                    )
-
-                    # Feed-forward network
-                    self.feed_forward = nn.Sequential(
-                        nn.Linear(embed_dim, attention_dim),
-                        nn.ReLU(),
-                        nn.Dropout(dropout_rate),
-                        nn.Linear(attention_dim, embed_dim),
-                    )
+                    self.layer_norms = nn.LayerNorm(embed_dim)
 
         # Ensure embed_dim is always defined for consistent dimensions
         if "embed_dim" not in locals():
             embed_dim = inferred_dim
-
-        # Final layer normalization - use the adjusted embed_dim
-        self.final_layer_norm = nn.LayerNorm(embed_dim)
 
         # Classifier - use the adjusted embed_dim
         self.classifier = nn.Linear(embed_dim, num_classes)
@@ -354,8 +340,6 @@ class AttentionProbe(torch.nn.Module):
             self.attention_layers = None
         if not hasattr(self, "layer_norms"):
             self.layer_norms = None
-        if not hasattr(self, "feed_forward"):
-            self.feed_forward = None
 
         self.to(device)
 
@@ -401,8 +385,8 @@ class AttentionProbe(torch.nn.Module):
         if isinstance(embeddings, list):
             # Apply attention projection heads to each layer's embeddings
             projected_embeddings = []
-            for i, (emb, attn_proj) in enumerate(
-                zip(embeddings, self.layer_projections, strict=False)
+            for i, (emb, attn_proj, layer_norm) in enumerate(
+                zip(embeddings, self.attention_layers, self.layer_norms, strict=False)
             ):
                 # Ensure embeddings are 3D
                 if emb.dim() == 3:
@@ -454,8 +438,10 @@ class AttentionProbe(torch.nn.Module):
                         attn_out, _ = attn_proj(emb, emb, emb, key_padding_mask=mask)
                     else:
                         attn_out, _ = attn_proj(emb, emb, emb)
+
+                    projected_emb = layer_norm(emb + self.dropout(attn_out))
                     # Global average pooling over sequence dimension
-                    projected_emb = attn_out.mean(dim=1)
+                    projected_emb = projected_emb.mean(dim=1)
                 else:
                     raise ValueError(
                         f"Attention probe expects 3D embeddings (batch_size, "
@@ -484,58 +470,50 @@ class AttentionProbe(torch.nn.Module):
                 embeddings = embeddings + self.pos_encoding(embeddings)
 
             # Apply main attention layers (only if they exist)
-            if self.attention_layers is not None:
+            if self.attention_layers is not None and self.layer_norms is not None:
                 x = embeddings
-                for _i, (attention, layer_norm) in enumerate(
-                    zip(self.attention_layers, self.layer_norms, strict=False)
-                ):
-                    # Self-attention
-                    if padding_mask is not None:
-                        # Ensure padding mask has correct shape for attention
-                        batch_size, seq_len, _ = x.shape
+                # Self-attention
+                if padding_mask is not None:
+                    # Ensure padding mask has correct shape for attention
+                    batch_size, seq_len, _ = x.shape
+                    logger.debug(
+                        f"Main attention layer: embedding shape={x.shape}, "
+                        f"padding_mask shape={padding_mask.shape}"
+                    )
+
+                    if padding_mask.shape[1] != seq_len:
+                        # Reshape padding mask to match the embedding "
+                        "sequence length"
+                        if padding_mask.shape[1] > seq_len:
+                            # Truncate to match sequence length
+                            mask = padding_mask[:, :seq_len]
+                            logger.debug(
+                                f"Truncated padding mask from "
+                                f"{padding_mask.shape[1]} to {seq_len}"
+                            )
+                        else:
+                            # Pad with zeros to match sequence length
+                            mask = torch.zeros(
+                                batch_size,
+                                seq_len,
+                                device=padding_mask.device,
+                                dtype=padding_mask.dtype,
+                            )
+                            mask[:, : padding_mask.shape[1]] = padding_mask
+                            logger.debug(
+                                f"Padded padding mask from "
+                                f"{padding_mask.shape[1]} to {seq_len}"
+                            )
+                    else:
+                        mask = padding_mask
                         logger.debug(
-                            f"Main attention layer: embedding shape={x.shape}, "
-                            f"padding_mask shape={padding_mask.shape}"
+                            f"Padding mask already matches sequence length: {seq_len}"
                         )
 
-                        if padding_mask.shape[1] != seq_len:
-                            # Reshape padding mask to match the embedding "
-                            "sequence length"
-                            if padding_mask.shape[1] > seq_len:
-                                # Truncate to match sequence length
-                                mask = padding_mask[:, :seq_len]
-                                logger.debug(
-                                    f"Truncated padding mask from "
-                                    f"{padding_mask.shape[1]} to {seq_len}"
-                                )
-                            else:
-                                # Pad with zeros to match sequence length
-                                mask = torch.zeros(
-                                    batch_size,
-                                    seq_len,
-                                    device=padding_mask.device,
-                                    dtype=padding_mask.dtype,
-                                )
-                                mask[:, : padding_mask.shape[1]] = padding_mask
-                                logger.debug(
-                                    f"Padded padding mask from "
-                                    f"{padding_mask.shape[1]} to {seq_len}"
-                                )
-                        else:
-                            mask = padding_mask
-                            logger.debug(
-                                f"Padding mask already matches sequence length: "
-                                f"{seq_len}"
-                            )
-
-                        attn_out, _ = attention(x, x, x, key_padding_mask=mask)
-                    else:
-                        attn_out, _ = attention(x, x, x)
-                    x = layer_norm(x + self.dropout(attn_out))
-
-                    # Feed-forward
-                    ff_out = self.feed_forward(x)
-                    x = layer_norm(x + self.dropout(ff_out))
+                    attn_out, _ = self.attention_layers(x, x, x, key_padding_mask=mask)
+                else:
+                    attn_out, _ = self.attention_layers(x, x, x)
+                x = self.layer_norms(x + self.dropout(attn_out))
             else:
                 # When using projection heads or feature mode, embeddings are already
                 # processed
@@ -545,8 +523,9 @@ class AttentionProbe(torch.nn.Module):
         if x.dim() == 3:
             x = x.mean(dim=1)
 
-        # Final layer normalization
-        x = self.final_layer_norm(x)
+        # Apply dropout if enabled
+        if self.dropout is not None:
+            x = self.dropout(x)
 
         # Classify
         logits = self.classifier(x)
@@ -572,5 +551,5 @@ class AttentionProbe(torch.nn.Module):
             "max_sequence_length": self.max_sequence_length,
             "use_positional_encoding": self.use_positional_encoding,
             "target_length": self.target_length,
-            "has_layer_projections": hasattr(self, "layer_projections"),
+            "has_attention_layers": hasattr(self, "attention_layers"),
         }

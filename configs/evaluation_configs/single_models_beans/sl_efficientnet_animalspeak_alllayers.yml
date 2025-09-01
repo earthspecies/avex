@@ -2,9 +2,9 @@
 dataset_config: configs/data_configs/benchmark_single.yml
 
 training_params:
-  train_epochs: 10
+  train_epochs: 30
   lr: 0.001
-  batch_size: 32
+  batch_size: 64
   optimizer: adamw
   weight_decay: 0.01
   amp: false
@@ -39,51 +39,54 @@ experiments:
       # freeze_backbone: false
       # online_training: true
       # hidden_dims: [512, 256]
-      # dropout_rate: 0.2
+      # dropout_rate: 0.3
       # activation: "gelu"
       #
-      probe_type: "linear"
-      aggregation: "mean"
-      input_processing: "pooled"
-      target_layers: ["model.avgpool"]
-      freeze_backbone: true
-      online_training: true
+      # probe_type: "linear"
+      # aggregation: "mean"
+      # input_processing: "pooled"
+      # target_layers: ["model.avgpool"]
+      # freeze_backbone: true
+      # online_training: true
       #
       # probe_type: "lstm"
       # aggregation: "none"
       # input_processing: "sequence"
       # target_layers: ["model.features.8"]
-      # lstm_hidden_size: 256
-      # num_layers: 2
+      # lstm_hidden_size: 16
+      # num_layers: 1
       # bidirectional: true
       # max_sequence_length: 1000
       # use_positional_encoding: false
+      # dropout_rate: 0.3
       # freeze_backbone: true
       # online_training: true
       #
-      # probe_type: "attention"
-      # aggregation: "none"
-      # input_processing: "sequence"
-      # target_layers: ["model.features.8"]
-      # num_heads: 8
-      # attention_dim: 512
-      # num_layers: 2
-      # max_sequence_length: 800
-      # use_positional_encoding: true
-      # freeze_backbone: true
-      # online_training: true
+      probe_type: "attention"
+      aggregation: "none"
+      input_processing: "sequence"
+      target_layers: ["model.features.8"]
+      num_heads: 8
+      attention_dim: 64
+      num_layers: 1
+      max_sequence_length: 800
+      use_positional_encoding: false
+      dropout_rate: 0.3
+      freeze_backbone: true
+      online_training: true
       #
       # probe_type: "transformer"
       # aggregation: "none"
       # input_processing: "sequence"
       # target_layers: ["model.features.8"]
-      # freeze_backbone: true
-      # num_heads: 12
-      # attention_dim: 768
-      # num_layers: 4
+      # num_heads: 8
+      # attention_dim: 128
+      # num_layers: 1
       # max_sequence_length: 1200
       # use_positional_encoding: true
-      # dropout_rate: 0.1
+      # dropout_rate: 0.3
+      # freeze_backbone: true
+      # online_training: true
 
 # Streaming embedding extraction configuration
 # Enable streaming for memory-efficient extraction when using "all" layers
