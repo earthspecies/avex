@@ -220,40 +220,56 @@ class PerchModel(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: list[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:  # type: ignore[override]
-        """Return Perch embeddings irrespective of *layers* argument.
+        aggregation: str = "mean",
+    ) -> torch.Tensor | list[torch.Tensor]:  # type: ignore[override]
+        """Return Perch embeddings with support for different aggregation methods.
 
         The generic :py:meth:`ModelBase.extract_embeddings` relies on PyTorch
         forward hooks which do not apply to the TF-Hub backbone.  Instead we
-        ignore *layers* (only logging a warning if the caller requested a
-        specific one) and return the features produced by
-        :py:meth:`extract_features`.
+        return the features produced by :py:meth:`extract_features`.
 
         Args:
             x: Input audio tensor or dictionary containing 'raw_wav' key
-            layers: Layer names (ignored for Perch model)
             padding_mask: Optional padding mask (unused)
+            aggregation: Aggregation method - "mean", "max", "cls_token", or "none"
 
         Returns:
-            torch.Tensor: Extracted embeddings from the Perch backbone
-        """
+            Union[torch.Tensor, List[torch.Tensor]]: Extracted embeddings based on
+            aggregation method
 
-        if layers and layers != ["last_layer"]:
-            logger.warning(
-                "PerchModel ignores layer selection; returning backbone "
-                "embeddings regardless (requested layers=%s).",
-                layers,
-            )
+        Raises:
+            ValueError: If unsupported aggregation method is provided.
+        """
 
         if isinstance(x, dict):
             audio = x["raw_wav"]
         else:
             audio = x
 
-        return self.extract_features(audio, padding_mask)
+        # Extract base embeddings
+        embeddings = self.extract_features(audio, padding_mask)
+
+        # Handle different aggregation methods
+        if aggregation == "none":
+            # For sequence probes, return list of embeddings
+            # Since Perch is a single-layer model, we return a list with one element
+            # Reshape from (B, 1280) to (B, 1, 1280) to make it 3D for sequence probes
+            batch_size, embed_dim = embeddings.shape
+            reshaped_embeddings = embeddings.unsqueeze(1)  # (B, 1, 1280)
+            return [reshaped_embeddings]
+        elif aggregation == "mean":
+            # Default behavior - return embeddings as is
+            return embeddings
+        elif aggregation == "max":
+            # Max pooling over time dimension (if applicable)
+            return embeddings
+        elif aggregation == "cls_token":
+            # For Perch, treat as mean since no CLS token
+            return embeddings
+        else:
+            raise ValueError(f"Unsupported aggregation method: {aggregation}")
 
 
 # Alias for consistency

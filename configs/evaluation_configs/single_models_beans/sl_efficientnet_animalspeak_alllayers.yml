@@ -1,5 +1,5 @@
 # On which datasets to run the evaluation and which metrics to use
-dataset_config: configs/data_configs/benchmark_birdset.yml
+dataset_config: configs/data_configs/benchmark_single.yml
 
 training_params:
   train_epochs: 10
@@ -9,6 +9,19 @@ training_params:
   weight_decay: 0.01
   amp: false
   amp_dtype: bf16
+
+# experiments:
+#   - run_name: birdnet_base
+#     run_config: configs/run_configs/pretrained/birdnet.yml
+#     checkpoint_path: null  # use pretrained TF-Hub weights
+#     pretrained: true
+#     probe_config:
+#       probe_type: "linear"
+#       aggregation: "mean"
+#       input_processing: "pooled"
+#       target_layers: ["last_layer"]
+#       freeze_backbone: true
+#       online_training: false
 
 # Which experiments to evaluate
 experiments:
@@ -29,12 +42,12 @@ experiments:
       # dropout_rate: 0.2
       # activation: "gelu"
       #
-      # probe_type: "linear"
-      # aggregation: "mean"
-      # input_processing: "pooled"
-      # target_layers: ["model.avgpool"]
-      # freeze_backbone: true
-      # online_training: true
+      probe_type: "linear"
+      aggregation: "mean"
+      input_processing: "pooled"
+      target_layers: ["model.avgpool"]
+      freeze_backbone: true
+      online_training: true
       #
       # probe_type: "lstm"
       # aggregation: "none"
@@ -48,17 +61,17 @@ experiments:
       # freeze_backbone: true
       # online_training: true
       #
-      probe_type: "attention"
-      aggregation: "none"
-      input_processing: "sequence"
-      target_layers: ["model.features.8"]
-      num_heads: 8
-      attention_dim: 512
-      num_layers: 2
-      max_sequence_length: 800
-      use_positional_encoding: true
-      freeze_backbone: true
-      online_training: true
+      # probe_type: "attention"
+      # aggregation: "none"
+      # input_processing: "sequence"
+      # target_layers: ["model.features.8"]
+      # num_heads: 8
+      # attention_dim: 512
+      # num_layers: 2
+      # max_sequence_length: 800
+      # use_positional_encoding: true
+      # freeze_backbone: true
+      # online_training: true
       #
       # probe_type: "transformer"
       # aggregation: "none"

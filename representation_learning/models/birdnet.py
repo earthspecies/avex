@@ -136,15 +136,20 @@ class Model(ModelBase):
     def extract_embeddings(  # ← the piece you asked for
         self,
         x: torch.Tensor | Dict[str, torch.Tensor],
-        layers=None,  # ignored – BirdNET has no named layers  # noqa: ANN001
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
-    ) -> torch.Tensor:
+        aggregation: str = "mean",
+    ) -> torch.Tensor | list[torch.Tensor]:
         """
+        Returns embeddings based on aggregation method:
+            • (B, 1024) if aggregation="mean" or "max" – one vector / clip
+            • list[Tensor] with shape (n_chunks,1024) per clip if aggregation="none"
+
         Returns:
-            • (B, 1024) if *average_over_time*=True   – one vector / clip
-            • list[Tensor] with shape (n_chunks,1024) per clip otherwise
+            torch.Tensor | list[torch.Tensor]: Aggregated embeddings based on method.
+
+        Raises:
+            ValueError: If unsupported aggregation method is provided.
         """
         if isinstance(x, dict):  # allow {'raw_wav': …}
             wav = x["raw_wav"]
@@ -156,9 +161,31 @@ class Model(ModelBase):
         for clip in wav:
             emb_np = self._embedding_for_clip(clip.numpy())  # (N,1024)
             emb = torch.from_numpy(emb_np).float()
-            batch_out.append(emb.mean(0, keepdim=True) if average_over_time else emb)
+            batch_out.append(emb)
 
-        result = torch.cat(batch_out, dim=0)
+        # Handle different aggregation methods
+        if aggregation == "none":
+            # For sequence probes, return list of embeddings per batch item
+            # Each batch item gets a list of chunk embeddings
+            result = []
+            for clip_embeddings in batch_out:
+                # Reshape from (N, 1024) to (1, N, 1024) to make it 3D for
+                # sequence probes
+                # N is the number of chunks, 1024 is the embedding dimension
+                reshaped = clip_embeddings.unsqueeze(0)  # (1, N, 1024)
+                result.append(reshaped)
+            return result
+        elif aggregation == "mean":
+            # Average over time dimension for each clip
+            result = torch.stack([emb.mean(0) for emb in batch_out])  # (B, 1024)
+        elif aggregation == "max":
+            # Max pooling over time dimension for each clip
+            result = torch.stack([emb.max(0)[0] for emb in batch_out])  # (B, 1024)
+        elif aggregation == "cls_token":
+            # For BirdNET, treat as mean since no CLS token
+            result = torch.stack([emb.mean(0) for emb in batch_out])  # (B, 1024)
+        else:
+            raise ValueError(f"Unsupported aggregation method: {aggregation}")
 
         # Move to appropriate device (BirdNet embeddings are computed on CPU)
         if self.classifier is not None and hasattr(self.classifier, "weight"):
