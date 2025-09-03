@@ -15,7 +15,7 @@ experiments:
   - run_name: sl_beats_animalspeak
     run_config: configs/run_configs/pretrained/beats_ft.yml
     probe_config:
-      type: linear
+      probe_type: linear
       target_layers: ["backbone"]
       aggregation: "mean"
       input_processing: "pooled"

@@ -15,7 +15,7 @@ experiments:
   - run_name: eat_hf_finetuned
     run_config: configs/run_configs/pretrained/eat_base_finetune.yml
     probe_config:
-      type: linear
+      probe_type: linear
       target_layers: ["backbone"]
       aggregation: "mean"
       input_processing: "pooled"

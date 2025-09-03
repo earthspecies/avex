@@ -26,10 +26,10 @@ evaluation_sets:
       split: esc50_test
     metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
 
-  - name: "hainan_gibbons_detection"
-    train: &gibbons_base
+  - name: "dcase_detection"
+    train: &dcase_base
       dataset_name: beans
-      split: hainan_gibbons_train
+      split: dcase_train
       type: detection
       label_column: labels_as_list
       audio_path_col: path
@@ -37,18 +37,17 @@ evaluation_sets:
       label_type: supervised
       audio_max_length_seconds: 5
       transformations:
-        # Convert list labels to multi-label format
         - type: labels_from_features
           features:
             - labels_as_list
           override: true
-          label_map: {'Gibbon duet': 0, 'Multiple pulse gibbon call': 1, 'Single pulse gibbon call': 2}
+          label_map: {'American Redstart': 0, 'Bay-breasted Warbler': 1, 'Black-throated Blue Warbler': 2, 'Chipping Sparrow': 3, 'Common Yellowthroat': 4, 'Gray-cheeked Thrush': 5, 'Hyena giggle': 6, 'Hyena groan and moo': 7, 'Hyena squitter': 8, 'Jackdaw call': 9, 'Meerkat close call': 10, 'Meerkat short note': 11, 'Other Animal': 12, 'Ovenbird': 13, 'Rose-breasted Grosbeak': 14, 'Savannah Sparrow': 15, "Swainson's Thrush": 16, 'White-throated Sparrow': 17}
       sample_rate: 16000
       data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
     validation:
-      <<: *gibbons_base
-      split: hainan_gibbons_validation
+      <<: *dcase_base
+      split: dcase_validation
     test:
-      <<: *gibbons_base
-      split: hainan_gibbons_test
+      <<: *dcase_base
+      split: dcase_test
     metrics: [mAP]

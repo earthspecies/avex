@@ -21,7 +21,7 @@ experiments:
     pretrained: true
     # checkpoint_path: runs/efficientnet_single_15_05/checkpoints/checkpoint_epoch_029.pt
     probe_config:
-      type: linear
+      probe_type: linear
       target_layers: ["model.avgpool"]
       aggregation: "mean"
       input_processing: "pooled"

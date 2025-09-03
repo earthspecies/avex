@@ -16,7 +16,7 @@ experiments:
   - run_name: efficientnet_animalspeak_soundscape
     run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
     probe_config:
-      type: linear
+      probe_type: linear
       target_layers: ["model.avgpool"]
       aggregation: "mean"
       input_processing: "pooled"
