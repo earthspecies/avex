@@ -1,0 +1,50 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark.yml
+
+training_params:
+  train_epochs: 300
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+  gradient_clip_val: 1.0
+  warmup_epochs: 5
+  scheduler_type: cosine
+
+# Which experiments to evaluate
+experiments:
+  - run_name: atst_frame
+    run_config: configs/run_configs/pretrained/atst_base.yml
+    probe_config:
+      probe_type: linear
+      target_layers: ["features"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+    ### whether to use pretrained model or the one we train on bioacoustic data
+    pretrained: true
+
+# Where to save the evaluation results
+save_dir: evaluation_results/atst_frame
+
+# Optional: Append results to a global CSV file for cross-model comparison
+results_csv_path: evaluation_results/all_models_results.csv
+
+device: cuda
+
+seed: 42
+
+num_workers: 8  # Enable workers for better memory management
+
+# Evaluation phases
+eval_modes:
+  - probe
+
+overwrite_embeddings: true
+
+# Control tqdm progress bar verbosity during fine-tuning
+# Set to true to disable progress bars and reduce output verbosity
+disable_tqdm: true
