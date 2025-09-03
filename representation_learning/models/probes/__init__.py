@@ -13,6 +13,24 @@ from representation_learning.models.probes.mlp_probe import MLPProbe
 from representation_learning.models.probes.transformer_probe import (
     TransformerProbe,
 )
+from representation_learning.models.probes.weighted_attention_probe import (
+    WeightedAttentionProbe,
+)
+from representation_learning.models.probes.weighted_linear_probe import (
+    WeightedLinearProbe,
+)
+from representation_learning.models.probes.weighted_lstm_probe import (
+    WeightedLSTMProbe,
+)
+from representation_learning.models.probes.weighted_minimal_attention_probe import (
+    WeightedMinimalAttentionProbe,
+)
+from representation_learning.models.probes.weighted_mlp_probe import (
+    WeightedMLPProbe,
+)
+from representation_learning.models.probes.weighted_transformer_probe import (
+    WeightedTransformerProbe,
+)
 
 __all__ = [
     "LinearProbe",
@@ -21,5 +39,11 @@ __all__ = [
     "AttentionProbe",
     "MinimalAttentionProbe",
     "TransformerProbe",
+    "WeightedLinearProbe",
+    "WeightedMLPProbe",
+    "WeightedLSTMProbe",
+    "WeightedAttentionProbe",
+    "WeightedMinimalAttentionProbe",
+    "WeightedTransformerProbe",
     "get_probe",
 ]

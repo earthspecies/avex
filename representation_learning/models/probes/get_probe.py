@@ -19,6 +19,24 @@ from representation_learning.models.probes.mlp_probe import MLPProbe
 from representation_learning.models.probes.transformer_probe import (
     TransformerProbe,
 )
+from representation_learning.models.probes.weighted_attention_probe import (
+    WeightedAttentionProbe,
+)
+from representation_learning.models.probes.weighted_linear_probe import (
+    WeightedLinearProbe,
+)
+from representation_learning.models.probes.weighted_lstm_probe import (
+    WeightedLSTMProbe,
+)
+from representation_learning.models.probes.weighted_minimal_attention_probe import (
+    WeightedMinimalAttentionProbe,
+)
+from representation_learning.models.probes.weighted_mlp_probe import (
+    WeightedMLPProbe,
+)
+from representation_learning.models.probes.weighted_transformer_probe import (
+    WeightedTransformerProbe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -270,9 +288,13 @@ def get_probe(
     # Validate input processing compatibility
     if input_processing == "sequence" and probe_type not in [
         "lstm",
+        "weighted_lstm",
         "attention",
         "attention_minimal",
         "transformer",
+        "weighted_attention",
+        "weighted_attention_minimal",
+        "weighted_transformer",
     ]:
         raise ValueError(
             f"Sequence input processing is not compatible with {probe_type} probe"
@@ -347,6 +369,142 @@ def get_probe(
             lstm_hidden_size=lstm_hidden_size,
             num_layers=num_layers,
             bidirectional=probe_config.bidirectional,
+            dropout_rate=probe_config.dropout_rate,
+            max_sequence_length=probe_config.max_sequence_length,
+            use_positional_encoding=probe_config.use_positional_encoding,
+            target_length=final_target_length,
+            freeze_backbone=probe_config.freeze_backbone,
+        )
+
+    elif probe_type == "weighted_lstm":
+        # Extract LSTM-specific parameters
+        lstm_hidden_size = probe_config.lstm_hidden_size
+        num_layers = probe_config.num_layers
+        if lstm_hidden_size is None or num_layers is None:
+            raise ValueError(
+                "WeightedLSTM probe requires lstm_hidden_size and num_layers "
+                "to be specified"
+            )
+
+        return WeightedLSTMProbe(
+            base_model=base_model,
+            layers=layers,
+            num_classes=num_classes,
+            device=device,
+            feature_mode=feature_mode,
+            input_dim=input_dim,
+            aggregation=probe_config.aggregation,
+            lstm_hidden_size=lstm_hidden_size,
+            num_layers=num_layers,
+            bidirectional=probe_config.bidirectional,
+            dropout_rate=probe_config.dropout_rate,
+            max_sequence_length=probe_config.max_sequence_length,
+            use_positional_encoding=probe_config.use_positional_encoding,
+            target_length=final_target_length,
+            freeze_backbone=probe_config.freeze_backbone,
+        )
+
+    elif probe_type == "weighted_linear":
+        return WeightedLinearProbe(
+            base_model=base_model,
+            layers=layers,
+            num_classes=num_classes,
+            device=device,
+            feature_mode=feature_mode,
+            input_dim=input_dim,
+            aggregation=probe_config.aggregation,
+            target_length=final_target_length,
+            freeze_backbone=probe_config.freeze_backbone,
+        )
+
+    elif probe_type == "weighted_mlp":
+        # Extract MLP-specific parameters
+        hidden_dims = probe_config.hidden_dims
+        if hidden_dims is None:
+            raise ValueError("WeightedMLP probe requires hidden_dims to be specified")
+
+        return WeightedMLPProbe(
+            base_model=base_model,
+            layers=layers,
+            num_classes=num_classes,
+            device=device,
+            feature_mode=feature_mode,
+            input_dim=input_dim,
+            aggregation=probe_config.aggregation,
+            hidden_dims=hidden_dims,
+            dropout_rate=probe_config.dropout_rate,
+            activation=probe_config.activation,
+            use_positional_encoding=probe_config.use_positional_encoding,
+            target_length=final_target_length,
+            projection_dim=probe_config.projection_dim,
+            freeze_backbone=probe_config.freeze_backbone,
+        )
+
+    elif probe_type == "weighted_attention":
+        # Extract attention-specific parameters
+        num_heads = probe_config.num_heads
+        attention_dim = probe_config.attention_dim
+        num_layers = probe_config.num_layers
+        if num_heads is None or attention_dim is None or num_layers is None:
+            raise ValueError(
+                "WeightedAttention probe requires num_heads, attention_dim, and "
+                "num_layers to be specified"
+            )
+
+        return WeightedAttentionProbe(
+            base_model=base_model,
+            layers=layers,
+            num_classes=num_classes,
+            device=device,
+            feature_mode=feature_mode,
+            input_dim=input_dim,
+            aggregation=probe_config.aggregation,
+            num_heads=num_heads,
+            attention_dim=attention_dim,
+            num_layers=num_layers,
+            dropout_rate=probe_config.dropout_rate,
+            max_sequence_length=probe_config.max_sequence_length,
+            use_positional_encoding=probe_config.use_positional_encoding,
+            target_length=final_target_length,
+            freeze_backbone=probe_config.freeze_backbone,
+        )
+
+    elif probe_type == "weighted_attention_minimal":
+        return WeightedMinimalAttentionProbe(
+            base_model=base_model,
+            layers=layers,
+            num_classes=num_classes,
+            device=device,
+            feature_mode=feature_mode,
+            input_dim=input_dim,
+            aggregation=probe_config.aggregation,
+            num_heads=probe_config.num_heads or 1,
+            target_length=final_target_length,
+            freeze_backbone=probe_config.freeze_backbone,
+        )
+
+    elif probe_type == "weighted_transformer":
+        # Extract transformer-specific parameters
+        num_heads = probe_config.num_heads
+        attention_dim = probe_config.attention_dim
+        num_layers = probe_config.num_layers
+        if num_heads is None or attention_dim is None or num_layers is None:
+            raise ValueError(
+                "WeightedTransformer probe requires num_heads, attention_dim, and "
+                "num_layers to be specified"
+            )
+
+        return WeightedTransformerProbe(
+            base_model=base_model,
+            layers=layers,
+            num_classes=num_classes,
+            device=device,
+            feature_mode=feature_mode,
+            input_dim=input_dim,
+            aggregation=probe_config.aggregation,
+            num_heads=num_heads,
+            attention_dim=attention_dim,
+            num_layers=num_layers,
             dropout_rate=probe_config.dropout_rate,
             max_sequence_length=probe_config.max_sequence_length,
             use_positional_encoding=probe_config.use_positional_encoding,
@@ -429,7 +587,9 @@ def get_probe(
 
     else:
         supported = (
-            "'linear', 'mlp', 'lstm', 'attention', 'attention_minimal', 'transformer'"
+            "'linear', 'mlp', 'lstm', 'attention', 'attention_minimal', 'transformer', "
+            "'weighted_linear', 'weighted_mlp', 'weighted_lstm', 'weighted_attention', "
+            "'weighted_attention_minimal', 'weighted_transformer'"
         )
         raise NotImplementedError(
             f"Probe type '{probe_type}' is not implemented. "

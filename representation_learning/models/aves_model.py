@@ -91,32 +91,53 @@ class Model(ModelBase):
         # Feed-forward layers will be discovered in _discover_linear_layers override
 
     def _discover_linear_layers(self) -> None:
-        """Discover and cache all linear layer names including feed-forward layers.
+        """Discover and cache only the AVES layers that are useful for embeddings.
 
-        This overrides the base class method to discover AVES-specific layers
-        beyond just nn.Linear layers.
+        This method is called when target_layers=["all"] is used.
+        Specifically:
+        - model.encoder.transformer.layers.{i}.feed_forward.output_dense
+          (only output_dense layers from transformer blocks)
         """
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
 
-            # Discover standard linear layers
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Linear):
+            for name, _module in self.named_modules():
+                # Keep only the output_dense layers from transformer blocks
+                # Pattern: model.encoder.transformer.layers.{i}
+                # .feed_forward.output_dense
+                if (
+                    name.endswith(".feed_forward.output_dense")
+                    and "model.encoder.transformer.layers." in name
+                ):
                     self._layer_names.append(name)
 
-            # Discover additional AVES-specific layers (feed-forward layers from
-            # transformer blocks)
-            # These are typically named like "encoder.layers.0.intermediate_dense",
-            # "encoder.layers.0.output_dense"
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Linear) and (
-                    "intermediate_dense" in name or "output_dense" in name
-                ):
-                    if name not in self._layer_names:
-                        self._layer_names.append(name)
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding layers in AVES model: "
+                f"{self._layer_names}"
+            )
 
-            logger.debug(
-                f"Discovered {len(self._layer_names)} hookable layers in AVES model: "
+    def _discover_embedding_layers(self) -> None:
+        """
+        Discover and cache only the AVES layers that are useful for embeddings.
+        Specifically:
+        - model.encoder.transformer.layers.{i}.feed_forward.output_dense
+          (only output_dense layers from transformer blocks)
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            for name, _module in self.named_modules():
+                # Keep only the output_dense layers from transformer blocks
+                # Pattern: model.encoder.transformer.layers.{i}
+                # .feed_forward.output_dense
+                if (
+                    name.endswith(".feed_forward.output_dense")
+                    and "model.encoder.transformer.layers." in name
+                ):
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding layers in AVES model: "
                 f"{self._layer_names}"
             )
 
@@ -220,7 +241,7 @@ class Model(ModelBase):
                     f"No layers found matching: {self._hook_outputs.keys()}"
                 )
 
-            # Process embeddings based on average_over_time parameter
+            # Process embeddings based on aggregation parameter
             if aggregation == "none":
                 return embeddings
             else:

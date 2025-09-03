@@ -86,7 +86,8 @@ class MinimalAttentionProbe(nn.Module):
         if self.base_model is not None and not self.feature_mode:
             self.base_model.register_hooks_for_layers(self.layers)
 
-        inferred_dim: int
+        inferred_dim: int = 0
+        classifier_input_dim: int = 0
 
         if feature_mode:
             if input_dim is None:
@@ -102,14 +103,24 @@ class MinimalAttentionProbe(nn.Module):
                     emb = base_model.extract_embeddings(dummy, aggregation="none")
                     if isinstance(emb, list) and len(emb) > 0:
                         emb = emb[0]
+                    logger.info(
+                        f"MinimalAttn: {emb.shape if hasattr(emb, 'shape') else 'list'}"
+                    )
                     if emb.dim() == 3:
                         inferred_dim = emb.shape[-1]
+                        classifier_input_dim = inferred_dim
                     else:
                         raise ValueError(
                             "Feature mode requires sequence embeddings (B,T,D)."
                         )
             else:
                 inferred_dim = input_dim
+                classifier_input_dim = inferred_dim
+
+            # Create attention layer for feature mode
+            self.attention = nn.MultiheadAttention(
+                inferred_dim, num_heads=self.num_heads, batch_first=True
+            ).to(device)
         else:
             if base_model is None:
                 raise ValueError("base_model must be provided when feature_mode=False")
@@ -122,6 +133,9 @@ class MinimalAttentionProbe(nn.Module):
                 if self.aggregation == "none":
                     # Handle list of embeddings from multiple layers
                     if isinstance(emb, list):
+                        logger.info(
+                            f"MinimalAttention probe (none): {len(emb)} tensors"
+                        )
                         # Create attention projection heads for each layer
                         self.layer_projections = nn.ModuleList(
                             [
@@ -135,12 +149,17 @@ class MinimalAttentionProbe(nn.Module):
                             ]
                         )
 
+                        # Set classifier input dimension for list case
+                        # Each attention head outputs emb.shape[-1] features, concat
+                        classifier_input_dim = sum(emb.shape[-1] for emb in emb)
+
                         # Log the setup
                         logger.info(
                             f"MinimalAttentionProbe init (feature_mode=False, "
                             f"aggregation='none'): dummy_embeddings: list of "
                             f"{len(emb)} tensors, layers: {layers}, "
                             f"aggregation: {self.aggregation}, "
+                            f"classifier_input_dim: {classifier_input_dim}"
                         )
                     else:
                         raise ValueError(
@@ -151,8 +170,10 @@ class MinimalAttentionProbe(nn.Module):
                     # Single tensor case
                     if isinstance(emb, list) and len(emb) > 0:
                         emb = emb[0]
+                    logger.info(f"Input to MinimalAttention probe shape: {emb.shape}")
                     if emb.dim() == 3:
                         inferred_dim = emb.shape[-1]
+                        classifier_input_dim = inferred_dim
                     else:
                         raise ValueError(
                             "MinimalAttentionProbe expects sequence embeddings (B,T,D)."
@@ -165,7 +186,18 @@ class MinimalAttentionProbe(nn.Module):
         if not hasattr(self, "attention"):
             self.attention = None
 
-        self.classifier = nn.Linear(inferred_dim, num_classes).to(device)
+        self.classifier = nn.Linear(classifier_input_dim, num_classes).to(device)
+
+        # Log final probe parameters
+        logger.info(
+            f"MinimalAttentionProbe initialized with final parameters: "
+            f"layers={self.layers}, feature_mode={self.feature_mode}, "
+            f"aggregation={self.aggregation}, freeze_backbone={self.freeze_backbone}, "
+            f"num_heads={self.num_heads}, target_length={self.target_length}, "
+            f"inferred_dim={inferred_dim}, classifier_dim={classifier_input_dim}, "
+            f"num_classes={num_classes}, "
+            f"has_layer_projections={hasattr(self, 'layer_projections')}"
+        )
 
     def __del__(self) -> None:
         """Cleanup hooks when the probe is destroyed."""
@@ -229,75 +261,75 @@ class MinimalAttentionProbe(nn.Module):
                 else:
                     embeddings = embeddings.detach()
 
-            # Handle the case where embeddings is a list (aggregation="none")
-            if isinstance(embeddings, list):
-                # Apply attention projection heads to each layer's embeddings
-                projected_embeddings = []
-                for i, (emb, attn_proj) in enumerate(
-                    zip(embeddings, self.layer_projections, strict=False)
-                ):
-                    # Ensure embeddings are 3D
-                    if emb.dim() == 3:
-                        # Apply self-attention to each layer's embeddings
-                        attn_out, _ = attn_proj(emb, emb, emb)
-                        # Global average pooling over sequence dimension
-                        projected_emb = attn_out.mean(dim=1)
-                    else:
-                        raise ValueError(
-                            f"MinimalAttentionProbe expects 3D embeddings "
-                            f"(batch_size, sequence_length, embedding_dim), "
-                            f"got shape {emb.shape} for layer {i}"
-                        )
-                    projected_embeddings.append(projected_emb)
-
-                # Concatenate along the feature dimension
-                embeddings = torch.cat(projected_embeddings, dim=-1)
-
-                # When using projection heads, embeddings are already processed
-                # No need to pass through main attention - go directly to classifier
-                pooled = embeddings
-            else:
-                # Single tensor case
-                if isinstance(embeddings, list) and len(embeddings) > 0:
-                    embeddings = embeddings[0]
-
-                if embeddings.dim() == 4:
-                    # For CNN-style embeddings, concatenate channels and height,
-                    # preserve width (time)
-                    # (B, C, H, W) -> (B, C*H, W) where W is preserved as time dimension
-                    batch_size, channels, height, width = embeddings.shape
-                    embeddings = embeddings.transpose(1, 2).reshape(
-                        batch_size, channels * height, width
-                    )
-                    # Result: (B, C*H, W) where C*H is feature dimension, W is time
-                elif embeddings.dim() == 3:
-                    pass
+        # Handle the case where embeddings is a list (aggregation="none")
+        if isinstance(embeddings, list):
+            # Apply attention projection heads to each layer's embeddings
+            projected_embeddings = []
+            for i, (emb, attn_proj) in enumerate(
+                zip(embeddings, self.layer_projections, strict=False)
+            ):
+                # Ensure embeddings are 3D
+                if emb.dim() == 3:
+                    # Apply self-attention to each layer's embeddings
+                    attn_out, _ = attn_proj(emb, emb, emb)
+                    # Global average pooling over sequence dimension
+                    projected_emb = attn_out.mean(dim=1)
                 else:
                     raise ValueError(
-                        f"Sequence probe requires (B,T,D) embeddings, got "
-                        f"{embeddings.shape}"
+                        f"MinimalAttentionProbe expects 3D embeddings "
+                        f"(batch_size, sequence_length, embedding_dim), "
+                        f"got shape {emb.shape} for layer {i}"
                     )
+                projected_embeddings.append(projected_emb)
 
-                # Ensure padding mask matches temporal dimension if provided
-                if (
-                    padding_mask is not None
-                    and padding_mask.shape[1] != embeddings.shape[1]
-                ):
-                    padding_mask = (
-                        torch.nn.functional.interpolate(
-                            padding_mask.float().unsqueeze(1),
-                            size=embeddings.shape[1],
-                            mode="nearest",
-                        )
-                        .squeeze(1)
-                        .bool()
-                    )
+            # Concatenate along the feature dimension
+            embeddings = torch.cat(projected_embeddings, dim=-1)
 
-                # Apply main attention
-                attn_out, _ = self.attention(
-                    embeddings, embeddings, embeddings, key_padding_mask=padding_mask
+            # When using projection heads, embeddings are already processed
+            # No need to pass through main attention - go directly to classifier
+            pooled = embeddings
+        else:
+            # Single tensor case
+            if isinstance(embeddings, list) and len(embeddings) > 0:
+                embeddings = embeddings[0]
+
+            if embeddings.dim() == 4:
+                # For CNN-style embeddings, concatenate channels and height,
+                # preserve width (time)
+                # (B, C, H, W) -> (B, C*H, W) where W is preserved as time dimension
+                batch_size, channels, height, width = embeddings.shape
+                embeddings = embeddings.transpose(1, 2).reshape(
+                    batch_size, channels * height, width
                 )
-                pooled = attn_out.mean(dim=1)
+                # Result: (B, C*H, W) where C*H is feature dimension, W is time
+            elif embeddings.dim() == 3:
+                pass
+            else:
+                raise ValueError(
+                    f"Sequence probe requires (B,T,D) embeddings, got "
+                    f"{embeddings.shape}"
+                )
+
+            # Ensure padding mask matches temporal dimension if provided
+            if (
+                padding_mask is not None
+                and padding_mask.shape[1] != embeddings.shape[1]
+            ):
+                padding_mask = (
+                    torch.nn.functional.interpolate(
+                        padding_mask.float().unsqueeze(1),
+                        size=embeddings.shape[1],
+                        mode="nearest",
+                    )
+                    .squeeze(1)
+                    .bool()
+                )
+
+            # Apply main attention
+            attn_out, _ = self.attention(
+                embeddings, embeddings, embeddings, key_padding_mask=padding_mask
+            )
+            pooled = attn_out.mean(dim=1)
 
         return self.classifier(pooled)
 

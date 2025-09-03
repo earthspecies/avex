@@ -108,6 +108,62 @@ class PerchModel(ModelBase):
 
         self.to(device)
 
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache layers for Perch model.
+
+        Note: Perch is a TensorFlow Hub model with no accessible intermediate layers.
+        The TensorFlow Hub model only exposes the final embedding output.
+        This method is implemented for API consistency but will only find the optional
+        PyTorch classifier layer.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # Perch is a TensorFlow Hub model with no accessible intermediate layers
+            # Only the optional PyTorch classifier layer can be discovered
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} layers in Perch model: "
+                f"{self._layer_names}"
+            )
+            if len(self._layer_names) == 0:
+                logger.info(
+                    "Perch is a TensorFlow Hub model with no accessible "
+                    "intermediate layers. "
+                    "Only the optional PyTorch classifier layer can be discovered."
+                )
+
+    def _discover_embedding_layers(self) -> None:
+        """Discover and cache layers for Perch model.
+
+        Note: Perch is a TensorFlow Hub model with no accessible intermediate layers.
+        The TensorFlow Hub model only exposes the final embedding output.
+        This method is implemented for API consistency but will only find the optional
+        PyTorch classifier layer.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # Perch is a TensorFlow Hub model with no accessible intermediate layers
+            # Only the optional PyTorch classifier layer can be discovered
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} layers in Perch model: "
+                f"{self._layer_names}"
+            )
+            if len(self._layer_names) == 0:
+                logger.info(
+                    "Perch is a TensorFlow Hub model with no accessible "
+                    "intermediate layers. "
+                    "Only the optional PyTorch classifier layer can be discovered."
+                )
+
     # --------------------------------------------------------------------- #
     #  Private helpers
     # --------------------------------------------------------------------- #

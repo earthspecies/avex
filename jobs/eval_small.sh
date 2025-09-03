@@ -2,11 +2,14 @@
 
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
-#SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A.log"
-#SBATCH --job-name="rl-eval"
-#SBATCH --cpus-per-gpu=6
+#SBATCH --job-name="rl-eval-probe"
+#SBATCH --cpus-per-gpu=10
 
-cd ~/representation-learning
+cd ~/code/representation-learning
 uv sync
-srun uv run repr-learn evaluate --config configs/evaluation_configs/test_small.yml
+echo $UV_PROJECT_ENVIRONMENT
+# export PYTHONBUFFERED=1
+# export LOG_LEVEL=DEBUG
+# export PYTHONLOGLEVEL=DEBUG
+srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/sl_efficientnet_audioset.yml  --patch dataset_config=configs/data_configs/benchmark_single.yml

@@ -49,28 +49,69 @@ class Model(ModelBase):
         # Convolutional layers will be discovered in _discover_linear_layers override
 
     def _discover_linear_layers(self) -> None:
-        """Discover and cache all linear layer names including convolutional layers.
+        """Discover and cache only the EfficientNet layers that are useful
+        for embeddings.
 
-        This overrides the base class method to discover EfficientNet-specific layers
-        beyond just nn.Linear layers.
+        This method is called when target_layers=["all"] is used.
+        Specifically filters for:
+        - Initial conv layer (model.features.0.0)
+        - Final projection layers from each block (model.features.X.Y.block.3.0)
+        - Final conv layer (model.features.8.0)
+        - Excludes expansion layers, depthwise convs, SE layers, and avgpool
         """
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
 
-            # Discover standard linear layers
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Linear):
+            for name, _module in self.named_modules():
+                # Keep the initial conv layer
+                if name == "model.features.0.0":
                     self._layer_names.append(name)
 
-            # Discover additional EfficientNet-specific layers (convolutional layers)
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Conv2d):
-                    if name not in self._layer_names:
-                        self._layer_names.append(name)
+                # Keep final projection layers (last conv in each MBConv block)
+                # Pattern: model.features.X.Y.block.3.0
+                elif name.endswith(".block.3.0") and "model.features." in name:
+                    self._layer_names.append(name)
 
-            logger.debug(
-                f"Discovered {len(self._layer_names)} hookable layers in "
-                f"EfficientNet model: "
+                # Keep the final conv layer
+                elif name == "model.features.8.0":
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding-relevant layers "
+                f"in EfficientNet model: "
+                f"{self._layer_names}"
+            )
+
+    def _discover_embedding_layers(self) -> None:
+        """Discover and cache only the EfficientNet layers that are useful
+        for embeddings.
+
+        Specifically filters for:
+        - Initial conv layer (model.features.0.0)
+        - Final projection layers from each block (model.features.X.Y.block.3.0)
+        - Final conv layer (model.features.8.0)
+        - Excludes expansion layers, depthwise convs, SE layers, and avgpool
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            for name, _module in self.named_modules():
+                # Keep the initial conv layer
+                if name == "model.features.0.0":
+                    self._layer_names.append(name)
+
+                # Keep final projection layers (last conv in each MBConv block)
+                # Pattern: model.features.X.Y.block.3.0
+                elif name.endswith(".block.3.0") and "model.features." in name:
+                    self._layer_names.append(name)
+
+                # Keep the final conv layer
+                elif name == "model.features.8.0":
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding-relevant layers "
+                f"in EfficientNet model: "
                 f"{self._layer_names}"
             )
 
@@ -225,41 +266,10 @@ class Model(ModelBase):
             logger.debug(f" Aggregation: {aggregation}")
             # Process embeddings based on aggregation parameter
             if aggregation == "none":
-                logger.debug(
-                    f"Reshaping embeddings based on aggregation: {aggregation}"
-                )
-                # For sequence probes, reshape 4D embeddings (B, C, H, W) to 3D
-                # (B, H, C*W) in place. This allows sequence probes to process
-                # spatial information as temporal sequence
-                for i, emb in enumerate(embeddings):
-                    if emb.dim() == 4:  # (B, C, H, W)
-                        batch_size, channels, height, width = emb.shape
-                        logger.debug(f"Processing 4D embedding {i}: {emb.shape}")
-                        # Reshape to (B, W, C*H) - treat width as sequence length,
-                        # C*H as features. Ensure proper memory layout for cuDNN
-                        reshaped_emb = (
-                            emb.permute(0, 3, 1, 2)
-                            .contiguous()
-                            .view(batch_size, width, channels * height)
-                        )
-                        # Ensure the tensor is contiguous and properly aligned for cuDNN
-                        embeddings[i] = reshaped_emb.contiguous()
-                        logger.debug(
-                            f"Reshaped embedding {i}: {embeddings[i].shape} "
-                            f"for sequence probe compatibility"
-                        )
-                    elif emb.dim() == 3:  # (B, H, W) - already 3D
-                        logger.debug(f"Embedding {i} already 3D: {emb.shape}")
-                    elif emb.dim() == 2:  # (B, features) - already 2D
-                        logger.debug(f"Embedding {i} already 2D: {emb.shape}")
-                    else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {emb.dim()}. "
-                            f"Expected 2, 3, or 4D for EfficientNet."
-                        )
-
-                logger.debug(f"Returning {len(embeddings)} reshaped embeddings")
-                return embeddings
+                if len(embeddings) == 1:
+                    return embeddings[0]
+                else:
+                    return embeddings
             else:
                 logger.debug(f"Using aggregation method: {aggregation}")
                 # Average over time and concatenate

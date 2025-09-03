@@ -186,6 +186,7 @@ class TestLSTMProbeEmbeddings:
                 num_classes=10,
                 device="cpu",
                 feature_mode=False,
+                aggregation="none",  # Use 'none' to get 3D embeddings for LSTM
                 lstm_hidden_size=256,
                 num_layers=2,
                 bidirectional=True,
@@ -287,6 +288,70 @@ class TestLSTMProbeEmbeddings:
         else:
             print("Model has no audio_config attribute")
 
+    def test_lstm_probe_target_layers_all(self) -> None:
+        """Test LSTM probe with target_layers='all' to reproduce the original error."""
+        # Create EfficientNet model
+        audio_config = AudioConfig(
+            sample_rate=16000,
+            n_fft=1024,
+            hop_length=512,
+            n_mels=128,
+        )
+
+        model = EfficientNetModel(
+            num_classes=1000,
+            pretrained=False,
+            device="cpu",
+            audio_config=audio_config,
+            return_features_only=True,
+            efficientnet_variant="b0",
+        )
+
+        # Create dummy audio input
+        x = torch.randn(1, 16000)
+
+        # Test with target_layers='all' (this was the failing case)
+        try:
+            print("\n=== Testing LSTM probe with target_layers='all' ===")
+
+            # First, discover and get available layers
+            model._discover_linear_layers()
+            available_layers = model._get_all_linear_layers()
+            print(f"Available layers: {available_layers}")
+            print(f"Number of layers: {len(available_layers)}")
+
+            # Create LSTM probe with target_layers='all'
+            probe = LSTMProbe(
+                base_model=model,
+                layers=available_layers,  # Use all available layers
+                num_classes=50,  # Same as in the error case
+                device="cpu",
+                feature_mode=False,
+                aggregation="none",  # This was the failing case
+                lstm_hidden_size=256,
+                num_layers=2,
+                bidirectional=False,  # Same as in the error case
+                max_sequence_length=1000,
+                use_positional_encoding=False,
+                target_length=16000,
+            )
+            print("✓ LSTM probe created successfully with target_layers='all'!")
+
+            # Try forward pass
+            output = probe(x)
+            print(f"✓ LSTM probe forward pass successful! Output shape: {output.shape}")
+            print("Expected output shape: [1, 50] (batch_size=1, num_classes=50)")
+
+            if output.shape == (1, 50):
+                print("✓ Output shape matches expected shape!")
+            else:
+                print(f"✗ Output shape mismatch: expected (1, 50), got {output.shape}")
+
+        except Exception as e:
+            print(f"✗ Error with target_layers='all': {e}")
+            print(f"Error type: {type(e)}")
+            raise
+
 
 if __name__ == "__main__":
     # Run tests manually for debugging
@@ -302,5 +367,8 @@ if __name__ == "__main__":
 
     print("\n3. Investigating EfficientNet layers...")
     test_instance.test_layer_investigation()
+
+    print("\n4. Testing LSTM probe with target_layers='all'...")
+    test_instance.test_lstm_probe_target_layers_all()
 
     print("\n=== All tests completed ===")

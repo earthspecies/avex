@@ -74,6 +74,15 @@ class TrainingParams(BaseModel):
         False, description="Enable gradient checkpointing to save memory"
     )
 
+    # Gradient clipping for training stability
+    gradient_clip_val: Optional[float] = Field(
+        None,
+        ge=0,
+        description=(
+            "Maximum gradient norm for clipping. If None, no clipping is applied."
+        ),
+    )
+
     # Two-stage fine-tuning parameters
     freeze_backbone_epochs: int = Field(
         0,
@@ -106,6 +115,17 @@ class TrainingParams(BaseModel):
     skip_validation: bool = Field(
         False,
         description="Skip validation epochs during training (train-only mode)",
+    )
+
+    # Learning rate scheduler parameters
+    warmup_epochs: int = Field(
+        5,
+        ge=0,
+        description="Number of warmup epochs for learning rate scheduling",
+    )
+    scheduler_type: Literal["none", "cosine", "linear", "step"] = Field(
+        "cosine",
+        description="Type of learning rate scheduler to use",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -337,7 +357,18 @@ class ProbeConfig(BaseModel):
     """
 
     probe_type: Literal[
-        "linear", "mlp", "attention", "attention_minimal", "lstm", "transformer"
+        "linear",
+        "mlp",
+        "attention",
+        "attention_minimal",
+        "lstm",
+        "transformer",
+        "weighted_linear",
+        "weighted_mlp",
+        "weighted_attention",
+        "weighted_attention_minimal",
+        "weighted_lstm",
+        "weighted_transformer",
     ] = Field("linear", description="Type of probe to use")
 
     aggregation: Literal["mean", "max", "cls_token", "none"] = Field(
@@ -443,7 +474,7 @@ class ProbeConfig(BaseModel):
             If the configuration is invalid or inconsistent.
         """
         # Validate MLP-specific parameters
-        if self.probe_type == "mlp":
+        if self.probe_type in ["mlp", "weighted_mlp"]:
             if self.hidden_dims is None:
                 raise ValueError("MLP probe requires hidden_dims to be specified")
             if len(self.hidden_dims) == 0:
@@ -452,7 +483,12 @@ class ProbeConfig(BaseModel):
                 raise ValueError("MLP probe hidden_dims must all be positive")
 
         # Validate attention/transformer-specific parameters
-        if self.probe_type in ["attention", "transformer"]:
+        if self.probe_type in [
+            "attention",
+            "transformer",
+            "weighted_attention",
+            "weighted_transformer",
+        ]:
             if self.num_heads is None:
                 raise ValueError(
                     f"{self.probe_type} probe requires num_heads to be specified"
@@ -467,11 +503,16 @@ class ProbeConfig(BaseModel):
                 )
 
         # Validate LSTM-specific parameters
-        if self.probe_type == "lstm":
+        if self.probe_type in ["lstm", "weighted_lstm"]:
             if self.lstm_hidden_size is None:
                 raise ValueError("LSTM probe requires lstm_hidden_size to be specified")
             if self.num_layers is None:
                 raise ValueError("LSTM probe requires num_layers to be specified")
+
+        # Validate weighted attention minimal-specific parameters
+        if self.probe_type == "weighted_attention_minimal":
+            # Weighted attention minimal uses default num_heads=1 if not specified
+            pass
 
         return self
 
@@ -968,10 +1009,7 @@ class ExperimentConfig(BaseModel):
         """
         if self.probe_config is not None:
             return self.probe_config.freeze_backbone
-        elif self.frozen is not None:
-            return self.frozen
-        else:
-            return True  # Default to frozen for backward compatibility
+        return True  # Default to frozen for backward compatibility
 
     def get_probe_type(self) -> str:
         """Get the probe type for this experiment.
@@ -979,7 +1017,9 @@ class ExperimentConfig(BaseModel):
         Returns
         -------
         str
-            The probe type (e.g., 'linear', 'mlp', 'attention', 'lstm', 'transformer')
+            The probe type (e.g., 'linear', 'mlp', 'attention', 'lstm', 'transformer',
+            'weighted_linear', 'weighted_mlp', 'weighted_attention', 'weighted_lstm',
+            'weighted_transformer')
         """
         if self.probe_config is not None:
             return self.probe_config.probe_type
@@ -1209,6 +1249,16 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             "Optional path to a CSV file where all evaluation results will be "
             "appended. If provided, results from each experiment will be written "
             "to this file with appropriate metadata for tracking across multiple runs."
+        ),
+    )
+
+    # Control tqdm progress bar verbosity
+    disable_tqdm: bool = Field(
+        False,
+        description=(
+            "If True, disable tqdm progress bars during fine-tuning and evaluation. "
+            "Useful for reducing output verbosity in automated runs or when logging "
+            "to files."
         ),
     )
 

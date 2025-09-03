@@ -107,13 +107,13 @@ def run_experiment(
     logger.info("running experiment")
     dataset_name = dataset_cfg.dataset_name
     experiment_name = experiment_cfg.run_name
-    frozen = experiment_cfg.is_frozen()
+    freeze_backbone = experiment_cfg.is_frozen()  # Checks probe_config.freeze_backbone
 
     logger.info(
-        "Running experiment '%s' on dataset '%s' with frozen: %s",
+        "Running experiment '%s' on dataset '%s' with freeze_backbone: %s",
         experiment_name,
         dataset_name,
-        frozen,
+        freeze_backbone,
     )
 
     # ------------------------------------------------------------------ #
@@ -258,14 +258,16 @@ def run_experiment(
     else:
         # Normal logic: check file existence
         need_recompute_embeddings_train = (
-            need_probe and not (train_path.exists() and val_path.exists())
+            need_probe
+            and not (train_path.exists() and val_path.exists())
+            and not online_training
         ) or (
             need_retrieval
             and retrieval_mode == "train_vs_test"
             and not train_path.exists()
         )
         need_recompute_embeddings_test = (
-            need_retrieval or need_probe or need_clustering
+            need_retrieval or (need_probe and not online_training) or need_clustering
         ) and not test_path.exists()
     logger.info(
         "Need to recompute embeddings for train: %s and test: %s",
@@ -355,19 +357,18 @@ def run_experiment(
         # Check if we can reuse cached model
         experiment_cfg.checkpoint_path = experiment_cfg.checkpoint_path
 
-        if not frozen:
-            logger.info("Loading fresh model for fine-tuning (frozen=False)")
-            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(
-                device
-            )
-        elif (
-            cached_model is not None
+        # Check if we can reuse cached model (only for frozen models)
+        if (
+            freeze_backbone
+            and cached_model is not None
             and cached_model_metadata is not None
             and cached_model_metadata.get("checkpoint_path")
             == experiment_cfg.checkpoint_path
-            and cached_model_metadata.get("frozen") == str(frozen)
+            and cached_model_metadata.get("freeze_backbone") == str(freeze_backbone)
         ):
-            logger.info("Reusing cached model from previous dataset (frozen=True)")
+            logger.info(
+                "Reusing cached model from previous dataset (freeze_backbone=True)"
+            )
             base_model = cached_model
         else:
             logger.info("Loading model (cache miss or first dataset)")
@@ -387,14 +388,14 @@ def run_experiment(
                 base_model.load_state_dict(state, strict=False)
                 logger.info("Loaded checkpoint from %s", ckpt_path)
 
-        if frozen:
-            base_model.eval()
+        # Note: Base model parameter freezing/counting handled by get_probe() function
+        # when creating the probe model, so we don't need to set it here
 
         # Update cached model metadata for next iteration
-        if frozen:
+        if freeze_backbone:
             cached_model_metadata = {
                 "checkpoint_path": experiment_cfg.checkpoint_path,
-                "frozen": str(frozen),
+                "freeze_backbone": str(freeze_backbone),
             }
         else:
             # Don't cache fine-tuning models since weights get modified
@@ -471,6 +472,7 @@ def run_experiment(
                     max_chunk_size=eval_cfg.max_chunk_size,
                     min_chunk_size=eval_cfg.min_chunk_size,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
                 val_embeds, val_labels = extract_embeddings_for_split(
                     base_model,
@@ -486,6 +488,7 @@ def run_experiment(
                     max_chunk_size=eval_cfg.max_chunk_size,
                     min_chunk_size=eval_cfg.min_chunk_size,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
             else:
                 logger.info(
@@ -501,6 +504,7 @@ def run_experiment(
                     device,
                     aggregation=aggregation_method,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
                 val_embeds, val_labels = extract_embeddings_for_split(
                     base_model,
@@ -509,6 +513,7 @@ def run_experiment(
                     device,
                     aggregation=aggregation_method,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
 
                 save_embeddings_arrays(
@@ -578,6 +583,7 @@ def run_experiment(
                     max_chunk_size=eval_cfg.max_chunk_size,
                     min_chunk_size=eval_cfg.min_chunk_size,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
             else:
                 logger.info(
@@ -592,6 +598,7 @@ def run_experiment(
                     device,
                     aggregation=aggregation_method_retrieval,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
 
                 save_embeddings_arrays(
@@ -604,7 +611,7 @@ def run_experiment(
                 )
 
     # ------------------- embeddings for retrieval and clustering -------- #
-    if need_retrieval or need_probe or need_clustering:
+    if need_retrieval or (need_probe and not online_training) or need_clustering:
         test_path = emb_base_dir / "embedding_test.h5"
         logger.info(test_path)
 
@@ -666,6 +673,7 @@ def run_experiment(
                     device,
                     aggregation=aggregation_method_retrieval,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
+                    disable_tqdm=eval_cfg.disable_tqdm,
                 )
 
                 save_embeddings_arrays(
@@ -730,6 +738,19 @@ def run_experiment(
                 experiment_cfg=experiment_cfg,
                 target_length=target_length,
             )
+
+            # Log total trainable parameters for offline training
+            if need_probe:
+                logger.info(
+                    "Offline training completed - parameters logged during creation"
+                )
+
+                # Print learned weights if the probe supports it
+                if hasattr(exp_logger, "probe_model") and hasattr(
+                    exp_logger.probe_model, "print_learned_weights"
+                ):
+                    logger.info("Printing learned weights for probe:")
+                    exp_logger.probe_model.print_learned_weights()
         else:
             logger.info("Training online")
             # For fine-tuning, use raw dataloaders
@@ -758,6 +779,19 @@ def run_experiment(
                 experiment_cfg=experiment_cfg,
                 target_length=target_length,
             )
+
+            # Log total trainable parameters for online training
+            if need_probe:
+                logger.info(
+                    "Online training completed - parameters logged during creation"
+                )
+
+                # Print learned weights if the probe supports it
+                if hasattr(exp_logger, "probe_model") and hasattr(
+                    exp_logger.probe_model, "print_learned_weights"
+                ):
+                    logger.info("Printing learned weights for probe:")
+                    exp_logger.probe_model.print_learned_weights()
     else:
         logger.info("Probe not run because not in eval_modes")
 
@@ -836,7 +870,7 @@ def run_experiment(
             retrieval_metrics=retrieval_metrics,
             clustering_metrics=clustering_metrics,
         ),
-        model=base_model if frozen else None,  # Only cache frozen models
+        model=base_model if freeze_backbone else None,  # Only cache frozen models
         model_metadata=cached_model_metadata,
     )
 

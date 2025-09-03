@@ -37,7 +37,7 @@ class ModelBase(nn.Module):
             for name, module in self.named_modules():
                 if isinstance(module, nn.Linear):
                     self._layer_names.append(name)
-            logger.debug(
+            logger.info(
                 f"Discovered {len(self._layer_names)} linear layers: "
                 f"{self._layer_names}"
             )
@@ -337,7 +337,10 @@ class ModelBase(nn.Module):
 
             # Process embeddings based on aggregation parameter
             if aggregation == "none":
-                return embeddings
+                if len(embeddings) == 1:
+                    return embeddings[0]
+                else:
+                    return embeddings
             else:
                 # Average over time dimension if embeddings are 3D and concatenate
                 for i in range(len(embeddings)):

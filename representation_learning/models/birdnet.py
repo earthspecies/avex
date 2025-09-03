@@ -96,6 +96,62 @@ class Model(ModelBase):
             device,
         )
 
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache layers for BirdNET model.
+
+        Note: BirdNET is a TensorFlow Lite model with no accessible intermediate layers.
+        The TensorFlow Lite model only exposes the final output (species predictions).
+        This method is implemented for API consistency but will only find the optional
+        PyTorch classifier layer.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # BirdNET is a TensorFlow Lite model with no accessible intermediate layers
+            # Only the optional PyTorch classifier layer can be discovered
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} layers in BirdNET model: "
+                f"{self._layer_names}"
+            )
+            if len(self._layer_names) == 0:
+                logger.info(
+                    "BirdNET is a TensorFlow Lite model with no accessible "
+                    "intermediate layers. "
+                    "Only the optional PyTorch classifier layer can be discovered."
+                )
+
+    def _discover_embedding_layers(self) -> None:
+        """Discover and cache layers for BirdNET model.
+
+        Note: BirdNET is a TensorFlow Lite model with no accessible intermediate layers.
+        The TensorFlow Lite model only exposes the final output (species predictions).
+        This method is implemented for API consistency but will only find the optional
+        PyTorch classifier layer.
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            # BirdNET is a TensorFlow Lite model with no accessible intermediate layers
+            # Only the optional PyTorch classifier layer can be discovered
+            for name, module in self.named_modules():
+                if isinstance(module, torch.nn.Linear):
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} layers in BirdNET model: "
+                f"{self._layer_names}"
+            )
+            if len(self._layer_names) == 0:
+                logger.info(
+                    "BirdNET is a TensorFlow Lite model with no accessible "
+                    "intermediate layers. "
+                    "Only the optional PyTorch classifier layer can be discovered."
+                )
+
     # --------------------------------------------------------------------- #
     #                       NN.Module / ModelBase hooks                     #
     # --------------------------------------------------------------------- #

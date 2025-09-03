@@ -99,30 +99,53 @@ class Model(ModelBase):
         # MLP layers will be discovered in _discover_linear_layers override
 
     def _discover_linear_layers(self) -> None:
-        """Discover and cache all linear layer names including MLP layers.
-
-        This overrides the base class method to discover BEATs-specific layers
-        beyond just nn.Linear layers.
+        """
+        Discover and cache only the BEATs layers that are useful for embeddings.
+        This method is called when target_layers=["all"] is used.
+        Specifically:
+        - backbone.post_extract_proj
+        - backbone.encoder.layers.{i}.fc2 (only fc2 layers from encoder blocks)
         """
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
 
-            # Discover standard linear layers
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Linear):
+            for name, _module in self.named_modules():
+                # Keep the initial projection after conv frontend
+                if name.endswith("post_extract_proj"):
                     self._layer_names.append(name)
 
-            # Discover additional BEATs-specific layers (MLP layers from
-            # transformer blocks)
-            # These are typically named like "encoder.layers.0.fc1",
-            # "encoder.layers.0.fc2"
-            for name, _module in self.named_modules():
-                if name.endswith("fc1") or name.endswith("fc2"):
-                    if name not in self._layer_names:
-                        self._layer_names.append(name)
+                # Keep only the fc2 layers from transformer encoder blocks
+                # Pattern: backbone.encoder.layers.{i}.fc2
+                elif name.endswith(".fc2") and "backbone.encoder.layers." in name:
+                    self._layer_names.append(name)
 
-            logger.debug(
-                f"Discovered {len(self._layer_names)} hookable layers in BEATs model: "
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding layers in BEATs: "
+                f"{self._layer_names}"
+            )
+
+    def _discover_embedding_layers(self) -> None:
+        """
+        Discover and cache only the BEATs layers that are useful for embeddings.
+        Specifically:
+        - backbone.post_extract_proj
+        - backbone.encoder.layers.{i}.fc2 (only fc2 layers from encoder blocks)
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            for name, _module in self.named_modules():
+                # Keep the initial projection after conv frontend
+                if name.endswith("post_extract_proj"):
+                    self._layer_names.append(name)
+
+                # Keep only the fc2 layers from transformer encoder blocks
+                # Pattern: backbone.encoder.layers.{i}.fc2
+                elif name.endswith(".fc2") and "backbone.encoder.layers." in name:
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding layers in BEATs: "
                 f"{self._layer_names}"
             )
 
@@ -256,11 +279,68 @@ class Model(ModelBase):
             # Collect embeddings from hook outputs
             embeddings = []
             for layer_name in self._hook_outputs.keys():
-                embeddings.append(self._hook_outputs[layer_name])
-                logger.debug(
-                    f"Found embedding for {layer_name}: "
-                    f"{self._hook_outputs[layer_name].shape}"
-                )
+                embedding = self._hook_outputs[layer_name]
+
+                # Handle different tensor dimensions for sequence probes
+                if embedding.dim() == 4:
+                    # 4D tensor: reshape to [batch_size, time, dim1*dim2]
+                    # Example: [1, 12, 248, 8] -> [1, 248, 96]
+                    batch_size, dim1, time_dim, dim2 = embedding.shape
+                    embedding = embedding.transpose(1, 2)  # [batch, time, dim1, dim2]
+                    embedding = embedding.reshape(
+                        batch_size, time_dim, dim1 * dim2
+                    )  # [batch_size, time, dim1*dim2]
+                    logger.debug(
+                        f"Reshaped 4D embedding for {layer_name} from "
+                        f"{self._hook_outputs[layer_name].shape} to {embedding.shape}"
+                    )
+                if embedding.dim() == 3:
+                    # 3D tensor: check if it needs transposing
+                    original_shape = embedding.shape
+
+                    # Case 1: transpose seq_len and batch_size dimensions
+                    if (
+                        embedding.shape[1] == wav.shape[0]
+                        and embedding.shape[0] != wav.shape[0]
+                    ):
+                        embedding = embedding.transpose(0, 1)
+                        logger.debug(
+                            f"Transposed 3D embedding for {layer_name} from "
+                            f"{original_shape} to {embedding.shape}"
+                        )
+                    # Case 2: reshape attention weights [heads, seq_len, seq_len]
+                    # This handles attention weight matrices
+                    elif (
+                        embedding.shape[0] != wav.shape[0]
+                        and embedding.shape[1] == embedding.shape[2]
+                    ):
+                        # This looks like attention weights [heads, seq_len, seq_len]
+                        # We need to reshape to [batch_size, seq_len, heads*seq_len]
+                        heads, seq_len, _ = embedding.shape
+                        embedding = embedding.reshape(
+                            1, seq_len, heads * seq_len
+                        )  # [1, seq_len, heads*seq_len]
+                        logger.debug(
+                            f"Reshaped attention weights for {layer_name} from "
+                            f"{original_shape} to {embedding.shape}"
+                        )
+                    # Case 3: reshape attention weights [seq_len, seq_len, heads]
+                    elif (
+                        embedding.shape[0] == embedding.shape[1]
+                        and embedding.shape[2] != wav.shape[0]
+                    ):
+                        # This looks like attention weights [seq_len, seq_len, heads]
+                        seq_len, _, heads = embedding.shape
+                        embedding = embedding.reshape(
+                            1, seq_len, seq_len * heads
+                        )  # [1, seq_len, seq_len*heads]
+                        logger.debug(
+                            f"Reshaped attention weights for {layer_name} from "
+                            f"{original_shape} to {embedding.shape}"
+                        )
+
+                embeddings.append(embedding)
+                logger.debug(f"Found embedding for {layer_name}: {embedding.shape}")
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
@@ -272,7 +352,10 @@ class Model(ModelBase):
 
             # Process embeddings based on average_over_time parameter
             if aggregation == "none":
-                return embeddings
+                if len(embeddings) == 1:
+                    return embeddings[0]
+                else:
+                    return embeddings
             else:
                 for i in range(len(embeddings)):
                     if embeddings[i].dim() == 2:

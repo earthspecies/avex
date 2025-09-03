@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import torch
+import torch.optim.lr_scheduler as lr_scheduler
 from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, ExperimentConfig
@@ -34,6 +35,8 @@ class FineTuneTrainer:
         num_labels: int,
         multi_label: bool = False,
         dataset_metrics: Optional[List[str]] = None,
+        warmup_epochs: int = 5,
+        scheduler_type: str = "cosine",
     ) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -45,6 +48,9 @@ class FineTuneTrainer:
         self.num_labels = num_labels
         self.multi_label = multi_label
         self.dataset_metrics = dataset_metrics
+        self.warmup_epochs = warmup_epochs
+        self.scheduler_type = scheduler_type
+        self.base_lr = cfg.training_params.lr
 
         # Set up loss function
         if self.multi_label:
@@ -52,15 +58,29 @@ class FineTuneTrainer:
         else:
             self.criterion = torch.nn.CrossEntropyLoss()
 
+        # Set up learning rate scheduler
+        self.scheduler = self._create_scheduler()
+
         # Log static hyper-parameters
-        self.log.log_params(
-            {
-                "epochs": cfg.training_params.train_epochs,
-                "lr": cfg.training_params.lr,
-                "batch_size": cfg.training_params.batch_size,
-                "loss_fn": ("bce_with_logits" if self.multi_label else "cross_entropy"),
-            }
-        )
+        log_params = {
+            "epochs": cfg.training_params.train_epochs,
+            "lr": cfg.training_params.lr,
+            "batch_size": cfg.training_params.batch_size,
+            "loss_fn": ("bce_with_logits" if self.multi_label else "cross_entropy"),
+        }
+
+        # Add gradient clipping parameter if specified
+        if (
+            hasattr(cfg.training_params, "gradient_clip_val")
+            and cfg.training_params.gradient_clip_val is not None
+        ):
+            log_params["gradient_clip_val"] = cfg.training_params.gradient_clip_val
+
+        # Add scheduler parameters
+        log_params["warmup_epochs"] = self.warmup_epochs
+        log_params["scheduler_type"] = self.scheduler_type
+
+        self.log.log_params(log_params)
 
         # Determine primary metric name based on task type and dataset configuration
         if self.dataset_metrics and len(self.dataset_metrics) > 0:
@@ -84,6 +104,64 @@ class FineTuneTrainer:
             self.primary_metric_name: 0.0,
         }
 
+    def _create_scheduler(self) -> Optional[torch.optim.lr_scheduler._LRScheduler]:
+        """Create learning rate scheduler based on configuration.
+
+        Returns
+        -------
+        Optional[torch.optim.lr_scheduler._LRScheduler]
+            The learning rate scheduler or None if scheduler_type is "none".
+        """
+        if self.scheduler_type == "none":
+            return None
+
+        # Calculate total steps for cosine annealing
+        total_epochs = self.cfg.training_params.train_epochs
+        steps_per_epoch = len(self.train_loader)
+        total_steps = total_epochs * steps_per_epoch
+
+        if self.scheduler_type == "cosine":
+            # Cosine annealing with warmup
+            return lr_scheduler.CosineAnnealingLR(
+                self.optimizer,
+                T_max=total_steps - (self.warmup_epochs * steps_per_epoch),
+                eta_min=self.base_lr * 0.01,  # Minimum LR is 1% of base LR
+            )
+        elif self.scheduler_type == "linear":
+            # Linear decay with warmup
+            return lr_scheduler.LinearLR(
+                self.optimizer,
+                start_factor=1.0,
+                end_factor=0.01,  # End at 1% of base LR
+                total_iters=total_steps - (self.warmup_epochs * steps_per_epoch),
+            )
+        elif self.scheduler_type == "step":
+            # Step decay
+            return lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=total_epochs // 3,  # Decay every 1/3 of total epochs
+                gamma=0.5,
+            )
+        else:
+            logger.warning(
+                f"Unknown scheduler type: {self.scheduler_type}. Using no scheduler."
+            )
+            return None
+
+    def _get_warmup_lr(self, epoch: int) -> float:
+        """Calculate learning rate during warmup period.
+
+        Returns
+        -------
+        float
+            The learning rate for the given epoch during warmup.
+        """
+        if epoch <= self.warmup_epochs:
+            # Linear warmup from 0 to base_lr
+            return self.base_lr * (epoch / self.warmup_epochs)
+        else:
+            return self.base_lr
+
     def train(self, num_epochs: int) -> tuple[dict[str, float], dict[str, float]]:
         """
         Run the full fine-tuning loop and return best train/val metrics.
@@ -94,15 +172,28 @@ class FineTuneTrainer:
             A tuple of (best_train_metrics, best_val_metrics) collected across epochs.
         """
         for epoch in range(1, num_epochs + 1):
+            # Set current epoch for scheduler stepping
+            self._current_epoch = epoch
+
+            # Apply learning rate warmup
+            if epoch <= self.warmup_epochs:
+                warmup_lr = self._get_warmup_lr(epoch)
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = warmup_lr
+
             train_loss, train_metric = self._run_epoch(train=True, epoch=epoch)
             val_loss, val_metric = self._run_epoch(train=False, epoch=epoch)
+
+            # Get current learning rate for logging
+            current_lr = self.optimizer.param_groups[0]["lr"]
 
             logger.info(
                 f"[Epoch {epoch:03d}] "
                 f"train_loss={train_loss:.4f}  "
                 f"train_{self.primary_metric_name}={train_metric:.4f} | "
                 f"val_loss={val_loss:.4f}  "
-                f"val_{self.primary_metric_name}={val_metric:.4f}"
+                f"val_{self.primary_metric_name}={val_metric:.4f} | "
+                f"lr={current_lr:.6f}"
             )
 
             # Log epoch-level metrics
@@ -174,11 +265,17 @@ class FineTuneTrainer:
                 f"and properly supported by the metric factory."
             ) from e
 
-        for batch in tqdm(
-            loader,
-            desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
-            leave=False,
-        ):
+        # Use tqdm only if not disabled in config
+        if not self.cfg.disable_tqdm:
+            iterator = tqdm(
+                loader,
+                desc=f"{'Train' if train else 'Eval '} Epoch {epoch}",
+                leave=False,
+            )
+        else:
+            iterator = loader
+
+        for batch in iterator:
             if "embed" in batch:
                 z = batch["embed"].to(self.device)
                 logits = self.model(z)
@@ -210,7 +307,26 @@ class FineTuneTrainer:
             if train:
                 self.optimizer.zero_grad()
                 loss.backward()
+
+                # Apply gradient clipping if specified in config
+                if (
+                    hasattr(self.cfg.training_params, "gradient_clip_val")
+                    and self.cfg.training_params.gradient_clip_val is not None
+                ):
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.cfg.training_params.gradient_clip_val,
+                    )
+
                 self.optimizer.step()
+
+                # Step scheduler after optimizer step (for proper LR scheduling)
+                if (
+                    hasattr(self, "_current_epoch")
+                    and self._current_epoch > self.warmup_epochs
+                    and self.scheduler is not None
+                ):
+                    self.scheduler.step()
 
             metric_calculator.update(logits, y)
 
@@ -328,13 +444,27 @@ def train_and_eval_offline(
         input_dim=input_dim,
         target_length=target_length,
     )
-    logger.info(
-        "Offline probe → %d parameters",
-        sum(p.numel() for p in probe.parameters()),
-    )
+    # Count parameters for offline probe
+    total_params = sum(p.numel() for p in probe.parameters())
+    trainable_params = sum(p.numel() for p in probe.parameters() if p.requires_grad)
+
+    def format_params(count: int, total: int) -> str:
+        if count >= 1e9:
+            return f"{count / 1e9:.2f}B trainable / {total / 1e9:.2f}B total"
+        elif count >= 1e6:
+            return f"{count / 1e6:.2f}M trainable / {total / 1e6:.2f}M total"
+        elif count >= 1e3:
+            return f"{count / 1e3:.2f}K trainable / {total / 1e3:.2f}K total"
+        else:
+            return f"{count} trainable / {total} total"
+
+    logger.info(f"Offline probe → {format_params(trainable_params, total_params)}")
     probe.train()
 
     optim = get_optimizer(probe.parameters(), eval_cfg.training_params)
+
+    # Store probe model in exp_logger for later access (e.g., printing learned weights)
+    exp_logger.probe_model = probe
 
     trainer = FineTuneTrainer(
         model=probe,
@@ -355,6 +485,8 @@ def train_and_eval_offline(
         num_labels=num_labels,
         multi_label=multi_label,
         dataset_metrics=dataset_metrics,
+        warmup_epochs=5,  # 5 epochs warmup
+        scheduler_type="cosine",  # Cosine annealing scheduler
     )
 
     train_metrics, val_metrics = trainer.train(
@@ -483,14 +615,62 @@ def train_and_eval_online(
         frozen=probe_config.freeze_backbone,
         target_length=target_length,
     )
+    # Count parameters separately for probe and base model
+    total_params = sum(p.numel() for p in sft_model.parameters())
+    trainable_params = sum(p.numel() for p in sft_model.parameters() if p.requires_grad)
+
+    # Count probe vs base model parameters
+    probe_total = 0
+    probe_trainable = 0
+    base_total = 0
+    base_trainable = 0
+
+    for name, param in sft_model.named_parameters():
+        if hasattr(sft_model, "base_model") and sft_model.base_model is not None:
+            # Check if this parameter belongs to the base model
+            is_base_param = any(
+                name.startswith(f"base_model.{base_name}")
+                for base_name, _ in sft_model.base_model.named_parameters()
+            )
+            if is_base_param:
+                base_total += param.numel()
+                if param.requires_grad:
+                    base_trainable += param.numel()
+            else:
+                probe_total += param.numel()
+                if param.requires_grad:
+                    probe_trainable += param.numel()
+        else:
+            # No base model, all parameters are probe parameters
+            probe_total += param.numel()
+            if param.requires_grad:
+                probe_trainable += param.numel()
+
+    def format_params(count: int, total: int) -> str:
+        if count >= 1e9:
+            return f"{count / 1e9:.2f}B trainable / {total / 1e9:.2f}B total"
+        elif count >= 1e6:
+            return f"{count / 1e6:.2f}M trainable / {total / 1e6:.2f}M total"
+        elif count >= 1e3:
+            return f"{count / 1e3:.2f}K trainable / {total / 1e3:.2f}K total"
+        else:
+            return f"{count} trainable / {total} total"
+
     logger.info(
-        "Online training model → %d parameters",
-        sum(p.numel() for p in sft_model.parameters()),
+        f"Online training model → {format_params(trainable_params, total_params)}"
     )
+    logger.info(f"  Probe parameters: {format_params(probe_trainable, probe_total)}")
+    if base_total > 0:
+        logger.info(
+            f"  Base model parameters: {format_params(base_trainable, base_total)}"
+        )
     sft_model.train()
 
     # Create optimizer
     optim = get_optimizer(sft_model.parameters(), eval_cfg.training_params)
+
+    # Store probe model in exp_logger for later access (e.g., printing learned weights)
+    exp_logger.probe_model = sft_model
 
     # Create trainer
     trainer = FineTuneTrainer(
@@ -504,6 +684,8 @@ def train_and_eval_online(
         num_labels=num_labels,
         multi_label=multi_label,
         dataset_metrics=dataset_metrics,
+        warmup_epochs=5,  # 5 epochs warmup
+        scheduler_type="cosine",  # Cosine annealing scheduler
     )
 
     # Train

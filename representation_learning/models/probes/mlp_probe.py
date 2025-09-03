@@ -80,11 +80,16 @@ class MLPProbe(torch.nn.Module):
         if self.base_model is not None and not self.feature_mode:
             self.base_model.register_hooks_for_layers(self.layers)
 
+        # Initialize variables
+        inferred_dim = None
+        classifier_input_dim = None
+
         # Determine classifier input dimension
         if self.feature_mode:
             # Embeddings will be fed directly – base_model may be None.
             if input_dim is not None:
                 inferred_dim = input_dim
+                classifier_input_dim = inferred_dim
             else:
                 if base_model is None:
                     raise ValueError(
@@ -122,12 +127,31 @@ class MLPProbe(torch.nn.Module):
                     assert isinstance(dummy_embeddings, torch.Tensor), (
                         "dummy_embeddings should be a tensor"
                     )
-                    if dummy_embeddings.dim() == 3:
-                        # Take the mean across a dimension
-                        dummy_embeddings = dummy_embeddings.squeeze(1)
-                        if dummy_embeddings.dim() == 3:
-                            dummy_embeddings = dummy_embeddings.mean(dim=1)
+                    logger.info(f"Input to MLP probe shape: {dummy_embeddings.shape}")
+                    if dummy_embeddings.dim() == 4:
+                        # Collapse 4D to 2D by taking mean across dimensions 1 and 2
+                        dummy_embeddings = dummy_embeddings.mean(dim=(1, 2))
+                        logger.info(
+                            f"Collapsed 4D embedding to: {dummy_embeddings.shape}"
+                        )
+                    elif dummy_embeddings.dim() == 3:
+                        # Collapse 3D to 2D by taking mean across sequence dimension
+                        dummy_embeddings = dummy_embeddings.mean(dim=1)
+                        logger.info(
+                            f"Collapsed 3D embedding to: {dummy_embeddings.shape}"
+                        )
+                    elif dummy_embeddings.dim() == 2:
+                        # Already 2D, use as is
+                        logger.info(
+                            f"Using 2D embedding as is: {dummy_embeddings.shape}"
+                        )
+                    else:
+                        raise ValueError(
+                            f"MLP probe expects 2D, 3D or 4D embeddings, got shape "
+                            f"{dummy_embeddings.shape}"
+                        )
                     inferred_dim = dummy_embeddings.shape[1]
+                    classifier_input_dim = inferred_dim
 
                 logger.info(
                     f"MLPProbe init: dummy_embeddings shape: "
@@ -166,11 +190,38 @@ class MLPProbe(torch.nn.Module):
                 if isinstance(dummy_embeddings, list):
                     # Detach each embedding in the list
                     dummy_embeddings = [emb.detach() for emb in dummy_embeddings]
-                    # Get embedding dimensions for each layer
-                    layer_dims = [
-                        emb.shape[1] if emb.dim() == 2 else emb.shape[-1]
-                        for emb in dummy_embeddings
-                    ]
+                    logger.info(
+                        f"MLP probe (none agg): {len(dummy_embeddings)} tensors"
+                    )
+                    # Get embedding dimensions for each layer, collapsing 3D to 2D
+                    layer_dims = []
+                    for i, emb in enumerate(dummy_embeddings):
+                        if emb.dim() == 4:
+                            # Collapse 4D to 2D by taking mean across dimensions 1 and 2
+                            dummy_embeddings[i] = emb.mean(dim=(1, 2))
+                            logger.info(
+                                f"Collapsed 4D embedding {i} to: "
+                                f"{dummy_embeddings[i].shape}"
+                            )
+                            layer_dims.append(dummy_embeddings[i].shape[1])
+                        elif emb.dim() == 3:
+                            # Collapse 3D to 2D by taking mean across sequence dimension
+                            dummy_embeddings[i] = emb.mean(dim=1)
+                            logger.info(
+                                f"Collapsed 3D embedding {i} to: "
+                                f"{dummy_embeddings[i].shape}"
+                            )
+                            layer_dims.append(dummy_embeddings[i].shape[1])
+                        elif emb.dim() == 2:
+                            # Already 2D, use as is
+                            logger.info(f"Using 2D embedding {i} as is: {emb.shape}")
+                            layer_dims.append(emb.shape[1])
+                        else:
+                            raise ValueError(
+                                f"MLP probe expects 2D, 3D or 4D embeddings "
+                                f"for layer {i}, "
+                                f"got shape {emb.shape}"
+                            )
 
                     # Determine projection dimension
                     if self.projection_dim is None:
@@ -187,13 +238,34 @@ class MLPProbe(torch.nn.Module):
 
                     # Final MLP input dimension is projection_dim * num_layers
                     inferred_dim = self.projection_dim * len(dummy_embeddings)
+                    classifier_input_dim = inferred_dim
 
                 else:
-                    if dummy_embeddings.dim() == 3:
-                        dummy_embeddings = dummy_embeddings.squeeze(1)
-                        if dummy_embeddings.dim() == 3:
-                            dummy_embeddings = dummy_embeddings.mean(dim=1)
+                    logger.info(f"Input to MLP probe shape: {dummy_embeddings.shape}")
+                    if dummy_embeddings.dim() == 4:
+                        # Collapse 4D to 2D by taking mean across dimensions 1 and 2
+                        dummy_embeddings = dummy_embeddings.mean(dim=(1, 2))
+                        logger.info(
+                            f"Collapsed 4D embedding to: {dummy_embeddings.shape}"
+                        )
+                    elif dummy_embeddings.dim() == 3:
+                        # Collapse 3D to 2D by taking mean across sequence dimension
+                        dummy_embeddings = dummy_embeddings.mean(dim=1)
+                        logger.info(
+                            f"Collapsed 3D embedding to: {dummy_embeddings.shape}"
+                        )
+                    elif dummy_embeddings.dim() == 2:
+                        # Already 2D, use as is
+                        logger.info(
+                            f"Using 2D embedding as is: {dummy_embeddings.shape}"
+                        )
+                    else:
+                        raise ValueError(
+                            f"MLP probe expects 2D, 3D or 4D embeddings, got shape "
+                            f"{dummy_embeddings.shape}"
+                        )
                     inferred_dim = dummy_embeddings.shape[1]
+                    classifier_input_dim = inferred_dim
 
                 if isinstance(dummy_embeddings, list):
                     logger.info(
@@ -211,9 +283,22 @@ class MLPProbe(torch.nn.Module):
                     )
 
         # Build MLP layers
-        self.mlp = self._build_mlp(inferred_dim, num_classes)
+        self.mlp = self._build_mlp(classifier_input_dim, num_classes)
         # Move MLP to the specified device
         self.mlp = self.mlp.to(self.device)
+
+        # Log final probe parameters
+        logger.info(
+            f"MLPProbe initialized with final parameters: "
+            f"layers={self.layers}, feature_mode={self.feature_mode}, "
+            f"aggregation={self.aggregation}, freeze_backbone={self.freeze_backbone}, "
+            f"hidden_dims={self.hidden_dims}, dropout_rate={self.dropout_rate}, "
+            f"activation={self.activation}, target_length={self.target_length}, "
+            f"projection_dim={self.projection_dim}, inferred_dim={inferred_dim}, "
+            f"cls_dim={classifier_input_dim}, mlp_dim={self.mlp[0].in_features}, "
+            f"n_classes={num_classes}, "
+            f"has_layer_projections={hasattr(self, 'layer_projections')}"
+        )
 
     def __del__(self) -> None:
         """Cleanup hooks when the probe is destroyed."""
@@ -295,6 +380,30 @@ class MLPProbe(torch.nn.Module):
         if self.feature_mode:
             assert isinstance(x, torch.Tensor), "x should be a tensor"
             embeddings = x
+
+            # Handle different embedding dimensions in feature mode
+            if embeddings.dim() == 4:
+                # Collapse 4D to 2D by taking mean across dimensions 1 and 2
+                embeddings = embeddings.mean(dim=(1, 2))
+                logger.debug(
+                    f"Feature mode: Collapsed 4D embedding to: {embeddings.shape}"
+                )
+            elif embeddings.dim() == 3:
+                # Collapse 3D to 2D by taking mean across sequence dimension
+                embeddings = embeddings.mean(dim=1)
+                logger.debug(
+                    f"Feature mode: Collapsed 3D embedding to: {embeddings.shape}"
+                )
+            elif embeddings.dim() == 2:
+                # Already 2D, use as is
+                logger.debug(
+                    f"Feature mode: Using 2D embedding as is: {embeddings.shape}"
+                )
+            else:
+                raise ValueError(
+                    f"Feature mode expects 2D, 3D or 4D embeddings, got shape "
+                    f"{embeddings.shape}"
+                )
         else:
             if self.base_model is None:
                 raise ValueError("base_model must be provided when feature_mode=False")
@@ -317,6 +426,11 @@ class MLPProbe(torch.nn.Module):
                     f"Input shape: {x.shape}, layers: {self.layers}"
                 ) from e
 
+            logger.debug(
+                f"MLP probe forward: Received embeddings type: {type(embeddings)}, "
+                f"shape: {embeddings.shape if hasattr(embeddings, 'shape') else 'list'}"
+            )
+
             # Log embeddings info for debugging
             if hasattr(self, "_debug_logged") and not self._debug_logged:
                 logger.info(
@@ -333,13 +447,20 @@ class MLPProbe(torch.nn.Module):
                     zip(embeddings, self.layer_projections, strict=False)
                 ):
                     # Ensure embedding is 2D: (batch_size, embedding_dim)
-                    if emb.dim() == 3:
-                        emb = emb.squeeze(1)  # Remove feature dimension if present
-                        if emb.dim() == 3:
-                            emb = emb.mean(dim=1)
-                    elif emb.dim() != 2:
+                    if emb.dim() == 4:
+                        # Collapse 4D to 2D by taking mean across dimensions 1 and 2
+                        emb = emb.mean(dim=(1, 2))
+                        logger.debug(f"Collapsed 4D embedding {i} to: {emb.shape}")
+                    elif emb.dim() == 3:
+                        # Collapse 3D to 2D by taking mean across sequence dimension
+                        emb = emb.mean(dim=1)
+                        logger.debug(f"Collapsed 3D embedding {i} to: {emb.shape}")
+                    elif emb.dim() == 2:
+                        # Already 2D, use as is
+                        logger.debug(f"Using 2D embedding {i} as is: {emb.shape}")
+                    else:
                         raise ValueError(
-                            f"Expected 2D or 3D embeddings for layer {i}, got "
+                            f"Expected 2D, 3D or 4D embeddings for layer {i}, got "
                             f"{emb.dim()}D. Shape: {emb.shape}"
                         )
 
@@ -352,16 +473,22 @@ class MLPProbe(torch.nn.Module):
 
             else:
                 # Validate embeddings shape for tensor case
-                if embeddings.dim() != 2 and embeddings.dim() != 3:
+                if embeddings.dim() == 4:
+                    # Collapse 4D to 2D by taking mean across dimensions 1 and 2
+                    embeddings = embeddings.mean(dim=(1, 2))
+                    logger.debug(f"Collapsed 4D embedding to: {embeddings.shape}")
+                elif embeddings.dim() == 3:
+                    # Collapse 3D to 2D by taking mean across sequence dimension
+                    embeddings = embeddings.mean(dim=1)
+                    logger.debug(f"Collapsed 3D embedding to: {embeddings.shape}")
+                elif embeddings.dim() == 2:
+                    # Already 2D, use as is
+                    logger.debug(f"Using 2D embedding as is: {embeddings.shape}")
+                else:
                     raise ValueError(
-                        f"Expected embeddings to have 2 or 3 dimensions, "
+                        f"Expected embeddings to have 2, 3 or 4 dimensions, "
                         f"got {embeddings.dim()}. Shape: {embeddings.shape}"
                     )
-
-                if embeddings.dim() == 3:
-                    embeddings = embeddings.squeeze(1)
-                    if embeddings.dim() == 3:
-                        embeddings = embeddings.mean(dim=1)
 
         # Debug logging for embeddings shape
         if hasattr(self, "_debug_logged") and not self._debug_logged:

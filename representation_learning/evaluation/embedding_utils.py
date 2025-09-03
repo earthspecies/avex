@@ -31,6 +31,7 @@ def extract_embeddings_for_split(
     max_chunk_size: int = 2000,
     min_chunk_size: int = 100,
     batch_chunk_size: int = 10,
+    disable_tqdm: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return stacked embeddings and labels for an entire dataloader.
 
@@ -92,11 +93,12 @@ def extract_embeddings_for_split(
             max_chunk_size,
             min_chunk_size,
             batch_chunk_size,
+            disable_tqdm,
         )
 
     # Original in-memory approach for backward compatibility
     return _extract_embeddings_in_memory(
-        model, dataloader, layer_names, device, aggregation
+        model, dataloader, layer_names, device, aggregation, disable_tqdm
     )
 
 
@@ -106,6 +108,7 @@ def _extract_embeddings_in_memory(
     layer_names: List[str],
     device: torch.device,
     aggregation: str = "mean",
+    disable_tqdm: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Original in-memory embedding extraction (kept for backward compatibility).
 
@@ -118,12 +121,15 @@ def _extract_embeddings_in_memory(
     embeds: list[torch.Tensor] = []
     labels: list[torch.Tensor] = []
 
-    progress = tqdm(
-        enumerate(dataloader),
-        desc="Extracting embeddings (in-memory)",
-        total=len(dataloader),
-        unit="batch",
-    )
+    if not disable_tqdm:
+        progress = tqdm(
+            enumerate(dataloader),
+            desc="Extracting embeddings (in-memory)",
+            total=len(dataloader),
+            unit="batch",
+        )
+    else:
+        progress = enumerate(dataloader)
 
     logger.info(f"Extracting embeddings for {len(dataloader)} batches (in-memory mode)")
 
@@ -169,6 +175,7 @@ def _extract_embeddings_streaming(
     max_chunk_size: int = 2000,
     min_chunk_size: int = 100,
     batch_chunk_size: int = 10,
+    disable_tqdm: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Memory-efficient streaming embedding extraction that saves to disk in chunks.
 
@@ -293,6 +300,7 @@ def _extract_embeddings_streaming(
                     first_batch,
                     batch_chunk_size,
                     aggregation,
+                    disable_tqdm,
                 )
         else:
             with h5py.File(str(save_path_obj), "w") as h5f:
@@ -310,6 +318,7 @@ def _extract_embeddings_streaming(
                     first_batch,
                     batch_chunk_size,
                     aggregation,
+                    disable_tqdm,
                 )
 
         # Load the saved embeddings back into memory
@@ -336,6 +345,7 @@ def _create_and_fill_h5_datasets_hybrid(
     first_batch: dict,
     batch_chunk_size: int,
     aggregation: str = "mean",
+    disable_tqdm: bool = False,
 ) -> None:
     """Helper function to create and fill HDF5 datasets with optimized hybrid approach.
 
@@ -493,12 +503,15 @@ def _create_and_fill_h5_datasets_hybrid(
             torch.cuda.empty_cache()
 
         # Process remaining batches using hybrid approach
-        progress = tqdm(
-            enumerate(dataloader),
-            desc="Extracting embeddings (hybrid streaming)",
-            total=len(dataloader),
-            unit="batch",
-        )
+        if not disable_tqdm:
+            progress = tqdm(
+                enumerate(dataloader),
+                desc="Extracting embeddings (hybrid streaming)",
+                total=len(dataloader),
+                unit="batch",
+            )
+        else:
+            progress = enumerate(dataloader)
 
         # Buffers for collecting multiple batches before writing
         batch_embeddings_buffer = []

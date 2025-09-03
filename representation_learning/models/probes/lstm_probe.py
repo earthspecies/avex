@@ -82,11 +82,29 @@ class LSTMProbe(torch.nn.Module):
         if self.base_model is not None and not self.feature_mode:
             self.base_model.register_hooks_for_layers(self.layers)
 
+        # Initialize lstm_true_hidden_size to default value
+        lstm_true_hidden_size = self.lstm_hidden_size
+        inferred_dim = None
+
         # Determine classifier input dimension
         if self.feature_mode:
             # Embeddings will be fed directly – base_model may be None.
             if input_dim is not None:
                 inferred_dim = input_dim
+                # Create single LSTM for feature mode
+                self.layer_projections = nn.LSTM(
+                    input_size=inferred_dim,
+                    hidden_size=lstm_true_hidden_size,
+                    num_layers=num_layers,
+                    bidirectional=bidirectional,
+                    dropout=dropout_rate if num_layers > 1 else 0,
+                    batch_first=True,
+                )
+
+                # Calculate classifier input dimension for feature mode
+                classifier_input_dim = lstm_true_hidden_size * (
+                    2 if bidirectional else 1
+                )
             else:
                 if base_model is None:
                     raise ValueError(
@@ -124,6 +142,31 @@ class LSTMProbe(torch.nn.Module):
                     assert isinstance(dummy_embeddings, torch.Tensor), (
                         "dummy_embeddings should be a tensor"
                     )
+                    logger.info(f"Input to LSTM probe shape: {dummy_embeddings.shape}")
+                    if dummy_embeddings.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = dummy_embeddings.shape
+                        logger.debug(
+                            f"Processing 4D embedding: {dummy_embeddings.shape}"
+                        )
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Ensure proper memory layout for cuDNN
+                        dummy_embeddings = (
+                            dummy_embeddings.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(
+                            f"Reshaped 4D embedding to: {dummy_embeddings.shape}"
+                        )
+
+                    if dummy_embeddings.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        dummy_embeddings = dummy_embeddings.unsqueeze(2)
+                        logger.info(
+                            f"Reshaped 2D embedding to: {dummy_embeddings.shape}"
+                        )
+
                     if dummy_embeddings.dim() == 3:
                         # For sequence probes, we expect 3D embeddings
                         # (batch_size, sequence_length, embedding_dim)
@@ -136,10 +179,10 @@ class LSTMProbe(torch.nn.Module):
                         )
                     else:
                         raise ValueError(
-                            f"LSTM probe expects 3D embeddings (batch_size, "
-                            f"sequence_length, embedding_dim), got shape "
+                            f"LSTM probe expects 2D, 3D or 4D embeddings, got shape "
                             f"{dummy_embeddings.shape}"
                         )
+
         else:
             # Extract embeddings from base_model to determine dimensions
             with torch.no_grad():
@@ -172,19 +215,45 @@ class LSTMProbe(torch.nn.Module):
                     dummy_embeddings = [emb.detach() for emb in dummy_embeddings]
 
                     # For sequence probes, we expect 3D embeddings
-                    # Check that all embeddings are 3D
+                    # Check that all embeddings are 3D or 4D
                     time_dims = []
                     for i, emb in enumerate(dummy_embeddings):
-                        if emb.dim() != 3:
+                        logger.info(f"Input to LSTM probe shape: {emb.shape}")
+                        if emb.dim() == 4:
+                            # Handle 4D embeddings (B, C, H, W)
+                            batch_size, channels, height, width = emb.shape
+                            logger.debug(f"Processing 4D embedding {i}: {emb.shape}")
+                            # Reshape to (B, W, C*H) - treat width as sequence length,
+                            # C*H as features. Ensure proper memory layout for cuDNN
+                            dummy_embeddings[i] = (
+                                emb.permute(0, 3, 1, 2)
+                                .contiguous()
+                                .view(batch_size, width, channels * height)
+                            )
+                            logger.info(
+                                f"Reshaped 4D embedding {i} to: "
+                                f"{dummy_embeddings[i].shape}"
+                            )
+                            time_dims.append(dummy_embeddings[i].shape[1])
+                        elif emb.dim() == 2:
+                            # Handle 2D embeddings by adding sequence dimension
+                            dummy_embeddings[i] = emb.unsqueeze(2)
+                            logger.info(
+                                f"Reshaped 2D embedding {i} to: "
+                                f"{dummy_embeddings[i].shape}"
+                            )
+                            time_dims.append(dummy_embeddings[i].shape[1])
+                        elif emb.dim() == 3:
+                            time_dims.append(emb.shape[1])
+                        else:
                             raise ValueError(
-                                f"LSTM probe expects 3D embeddings (batch_size, "
-                                f"sequence_length, embedding_dim), got shape "
+                                f"LSTM probe expects 2D, 3D or 4D embeddings, "
+                                f"got shape "
                                 f"{emb.shape} for layer {i}"
                             )
-                        time_dims.append(emb.shape[1])
 
                     lstm_true_hidden_size = int(
-                        np.maximum(int(min(time_dims) / 4), lstm_hidden_size)
+                        np.maximum(int(min(time_dims) / 4), self.lstm_hidden_size)
                     )
 
                     # Create LSTM projection heads for each layer
@@ -202,20 +271,25 @@ class LSTMProbe(torch.nn.Module):
                         ]
                     )
 
-                    # Input dimension is lstm_hidden_size * number of layers
+                    # Input dimension is lstm_true_hidden_size * number of layers
                     # (accounting for bidirectional LSTM)
-                    lstm_output_size = self.lstm_hidden_size * (
+                    lstm_output_size = lstm_true_hidden_size * (
                         2 if self.bidirectional else 1
                     )
                     inferred_dim = lstm_output_size * len(dummy_embeddings)
-
+                    classifier_input_dim = (
+                        lstm_true_hidden_size
+                        * (2 if bidirectional else 1)
+                        * len(self.layer_projections)
+                    )
                     # Log the setup
                     logger.info(
                         f"LSTMProbe init (feature_mode=False, aggregation='none'): "
                         f"dummy_embeddings: list of {len(dummy_embeddings)} tensors, "
                         f"layers: {layers}, aggregation: {self.aggregation}, "
                         f"inferred_dim: {inferred_dim}, "
-                        f"lstm_true_hidden_size: {lstm_true_hidden_size}"
+                        f"lstm_true_hidden_size: {lstm_true_hidden_size}, "
+                        f"lstm_output_size: {lstm_output_size}"
                     )
                 else:
                     # Single tensor case
@@ -227,6 +301,31 @@ class LSTMProbe(torch.nn.Module):
 
                     if self.freeze_backbone:
                         dummy_embeddings = dummy_embeddings.detach()
+                    logger.info(f"Input to LSTM probe shape: {dummy_embeddings.shape}")
+
+                    if dummy_embeddings.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = dummy_embeddings.shape
+                        logger.debug(
+                            f"Processing 4D embedding: {dummy_embeddings.shape}"
+                        )
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Ensure proper memory layout for cuDNN
+                        dummy_embeddings = (
+                            dummy_embeddings.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(
+                            f"Reshaped 4D embedding to: {dummy_embeddings.shape}"
+                        )
+
+                    if dummy_embeddings.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        dummy_embeddings = dummy_embeddings.unsqueeze(2)
+                        logger.info(
+                            f"Reshaped 2D embedding to: {dummy_embeddings.shape}"
+                        )
 
                     if dummy_embeddings.dim() == 3:
                         # For sequence probes, we expect 3D embeddings
@@ -238,11 +337,27 @@ class LSTMProbe(torch.nn.Module):
                                 self.lstm_hidden_size,
                             )
                         )
+
+                        # Create single LSTM for single tensor case
+                        self.layer_projections = nn.LSTM(
+                            input_size=inferred_dim,
+                            hidden_size=lstm_true_hidden_size,
+                            num_layers=num_layers,
+                            bidirectional=bidirectional,
+                            dropout=dropout_rate if num_layers > 1 else 0,
+                            batch_first=True,
+                        )
+
+                        # Calculate classifier input dimension for single tensor case
+                        classifier_input_dim = lstm_true_hidden_size * (
+                            2 if bidirectional else 1
+                        )
                         logger.debug(
                             f"LSTM probe: Using 3D tensor with "
                             f"inferred_dim: {inferred_dim}, "
                             f"lstm_true_hidden_size: {lstm_true_hidden_size}"
                         )
+
                     else:
                         logger.error(
                             f"LSTM probe: Expected 3D embeddings but got shape "
@@ -256,22 +371,7 @@ class LSTMProbe(torch.nn.Module):
                             f"{dummy_embeddings.shape}"
                         )
 
-        # Create the main LSTM layer (only used for single layer or when not
-        # using projection heads)
-        self.lstm = nn.LSTM(
-            input_size=inferred_dim,
-            hidden_size=lstm_true_hidden_size,
-            num_layers=num_layers,
-            bidirectional=bidirectional,
-            dropout=dropout_rate if num_layers > 1 else 0,
-            batch_first=True,
-        )
-
-        # Calculate output size based on bidirectional setting
-        lstm_output_size = lstm_hidden_size * (2 if bidirectional else 1)
-
-        # Create the classifier head
-        self.classifier = nn.Linear(lstm_output_size, num_classes)
+        self.classifier = nn.Linear(classifier_input_dim, num_classes)
 
         # Optional positional encoding
         if use_positional_encoding:
@@ -288,6 +388,21 @@ class LSTMProbe(torch.nn.Module):
             self.dropout = None
 
         self.to(device)
+
+        # Log final probe parameters
+        logger.info(
+            f"LSTMProbe initialized with final parameters: "
+            f"layers={self.layers}, feature_mode={self.feature_mode}, "
+            f"aggregation={self.aggregation}, freeze_backbone={self.freeze_backbone}, "
+            f"lstm_hidden_size={self.lstm_hidden_size}, num_layers={self.num_layers}, "
+            f"bidirectional={self.bidirectional}, dropout_rate={self.dropout_rate}, "
+            f"max_sequence_length={self.max_sequence_length}, "
+            f"use_positional_encoding={self.use_positional_encoding}, "
+            f"target_length={self.target_length}, "
+            f"inferred_dim={inferred_dim}, lstm_hidden_size={lstm_true_hidden_size}, "
+            f"classifier_input_dim={classifier_input_dim}, num_classes={num_classes}, "
+            f"has_layer_projections={hasattr(self, 'layer_projections')}"
+        )
 
     def __del__(self) -> None:
         """Cleanup hooks when the probe is destroyed."""
@@ -324,22 +439,6 @@ class LSTMProbe(torch.nn.Module):
             # x is already embeddings
             assert isinstance(x, torch.Tensor), "x should be a tensor in feature mode"
             embeddings = x
-
-            # In feature mode, we need to process the embeddings through the main LSTM
-            # Ensure embeddings are 3D
-            if embeddings.dim() != 3:
-                raise ValueError(
-                    f"LSTM probe expects 3D embeddings (batch_size, "
-                    f"sequence_length, embedding_dim), got shape "
-                    f"{embeddings.shape}"
-                )
-
-            # Add positional encoding if enabled
-            if self.pos_encoding is not None:
-                embeddings = embeddings + self.pos_encoding[:, : embeddings.size(1), :]
-
-            # Pass through main LSTM
-            lstm_out, _ = self.lstm(embeddings)
         else:
             # Extract embeddings from base_model
             logger.debug(
@@ -360,83 +459,113 @@ class LSTMProbe(torch.nn.Module):
                 else:
                     embeddings = embeddings.detach()
 
-            # Handle the case where embeddings is a list (aggregation="none")
-            if isinstance(embeddings, list):
-                # Apply LSTM projection heads to each layer's embeddings
-                projected_embeddings = []
-                logger.debug(
-                    f"Processing {len(embeddings)} embeddings through "
-                    f"LSTM projection heads"
-                )
+        # Handle the case where embeddings is a list (aggregation="none")
+        if isinstance(embeddings, list):
+            # Apply LSTM projection heads to each layer's embeddings
+            projected_embeddings = []
+            logger.debug(
+                f"Processing {len(embeddings)} embeddings through LSTM projection heads"
+            )
 
-                for i, (emb, lstm_proj) in enumerate(
-                    zip(embeddings, self.layer_projections, strict=False)
-                ):
-                    # Ensure embeddings are 3D
-                    if emb.dim() == 3:
-                        logger.debug(
-                            f"Processing embedding {i}: shape={emb.shape}, "
-                            f"device={emb.device}"
-                        )
-                        # Ensure the embedding is contiguous for cuDNN compatibility
-                        emb = emb.contiguous()
-                        logger.debug(
-                            f"After contiguous: shape={emb.shape}, device={emb.device}"
-                        )
+            for i, (emb, lstm_proj) in enumerate(
+                zip(embeddings, self.layer_projections, strict=False)
+            ):
+                # Handle 4D embeddings first
+                if emb.dim() == 4:
+                    # Handle 4D embeddings (B, C, H, W)
+                    batch_size, channels, height, width = emb.shape
+                    logger.debug(f"Processing 4D embedding {i}: {emb.shape}")
+                    # Reshape to (B, W, C*H) - treat width as sequence length,
+                    # C*H as features. Ensure proper memory layout for cuDNN
+                    emb = (
+                        emb.permute(0, 3, 1, 2)
+                        .contiguous()
+                        .view(batch_size, width, channels * height)
+                    )
+                    logger.debug(f"Reshaped 4D embedding {i} to: {emb.shape}")
+                elif emb.dim() == 2:
+                    # Handle 2D embeddings by adding sequence dimension
+                    emb = emb.unsqueeze(2)
+                    logger.debug(f"Reshaped 2D embedding {i} to: {emb.shape}")
 
-                        # Pass through LSTM projection head
-                        # Note: Using regular LSTM instead of packed sequences
-                        # to avoid cuDNN issues
-                        lstm_out, _ = lstm_proj(emb)
-                        # Take the mean for classification
-                        projected_emb = lstm_out.mean(dim=1)
-                    else:
-                        raise ValueError(
-                            f"LSTM probe expects 3D embeddings (batch_size, "
-                            f"sequence_length, embedding_dim), got shape "
-                            f"{emb.shape} for layer {i}"
-                        )
-                    projected_embeddings.append(projected_emb)
+                # Ensure embeddings are 3D
+                if emb.dim() == 3:
+                    logger.debug(
+                        f"Processing embedding {i}: shape={emb.shape}, "
+                        f"device={emb.device}"
+                    )
+                    # Ensure the embedding is contiguous for cuDNN compatibility
+                    emb = emb.contiguous()
+                    logger.debug(
+                        f"After contiguous: shape={emb.shape}, device={emb.device}"
+                    )
 
-                # Concatenate along the feature dimension
-                lstm_out = torch.cat(projected_embeddings, dim=-1)
-
-                # When using projection heads, embeddings are already processed
-                # No need to pass through main LSTM - go directly to classifier
-                if self.pos_encoding is not None:
-                    # Note: positional encoding not applicable for concatenated features
-                    pass
-
-                # Skip main LSTM since we already processed each layer with
-                # individual LSTMs
-                # lstm_out = embeddings.unsqueeze(1)  # Add sequence dimension for
-                # consistency
-            else:
-                # Single tensor case - ensure it's 3D
-                if embeddings.dim() != 3:
+                    # Pass through LSTM projection head
+                    # Note: Using regular LSTM instead of packed sequences
+                    # to avoid cuDNN issues
+                    lstm_out, _ = lstm_proj(emb)
+                    # Take the mean for classification
+                    projected_emb = lstm_out.mean(dim=1)
+                else:
                     raise ValueError(
                         f"LSTM probe expects 3D embeddings (batch_size, "
                         f"sequence_length, embedding_dim), got shape "
-                        f"{embeddings.shape}"
+                        f"{emb.shape} for layer {i}"
                     )
+                projected_embeddings.append(projected_emb)
 
-                # Add positional encoding if enabled
-                if self.pos_encoding is not None:
-                    embeddings = (
-                        embeddings + self.pos_encoding[:, : embeddings.size(1), :]
-                    )
+            # Concatenate along the feature dimension
+            lstm_out = torch.cat(projected_embeddings, dim=-1)
 
-                # Ensure embeddings are contiguous for cuDNN compatibility
-                embeddings = embeddings.contiguous()
+            # When using projection heads, embeddings are already processed
+            # No need to pass through main LSTM - go directly to classifier
+            if self.pos_encoding is not None:
+                # Note: positional encoding not applicable for concatenated features
+                pass
 
-                # Pass through main LSTM
-                # Note: Using regular LSTM instead of packed sequences
-                # to avoid cuDNN issues
-                lstm_out, _ = self.lstm(embeddings)
+            # Skip main LSTM since we already processed each layer with
+            # individual LSTMs
+            # lstm_out = embeddings.unsqueeze(1)  # Add sequence dimension for
+            # consistency
+        else:
+            # Single tensor case - handle 2D, 4D or ensure it's 3D
+            if embeddings.dim() == 4:
+                # Handle 4D embeddings (B, C, H, W)
+                batch_size, channels, height, width = embeddings.shape
+                logger.debug(f"Processing 4D embedding: {embeddings.shape}")
+                # Reshape to (B, W, C*H) - treat width as sequence length,
+                # C*H as features. Ensure proper memory layout for cuDNN
+                embeddings = (
+                    embeddings.permute(0, 3, 1, 2)
+                    .contiguous()
+                    .view(batch_size, width, channels * height)
+                )
+                logger.debug(f"Reshaped 4D embedding to: {embeddings.shape}")
+            elif embeddings.dim() == 2:
+                # Handle 2D embeddings by adding sequence dimension
+                embeddings = embeddings.unsqueeze(2)
+                logger.debug(f"Reshaped 2D embedding to: {embeddings.shape}")
+            elif embeddings.dim() != 3:
+                raise ValueError(
+                    f"LSTM probe expects 2D, 3D or 4D embeddings, got shape "
+                    f"{embeddings.shape}"
+                )
 
-                # Take the last output for classification
-                # For bidirectional LSTM, this captures information from both directions
-                lstm_out = lstm_out.mean(dim=1)
+            # Add positional encoding if enabled
+            if self.pos_encoding is not None:
+                embeddings = embeddings + self.pos_encoding[:, : embeddings.size(1), :]
+
+            # Ensure embeddings are contiguous for cuDNN compatibility
+            embeddings = embeddings.contiguous()
+
+            # Pass through main LSTM
+            # Note: Using regular LSTM instead of packed sequences
+            # to avoid cuDNN issues
+            lstm_out, _ = self.layer_projections(embeddings)
+
+            # Take the last output for classification
+            # For bidirectional LSTM, this captures information from both directions
+            lstm_out = lstm_out.mean(dim=1)
 
         # Apply dropout if enabled
         if self.dropout is not None:

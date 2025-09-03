@@ -6,7 +6,7 @@ This document describes the new flexible probe system that replaces the old rigi
 
 The new probe system provides:
 
-- **Multiple probe types**: Linear, MLP, LSTM, Attention, and Transformer probes
+- **Multiple probe types**: Linear, MLP, LSTM, Attention, and Transformer probes, plus weighted versions of each
 - **Flexible aggregation**: Mean, max, concatenation, CLS token, or no aggregation
 - **Input processing options**: Flatten, sequence, pooled, or no processing
 - **Probe-specific parameters**: Hidden dimensions, attention heads, LSTM configuration, etc.
@@ -86,6 +86,118 @@ probe_config:
   max_sequence_length: 1200
   use_positional_encoding: true
 ```
+
+## Weighted Probe Types
+
+Weighted probe types are enhanced versions of the standard probes that use learned weights to combine multiple layer embeddings. They provide a single architecture head that learns optimal weights for combining embeddings from different layers.
+
+### 6. Weighted Linear Probe (`"weighted_linear"`)
+Single linear classifier with learned weights for combining multiple layer embeddings.
+
+```yaml
+probe_config:
+  probe_type: "weighted_linear"
+  aggregation: "none"  # Required for weighted probes
+  input_processing: "pooled"
+  target_layers: ["layer_6", "layer_8", "layer_10", "layer_12"]
+  freeze_backbone: true
+```
+
+### 7. Weighted MLP Probe (`"weighted_mlp"`)
+Single MLP with learned weights for combining multiple layer embeddings.
+
+```yaml
+probe_config:
+  probe_type: "weighted_mlp"
+  aggregation: "none"  # Required for weighted probes
+  input_processing: "pooled"
+  target_layers: ["layer_6", "layer_8", "layer_10", "layer_12"]
+  hidden_dims: [512, 256]
+  dropout_rate: 0.2
+  activation: "gelu"
+  freeze_backbone: true
+```
+
+### 8. Weighted LSTM Probe (`"weighted_lstm"`)
+Single LSTM with learned weights for combining multiple layer embeddings.
+
+```yaml
+probe_config:
+  probe_type: "weighted_lstm"
+  aggregation: "none"  # Required for weighted probes
+  input_processing: "sequence"
+  target_layers: ["layer_4", "layer_6", "layer_8", "layer_10", "layer_12"]
+  lstm_hidden_size: 128
+  num_layers: 2
+  bidirectional: true
+  max_sequence_length: 1000
+  use_positional_encoding: false
+  dropout_rate: 0.3
+  freeze_backbone: true
+```
+
+### 9. Weighted Attention Probe (`"weighted_attention"`)
+Single attention mechanism with learned weights for combining multiple layer embeddings.
+
+```yaml
+probe_config:
+  probe_type: "weighted_attention"
+  aggregation: "none"  # Required for weighted probes
+  input_processing: "sequence"
+  target_layers: ["layer_4", "layer_6", "layer_8", "layer_10", "layer_12"]
+  num_heads: 8
+  attention_dim: 256
+  num_layers: 2
+  max_sequence_length: 800
+  use_positional_encoding: false
+  dropout_rate: 0.3
+  freeze_backbone: true
+```
+
+### 10. Weighted Minimal Attention Probe (`"weighted_attention_minimal"`)
+Single minimal attention mechanism with learned weights for combining multiple layer embeddings.
+
+```yaml
+probe_config:
+  probe_type: "weighted_attention_minimal"
+  aggregation: "none"  # Required for weighted probes
+  input_processing: "sequence"
+  target_layers: ["layer_6", "layer_8", "layer_10", "layer_12"]
+  num_heads: 4
+  freeze_backbone: true
+```
+
+### 11. Weighted Transformer Probe (`"weighted_transformer"`)
+Single transformer encoder with learned weights for combining multiple layer embeddings.
+
+```yaml
+probe_config:
+  probe_type: "weighted_transformer"
+  aggregation: "none"  # Required for weighted probes
+  input_processing: "sequence"
+  target_layers: ["layer_4", "layer_6", "layer_8", "layer_10", "layer_12"]
+  num_heads: 12
+  attention_dim: 768
+  num_layers: 4
+  max_sequence_length: 1200
+  use_positional_encoding: true
+  dropout_rate: 0.3
+  freeze_backbone: true
+```
+
+### Key Features of Weighted Probes
+
+- **Single Architecture Head**: Each weighted probe uses one architecture component (linear, MLP, LSTM, attention, transformer) instead of multiple projection heads per layer
+- **Learned Weighted Sum**: Uses `nn.Parameter` to learn optimal weights for combining multiple layer embeddings
+- **Dimension Validation**: Ensures all embeddings have the same dimension for weighted sum aggregation
+- **Weight Debugging**: All weighted probes implement `print_learned_weights()` method to show which layers are most important
+- **Efficiency**: More efficient than multiple projection heads while maintaining or improving performance
+
+### Requirements for Weighted Probes
+
+- **Aggregation**: Must use `aggregation: "none"` to enable learned weights
+- **Multiple Layers**: Requires multiple target layers to learn meaningful weights
+- **Same Dimensions**: All layer embeddings must have the same dimension for weighted sum
 
 ## Aggregation Methods
 
@@ -219,6 +331,10 @@ probe_config:
 - **LSTM**: Sequence modeling, moderate complexity
 - **Attention**: Sequence modeling, higher complexity
 - **Transformer**: Complex sequence modeling, highest complexity
+- **Weighted Probes**: Enhanced versions that learn optimal weights for combining multiple layers
+  - Use when you want to leverage multiple layers efficiently
+  - Better performance than concatenation with lower computational cost
+  - Provides interpretability through learned layer weights
 
 ### 2. Layer Selection
 - **Single layer**: Use `["layer_12"]` for final representations
@@ -228,7 +344,8 @@ probe_config:
 ### 3. Aggregation Strategy
 - **Mean/Max**: Good for classification tasks
 - **Concat**: Better for complex tasks, requires larger probe networks
-- **None**: Required for sequence-based probes
+- **None**: Required for sequence-based probes and weighted probes
+- **Weighted Sum**: Automatic with weighted probes when using `aggregation: "none"`
 
 ### 4. Input Processing
 - **Pooled**: Good for classification tasks

@@ -43,6 +43,7 @@ class TestAllSequenceProbes:
                 num_classes=10,
                 device="cpu",
                 feature_mode=False,
+                aggregation="none",  # Use 'none' to get sequence embeddings
                 lstm_hidden_size=256,
                 num_layers=2,
                 bidirectional=True,
@@ -69,6 +70,7 @@ class TestAllSequenceProbes:
                 num_classes=10,
                 device="cpu",
                 feature_mode=False,
+                aggregation="none",  # Use 'none' to get sequence embeddings
                 attention_dim=256,
                 num_heads=8,
                 num_layers=2,
@@ -99,6 +101,7 @@ class TestAllSequenceProbes:
                 num_classes=10,
                 device="cpu",
                 feature_mode=False,
+                aggregation="none",  # Use 'none' to get sequence embeddings
                 attention_dim=256,
                 num_heads=8,
                 num_layers=2,

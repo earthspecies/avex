@@ -114,11 +114,16 @@ class AttentionProbe(torch.nn.Module):
         if self.base_model is not None and not self.feature_mode:
             self.base_model.register_hooks_for_layers(self.layers)
 
+        # Initialize variables
+        inferred_dim = None
+        classifier_input_dim = None
+
         # Determine classifier input dimension
         if self.feature_mode:
             # Embeddings will be fed directly – base_model may be None.
             if input_dim is not None:
                 inferred_dim = input_dim
+                classifier_input_dim = inferred_dim
             else:
                 if base_model is None:
                     raise ValueError(
@@ -156,16 +161,72 @@ class AttentionProbe(torch.nn.Module):
                     assert isinstance(dummy_embeddings, torch.Tensor), (
                         "dummy_embeddings should be a tensor"
                     )
+                    logger.info(
+                        f"Input to Attention probe shape: {dummy_embeddings.shape}"
+                    )
+                    if dummy_embeddings.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = dummy_embeddings.shape
+                        logger.debug(
+                            f"Processing 4D embedding: {dummy_embeddings.shape}"
+                        )
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Ensure proper memory layout for cuDNN
+                        dummy_embeddings = (
+                            dummy_embeddings.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(
+                            f"Reshaped 4D embedding to: {dummy_embeddings.shape}"
+                        )
+
+                    if dummy_embeddings.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        dummy_embeddings = dummy_embeddings.unsqueeze(2)
+                        logger.info(
+                            f"Reshaped 2D embedding to: {dummy_embeddings.shape}"
+                        )
+
                     if dummy_embeddings.dim() == 3:
                         # For sequence probes, we expect 3D embeddings
                         # (batch_size, sequence_length, embedding_dim)
                         inferred_dim = dummy_embeddings.shape[-1]
+                        classifier_input_dim = inferred_dim
                     else:
                         raise ValueError(
-                            f"Attention probe expects 3D embeddings (batch_size, "
-                            f"sequence_length, embedding_dim), got shape "
-                            f"{dummy_embeddings.shape}"
+                            f"Attention probe expects 2D, 3D or 4D embeddings, "
+                            f"got shape {dummy_embeddings.shape}"
                         )
+
+            # Find all divisors of embed_dim that are reasonable for
+            # attention heads. We want heads that result in head_dim >= 64
+            # (PyTorch recommendation)
+            valid_heads = []
+            for n in range(1, min(self.num_heads + 1, inferred_dim + 1)):
+                if inferred_dim % n == 0 and inferred_dim // n >= 64:
+                    valid_heads.append(n)
+
+            if not valid_heads:
+                # If no valid heads found, use 1 head and adjust
+                # embed_dim if needed
+                adjusted_num_heads = 1
+                if inferred_dim < 64:
+                    inferred_dim = 64
+            else:
+                # Use the largest valid number of heads
+                # (closest to requested)
+                adjusted_num_heads = max(valid_heads)
+
+            self.attention_layers = nn.MultiheadAttention(
+                embed_dim=inferred_dim,
+                num_heads=adjusted_num_heads,
+                dropout=self.dropout_rate,
+                batch_first=True,
+            )
+
+            # Layer normalization
+            self.layer_norms = nn.LayerNorm(inferred_dim)
         else:
             # Extract embeddings from base_model to determine dimensions
             with torch.no_grad():
@@ -196,25 +257,53 @@ class AttentionProbe(torch.nn.Module):
                 if isinstance(dummy_embeddings, list):
                     # Detach each embedding in the list
                     dummy_embeddings = [emb.detach() for emb in dummy_embeddings]
+                    logger.info(
+                        f"Attention probe (none): {len(dummy_embeddings)} tensors"
+                    )
 
                     # For sequence probes, we expect 3D embeddings
-                    # Check that all embeddings are 3D
+                    # Check that all embeddings are 3D or 4D
                     for i, emb in enumerate(dummy_embeddings):
-                        if emb.dim() != 3:
+                        logger.info(f"Input to Attention probe shape: {emb.shape}")
+                        if emb.dim() == 4:
+                            # Handle 4D embeddings (B, C, H, W)
+                            batch_size, channels, height, width = emb.shape
+                            logger.debug(f"Processing 4D embedding {i}: {emb.shape}")
+                            # Reshape to (B, W, C*H) - treat width as sequence length,
+                            # C*H as features. Ensure proper memory layout for cuDNN
+                            dummy_embeddings[i] = (
+                                emb.permute(0, 3, 1, 2)
+                                .contiguous()
+                                .view(batch_size, width, channels * height)
+                            )
+                            logger.info(
+                                f"Reshaped 4D embedding {i} to: "
+                                f"{dummy_embeddings[i].shape}"
+                            )
+                        elif emb.dim() == 2:
+                            # Handle 2D embeddings by adding sequence dimension
+                            dummy_embeddings[i] = emb.unsqueeze(2)
+                            logger.info(
+                                f"Reshaped 2D embedding {i} to: "
+                                f"{dummy_embeddings[i].shape}"
+                            )
+                        elif emb.dim() != 3:
                             raise ValueError(
-                                f"Attention probe expects 3D embeddings (batch_size, "
-                                f"sequence_length, embedding_dim), got shape "
-                                f"{emb.shape} for layer {i}"
+                                f"Attention probe expects 2D, 3D or 4D embeddings, "
+                                f"got shape {emb.shape} for layer {i}"
                             )
 
                     # Create attention projection heads for each layer
                     self.attention_layers = nn.ModuleList()
                     self.layer_norms = nn.ModuleList()
+                    self.input_projections = nn.ModuleList()  # For dimension adjustment
+                    layer_output_dims = []  # Track output dimension of each layer
 
                     for i, emb in enumerate(dummy_embeddings):
                         # Find the optimal number of heads that the embedding "
                         "dimension can be divisible by"
-                        embed_dim = emb.shape[-1]
+                        original_embed_dim = emb.shape[-1]
+                        embed_dim = original_embed_dim
 
                         # Find all divisors of embed_dim that are reasonable for "
                         "attention heads. We want heads that result in head_dim >= 64 "
@@ -235,6 +324,13 @@ class AttentionProbe(torch.nn.Module):
                             "(closest to requested)"
                             num_heads = max(valid_heads)
 
+                        # Create input projection if needed
+                        if original_embed_dim != embed_dim:
+                            input_proj = nn.Linear(original_embed_dim, embed_dim)
+                            self.input_projections.append(input_proj)
+                        else:
+                            self.input_projections.append(nn.Identity())
+
                         attention_proj = nn.MultiheadAttention(
                             embed_dim=embed_dim,
                             num_heads=num_heads,
@@ -243,15 +339,18 @@ class AttentionProbe(torch.nn.Module):
                         )
                         self.attention_layers.append(attention_proj)
                         self.layer_norms.append(nn.LayerNorm(embed_dim))
+                        layer_output_dims.append(embed_dim)  # Track layer output dim
 
                         logger.debug(
                             f"Created attention projection head {i}: "
-                            f"embed_dim={embed_dim}, num_heads={num_heads}, "
-                            f"for embedding shape {emb.shape}"
+                            f"orig_dim={original_embed_dim}, embed_dim={embed_dim}, "
+                            f"num_heads={num_heads}, for embedding shape {emb.shape}"
                         )
 
-                    # Input dimension is attention_dim * number of layers
-                    inferred_dim = self.attention_dim * len(dummy_embeddings)
+                    # Input dimension is sum of all layer output dimensions (concat)
+                    # Each attention head outputs embed_dim features, and we concat them
+                    inferred_dim = sum(layer_output_dims)
+                    classifier_input_dim = inferred_dim
 
                     # Log the setup
 
@@ -260,12 +359,39 @@ class AttentionProbe(torch.nn.Module):
                         f"aggregation='none'): "
                         f"dummy_embeddings: list of {len(dummy_embeddings)} tensors, "
                         f"layers: {layers}, aggregation: {self.aggregation}, "
-                        f"inferred_dim: {inferred_dim}"
+                        f"inferred_dim: {inferred_dim}, dims: {layer_output_dims}"
                     )
                 else:
                     # Single tensor case
                     if self.freeze_backbone:
                         dummy_embeddings = dummy_embeddings.detach()
+
+                    logger.info(
+                        f"Input to Attention probe shape: {dummy_embeddings.shape}"
+                    )
+                    if dummy_embeddings.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = dummy_embeddings.shape
+                        logger.debug(
+                            f"Processing 4D embedding: {dummy_embeddings.shape}"
+                        )
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Ensure proper memory layout for cuDNN
+                        dummy_embeddings = (
+                            dummy_embeddings.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(
+                            f"Reshaped 4D embedding to: {dummy_embeddings.shape}"
+                        )
+
+                    if dummy_embeddings.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        dummy_embeddings = dummy_embeddings.unsqueeze(2)
+                        logger.info(
+                            f"Reshaped 2D embedding to: {dummy_embeddings.shape}"
+                        )
 
                     if dummy_embeddings.dim() == 3:
                         # For sequence probes, we expect 3D embeddings
@@ -273,9 +399,8 @@ class AttentionProbe(torch.nn.Module):
                         inferred_dim = dummy_embeddings.shape[-1]
                     else:
                         raise ValueError(
-                            f"Attention probe expects 3D embeddings (batch_size, "
-                            f"sequence_length, embedding_dim), got shape "
-                            f"{dummy_embeddings.shape}"
+                            f"Attention probe expects 2D, 3D or 4D embeddings, "
+                            f"got shape {dummy_embeddings.shape}"
                         )
 
                     # Find the optimal number of heads that the embedding
@@ -286,7 +411,7 @@ class AttentionProbe(torch.nn.Module):
                     # attention heads. We want heads that result in head_dim >= 64
                     # (PyTorch recommendation)
                     valid_heads = []
-                    for n in range(1, min(num_heads + 1, embed_dim + 1)):
+                    for n in range(1, min(self.num_heads + 1, embed_dim + 1)):
                         if embed_dim % n == 0 and embed_dim // n >= 64:
                             valid_heads.append(n)
 
@@ -317,12 +442,16 @@ class AttentionProbe(torch.nn.Module):
                     # Layer normalization
                     self.layer_norms = nn.LayerNorm(embed_dim)
 
+                    # Set classifier input dimension for single tensor case
+                    classifier_input_dim = embed_dim
+
         # Ensure embed_dim is always defined for consistent dimensions
         if "embed_dim" not in locals():
             embed_dim = inferred_dim
 
-        # Classifier - use the adjusted embed_dim
-        self.classifier = nn.Linear(embed_dim, num_classes)
+        # Classifier - classifier_input_dim is set in each branch above
+        logger.info(f"Creating classifier: classifier_input_dim={classifier_input_dim}")
+        self.classifier = nn.Linear(classifier_input_dim, num_classes)
 
         # Positional encoding - use the adjusted embed_dim
         if use_positional_encoding:
@@ -342,6 +471,21 @@ class AttentionProbe(torch.nn.Module):
             self.layer_norms = None
 
         self.to(device)
+
+        # Log final probe parameters
+        logger.info(
+            f"AttentionProbe initialized with final parameters: "
+            f"layers={self.layers}, feature_mode={self.feature_mode}, "
+            f"aggregation={self.aggregation}, freeze_backbone={self.freeze_backbone}, "
+            f"num_heads={self.num_heads}, attention_dim={self.attention_dim}, "
+            f"num_layers={self.num_layers}, dropout_rate={self.dropout_rate}, "
+            f"max_sequence_length={self.max_sequence_length}, "
+            f"use_positional_encoding={self.use_positional_encoding}, "
+            f"target_length={self.target_length}, "
+            f"inferred_dim={inferred_dim}, embed_dim={embed_dim}, "
+            f"classifier_input_dim={embed_dim}, num_classes={num_classes}, "
+            f"has_attention_layers={hasattr(self, 'attention_layers')}"
+        )
 
     def forward(
         self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
@@ -375,6 +519,11 @@ class AttentionProbe(torch.nn.Module):
                 x, padding_mask=padding_mask, aggregation=self.aggregation
             )
 
+            logger.debug(
+                f"Attention forward: Received embeddings type: {type(embeddings)}, "
+                f"shape: {embeddings.shape if hasattr(embeddings, 'shape') else 'list'}"
+            )
+
             if self.freeze_backbone:
                 if isinstance(embeddings, list):
                     embeddings = [emb.detach() for emb in embeddings]
@@ -385,21 +534,49 @@ class AttentionProbe(torch.nn.Module):
         if isinstance(embeddings, list):
             # Apply attention projection heads to each layer's embeddings
             projected_embeddings = []
-            for i, (emb, attn_proj, layer_norm) in enumerate(
-                zip(embeddings, self.attention_layers, self.layer_norms, strict=False)
+            for i, (emb, input_proj, attn_proj, layer_norm) in enumerate(
+                zip(
+                    embeddings,
+                    self.input_projections,
+                    self.attention_layers,
+                    self.layer_norms,
+                    strict=False,
+                )
             ):
+                # Handle 4D embeddings first
+                if emb.dim() == 4:
+                    # Handle 4D embeddings (B, C, H, W)
+                    batch_size, channels, height, width = emb.shape
+                    logger.debug(f"Processing 4D embedding {i}: {emb.shape}")
+                    # Reshape to (B, W, C*H) - treat width as sequence length,
+                    # C*H as features. Ensure proper memory layout for cuDNN
+                    emb = (
+                        emb.permute(0, 3, 1, 2)
+                        .contiguous()
+                        .view(batch_size, width, channels * height)
+                    )
+                    logger.debug(f"Reshaped 4D embedding {i} to: {emb.shape}")
+                elif emb.dim() == 2:
+                    # Handle 2D embeddings by adding sequence dimension
+                    emb = emb.unsqueeze(2)
+                    logger.debug(f"Reshaped 2D embedding {i} to: {emb.shape}")
+
                 # Ensure embeddings are 3D
                 if emb.dim() == 3:
+                    # Apply input projection to adjust embedding dimension if needed
+                    emb_proj = input_proj(emb)
+
                     # Apply self-attention to each layer's embeddings
                     # Use padding mask if available, but ensure it has correct shape
                     if padding_mask is not None:
                         # The padding mask should have shape (batch_size, "
                         "sequence_length) where sequence_length is the second "
                         "dimension of emb"
-                        batch_size, seq_len, _ = emb.shape
+                        batch_size, seq_len, _ = emb_proj.shape
                         logger.debug(
                             f"Attention projection head {i}: "
-                            f"embedding shape={emb.shape}, "
+                            f"original embedding shape={emb.shape}, "
+                            f"projected embedding shape={emb_proj.shape}, "
                             f"padding_mask shape={padding_mask.shape}"
                         )
 
@@ -435,11 +612,13 @@ class AttentionProbe(torch.nn.Module):
                                 f"{seq_len}"
                             )
 
-                        attn_out, _ = attn_proj(emb, emb, emb, key_padding_mask=mask)
+                        attn_out, _ = attn_proj(
+                            emb_proj, emb_proj, emb_proj, key_padding_mask=mask
+                        )
                     else:
-                        attn_out, _ = attn_proj(emb, emb, emb)
+                        attn_out, _ = attn_proj(emb_proj, emb_proj, emb_proj)
 
-                    projected_emb = layer_norm(emb + self.dropout(attn_out))
+                    projected_emb = layer_norm(emb_proj + self.dropout(attn_out))
                     # Global average pooling over sequence dimension
                     projected_emb = projected_emb.mean(dim=1)
                 else:
@@ -457,11 +636,26 @@ class AttentionProbe(torch.nn.Module):
             # No need to pass through main attention layers - go directly to classifier
             x = embeddings
         else:
-            # Single tensor case - ensure it's 3D
-            if embeddings.dim() != 3:
+            # Single tensor case - handle 2D, 4D or ensure it's 3D
+            if embeddings.dim() == 4:
+                # Handle 4D embeddings (B, C, H, W)
+                batch_size, channels, height, width = embeddings.shape
+                logger.debug(f"Processing 4D embedding: {embeddings.shape}")
+                # Reshape to (B, W, C*H) - treat width as sequence length,
+                # C*H as features. Ensure proper memory layout for cuDNN
+                embeddings = (
+                    embeddings.permute(0, 3, 1, 2)
+                    .contiguous()
+                    .view(batch_size, width, channels * height)
+                )
+                logger.debug(f"Reshaped 4D embedding to: {embeddings.shape}")
+            elif embeddings.dim() == 2:
+                # Handle 2D embeddings by adding sequence dimension
+                embeddings = embeddings.unsqueeze(2)
+                logger.debug(f"Reshaped 2D embedding to: {embeddings.shape}")
+            elif embeddings.dim() != 3:
                 raise ValueError(
-                    f"Attention probe expects 3D embeddings (batch_size, "
-                    f"sequence_length, embedding_dim), got shape "
+                    f"Attention probe expects 2D, 3D or 4D embeddings, got shape "
                     f"{embeddings.shape}"
                 )
 
