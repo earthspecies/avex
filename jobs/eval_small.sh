@@ -16,5 +16,5 @@ echo $UV_PROJECT_ENVIRONMENT
 
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/sl_beats_all_ft.yml  --patch dataset_config=configs/data_configs/benchmark_single.yml
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/sl_efficientnet_animalspeak_audioset_ft.yml  --patch dataset_config=configs/data_configs/benchmark_single.yml
-srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/sl_eat_all_ssl_all_ft.yml --patch dataset_config=configs/data_configs/benchmark_single.yml
-# srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/bird_aves_bio_ft.yml  --patch dataset_config=configs/data_configs/benchmark_single.yml
+# srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/sl_eat_all_ssl_all.yml --patch dataset_config=configs/data_configs/benchmark_single.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/bird_aves_bio.yml  --patch dataset_config=configs/data_configs/benchmark_single.yml

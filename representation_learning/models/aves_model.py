@@ -213,9 +213,11 @@ class Model(ModelBase):
             if isinstance(x, dict):
                 wav = x["raw_wav"]
                 mask = x.get("padding_mask")
+                expected_batch_size = wav.shape[0]
             else:
                 wav = x
                 mask = padding_mask
+                expected_batch_size = wav.shape[0]
 
             # Forward pass to trigger hooks (conditionally use torch.no_grad based on
             # freeze_backbone)
@@ -248,28 +250,24 @@ class Model(ModelBase):
                     f"No layers found matching: {self._hook_outputs.keys()}"
                 )
 
+            # First, ensure all embeddings are in batch-first format
+            for i in range(len(embeddings)):
+                if embeddings[i].shape[0] != expected_batch_size:
+                    # Transpose to batch-first format
+                    embeddings[i] = embeddings[i].transpose(0, 1)
+
             # Process embeddings based on aggregation parameter
             if aggregation == "none":
-                return embeddings
-            else:
-                # Determine expected batch size from input
-                if isinstance(x, dict):
-                    expected_batch_size = x["raw_wav"].shape[0]
+                if len(embeddings) == 1:
+                    return embeddings[0]
                 else:
-                    expected_batch_size = x.shape[0]
-
+                    return embeddings
+            else:
                 for i in range(len(embeddings)):
                     if embeddings[i].dim() == 2:
                         # Already in correct shape
                         pass
                     elif embeddings[i].dim() == 3:
-                        # Check if tensor is in time-first format
-                        # (time, batch, features)
-                        if embeddings[i].shape[0] != expected_batch_size:
-                            # Transpose to batch-first format
-                            embeddings[i] = embeddings[i].view(
-                                embeddings[i].shape[0], -1
-                            )
                         if aggregation == "mean":
                             embeddings[i] = embeddings[i].mean(dim=1)
                         elif aggregation == "max":
