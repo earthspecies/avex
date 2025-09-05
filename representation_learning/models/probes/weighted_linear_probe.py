@@ -34,9 +34,6 @@ class WeightedLinearProbe(torch.nn.Module):
             computed from base_model.audio_processor. Required if
             base_model.audio_processor does not have target_length or
             target_length_seconds attributes.
-        projection_dim: Target dimension for each layer projection when
-            aggregation=None. If None, uses the minimum embedding dimension
-            across all layers.
         freeze_backbone: Whether the backbone model is frozen. If True, embeddings
             will be detached to prevent gradient flow back to the backbone.
     """
@@ -118,6 +115,18 @@ class WeightedLinearProbe(torch.nn.Module):
                         # For linear probes, we expect 2D embeddings
                         # (batch_size, embedding_dim)
                         inferred_dim = dummy_embeddings.shape[-1]
+                    elif dummy_embeddings.dim() == 3:
+                        # We reshape to 2D
+                        inferred_dim = (
+                            dummy_embeddings.shape[1] * dummy_embeddings.shape[2]
+                        )
+                    elif dummy_embeddings.dim() == 4:
+                        # We reshape to 2D
+                        inferred_dim = (
+                            dummy_embeddings.shape[1]
+                            * dummy_embeddings.shape[2]
+                            * dummy_embeddings.shape[3]
+                        )
                     else:
                         raise ValueError(
                             f"Linear probe expects 2D embeddings (batch_size, "
@@ -243,22 +252,22 @@ class WeightedLinearProbe(torch.nn.Module):
                             emb = info["embedding"]
                             feature_dim = info["feature_dim"]
 
-                            # Create a simple linear projector for 2D output
-                            projector = nn.Linear(feature_dim, max_feature_dim)
-                            self.embedding_projectors.append(projector)
-
-                            # Log whether this embedding needs dimension changes
                             if feature_dim == max_feature_dim:
+                                projector = None
                                 logger.info(
-                                    f"Created linear projector for embedding {i} "
-                                    f"(shape: {emb.shape}) - already matches target "
-                                    f"dimensions"
+                                    f"Skipped linear projector for embedding {i} "
+                                    f"(shape: {emb.shape}) - already matches target"
+                                    f"already matches target dimensions"
                                 )
                             else:
+                                # Create a simple linear projector for 2D output
+                                projector = nn.Linear(feature_dim, max_feature_dim)
                                 logger.info(
                                     f"Created linear projector for embedding {i} "
-                                    f"(shape: {emb.shape}) -> target: {max_feature_dim}"
+                                    f"(shape: {emb.shape})"
+                                    f"-> target: {max_feature_dim}"
                                 )
+                            self.embedding_projectors.append(projector)
 
                         # Apply projectors to determine final dimensions
                         projected_embeddings = []
@@ -289,7 +298,10 @@ class WeightedLinearProbe(torch.nn.Module):
                                 )
 
                             # Apply linear projection
-                            projected_emb = projector(emb_2d)
+                            if projector is not None:
+                                projected_emb = projector(emb_2d)
+                            else:
+                                projected_emb = emb_2d
                             logger.info(
                                 f"Projected embedding {i}: {emb.shape} -> "
                                 f"{projected_emb.shape}"
@@ -333,35 +345,6 @@ class WeightedLinearProbe(torch.nn.Module):
                         f"inferred_dim: {inferred_dim}, "
                         f"num_embeddings: {num_embeddings}"
                     )
-                elif self.aggregation == "none":
-                    # Handle case where aggregation="none" but only one layer
-                    # was extracted
-                    # This happens when the base model returns a single tensor
-                    # instead of a list
-                    logger.info(
-                        f"WeightedLinearProbe init "
-                        f"(feature_mode=False, aggregation='none'): "
-                        f"Only one layer extracted, treating as single embedding. "
-                        f"dummy_embeddings type: {type(dummy_embeddings)}, "
-                        f"shape: {dummy_embeddings.shape}"
-                    )
-
-                    if self.freeze_backbone:
-                        dummy_embeddings = dummy_embeddings.detach()
-
-                    if dummy_embeddings.dim() == 2:
-                        inferred_dim = dummy_embeddings.shape[-1]
-                        # No layer_weights needed for single embedding
-                        self.layer_weights = None
-                        logger.info(
-                            f"Single embedding case: inferred_dim={inferred_dim}, "
-                            f"no layer_weights needed"
-                        )
-                    else:
-                        raise ValueError(
-                            f"Linear probe expects 2D embeddings (batch_size, "
-                            f"embedding_dim), got shape {dummy_embeddings.shape}"
-                        )
                 else:
                     # Single tensor case
                     logger.debug(
@@ -380,21 +363,33 @@ class WeightedLinearProbe(torch.nn.Module):
                         # For linear probes, we expect 2D embeddings
                         # (batch_size, embedding_dim)
                         inferred_dim = dummy_embeddings.shape[-1]
-
                         logger.debug(
                             f"Linear probe: Using 2D tensor with "
                             f"inferred_dim: {inferred_dim}"
                         )
-
+                    elif dummy_embeddings.dim() == 3:
+                        # We reshape to 2D
+                        inferred_dim = (
+                            dummy_embeddings.shape[1] * dummy_embeddings.shape[2]
+                        )
+                    elif dummy_embeddings.dim() == 4:
+                        # We reshape to 2D
+                        inferred_dim = (
+                            dummy_embeddings.shape[1]
+                            * dummy_embeddings.shape[2]
+                            * dummy_embeddings.shape[3]
+                        )
                     else:
                         logger.error(
-                            f"Linear probe: Expected 2D embeddings but got shape "
+                            f"Linear probe: Expected 2D, 3D or 4D embeddings but got "
+                            f"shape "
                             f"{dummy_embeddings.shape}. This suggests the "
                             f"base_model.extract_embeddings did not respect "
                             f"aggregation='{self.aggregation}'"
                         )
                         raise ValueError(
-                            f"Linear probe expects 2D embeddings (batch_size, "
+                            f"Linear probe expects 2D, 3D or 4D embeddings "
+                            f"(batch_size, "
                             f"embedding_dim), got shape {dummy_embeddings.shape}"
                         )
 
@@ -502,7 +497,10 @@ class WeightedLinearProbe(torch.nn.Module):
                         )
 
                     # Apply linear projection
-                    projected_emb = projector(emb_2d)
+                    if projector is not None:
+                        projected_emb = projector(emb_2d)
+                    else:
+                        projected_emb = emb_2d
                     logger.debug(
                         f"Projected embedding {i}: {emb.shape} -> {projected_emb.shape}"
                     )
@@ -543,10 +541,18 @@ class WeightedLinearProbe(torch.nn.Module):
             )
 
         # Single tensor case - ensure it's 2D
-        if embeddings.dim() != 2:
+        if embeddings.dim() == 3:
+            # 3D: (batch, seq_len, features) -> (batch, seq_len*features)
+            batch_size = embeddings.shape[0]
+            embeddings = embeddings.reshape(batch_size, -1)
+        elif embeddings.dim() == 4:
+            # 4D: (batch, channels, height, width) -> (batch, channels*height*width)
+            batch_size = embeddings.shape[0]
+            embeddings = embeddings.reshape(batch_size, -1)
+        elif embeddings.dim() != 2:
             raise ValueError(
-                f"Linear probe expects 2D embeddings (batch_size, "
-                f"embedding_dim), got shape {embeddings.shape}"
+                f"Linear probe expects 2D, 3D, or 4D embeddings, got shape "
+                f"{embeddings.shape}"
             )
 
         # Classify
@@ -601,7 +607,6 @@ class WeightedLinearProbe(torch.nn.Module):
             "aggregation": self.aggregation,
             "freeze_backbone": self.freeze_backbone,
             "target_length": self.target_length,
-            "projection_dim": self.projection_dim,
             "has_layer_weights": hasattr(self, "layer_weights"),
             "has_embedding_projectors": hasattr(self, "embedding_projectors")
             and getattr(self, "embedding_projectors", None) is not None,

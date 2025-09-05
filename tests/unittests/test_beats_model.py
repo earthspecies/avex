@@ -219,7 +219,7 @@ class TestBEATsModelEmbeddingExtraction:
     def test_extract_embeddings_aggregation_none(
         self, beats_model: Model, sample_audio: torch.Tensor
     ) -> None:
-        """Test extraction without aggregation (returns list)."""
+        """Test extraction without aggregation (returns tensor for single embedding)."""
         # Register hooks for specific layers that we know exist
         beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
 
@@ -228,15 +228,10 @@ class TestBEATsModelEmbeddingExtraction:
         # Clean up
         beats_model.deregister_all_hooks()
 
-        # When aggregation="none", we get a list of embeddings
-        assert isinstance(embeddings, list)
-        assert len(embeddings) > 0
-
-        # Each embedding should be a tensor
-        for emb in embeddings:
-            assert torch.is_tensor(emb)
-            assert emb.shape[0] == 2  # batch size
-            assert emb.shape[1] > 0  # features
+        # When aggregation="none" and single embedding, we get a tensor
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # features
 
     def test_extract_embeddings_hook_management(
         self, beats_model: Model, sample_audio: torch.Tensor

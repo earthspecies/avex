@@ -189,11 +189,17 @@ class EATHFModel(ModelBase):
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
 
+            # Discover standard linear layers
+            # for name, module in self.named_modules():
+            #     if isinstance(module, torch.nn.Linear):
+            #         self._layer_names.append(name)
+
             for name, _module in self.named_modules():
                 # Keep only the fc2 layers from transformer blocks
                 # Pattern: backbone.model.blocks.{i}.mlp.fc2
-                if name.endswith(".mlp.fc2") and "backbone.model.blocks." in name:
-                    self._layer_names.append(name)
+                if name.endswith("attn.proj") and "backbone.model.blocks." in name:
+                    if name not in self._layer_names:
+                        self._layer_names.append(name)
 
             logger.info(
                 f"Discovered {len(self._layer_names)} embedding layers in EAT model: "
@@ -209,12 +215,17 @@ class EATHFModel(ModelBase):
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
 
+            # Discover standard linear layers
+            # for name, module in self.named_modules():
+            #     if isinstance(module, torch.nn.Linear):
+            #         self._layer_names.append(name)
+
             for name, _module in self.named_modules():
                 # Keep only the fc2 layers from transformer blocks
                 # Pattern: backbone.model.blocks.{i}.mlp.fc2
-                if name.endswith(".mlp.fc2") and "backbone.model.blocks." in name:
-                    self._layer_names.append(name)
-
+                if name.endswith("attn.proj") and "backbone.model.blocks." in name:
+                    if name not in self._layer_names:
+                        self._layer_names.append(name)
             logger.info(
                 f"Discovered {len(self._layer_names)} embedding layers in EAT model: "
                 f"{self._layer_names}"
@@ -325,8 +336,10 @@ class EATHFModel(ModelBase):
             # Process input
             if isinstance(x, dict):
                 wav = x["raw_wav"]
+                expected_batch_size = wav.shape[0]
             else:
                 wav = x
+                expected_batch_size = wav.shape[0]
 
             # Store original pooling method
             prev_pooling = self.pooling
@@ -365,6 +378,12 @@ class EATHFModel(ModelBase):
                 raise ValueError(
                     f"No layers found matching: {self._hook_outputs.keys()}"
                 )
+
+            # First, ensure all embeddings are in batch-first format
+            for i in range(len(embeddings)):
+                if embeddings[i].shape[0] != expected_batch_size:
+                    # Transpose to batch-first format
+                    embeddings[i] = embeddings[i].transpose(0, 1)
 
             # Process embeddings based on aggregation parameter
             if aggregation == "none":

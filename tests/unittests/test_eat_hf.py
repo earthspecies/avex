@@ -164,7 +164,8 @@ class TestEATHFExtractEmbeddings:
     def test_extract_embeddings_aggregation_none(
         self, model: EATHFModel, audio_input: torch.Tensor
     ) -> None:
-        """Test extract_embeddings when aggregation='none'."""
+        """Test extract_embeddings when aggregation='none' (returns tensor for single
+        embedding)."""
         # Register hooks for the specific layer
         model.register_hooks_for_layers(["backbone.model.blocks.0.mlp.fc2"])
 
@@ -176,10 +177,9 @@ class TestEATHFExtractEmbeddings:
         # Clean up
         model.deregister_all_hooks()
 
-        # Should return a list of embeddings
-        assert isinstance(embeddings, list)
-        assert len(embeddings) == 1
-        assert embeddings[0].shape == (
+        # When aggregation="none" and single embedding, we get a tensor
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape == (
             2,
             513,
             768,
@@ -461,15 +461,13 @@ class TestEATHFExtractEmbeddings:
         # Clean up
         model.deregister_all_hooks()
 
-        # Should return a list of 3D embeddings
-        assert isinstance(embeddings, list)
-        assert len(embeddings) == 1
-        assert embeddings[0].shape == (
+        # When aggregation="none" and single embedding, we get a tensor
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape == (
             2,
             513,
             768,
         )  # (batch, seq_len, features)
-        assert torch.is_tensor(embeddings[0])
 
     def test_extract_embeddings_invalid_dimension(
         self, model: EATHFModel, audio_input: torch.Tensor

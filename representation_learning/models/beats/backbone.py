@@ -121,6 +121,7 @@ class TransformerEncoder(nn.Module):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
         layer: Optional[int] = None,
+        disable_layerdrop: bool = False,
     ) -> Tuple[torch.Tensor, list]:
         """Forward pass through the transformer encoder.
 
@@ -128,11 +129,14 @@ class TransformerEncoder(nn.Module):
             x: Input tensor
             padding_mask: Optional padding mask
             layer: Optional target layer index
+            disable_layerdrop: Whether to disable layerdrop during forward pass
 
         Returns:
             Tuple[torch.Tensor, list]: Encoded features and layer results
         """
-        x, layer_results = self.extract_features(x, padding_mask, layer)
+        x, layer_results = self.extract_features(
+            x, padding_mask, layer, disable_layerdrop
+        )
 
         if self.layer_norm_first and layer is None:
             x = self.layer_norm(x)
@@ -144,6 +148,7 @@ class TransformerEncoder(nn.Module):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
         tgt_layer: Optional[int] = None,
+        disable_layerdrop: bool = False,
     ) -> Tuple[torch.Tensor, list]:
         """Extract features from input through transformer layers.
 
@@ -151,6 +156,7 @@ class TransformerEncoder(nn.Module):
             x: Input tensor
             padding_mask: Optional padding mask
             tgt_layer: Optional target layer to stop at
+            disable_layerdrop: Whether to disable layerdrop during forward pass
 
         Returns:
             Tuple[torch.Tensor, list]: Extracted features and layer results
@@ -179,8 +185,17 @@ class TransformerEncoder(nn.Module):
         for i, layer in enumerate(self.layers):
             if self.layer_wise_gradient_decay_ratio != 1.0:
                 x = GradMultiply.apply(x, self.layer_wise_gradient_decay_ratio)
-            dropout_probability = np.random.random()
-            if not self.training or (dropout_probability > self.layerdrop):
+            if disable_layerdrop:
+                # When layerdrop is disabled, always execute the layer
+                should_execute = True
+            else:
+                # Normal layerdrop behavior
+                dropout_probability = np.random.random()
+                should_execute = not self.training or (
+                    dropout_probability > self.layerdrop
+                )
+
+            if should_execute:
                 x, z, pos_bias = layer(
                     x,
                     self_attn_padding_mask=padding_mask,

@@ -163,6 +163,9 @@ class ClusteringEvaluator:
                     linear_layers[-1] if name == "last_layer" else name
                     for name in layer_names
                 ]
+                logger.info(
+                    f"Resolved 'last_layer' to actual layer name: '{linear_layers[-1]}'"
+                )
             else:
                 logger.warning("No linear layers found, using 'last_layer' as-is")
 

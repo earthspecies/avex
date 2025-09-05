@@ -74,15 +74,27 @@ class Conv4DProjector(nn.Module):
             current_feature_dim = channels * height
             current_seq_len = width
 
-            # If dimensions already match target, just do format conversion
-            if current_feature_dim == self.target_feature_dim and (
-                self.target_sequence_length is None
-                or current_seq_len == self.target_sequence_length
-            ):
-                # No projection needed - just reshape to 3D format
+            # If feature dimensions already match target, just do format conversion
+            if current_feature_dim == self.target_feature_dim:
+                # No feature projection needed - just reshape to 3D format
                 x_output = x.transpose(1, 3).reshape(
                     batch_size, width, channels * height
                 )
+
+                # Handle target sequence length if specified
+                if (
+                    self.target_sequence_length is not None
+                    and current_seq_len != self.target_sequence_length
+                ):
+                    # Use interpolation to resize sequence length
+                    # x_output shape: (batch, seq_len, features)
+                    # We need to interpolate along the sequence dimension (dim=1)
+                    x_output = torch.nn.functional.interpolate(
+                        x_output.transpose(1, 2),  # (batch, features, seq_len)
+                        size=self.target_sequence_length,
+                        mode="linear",
+                        align_corners=False,
+                    ).transpose(1, 2)  # Back to (batch, seq_len, features)
             else:
                 # Create 1x1 conv layer if needed
                 if (
@@ -266,12 +278,24 @@ class Sequence3DProjector(nn.Module):
         # Apply projection if needed
         if self.target_feature_dim is not None:
             # Check if we need to do any projection
-            if features == self.target_feature_dim and (
-                self.target_sequence_length is None
-                or seq_len == self.target_sequence_length
-            ):
-                # No projection needed - dimensions already match
+            if features == self.target_feature_dim:
+                # No feature projection needed - dimensions already match
                 x_standardized = x
+
+                # Handle target sequence length if specified
+                if (
+                    self.target_sequence_length is not None
+                    and seq_len != self.target_sequence_length
+                ):
+                    # Use interpolation to resize sequence length
+                    # x_standardized shape: (batch, seq_len, features)
+                    # We need to interpolate along the sequence dimension (dim=1)
+                    x_standardized = torch.nn.functional.interpolate(
+                        x_standardized.transpose(1, 2),  # (batch, features, seq_len)
+                        size=self.target_sequence_length,
+                        mode="linear",
+                        align_corners=False,
+                    ).transpose(1, 2)  # Back to (batch, seq_len, features)
             else:
                 if (
                     self.projection_layer is None

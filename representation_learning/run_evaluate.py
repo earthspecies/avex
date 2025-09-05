@@ -406,6 +406,7 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     if base_model is not None:
         layer_names = experiment_cfg.get_target_layers()
+        logger.info(f"Target layers for experiment: {layer_names}")
     else:
         # When base_model is None, we don't need layer names
         layer_names = []
@@ -427,6 +428,20 @@ def run_experiment(
     else:
         logger.info(
             "No dataset audio_max_length_seconds specified, using default target_length"
+        )
+
+    # ------------------------------------------------------------------ #
+    #  Determine disable_layerdrop parameter for BEATs models
+    # ------------------------------------------------------------------ #
+    # For BEATs models, disable layerdrop to ensure consistent behavior and avoid
+    # the layerdrop issue that causes hook failures
+    disable_layerdrop_for_embeddings = None
+    if base_model is not None and hasattr(base_model, "disable_layerdrop"):
+        # For BEATs models, set disable_layerdrop=True to prevent layerdrop issues
+        base_model.disable_layerdrop = True
+        disable_layerdrop_for_embeddings = True
+        logger.info(
+            "Setting disable_layerdrop=True for BEATs model to prevent layerdrop issues"
         )
 
     train_ds: EmbeddingDataset | None = None  # will remain None if not needed
@@ -473,6 +488,7 @@ def run_experiment(
                     min_chunk_size=eval_cfg.min_chunk_size,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
                 val_embeds, val_labels = extract_embeddings_for_split(
                     base_model,
@@ -489,6 +505,7 @@ def run_experiment(
                     min_chunk_size=eval_cfg.min_chunk_size,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
             else:
                 logger.info(
@@ -505,6 +522,7 @@ def run_experiment(
                     aggregation=aggregation_method,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
                 val_embeds, val_labels = extract_embeddings_for_split(
                     base_model,
@@ -514,6 +532,7 @@ def run_experiment(
                     aggregation=aggregation_method,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
 
                 save_embeddings_arrays(
@@ -584,6 +603,7 @@ def run_experiment(
                     min_chunk_size=eval_cfg.min_chunk_size,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
             else:
                 logger.info(
@@ -599,6 +619,7 @@ def run_experiment(
                     aggregation=aggregation_method_retrieval,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
 
                 save_embeddings_arrays(
@@ -658,6 +679,7 @@ def run_experiment(
                     auto_chunk_size=eval_cfg.auto_chunk_size,
                     max_chunk_size=eval_cfg.max_chunk_size,
                     min_chunk_size=eval_cfg.min_chunk_size,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
             else:
                 logger.info(
@@ -674,6 +696,7 @@ def run_experiment(
                     aggregation=aggregation_method_retrieval,
                     batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
                     disable_tqdm=eval_cfg.disable_tqdm,
+                    disable_layerdrop=disable_layerdrop_for_embeddings,
                 )
 
                 save_embeddings_arrays(
@@ -939,6 +962,22 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
             logger.info(
                 f"Experiment '{exp_cfg.run_name}' using legacy probe configuration"
             )
+
+        # Log training parameters
+        training_params = eval_cfg.training_params
+        logger.info(
+            f"Experiment '{exp_cfg.run_name}' training parameters: "
+            f"epochs={training_params.train_epochs}, "
+            f"lr={training_params.lr}, "
+            f"batch_size={training_params.batch_size}, "
+            f"optimizer={training_params.optimizer}, "
+            f"weight_decay={training_params.weight_decay}, "
+            f"amp={training_params.amp}, "
+            f"amp_dtype={training_params.amp_dtype}, "
+            f"gradient_clip_val={training_params.gradient_clip_val}, "
+            f"warmup_epochs={training_params.warmup_epochs}, "
+            f"scheduler_type={training_params.scheduler_type}"
+        )
 
         cached_model = None
         model_metadata = None

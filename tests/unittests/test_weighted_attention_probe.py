@@ -33,6 +33,7 @@ class MockBaseModel(ModelBase):
         x: torch.Tensor,
         padding_mask: torch.Tensor | None = None,
         aggregation: str = "mean",
+        freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:
         """Mock extract_embeddings method.
 
@@ -530,6 +531,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 if aggregation == "none":
                     # Return embeddings with different sequence lengths
@@ -625,13 +627,14 @@ class TestWeightedAttentionProbe:
             num_layers=num_layers,
         )
 
-        # Check that hooks are registered
-        assert len(base_model._hooks) == 1
+        # Hooks are not registered in constructor anymore
+        # They are registered in get_probe() function
+        assert len(base_model._hooks) == 0
 
         # Cleanup
         del probe
 
-        # Check that hooks are cleaned up
+        # Check that hooks are cleaned up (should still be 0)
         assert len(base_model._hooks) == 0
 
     def test_print_learned_weights_with_weights(self) -> None:
@@ -732,6 +735,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -807,6 +811,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -876,6 +881,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -930,6 +936,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -975,8 +982,7 @@ class TestWeightedAttentionProbe:
         assert probe.embedding_projectors is not None
 
     def test_automatic_projection_2d_embeddings_only(self) -> None:
-        """Test WeightedAttentionProbe with automatic projection for 2D
-        embeddings only."""
+        """Test WeightedAttentionProbe with 2D embeddings that get converted to 3D."""
 
         class MockBaseModel2D(MockBaseModel):
             def extract_embeddings(
@@ -984,28 +990,30 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
-                    # Return multiple 2D embeddings with different dimensions
+                    # Return multiple 2D embeddings with DIFFERENT dimensions
+                    # This will force projection to be created
                     emb1 = torch.randn(
+                        batch_size, 32, device=self.device
+                    )  # (batch, 32)
+                    emb2 = torch.randn(
                         batch_size, 64, device=self.device
                     )  # (batch, 64)
-                    emb2 = torch.randn(
+                    emb3 = torch.randn(
                         batch_size, 128, device=self.device
                     )  # (batch, 128)
-                    emb3 = torch.randn(
-                        batch_size, 256, device=self.device
-                    )  # (batch, 256)
                     return [emb1, emb2, emb3]
                 else:
-                    return torch.randn(batch_size, 128, device=self.device)
+                    return torch.randn(batch_size, 64, device=self.device)
 
-        base_model = MockBaseModel2D([256, 256, 256])
+        base_model = MockBaseModel2D([32, 64, 128])
         num_classes = 2
         batch_size = 2
         num_heads = 4
-        attention_dim = 256  # Target feature dimension
+        attention_dim = 128  # Target feature dimension (max)
         num_layers = 1
 
         probe = WeightedAttentionProbe(
@@ -1038,6 +1046,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -1108,6 +1117,7 @@ class TestWeightedAttentionProbe:
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":

@@ -236,5 +236,21 @@ def test_extract_embeddings_main() -> None:
     print(f"Total features: {embeddings.shape[1]}")
 
 
+def test_get_last_non_classification_layer() -> None:
+    """Test that _get_last_non_classification_layer returns the correct layer."""
+    model = MockModel("cpu")
+
+    # Test with layers that don't contain classification patterns
+    # Should return the last layer
+    last_layer = model._get_last_non_classification_layer()
+    assert last_layer == "model.1"  # The last layer in our mock model
+
+    # Test with empty layer names
+    model._layer_names = []
+    last_layer = model._get_last_non_classification_layer()
+    assert last_layer is None
+
+
 if __name__ == "__main__":
     test_extract_embeddings_main()
+    test_get_last_non_classification_layer()

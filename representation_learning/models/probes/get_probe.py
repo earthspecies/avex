@@ -295,6 +295,8 @@ def get_probe(
         "weighted_attention",
         "weighted_attention_minimal",
         "weighted_transformer",
+        "weighted_linear",
+        "weighted_mlp",
     ]:
         raise ValueError(
             f"Sequence input processing is not compatible with {probe_type} probe"

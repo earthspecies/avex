@@ -251,9 +251,6 @@ class Model(ModelBase):
 
             # Collect embeddings from hook outputs
             embeddings = []
-            logger.debug(
-                f"Collecting embeddings from {len(self._hook_outputs)} registered hooks"
-            )
             for layer_name in self._hook_outputs:
                 if layer_name in self._hook_outputs:
                     embeddings.append(self._hook_outputs[layer_name])

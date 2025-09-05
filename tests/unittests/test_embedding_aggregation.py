@@ -305,6 +305,56 @@ class TestEmbeddingAggregation:
         assert output_lstm.shape == (4, 10)
         assert output_attention.shape == (4, 10)
 
+    def test_weighted_probes_with_sequence_processing(self) -> None:
+        """Test that weighted probes work with sequence input processing."""
+        # Test weighted_linear probe with sequence processing
+        probe_config_linear = ProbeConfig(
+            probe_type="weighted_linear",
+            aggregation="none",
+            input_processing="sequence",
+            target_layers=["layer_12"],
+        )
+
+        # Test weighted_mlp probe with sequence processing
+        probe_config_mlp = ProbeConfig(
+            probe_type="weighted_mlp",
+            aggregation="none",
+            input_processing="sequence",
+            target_layers=["layer_12"],
+            hidden_dims=[256, 128],
+        )
+
+        probe_linear = get_probe(
+            probe_config=probe_config_linear,
+            base_model=None,
+            num_classes=10,
+            device="cpu",
+            feature_mode=True,
+            input_dim=5120,  # 512 * 10 (seq_len * features)
+        )
+
+        probe_mlp = get_probe(
+            probe_config=probe_config_mlp,
+            base_model=None,
+            num_classes=10,
+            device="cpu",
+            feature_mode=True,
+            input_dim=5120,  # 512 * 10 (seq_len * features)
+        )
+
+        assert probe_linear is not None
+        assert probe_mlp is not None
+
+        # Test forward pass with sequence input
+        # Weighted probes with sequence processing should handle 3D tensors
+        x_sequence = torch.randn(4, 10, 512)  # batch_size=4, seq_len=10, features=512
+
+        output_linear = probe_linear(x_sequence)
+        output_mlp = probe_mlp(x_sequence)
+
+        assert output_linear.shape == (4, 10)
+        assert output_mlp.shape == (4, 10)
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

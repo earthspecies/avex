@@ -186,7 +186,8 @@ class TestEfficientNetExtractEmbeddings:
     def test_extract_embeddings_aggregation_none(
         self, model: EfficientNetModel, audio_input: torch.Tensor
     ) -> None:
-        """Test extract_embeddings when aggregation='none'."""
+        """Test extract_embeddings when aggregation='none' (returns tensor for single
+        embedding)."""
         # Get the first convolutional layer name for testing
         model._discover_linear_layers()
         conv_layer_name = (
@@ -201,11 +202,10 @@ class TestEfficientNetExtractEmbeddings:
         # Clean up
         model.deregister_all_hooks()
 
-        # Should return a list of embeddings
-        assert isinstance(embeddings, list)
-        assert len(embeddings) == 1
-        assert embeddings[0].shape[0] == 2  # batch size
-        assert embeddings[0].shape[1] > 0  # flattened features
+        # When aggregation="none" and single embedding, we get a tensor
+        assert torch.is_tensor(embeddings)
+        assert embeddings.shape[0] == 2  # batch size
+        assert embeddings.shape[1] > 0  # flattened features
 
     def test_extract_embeddings_gradient_checkpointing(
         self, model: EfficientNetModel, audio_input: torch.Tensor

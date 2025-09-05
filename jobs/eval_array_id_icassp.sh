@@ -7,6 +7,7 @@
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 #SBATCH --job-name="rl-eval-array-id-icassp"
 #SBATCH --cpus-per-gpu=9
+#SBATCH --nodelist=slurm-8x-a100-40gb-1
 
 # Map array task ID to config file
 declare -A configs=(

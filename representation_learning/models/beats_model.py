@@ -54,8 +54,12 @@ class Model(ModelBase):
         return_features_only: bool = False,
         use_naturelm: bool = False,
         fine_tuned: bool = False,
+        disable_layerdrop: bool = False,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
+
+        # Store disable_layerdrop parameter
+        self.disable_layerdrop = disable_layerdrop
 
         # ------------------------------------------------------------------
         # 1.  Build the BEATs backbone
@@ -134,15 +138,21 @@ class Model(ModelBase):
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
 
+            # # Discover standard linear layers
+            # for name, module in self.named_modules():
+            #     if isinstance(module, torch.nn.Linear):
+            #         self._layer_names.append(name)
+
             for name, _module in self.named_modules():
-                # Keep the initial projection after conv frontend
-                if name.endswith("post_extract_proj"):
-                    self._layer_names.append(name)
+                # # Keep the initial projection after conv frontend
+                # if name.endswith("post_extract_proj"):
+                #     self._layer_names.append(name)
 
                 # Keep only the fc2 layers from transformer encoder blocks
                 # Pattern: backbone.encoder.layers.{i}.fc2
-                elif name.endswith(".fc2") and "backbone.encoder.layers." in name:
-                    self._layer_names.append(name)
+                if name.endswith(".fc2") and "backbone.encoder.layers." in name:
+                    if name not in self._layer_names:
+                        self._layer_names.append(name)
 
             logger.info(
                 f"Discovered {len(self._layer_names)} embedding layers in BEATs: "
@@ -178,7 +188,9 @@ class Model(ModelBase):
         # Optional audio pre-processing
         x = self.process_audio(x)
 
-        features, frame_padding = self.backbone(x, padding_mask)
+        features, frame_padding = self.backbone(
+            x, padding_mask, disable_layerdrop=self.disable_layerdrop
+        )
 
         # features: (B, T', D)
         # frame_padding: (B, T') or None
@@ -247,14 +259,28 @@ class Model(ModelBase):
         if not self._hooks:
             raise ValueError("No hooks are registered in the model.")
 
-        # Store original training state and set to eval for deterministic results
+        # Store original training state
         was_training = self.training
-        self.eval()
+        mode_changed = False
 
-        # Set deterministic behavior for CUDA if available
-        if torch.cuda.is_available():
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+        # Set model mode based on freeze_backbone parameter
+        if freeze_backbone:
+            # For frozen backbone: use eval mode for deterministic results
+            if self.training:
+                self.eval()
+                mode_changed = True
+            # Set deterministic behavior for CUDA if available
+            if torch.cuda.is_available():
+                torch.backends.cudnn.deterministic = True
+                torch.backends.cudnn.benchmark = False
+        else:
+            # For fine-tuning: keep current training state
+            # Don't change model mode to allow proper training behavior
+            # However, if disable_layerdrop=True, we need to ensure hooks work
+            # by temporarily switching to eval mode for the forward pass
+            if self.disable_layerdrop and self.training:
+                self.eval()
+                mode_changed = True
 
         try:
             # Clear previous hook outputs
@@ -266,9 +292,11 @@ class Model(ModelBase):
             if isinstance(x, dict):
                 wav = x["raw_wav"]
                 mask = x.get("padding_mask")
+                expected_batch_size = wav.shape[0]
             else:
                 wav = x
                 mask = padding_mask
+                expected_batch_size = wav.shape[0]
 
             # Forward pass to trigger hooks (conditionally use torch.no_grad based on
             # freeze_backbone)
@@ -287,65 +315,6 @@ class Model(ModelBase):
             embeddings = []
             for layer_name in self._hook_outputs.keys():
                 embedding = self._hook_outputs[layer_name]
-
-                # Handle different tensor dimensions for sequence probes
-                if embedding.dim() == 4:
-                    # 4D tensor: reshape to [batch_size, time, dim1*dim2]
-                    # Example: [1, 12, 248, 8] -> [1, 248, 96]
-                    batch_size, dim1, time_dim, dim2 = embedding.shape
-                    embedding = embedding.transpose(1, 2)  # [batch, time, dim1, dim2]
-                    embedding = embedding.reshape(
-                        batch_size, time_dim, dim1 * dim2
-                    )  # [batch_size, time, dim1*dim2]
-                    logger.debug(
-                        f"Reshaped 4D embedding for {layer_name} from "
-                        f"{self._hook_outputs[layer_name].shape} to {embedding.shape}"
-                    )
-                if embedding.dim() == 3:
-                    # 3D tensor: check if it needs transposing
-                    original_shape = embedding.shape
-
-                    # Case 1: transpose seq_len and batch_size dimensions
-                    if (
-                        embedding.shape[1] == wav.shape[0]
-                        and embedding.shape[0] != wav.shape[0]
-                    ):
-                        embedding = embedding.transpose(0, 1)
-                        logger.debug(
-                            f"Transposed 3D embedding for {layer_name} from "
-                            f"{original_shape} to {embedding.shape}"
-                        )
-                    # Case 2: reshape attention weights [heads, seq_len, seq_len]
-                    # This handles attention weight matrices
-                    elif (
-                        embedding.shape[0] != wav.shape[0]
-                        and embedding.shape[1] == embedding.shape[2]
-                    ):
-                        # This looks like attention weights [heads, seq_len, seq_len]
-                        # We need to reshape to [batch_size, seq_len, heads*seq_len]
-                        heads, seq_len, _ = embedding.shape
-                        embedding = embedding.reshape(
-                            1, seq_len, heads * seq_len
-                        )  # [1, seq_len, heads*seq_len]
-                        logger.debug(
-                            f"Reshaped attention weights for {layer_name} from "
-                            f"{original_shape} to {embedding.shape}"
-                        )
-                    # Case 3: reshape attention weights [seq_len, seq_len, heads]
-                    elif (
-                        embedding.shape[0] == embedding.shape[1]
-                        and embedding.shape[2] != wav.shape[0]
-                    ):
-                        # This looks like attention weights [seq_len, seq_len, heads]
-                        seq_len, _, heads = embedding.shape
-                        embedding = embedding.reshape(
-                            1, seq_len, seq_len * heads
-                        )  # [1, seq_len, seq_len*heads]
-                        logger.debug(
-                            f"Reshaped attention weights for {layer_name} from "
-                            f"{original_shape} to {embedding.shape}"
-                        )
-
                 embeddings.append(embedding)
                 logger.debug(f"Found embedding for {layer_name}: {embedding.shape}")
 
@@ -357,7 +326,13 @@ class Model(ModelBase):
                     f"No layers found matching: {self._hook_outputs.keys()}"
                 )
 
-            # Process embeddings based on average_over_time parameter
+            # First, ensure all embeddings are in batch-first format
+            for i in range(len(embeddings)):
+                if embeddings[i].shape[0] != expected_batch_size:
+                    # Transpose to batch-first format
+                    embeddings[i] = embeddings[i].transpose(0, 1)
+
+            # Process embeddings based on aggregation parameter
             if aggregation == "none":
                 if len(embeddings) == 1:
                     return embeddings[0]
@@ -392,12 +367,11 @@ class Model(ModelBase):
                     return embeddings[0]
                 else:
                     return torch.cat(embeddings, dim=1)
-
         finally:
             # Clear hook outputs for next call
             self._clear_hook_outputs()
-            # Restore original training state
-            if was_training:
+            # Restore original training state only if we changed it
+            if mode_changed and was_training:
                 self.train()
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:

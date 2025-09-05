@@ -6,6 +6,7 @@
 #SBATCH --ntasks-per-gpu=1
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 #SBATCH --job-name="rl-eval-array-beans-icassp"
+#SBATCH --nodelist=slurm-8x-a100-40gb-1
 #SBATCH --cpus-per-gpu=9
 
 # Map array task ID to config file

@@ -156,7 +156,8 @@ class TestAVESModel:
             aves_model.register_hooks_for_layers(layers)
 
     def test_extract_embeddings_aggregation_none(self, aves_model: AVESModel) -> None:
-        """Test embedding extraction without aggregation (returns list)."""
+        """Test embedding extraction without aggregation (returns tensor for single
+        embedding)."""
         x = torch.randn(2, 16000)
 
         # Use the first discovered MLP layer if available
@@ -173,11 +174,10 @@ class TestAVESModel:
             # Clean up
             aves_model.deregister_all_hooks()
 
-            # Should return list of tensors when not aggregating
-            assert isinstance(result, list)
-            assert len(result) == 1
+            # When aggregation="none" and single embedding, we get a tensor
+            assert torch.is_tensor(result)
             # Should be 3D tensor (batch, time, features)
-            assert len(result[0].shape) == 3
+            assert len(result.shape) == 3
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
@@ -191,12 +191,11 @@ class TestAVESModel:
             # Clean up
             aves_model.deregister_all_hooks()
 
-            # Should return list with single 3D tensor (batch, time, features)
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert len(result[0].shape) == 3  # (batch, time, features)
-            assert result[0].shape[0] == 2  # batch size
-            assert result[0].shape[2] > 0  # feature dimension
+            # When aggregation="none" and single embedding, we get a tensor
+            assert torch.is_tensor(result)
+            assert len(result.shape) == 3  # (batch, time, features)
+            assert result.shape[0] == 2  # batch size
+            assert result.shape[2] > 0  # feature dimension
 
     def test_extract_embeddings_3d_tensor_handling(self, aves_model: AVESModel) -> None:
         """Test handling of 3D tensors in embedding extraction."""

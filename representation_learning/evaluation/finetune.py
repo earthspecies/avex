@@ -179,8 +179,8 @@ class FineTuneTrainer:
             # Set current epoch for scheduler stepping
             self._current_epoch = epoch
 
-            # Apply learning rate warmup
-            if epoch <= self.warmup_epochs:
+            # Apply learning rate warmup only if scheduler is enabled
+            if self.scheduler is not None and epoch <= self.warmup_epochs:
                 warmup_lr = self._get_warmup_lr(epoch)
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = warmup_lr
@@ -337,10 +337,11 @@ class FineTuneTrainer:
                 self.optimizer.step()
 
                 # Step scheduler after optimizer step (for proper LR scheduling)
+                # Only step scheduler if it exists and we're past the warmup period
                 if (
-                    hasattr(self, "_current_epoch")
+                    self.scheduler is not None
+                    and hasattr(self, "_current_epoch")
                     and self._current_epoch > self.warmup_epochs
-                    and self.scheduler is not None
                 ):
                     self.scheduler.step()
 
@@ -502,7 +503,8 @@ def train_and_eval_offline(
         multi_label=multi_label,
         dataset_metrics=dataset_metrics,
         warmup_epochs=5,  # 5 epochs warmup
-        scheduler_type="cosine",  # Cosine annealing scheduler
+        scheduler_type=eval_cfg.training_params.scheduler_type,  # Use scheduler type
+        # from config
     )
 
     train_metrics, val_metrics = trainer.train(
@@ -701,7 +703,8 @@ def train_and_eval_online(
         multi_label=multi_label,
         dataset_metrics=dataset_metrics,
         warmup_epochs=5,  # 5 epochs warmup
-        scheduler_type="cosine",  # Cosine annealing scheduler
+        scheduler_type=eval_cfg.training_params.scheduler_type,  # Use scheduler type
+        # from config
     )
 
     # Train

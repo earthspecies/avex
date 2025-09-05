@@ -218,25 +218,16 @@ class WeightedAttentionProbe(torch.nn.Module):
 
                     for i, emb in enumerate(dummy_embeddings):
                         logger.info(f"Original embedding {i} shape: {emb.shape}")
-
-                        if emb.dim() == 4:
+                        if emb.dim() == 3:
+                            seq_len = emb.shape[1]
+                            feature_dim = emb.shape[2]
+                        elif emb.dim() == 4:
                             # 4D: (batch, channels, height, width) -> width is sequence,
                             # channels*height is features
                             seq_len = emb.shape[3]  # width
                             feature_dim = (
                                 emb.shape[1] * emb.shape[2]
                             )  # channels * height
-                        elif emb.dim() == 3:
-                            # 3D: (batch, seq_len, features) or
-                            # (batch, features, seq_len)
-                            if emb.shape[2] > emb.shape[1] * 2:
-                                # (batch, seq_len, features)
-                                seq_len = emb.shape[1]
-                                feature_dim = emb.shape[2]
-                            else:
-                                # (batch, features, seq_len) - needs transposition
-                                seq_len = emb.shape[2]
-                                feature_dim = emb.shape[1]
                         elif emb.dim() == 2:
                             # 2D: (batch, features) -> seq_len=1, features=features
                             seq_len = 1
@@ -321,48 +312,47 @@ class WeightedAttentionProbe(torch.nn.Module):
                             # Always create projector with target dimensions
                             # The projector will detect if no changes are needed and
                             # skip projection
-                            if emb.dim() == 4:
-                                # 4D: Use Conv4DProjector
-                                projector = Conv4DProjector(
-                                    target_feature_dim=max_feature_dim,
-                                    target_sequence_length=max_seq_len,
-                                )
-                            elif emb.dim() == 3:
-                                # 3D: Use Sequence3DProjector
-                                projector = Sequence3DProjector(
-                                    target_feature_dim=max_feature_dim,
-                                    target_sequence_length=max_seq_len,
-                                )
-                            elif emb.dim() == 2:
-                                # 2D: Use EmbeddingProjector with force_sequence_format
-                                projector = EmbeddingProjector(
-                                    target_feature_dim=max_feature_dim,
-                                    target_sequence_length=max_seq_len,
-                                    force_sequence_format=True,
+                            if (
+                                feature_dim == max_feature_dim
+                                and seq_len == max_seq_len
+                            ):
+                                projector = None
+                                logger.info(
+                                    f"Skipped projector for embedding {i} "
+                                    f"(shape: {emb.shape}) - already matches target"
+                                    f"already matches target dimensions"
                                 )
                             else:
-                                raise ValueError(
-                                    f"Unsupported embedding dimension: {emb.dim()}"
-                                )
-
-                            self.embedding_projectors.append(projector)
-
-                            # Log whether this embedding needs dimension changes
-                            if (
-                                seq_len == max_seq_len
-                                and feature_dim == max_feature_dim
-                            ):
+                                if emb.dim() == 4:
+                                    # 4D: Use Conv4DProjector
+                                    projector = Conv4DProjector(
+                                        target_feature_dim=max_feature_dim,
+                                        target_sequence_length=max_seq_len,
+                                    )
+                                elif emb.dim() == 3:
+                                    # 3D: Use Sequence3DProjector
+                                    projector = Sequence3DProjector(
+                                        target_feature_dim=max_feature_dim,
+                                        target_sequence_length=max_seq_len,
+                                    )
+                                elif emb.dim() == 2:
+                                    # 2D: Use EmbeddingProjector with
+                                    # force_sequence_format
+                                    projector = EmbeddingProjector(
+                                        target_feature_dim=max_feature_dim,
+                                        target_sequence_length=max_seq_len,
+                                    )
+                                else:
+                                    raise ValueError(
+                                        f"Unsupported embedding dimension: {emb.dim()}"
+                                    )
                                 logger.info(
                                     f"Created projector for embedding {i} "
                                     f"(shape: {emb.shape}) - already matches target "
                                     f"dimensions, will only do format conversion"
                                 )
-                            else:
-                                logger.info(
-                                    f"Created projector for embedding {i} "
-                                    f"(shape: {emb.shape}) -> target: "
-                                    f"({max_seq_len}, {max_feature_dim})"
-                                )
+
+                            self.embedding_projectors.append(projector)
 
                         # Apply projectors to determine final dimensions
                         projected_embeddings = []
@@ -373,8 +363,26 @@ class WeightedAttentionProbe(torch.nn.Module):
                                 strict=False,
                             )
                         ):
-                            # Apply projection (all projectors are now not None)
-                            projected_emb = projector(emb)
+                            # Apply projection or reshape if no projector needed
+                            if projector is not None:
+                                projected_emb = projector(emb)
+                            else:
+                                # No projector needed, but we still need to reshape to
+                                # target dimensions
+                                if emb.dim() == 4:
+                                    # 4D: reshape to (batch, width, channels*height)
+                                    batch_size, channels, height, width = emb.shape
+                                    projected_emb = emb.transpose(1, 3).reshape(
+                                        batch_size, width, channels * height
+                                    )
+                                elif emb.dim() == 3:
+                                    # 3D: already in correct format
+                                    projected_emb = emb
+                                elif emb.dim() == 2:
+                                    # 2D: (batch, features) -> (batch, 1, features)
+                                    projected_emb = emb.unsqueeze(1)
+                                else:
+                                    projected_emb = emb
                             logger.info(
                                 f"Projected embedding {i}: {emb.shape} -> "
                                 f"{projected_emb.shape}"
@@ -425,65 +433,6 @@ class WeightedAttentionProbe(torch.nn.Module):
                         f"inferred_dim: {inferred_dim}, "
                         f"num_embeddings: {num_embeddings}"
                     )
-                elif self.aggregation == "none":
-                    # Handle case where aggregation="none" but only one layer
-                    # was extracted
-                    # This happens when the base model returns a single tensor
-                    # instead of a list
-                    logger.info(
-                        f"WeightedAttentionProbe init "
-                        f"(feature_mode=False, aggregation='none'): "
-                        f"Only one layer extracted, treating as single embedding. "
-                        f"dummy_embeddings type: {type(dummy_embeddings)}, "
-                        f"shape: {dummy_embeddings.shape}"
-                    )
-
-                    if self.freeze_backbone:
-                        dummy_embeddings = dummy_embeddings.detach()
-
-                    if dummy_embeddings.dim() == 2:
-                        # 2D: (batch, features) -> add sequence dimension of size 1
-                        inferred_dim = dummy_embeddings.shape[-1]
-                        self.layer_weights = None
-                        logger.info(
-                            f"Single 2D embedding case: inferred_dim={inferred_dim}, "
-                            f"will add sequence dimension during forward pass"
-                        )
-                    elif dummy_embeddings.dim() == 3:
-                        inferred_dim = dummy_embeddings.shape[-1]
-                        # No layer_weights needed for single embedding
-                        self.layer_weights = None
-                        logger.info(
-                            f"Single 3D embedding case: inferred_dim={inferred_dim}, "
-                            f"no layer_weights needed"
-                        )
-                    elif dummy_embeddings.dim() == 4:
-                        # 4D: (batch, channels, height, width) -> reshape to 3D
-                        # width is sequence, channels*height is features
-                        batch_size, channels, height, width = dummy_embeddings.shape
-                        seq_len = width
-                        feature_dim = channels * height
-
-                        # Reshape to 3D: (batch, seq_len, features)
-                        dummy_embeddings = (
-                            dummy_embeddings.permute(0, 3, 1, 2)
-                            .contiguous()
-                            .view(batch_size, seq_len, feature_dim)
-                        )
-                        inferred_dim = feature_dim
-                        self.layer_weights = None
-                        logger.info(
-                            f"Single 4D embedding case: reshaped from "
-                            f"{dummy_embeddings.shape} "
-                            f"to 3D with inferred_dim={inferred_dim}, "
-                            f"no layer_weights needed"
-                        )
-                    else:
-                        raise ValueError(
-                            f"Attention probe expects 2D, 3D, or 4D embeddings, "
-                            f"got shape "
-                            f"{dummy_embeddings.shape}"
-                        )
                 else:
                     # Single tensor case
                     logger.debug(
@@ -499,9 +448,9 @@ class WeightedAttentionProbe(torch.nn.Module):
                     )
 
                     if dummy_embeddings.dim() == 2:
-                        # 2D: (batch, features) -> will add sequence dimension during
-                        # forward pass
-                        inferred_dim = dummy_embeddings.shape[-1]
+                        # 2D: (batch, features) -> (batch, features, 1)
+                        # will add sequence dimension during
+                        inferred_dim = 1
                         logger.debug(
                             f"Attention probe: Using 2D tensor with "
                             f"inferred_dim: {inferred_dim}, will add sequence dimension"
@@ -670,7 +619,28 @@ class WeightedAttentionProbe(torch.nn.Module):
                 ):
                     # Apply projection (all projectors are now not None)
                     logger.debug(f"Projecting embedding {i}: {emb.shape}")
-                    projected_emb = projector(emb)
+
+                    # Apply projection or reshape if no projector needed
+                    if projector is not None:
+                        projected_emb = projector(emb)
+                    else:
+                        # No projector needed, but we still need to reshape to target
+                        # dimensions
+                        if emb.dim() == 4:
+                            # 4D: (batch, channels, height, width) -> (batch, width,
+                            # channels*height)
+                            batch_size, channels, height, width = emb.shape
+                            projected_emb = emb.transpose(1, 3).reshape(
+                                batch_size, width, channels * height
+                            )
+                        elif emb.dim() == 3:
+                            # 3D: already in correct format
+                            projected_emb = emb
+                        elif emb.dim() == 2:
+                            # 2D: (batch, features) -> (batch, 1, features)
+                            projected_emb = emb.unsqueeze(1)
+                        else:
+                            projected_emb = emb
                     logger.debug(
                         f"Projected embedding {i}: {emb.shape} -> {projected_emb.shape}"
                     )
@@ -689,6 +659,9 @@ class WeightedAttentionProbe(torch.nn.Module):
             # Verify all embeddings have the same shape
             for i, emb in enumerate(embeddings):
                 if emb.shape != (batch_size, seq_len, embedding_dim):
+                    # print all embeddings shapes
+                    for i, emb in enumerate(embeddings):
+                        print(f"Embedding {i} shape: {emb.shape}")
                     raise ValueError(
                         f"Embedding {i} has shape {emb.shape}, expected "
                         f"{(batch_size, seq_len, embedding_dim)}. "
@@ -757,6 +730,7 @@ class WeightedAttentionProbe(torch.nn.Module):
             )
             # Layer normalization
             embeddings = self.layer_norms[i](embeddings + attn_out)
+            embeddings = self.dropout(embeddings)
 
         # Global average pooling
         embeddings = embeddings.mean(dim=1)

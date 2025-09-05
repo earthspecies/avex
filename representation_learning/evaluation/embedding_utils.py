@@ -32,6 +32,7 @@ def extract_embeddings_for_split(
     min_chunk_size: int = 100,
     batch_chunk_size: int = 10,
     disable_tqdm: bool = False,
+    disable_layerdrop: Optional[bool] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return stacked embeddings and labels for an entire dataloader.
 
@@ -69,6 +70,9 @@ def extract_embeddings_for_split(
         Maximum chunk size when auto-calculating. Default is 2000.
     min_chunk_size : int, optional
         Minimum chunk size when auto-calculating. Default is 100.
+    disable_layerdrop : Optional[bool], optional
+        Whether to disable layerdrop during forward pass. If None, uses model's default.
+        Only applies to BEATs models.
 
     Returns
     -------
@@ -94,11 +98,18 @@ def extract_embeddings_for_split(
             min_chunk_size,
             batch_chunk_size,
             disable_tqdm,
+            disable_layerdrop,
         )
 
     # Original in-memory approach for backward compatibility
     return _extract_embeddings_in_memory(
-        model, dataloader, layer_names, device, aggregation, disable_tqdm
+        model,
+        dataloader,
+        layer_names,
+        device,
+        aggregation,
+        disable_tqdm,
+        disable_layerdrop,
     )
 
 
@@ -109,6 +120,7 @@ def _extract_embeddings_in_memory(
     device: torch.device,
     aggregation: str = "mean",
     disable_tqdm: bool = False,
+    disable_layerdrop: Optional[bool] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Original in-memory embedding extraction (kept for backward compatibility).
 
@@ -117,6 +129,11 @@ def _extract_embeddings_in_memory(
     Tuple[torch.Tensor, torch.Tensor]
         (embeddings, labels) stacked on CPU.
     """
+    # Temporarily override model's disable_layerdrop if provided
+    original_disable_layerdrop = None
+    if disable_layerdrop is not None and hasattr(model, "disable_layerdrop"):
+        original_disable_layerdrop = model.disable_layerdrop
+        model.disable_layerdrop = disable_layerdrop
 
     embeds: list[torch.Tensor] = []
     labels: list[torch.Tensor] = []
@@ -157,6 +174,11 @@ def _extract_embeddings_in_memory(
         return torch.cat(embeds), torch.cat(labels)
 
     finally:
+        # Restore original disable_layerdrop if it was overridden
+        if original_disable_layerdrop is not None and hasattr(
+            model, "disable_layerdrop"
+        ):
+            model.disable_layerdrop = original_disable_layerdrop
         # Always deregister hooks when done
         model.deregister_all_hooks()
 
@@ -176,6 +198,7 @@ def _extract_embeddings_streaming(
     min_chunk_size: int = 100,
     batch_chunk_size: int = 10,
     disable_tqdm: bool = False,
+    disable_layerdrop: Optional[bool] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Memory-efficient streaming embedding extraction that saves to disk in chunks.
 
@@ -192,6 +215,12 @@ def _extract_embeddings_streaming(
     ValueError
         If invalid parameters are provided.
     """
+    # Temporarily override model's disable_layerdrop if provided
+    original_disable_layerdrop = None
+    if disable_layerdrop is not None and hasattr(model, "disable_layerdrop"):
+        original_disable_layerdrop = model.disable_layerdrop
+        model.disable_layerdrop = disable_layerdrop
+
     # Register hooks for the specified layers outside the loop
     model.register_hooks_for_layers(layer_names)
 
@@ -327,6 +356,11 @@ def _extract_embeddings_streaming(
         return embeddings, labels
 
     finally:
+        # Restore original disable_layerdrop if it was overridden
+        if original_disable_layerdrop is not None and hasattr(
+            model, "disable_layerdrop"
+        ):
+            model.disable_layerdrop = original_disable_layerdrop
         # Always deregister hooks when done
         model.deregister_all_hooks()
 

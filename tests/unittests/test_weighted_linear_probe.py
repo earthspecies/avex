@@ -22,7 +22,7 @@ class MockBaseModel(ModelBase):
     """Mock base model for testing."""
 
     def __init__(self, embedding_dims: list, device: str = "cpu") -> None:
-        super().__init__()
+        super().__init__(device=device)
         self.device = device
         self.embedding_dims = embedding_dims
         self.audio_processor = MockAudioProcessor()
@@ -33,6 +33,7 @@ class MockBaseModel(ModelBase):
         x: torch.Tensor,
         padding_mask: torch.Tensor | None = None,
         aggregation: str = "mean",
+        freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:
         """Mock extract_embeddings method.
 
@@ -176,24 +177,32 @@ class TestWeightedLinearProbe:
         assert debug_info["has_layer_weights"] is True
         assert len(debug_info["layer_weights"]) == len(embedding_dims)
 
-    def test_list_embeddings_different_dimensions_raises_error(self) -> None:
-        """Test that WeightedLinearProbe raises error for different embedding
-        dimensions."""
+    def test_list_embeddings_different_dimensions_creates_projectors(self) -> None:
+        """Test that WeightedLinearProbe creates projection layers for different
+        embedding dimensions."""
         embedding_dims = [256, 512, 128]  # Different dimensions
 
         base_model = MockBaseModel(embedding_dims)
 
-        with pytest.raises(
-            ValueError, match="All embeddings must have the same dimension"
-        ):
-            WeightedLinearProbe(
-                base_model=base_model,
-                layers=["layer1", "layer2", "layer3"],
-                num_classes=5,
-                device="cpu",
-                feature_mode=False,
-                aggregation="none",
-            )
+        # Should not raise error, but create projection layers
+        probe = WeightedLinearProbe(
+            base_model=base_model,
+            layers=["layer1", "layer2", "layer3"],
+            num_classes=5,
+            device="cpu",
+            feature_mode=False,
+            aggregation="none",
+        )
+
+        # Should have created projection layers
+        assert hasattr(probe, "embedding_projectors")
+        assert probe.embedding_projectors is not None
+        assert len(probe.embedding_projectors) == 3
+
+        # Test forward pass works
+        x = torch.randn(2, 1000)
+        output = probe(x)
+        assert output.shape == (2, 5)
 
     def test_feature_mode_without_input_dim_raises_error(self) -> None:
         """Test that WeightedLinearProbe raises error in feature mode without
@@ -211,11 +220,11 @@ class TestWeightedLinearProbe:
             )
 
     def test_projection_dim_parameter(self) -> None:
-        """Test WeightedLinearProbe with projection_dim parameter."""
+        """Test WeightedLinearProbe without projection_dim parameter (removed in
+        simplification)."""
         input_dim = 128
         num_classes = 4
         batch_size = 2
-        projection_dim = 64
 
         probe = WeightedLinearProbe(
             base_model=None,
@@ -224,7 +233,6 @@ class TestWeightedLinearProbe:
             device="cpu",
             feature_mode=True,
             input_dim=input_dim,
-            projection_dim=projection_dim,
         )
 
         # Test forward pass
@@ -232,7 +240,6 @@ class TestWeightedLinearProbe:
         output = probe(x)
 
         assert output.shape == (batch_size, num_classes)
-        assert probe.projection_dim == projection_dim
 
     def test_freeze_backbone(self) -> None:
         """Test WeightedLinearProbe with frozen backbone."""
@@ -337,7 +344,6 @@ class TestWeightedLinearProbe:
             "aggregation",
             "freeze_backbone",
             "target_length",
-            "projection_dim",
             "has_layer_weights",
         ]
 
@@ -361,13 +367,14 @@ class TestWeightedLinearProbe:
             feature_mode=False,
         )
 
-        # Check that hooks are registered
-        assert len(base_model._hooks) == 1
+        # Hooks are not registered in constructor anymore
+        # They are registered in get_probe() function
+        assert len(base_model._hooks) == 0
 
         # Cleanup
         del probe
 
-        # Check that hooks are cleaned up
+        # Check that hooks are cleaned up (should still be 0)
         assert len(base_model._hooks) == 0
 
     def test_print_learned_weights_with_weights(self) -> None:
@@ -446,35 +453,41 @@ class TestWeightedLinearProbe:
         assert "No learned weights found" in output
         assert "does not use weighted sum" in output
 
-    def test_2d_embedding_requirement(self) -> None:
-        """Test that WeightedLinearProbe requires 2D embeddings."""
+    def test_3d_embedding_handling(self) -> None:
+        """Test that WeightedLinearProbe handles 3D embeddings by reshaping them."""
 
-        # Create a mock that returns 3D embeddings (should fail)
+        # Create a mock that returns 3D embeddings
         class MockBaseModel3D(MockBaseModel):
             def extract_embeddings(
                 self,
                 x: torch.Tensor,
                 padding_mask: torch.Tensor | None = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = True,
             ) -> torch.Tensor | list[torch.Tensor]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
-                    # Return 3D embeddings (should cause error)
+                    # Return 3D embeddings in a list
                     return [torch.randn(batch_size, 10, 128, device=self.device)]
                 else:
                     return torch.randn(batch_size, 10, 128, device=self.device)
 
         base_model = MockBaseModel3D([128])
 
-        with pytest.raises(ValueError, match="Linear probe expects 2D embeddings"):
-            WeightedLinearProbe(
-                base_model=base_model,
-                layers=["layer1"],
-                num_classes=5,
-                device="cpu",
-                feature_mode=False,
-                aggregation="mean",
-            )
+        # Should not raise error, but handle 3D embeddings by reshaping
+        probe = WeightedLinearProbe(
+            base_model=base_model,
+            layers=["layer1"],
+            num_classes=5,
+            device="cpu",
+            feature_mode=False,
+            aggregation="mean",
+        )
+
+        # Test forward pass works with 3D embeddings
+        x = torch.randn(2, 1000)
+        output = probe(x)
+        assert output.shape == (2, 5)
 
     def test_target_length_parameter(self) -> None:
         """Test WeightedLinearProbe with target_length parameter."""

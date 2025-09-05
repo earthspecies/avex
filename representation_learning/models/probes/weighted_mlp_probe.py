@@ -129,6 +129,13 @@ class WeightedMLPProbe(torch.nn.Module):
                         # For MLP probes, we expect 2D embeddings
                         # (batch_size, embedding_dim)
                         inferred_dim = dummy_embeddings.shape[-1]
+                    elif dummy_embeddings.dim() == 3:
+                        # 3D: (batch, seq_len, features) -> (batch, seq_len*features)
+                        inferred_dim = dummy_embeddings.shape[-1]
+                    elif dummy_embeddings.dim() == 4:
+                        # 4D: (batch, channels, height, width) -> (batch,
+                        # channels*height*width)
+                        inferred_dim = dummy_embeddings.shape[-1]
                     else:
                         raise ValueError(
                             f"MLP probe expects 2D embeddings (batch_size, "
@@ -577,10 +584,18 @@ class WeightedMLPProbe(torch.nn.Module):
             )
 
         # Single tensor case - ensure it's 2D
-        if embeddings.dim() != 2:
+        if embeddings.dim() == 3:
+            # 3D: (batch, seq_len, features) -> (batch, seq_len*features)
+            batch_size = embeddings.shape[0]
+            embeddings = embeddings.reshape(batch_size, -1)
+        elif embeddings.dim() == 4:
+            # 4D: (batch, channels, height, width) -> (batch, channels*height*width)
+            batch_size = embeddings.shape[0]
+            embeddings = embeddings.reshape(batch_size, -1)
+        elif embeddings.dim() != 2:
             raise ValueError(
-                f"MLP probe expects 2D embeddings (batch_size, "
-                f"embedding_dim), got shape {embeddings.shape}"
+                f"MLP probe expects 2D, 3D, or 4D embeddings, got shape "
+                f"{embeddings.shape}"
             )
 
         # Pass through MLP

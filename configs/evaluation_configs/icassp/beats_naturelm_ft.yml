@@ -3,7 +3,7 @@ dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
   train_epochs: 50
-  lr: 0.001
+  lr: 0.00001
   batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
@@ -15,8 +15,8 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: efficientnet_animalspeak_audioset_attention_last
-    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
+  - run_name: beats_naturelm_attention_ft
+    run_config: configs/run_configs/pretrained/beats_naturelm.yml
     probe_config:
       probe_type: weighted_attention
       aggregation: none
@@ -28,66 +28,22 @@ experiments:
       max_sequence_length: 800
       use_positional_encoding: False
       dropout_rate: 0.3
-      freeze_backbone: True
+      freeze_backbone: False
       online_training: True
-    pretrained: false
-    checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak_audioset.pt
+    pretrained: true
 
-  - run_name: efficientnet_animalspeak_audioset_attention_all
-    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
-    probe_config:
-      probe_type: weighted_attention
-      aggregation: none
-      input_processing: sequence
-      target_layers: ["all"]
-      num_heads: 8
-      attention_dim: 64
-      num_layers: 1
-      max_sequence_length: 800
-      use_positional_encoding: False
-      dropout_rate: 0.3
-      freeze_backbone: True
-      online_training: True
-    pretrained: false
-    checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak_audioset.pt
-
-  - run_name: efficientnet_animalspeak_audioset_linear_last
-    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
+  - run_name: beats_naturelm_linear_ft
+    run_config: configs/run_configs/pretrained/beats_naturelm.yml
     probe_config:
       probe_type: weighted_linear
       aggregation: mean
       input_processing: pooled
       target_layers: ["last_layer"]
-      freeze_backbone: True
+      freeze_backbone: False
       online_training: True
-    pretrained: false
-    checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak_audioset.pt
+    pretrained: true
 
-  - run_name: efficientnet_animalspeak_audioset_linear_all
-    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
-    probe_config:
-      probe_type: weighted_linear
-      target_layers: ["all"]
-      aggregation: mean
-      input_processing: pooled
-      freeze_backbone: True
-      online_training: True
-    pretrained: false
-    checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak_audioset.pt
-
-  # - run_name: efficientnet_animalspeak_audioset_linear_ft
-  #   run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml
-  #   probe_config:
-  #     probe_type: weighted_linear
-  #     aggregation: mean
-  #     input_processing: pooled
-  #     target_layers: ["last_layer"]
-  #     freeze_backbone: False
-  #     online_training: True
-  #   pretrained: false
-  #   checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak_audioset.pt
-
-  # - run_name: sl_efficientnet_animalspeak_audioset_lstm_all
+  # - run_name: beats_naturelm_lstm_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_lstm"
@@ -105,7 +61,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_lstm_last
+  # - run_name: beats_naturelm_lstm_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_lstm"
@@ -123,7 +79,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_lstm_ft
+  # - run_name: beats_naturelm_lstm_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_lstm"
@@ -141,7 +97,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_mlp_all
+  # - run_name: beats_naturelm_mlp_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_mlp"
@@ -156,7 +112,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_mlp_last
+  # - run_name: beats_naturelm_mlp_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_mlp"
@@ -171,7 +127,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_mlp_ft
+  # - run_name: beats_naturelm_mlp_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_mlp"
@@ -186,7 +142,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_transformer_all
+  # - run_name: beats_naturelm_transformer_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_transformer"
@@ -204,7 +160,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_transformer_last
+  # - run_name: beats_naturelm_transformer_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_transformer"
@@ -222,7 +178,7 @@ experiments:
   #   pretrained: false
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
-  # - run_name: sl_efficientnet_animalspeak_audioset_transformer_ft
+  # - run_name: beats_naturelm_transformer_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
   #     probe_type: "weighted_transformer"
@@ -241,7 +197,7 @@ experiments:
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
 # Where to save the evaluation results
-save_dir: evaluation_results/icassp/efficientnet_animalspeak_audioset
+save_dir: evaluation_results/icassp/beats_naturelm
 
 # Optional: Append results to a global CSV file for cross-model comparison
 results_csv_path: evaluation_results/icassp/all_models_results.csv

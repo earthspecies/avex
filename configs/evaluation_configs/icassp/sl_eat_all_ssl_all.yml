@@ -51,24 +51,6 @@ experiments:
     pretrained: false
     checkpoint_path: gs://representation-learning/models/sl_eat_all_ssl_all.pt
 
-  - run_name: sl_eat_all_ssl_all_attention_ft
-    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
-    probe_config:
-      probe_type: weighted_attention
-      aggregation: none
-      input_processing: sequence
-      target_layers: ["last_layer"]
-      num_heads: 8
-      attention_dim: 64
-      num_layers: 1
-      max_sequence_length: 800
-      use_positional_encoding: False
-      dropout_rate: 0.3
-      freeze_backbone: False
-      online_training: True
-    pretrained: false
-    checkpoint_path: gs://representation-learning/models/sl_eat_all_ssl_all.pt
-
   - run_name: sl_eat_all_ssl_all_linear_last
     run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
     probe_config:
@@ -89,18 +71,6 @@ experiments:
       aggregation: mean
       input_processing: pooled
       freeze_backbone: True
-      online_training: True
-    pretrained: false
-    checkpoint_path: gs://representation-learning/models/sl_eat_all_ssl_all.pt
-
-  - run_name: sl_eat_all_ssl_all_linear_ft
-    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
-    probe_config:
-      probe_type: weighted_linear
-      aggregation: mean
-      input_processing: pooled
-      target_layers: ["last_layer"]
-      freeze_backbone: False
       online_training: True
     pretrained: false
     checkpoint_path: gs://representation-learning/models/sl_eat_all_ssl_all.pt
