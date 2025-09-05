@@ -3,7 +3,7 @@ dataset_config: configs/data_configs/beans_h100.yml
 
 training_params:
   train_epochs: 50
-  lr: 0.001
+  lr: 0.0001
   batch_size: 24
   optimizer: adamw
   weight_decay: 0.01

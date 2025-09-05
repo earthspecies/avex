@@ -22,6 +22,18 @@ declare -A configs=(
     [9]="sl_eat_all_ssl_all.yml"
 )
 
+declare -A configs_ft=(
+    [1]="sl_efficientnet_animalspeak_audioset_ft.yml"
+    [2]="ssl_eat_all_ft.yml"
+    [3]="bird_aves_bio_ft.yml"
+    [4]="beats_ft.yml"
+    [5]="beats_naturelm_ft.yml"
+    [6]="eat_hf_ft.yml"
+    [7]="eat_hf_finetuned_ft.yml"
+    [8]="sl_beats_all_ft.yml"
+    [9]="sl_eat_all_ssl_all_ft.yml"
+)
+
 # Get the config file for this array task
 config_file=${configs[$SLURM_ARRAY_TASK_ID]}
 
