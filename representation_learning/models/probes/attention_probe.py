@@ -110,9 +110,7 @@ class AttentionProbe(torch.nn.Module):
         self.use_positional_encoding = use_positional_encoding
         self.target_length = target_length
 
-        # Register hooks for the specified layers if base_model is provided
-        if self.base_model is not None and not self.feature_mode:
-            self.base_model.register_hooks_for_layers(self.layers)
+        # Hooks are now registered in get_probe() after model mode is set
 
         # Initialize variables
         inferred_dim = None
@@ -154,7 +152,7 @@ class AttentionProbe(torch.nn.Module):
 
                     dummy = torch.randn(1, computed_target_length, device=device)
                     dummy_embeddings = base_model.extract_embeddings(
-                        dummy, aggregation=self.aggregation
+                        dummy, aggregation=self.aggregation, freeze_backbone=True
                     ).detach()
 
                     # feature_mode=True assumes that the embeddings are not lists
@@ -250,7 +248,7 @@ class AttentionProbe(torch.nn.Module):
 
                 dummy = torch.randn(1, computed_target_length, device=device)
                 dummy_embeddings = base_model.extract_embeddings(
-                    dummy, aggregation=self.aggregation
+                    dummy, aggregation=self.aggregation, freeze_backbone=True
                 )
 
                 # Handle the case where dummy_embeddings is a list (aggregation="none")
@@ -516,7 +514,10 @@ class AttentionProbe(torch.nn.Module):
         else:
             # Extract embeddings from base_model
             embeddings = self.base_model.extract_embeddings(
-                x, padding_mask=padding_mask, aggregation=self.aggregation
+                x,
+                padding_mask=padding_mask,
+                aggregation=self.aggregation,
+                freeze_backbone=self.freeze_backbone,
             )
 
             logger.debug(

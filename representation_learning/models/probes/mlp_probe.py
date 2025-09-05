@@ -76,9 +76,7 @@ class MLPProbe(torch.nn.Module):
         self.target_length = target_length
         self.projection_dim = projection_dim
 
-        # Register hooks for the specified layers if base_model is provided
-        if self.base_model is not None and not self.feature_mode:
-            self.base_model.register_hooks_for_layers(self.layers)
+        # Hooks are now registered in get_probe() after model mode is set
 
         # Initialize variables
         inferred_dim = None
@@ -410,7 +408,10 @@ class MLPProbe(torch.nn.Module):
 
             try:
                 embeddings = self.base_model.extract_embeddings(
-                    x, padding_mask=padding_mask, aggregation=self.aggregation
+                    x,
+                    padding_mask=padding_mask,
+                    aggregation=self.aggregation,
+                    freeze_backbone=self.freeze_backbone,
                 )
 
                 # Detach embeddings if backbone is frozen to prevent gradient flow

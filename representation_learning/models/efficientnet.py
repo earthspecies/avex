@@ -199,6 +199,7 @@ class Model(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         aggregation: str = "none",
+        freeze_backbone: bool = True,
     ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """Extract embeddings from all registered hooks in the EfficientNet model.
 
@@ -212,6 +213,8 @@ class Model(ModelBase):
             Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none').
             When 'none', 4D embeddings (B, C, H, W) are reshaped to 3D (B, H, C*W)
             for sequence probe compatibility.
+        freeze_backbone : bool
+            Whether to freeze the backbone and use torch.no_grad()
 
         Returns
         -------
@@ -238,8 +241,12 @@ class Model(ModelBase):
             else:
                 wav = x
 
-            # Forward pass to trigger hooks
-            with torch.no_grad():
+            # Forward pass to trigger hooks (conditionally use torch.no_grad based on
+            # freeze_backbone)
+            if freeze_backbone:
+                with torch.no_grad():
+                    self.forward(wav, padding_mask)
+            else:
                 self.forward(wav, padding_mask)
 
             # Collect embeddings from hook outputs

@@ -76,9 +76,7 @@ class WeightedMLPProbe(torch.nn.Module):
         self.activation = activation
         self.target_length = target_length
 
-        # Register hooks for the specified layers if base_model is provided
-        if self.base_model is not None and not self.feature_mode:
-            self.base_model.register_hooks_for_layers(self.layers)
+        # Hooks are now registered in get_probe() after model mode is set
 
         # Initialize variables
         inferred_dim = None
@@ -335,7 +333,7 @@ class WeightedMLPProbe(torch.nn.Module):
                         inferred_dim = embedding_dims[0]
 
                     # Create learned weights for weighted sum
-                    self.layer_weights = nn.Parameter(torch.ones(num_embeddings))
+                    self.layer_weights = nn.Parameter(torch.zeros(num_embeddings))
 
                     # Log the setup
                     logger.info(
@@ -492,7 +490,10 @@ class WeightedMLPProbe(torch.nn.Module):
                 f"with aggregation='{self.aggregation}'"
             )
             embeddings = self.base_model.extract_embeddings(
-                x, padding_mask=padding_mask, aggregation=self.aggregation
+                x,
+                padding_mask=padding_mask,
+                aggregation=self.aggregation,
+                freeze_backbone=self.freeze_backbone,
             )
             logger.debug(
                 f"MLP probe forward: Received embeddings type: {type(embeddings)}, "
@@ -510,7 +511,7 @@ class WeightedMLPProbe(torch.nn.Module):
             # Apply individual embedding projectors to each embedding if enabled
             if (
                 hasattr(self, "embedding_projectors")
-                and self.embedding_projectors is not None
+                and getattr(self, "embedding_projectors", None) is not None
             ):
                 projected_embeddings = []
                 for i, (emb, projector) in enumerate(
@@ -592,7 +593,7 @@ class WeightedMLPProbe(torch.nn.Module):
         This function prints the raw weights and normalized weights (softmax)
         for each layer when using list embeddings with aggregation='none'.
         """
-        if not hasattr(self, "layer_weights"):
+        if not hasattr(self, "layer_weights") or self.layer_weights is None:
             print(
                 "No learned weights found. This probe does not use weighted sum of "
                 "embeddings."
@@ -639,11 +640,11 @@ class WeightedMLPProbe(torch.nn.Module):
             "has_layer_weights": hasattr(self, "layer_weights"),
             "has_embedding_projectors": (
                 hasattr(self, "embedding_projectors")
-                and self.embedding_projectors is not None
+                and getattr(self, "embedding_projectors", None) is not None
             ),
         }
 
-        if hasattr(self, "layer_weights"):
+        if hasattr(self, "layer_weights") and self.layer_weights is not None:
             info["layer_weights"] = self.layer_weights.detach().cpu().numpy().tolist()
 
         return info

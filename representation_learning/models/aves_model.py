@@ -180,6 +180,7 @@ class Model(ModelBase):
         *,
         padding_mask: torch.Tensor | None = None,  # noqa: ANN401
         aggregation: str = "none",
+        freeze_backbone: bool = True,
     ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """Extract embeddings from all registered hooks in the AVES model.
 
@@ -188,6 +189,8 @@ class Model(ModelBase):
             padding_mask: Optional padding mask
             aggregation: Aggregation method for multiple layers ('mean', 'max',
                 'cls_token', 'none')
+            freeze_backbone: Whether to freeze the backbone
+                and use torch.no_grad() for the forward pass
 
         Returns:
             Union[torch.Tensor, List[torch.Tensor]]: Model embeddings (tensor if
@@ -214,8 +217,12 @@ class Model(ModelBase):
                 wav = x
                 mask = padding_mask
 
-            # Forward pass to trigger hooks
-            with torch.no_grad():
+            # Forward pass to trigger hooks (conditionally use torch.no_grad based on
+            # freeze_backbone)
+            if freeze_backbone:
+                with torch.no_grad():
+                    self.forward(wav, mask)
+            else:
                 self.forward(wav, mask)
 
             logger.debug(

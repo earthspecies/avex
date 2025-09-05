@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -172,6 +173,9 @@ class FineTuneTrainer:
             A tuple of (best_train_metrics, best_val_metrics) collected across epochs.
         """
         for epoch in range(1, num_epochs + 1):
+            # Start timing the epoch
+            epoch_start_time = time.time()
+
             # Set current epoch for scheduler stepping
             self._current_epoch = epoch
 
@@ -184,6 +188,9 @@ class FineTuneTrainer:
             train_loss, train_metric = self._run_epoch(train=True, epoch=epoch)
             val_loss, val_metric = self._run_epoch(train=False, epoch=epoch)
 
+            # Calculate epoch duration
+            epoch_duration = time.time() - epoch_start_time
+
             # Get current learning rate for logging
             current_lr = self.optimizer.param_groups[0]["lr"]
 
@@ -193,17 +200,26 @@ class FineTuneTrainer:
                 f"train_{self.primary_metric_name}={train_metric:.4f} | "
                 f"val_loss={val_loss:.4f}  "
                 f"val_{self.primary_metric_name}={val_metric:.4f} | "
-                f"lr={current_lr:.6f}"
+                f"lr={current_lr:.6f} | "
+                f"epoch_duration={epoch_duration:.2f}s"
             )
 
             # Log epoch-level metrics
             self.log.log_metrics(
-                {"loss": train_loss, self.primary_metric_name: train_metric},
+                {
+                    "loss": train_loss,
+                    self.primary_metric_name: train_metric,
+                    "epoch_duration": epoch_duration,
+                },
                 step=epoch,
                 split="train",
             )
             self.log.log_metrics(
-                {"loss": val_loss, self.primary_metric_name: val_metric},
+                {
+                    "loss": val_loss,
+                    self.primary_metric_name: val_metric,
+                    "epoch_duration": epoch_duration,
+                },
                 step=epoch,
                 split="val",
             )

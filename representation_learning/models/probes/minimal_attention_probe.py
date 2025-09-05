@@ -82,9 +82,7 @@ class MinimalAttentionProbe(nn.Module):
 
         self.freeze_backbone = freeze_backbone
 
-        # Register hooks for the specified layers if base_model is provided
-        if self.base_model is not None and not self.feature_mode:
-            self.base_model.register_hooks_for_layers(self.layers)
+        # Hooks are now registered in get_probe() after model mode is set
 
         inferred_dim: int = 0
         classifier_input_dim: int = 0
@@ -100,26 +98,65 @@ class MinimalAttentionProbe(nn.Module):
                 with torch.no_grad():
                     test_len = self._compute_target_length(base_model)
                     dummy = torch.randn(1, test_len, device=device)
-                    emb = base_model.extract_embeddings(dummy, aggregation="none")
+                    emb = base_model.extract_embeddings(
+                        dummy, aggregation="none", freeze_backbone=True
+                    )
                     if isinstance(emb, list) and len(emb) > 0:
                         emb = emb[0]
                     logger.info(
                         f"MinimalAttn: {emb.shape if hasattr(emb, 'shape') else 'list'}"
                     )
+                    if emb.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = emb.shape
+                        logger.debug(f"Processing 4D embedding: {emb.shape}")
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Match WeightedAttentionProbe pattern
+                        emb = (
+                            emb.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(f"Reshaped 4D embedding to: {emb.shape}")
+
+                    if emb.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        emb = emb.unsqueeze(2)  # (B, D) -> (B, D, 1)
+                        logger.info(f"Reshaped 2D embedding to: {emb.shape}")
+
                     if emb.dim() == 3:
                         inferred_dim = emb.shape[-1]
                         classifier_input_dim = inferred_dim
                     else:
                         raise ValueError(
-                            "Feature mode requires sequence embeddings (B,T,D)."
+                            "Feature mode requires 2D, 3D or 4D embeddings."
                         )
             else:
                 inferred_dim = input_dim
                 classifier_input_dim = inferred_dim
 
+            # Find all divisors of embed_dim that are reasonable for
+            # attention heads. We want heads that result in head_dim >= 64
+            # (PyTorch recommendation)
+            valid_heads = []
+            for n in range(1, min(self.num_heads + 1, inferred_dim + 1)):
+                if inferred_dim % n == 0 and inferred_dim // n >= 64:
+                    valid_heads.append(n)
+
+            if not valid_heads:
+                # If no valid heads found, use 1 head and adjust
+                # embed_dim if needed
+                adjusted_num_heads = 1
+                if inferred_dim < 64:
+                    inferred_dim = 64
+            else:
+                # Use the largest valid number of heads
+                # (closest to requested)
+                adjusted_num_heads = max(valid_heads)
+
             # Create attention layer for feature mode
             self.attention = nn.MultiheadAttention(
-                inferred_dim, num_heads=self.num_heads, batch_first=True
+                inferred_dim, num_heads=adjusted_num_heads, batch_first=True
             ).to(device)
         else:
             if base_model is None:
@@ -128,7 +165,9 @@ class MinimalAttentionProbe(nn.Module):
             with torch.no_grad():
                 test_len = self._compute_target_length(base_model)
                 dummy = torch.randn(1, test_len, device=device)
-                emb = base_model.extract_embeddings(dummy, aggregation=self.aggregation)
+                emb = base_model.extract_embeddings(
+                    dummy, aggregation=self.aggregation, freeze_backbone=True
+                )
 
                 if self.aggregation == "none":
                     # Handle list of embeddings from multiple layers
@@ -171,15 +210,53 @@ class MinimalAttentionProbe(nn.Module):
                     if isinstance(emb, list) and len(emb) > 0:
                         emb = emb[0]
                     logger.info(f"Input to MinimalAttention probe shape: {emb.shape}")
+                    if emb.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = emb.shape
+                        logger.debug(f"Processing 4D embedding: {emb.shape}")
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Match WeightedAttentionProbe pattern
+                        emb = (
+                            emb.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(f"Reshaped 4D embedding to: {emb.shape}")
+
+                    if emb.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        emb = emb.unsqueeze(2)  # (B, D) -> (B, D, 1)
+                        logger.info(f"Reshaped 2D embedding to: {emb.shape}")
+
                     if emb.dim() == 3:
                         inferred_dim = emb.shape[-1]
                         classifier_input_dim = inferred_dim
                     else:
                         raise ValueError(
-                            "MinimalAttentionProbe expects sequence embeddings (B,T,D)."
+                            "MinimalAttentionProbe expects 2D, 3D or 4D embeddings."
                         )
+
+                    # Find all divisors of embed_dim that are reasonable for
+                    # attention heads. We want heads that result in head_dim >= 64
+                    # (PyTorch recommendation)
+                    valid_heads = []
+                    for n in range(1, min(self.num_heads + 1, inferred_dim + 1)):
+                        if inferred_dim % n == 0 and inferred_dim // n >= 64:
+                            valid_heads.append(n)
+
+                    if not valid_heads:
+                        # If no valid heads found, use 1 head and adjust
+                        # embed_dim if needed
+                        adjusted_num_heads = 1
+                        if inferred_dim < 64:
+                            inferred_dim = 64
+                    else:
+                        # Use the largest valid number of heads
+                        # (closest to requested)
+                        adjusted_num_heads = max(valid_heads)
+
                     self.attention = nn.MultiheadAttention(
-                        inferred_dim, num_heads=self.num_heads, batch_first=True
+                        inferred_dim, num_heads=adjusted_num_heads, batch_first=True
                     ).to(device)
 
         # Ensure attention attribute exists for all cases
@@ -253,6 +330,7 @@ class MinimalAttentionProbe(nn.Module):
                 x,
                 padding_mask=padding_mask,
                 aggregation=self.aggregation,
+                freeze_backbone=self.freeze_backbone,
             )
 
             if self.freeze_backbone:
@@ -294,14 +372,22 @@ class MinimalAttentionProbe(nn.Module):
                 embeddings = embeddings[0]
 
             if embeddings.dim() == 4:
-                # For CNN-style embeddings, concatenate channels and height,
-                # preserve width (time)
-                # (B, C, H, W) -> (B, C*H, W) where W is preserved as time dimension
+                # Handle 4D embeddings (B, C, H, W)
                 batch_size, channels, height, width = embeddings.shape
-                embeddings = embeddings.transpose(1, 2).reshape(
-                    batch_size, channels * height, width
+                logger.debug(f"Processing 4D embedding: {embeddings.shape}")
+                # Reshape to (B, W, C*H) - treat width as sequence length,
+                # C*H as features. Match WeightedAttentionProbe pattern
+                embeddings = (
+                    embeddings.permute(0, 3, 1, 2)
+                    .contiguous()
+                    .view(batch_size, width, channels * height)
                 )
-                # Result: (B, C*H, W) where C*H is feature dimension, W is time
+                # Result: (B, W, C*H) where W is sequence length, C*H is features
+            elif embeddings.dim() == 2:
+                # Handle 2D embeddings by adding sequence dimension
+                embeddings = embeddings.unsqueeze(2)  # (B, D) -> (B, D, 1)
+                embeddings = embeddings.transpose(1, 2)  # (B, D, 1) -> (B, 1, D)
+                logger.debug(f"Reshaped 2D embedding to: {embeddings.shape}")
             elif embeddings.dim() == 3:
                 pass
             else:

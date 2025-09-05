@@ -311,6 +311,10 @@ def get_probe(
         for p in base_model.parameters():
             p.requires_grad = False
 
+    # Register hooks AFTER setting model mode to ensure they work correctly
+    if base_model is not None and not feature_mode:
+        base_model.register_hooks_for_layers(layers)
+
     # Use provided target_length if available, otherwise use probe_config.target_length
     final_target_length = (
         target_length if target_length is not None else probe_config.target_length
@@ -436,7 +440,6 @@ def get_probe(
             activation=probe_config.activation,
             use_positional_encoding=probe_config.use_positional_encoding,
             target_length=final_target_length,
-            projection_dim=probe_config.projection_dim,
             freeze_backbone=probe_config.freeze_backbone,
         )
 

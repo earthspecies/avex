@@ -1,6 +1,32 @@
 benchmark_name: "bioacoustic_benchmark_single"
 
 evaluation_sets:
+  # Classification Tasks
+  - name: "dog_classification"
+    train: &dogs_base
+      dataset_name: beans
+      split: dogs_train
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 10
+      transformations:
+        - type: label_from_feature
+          feature: label
+          override: true
+          label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
+      sample_rate: 16000
+      # data_root: "/scratch-representation-learning/beans/v0.1.0/raw/"
+      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+    validation:
+      <<: *dogs_base
+      split: dogs_validation
+    test:
+      <<: *dogs_base
+      split: dogs_test
+    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
   - name: "esc50_classification"
     train: &esc50_base
       dataset_name: beans
@@ -25,29 +51,110 @@ evaluation_sets:
       <<: *esc50_base
       split: esc50_test
     metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  # - name: "bird_classification"
+  #   train: &bird_base
+  #     dataset_name: beans
+  #     split: cbi_train
+  #     type: classification
+  #     label_column: label
+  #     audio_path_col: path
+  #     multi_label: false
+  #     label_type: supervised
+  #     audio_max_length_seconds: 10
+  #     transformations:
+  #       - type: label_from_feature
+  #         feature: label
+  #         override: true
+  #         label_map: {'aldfly': 0, 'ameavo': 1, 'amebit': 2, 'amecro': 3, 'amegfi': 4, 'amekes': 5, 'amepip': 6, 'amered': 7, 'amerob': 8, 'amewig': 9, 'amewoo': 10, 'amtspa': 11, 'annhum': 12, 'astfly': 13, 'baisan': 14, 'baleag': 15, 'balori': 16, 'banswa': 17, 'barswa': 18, 'bawwar': 19, 'belkin1': 20, 'belspa2': 21, 'bewwre': 22, 'bkbcuc': 23, 'bkbmag1': 24, 'bkbwar': 25, 'bkcchi': 26, 'bkchum': 27, 'bkhgro': 28, 'bkpwar': 29, 'bktspa': 30, 'blkpho': 31, 'blugrb1': 32, 'blujay': 33, 'bnhcow': 34, 'boboli': 35, 'bongul': 36, 'brdowl': 37, 'brebla': 38, 'brespa': 39, 'brncre': 40, 'brnthr': 41, 'brthum': 42, 'brwhaw': 43, 'btbwar': 44, 'btnwar': 45, 'btywar': 46, 'buffle': 47, 'buggna': 48, 'buhvir': 49, 'bulori': 50, 'bushti': 51, 'buwtea': 52, 'buwwar': 53, 'cacwre': 54, 'calgul': 55, 'calqua': 56, 'camwar': 57, 'cangoo': 58, 'canwar': 59, 'canwre': 60, 'carwre': 61, 'casfin': 62, 'caster1': 63, 'casvir': 64, 'cedwax': 65, 'chispa': 66, 'chiswi': 67, 'chswar': 68, 'chukar': 69, 'clanut': 70, 'cliswa': 71, 'comgol': 72, 'comgra': 73, 'comloo': 74, 'commer': 75, 'comnig': 76, 'comrav': 77, 'comred': 78, 'comter': 79, 'comyel': 80, 'coohaw': 81, 'coshum': 82, 'cowscj1': 83, 'daejun': 84, 'doccor': 85, 'dowwoo': 86, 'dusfly': 87, 'eargre': 88, 'easblu': 89, 'easkin': 90, 'easmea': 91, 'easpho': 92, 'eastow': 93, 'eawpew': 94, 'eucdov': 95, 'eursta': 96, 'evegro': 97, 'fiespa': 98, 'fiscro': 99, 'foxspa': 100, 'gadwal': 101, 'gcrfin': 102, 'gnttow': 103, 'gnwtea': 104, 'gockin': 105, 'gocspa': 106, 'goleag': 107, 'grbher3': 108, 'grcfly': 109, 'greegr': 110, 'greroa': 111, 'greyel': 112, 'grhowl': 113, 'grnher': 114, 'grtgra': 115, 'grycat': 116, 'gryfly': 117, 'haiwoo': 118, 'hamfly': 119, 'hergul': 120, 'herthr': 121, 'hoomer': 122, 'hoowar': 123, 'horgre': 124, 'horlar': 125, 'houfin': 126, 'houspa': 127, 'houwre': 128, 'indbun': 129, 'juntit1': 130, 'killde': 131, 'labwoo': 132, 'larspa': 133, 'lazbun': 134, 'leabit': 135, 'leafly': 136, 'leasan': 137, 'lecthr': 138, 'lesgol': 139, 'lesnig': 140, 'lesyel': 141, 'lewwoo': 142, 'linspa': 143, 'lobcur': 144, 'lobdow': 145, 'logshr': 146, 'lotduc': 147, 'louwat': 148, 'macwar': 149, 'magwar': 150, 'mallar3': 151, 'marwre': 152, 'merlin': 153, 'moublu': 154, 'mouchi': 155, 'moudov': 156, 'norcar': 157, 'norfli': 158, 'norhar2': 159, 'normoc': 160, 'norpar': 161, 'norpin': 162, 'norsho': 163, 'norwat': 164, 'nrwswa': 165, 'nutwoo': 166, 'olsfly': 167, 'orcwar': 168, 'osprey': 169, 'ovenbi1': 170, 'palwar': 171, 'pasfly': 172, 'pecsan': 173, 'perfal': 174, 'phaino': 175, 'pibgre': 176, 'pilwoo': 177, 'pingro': 178, 'pinjay': 179, 'pinsis': 180, 'pinwar': 181, 'plsvir': 182, 'prawar': 183, 'purfin': 184, 'pygnut': 185, 'rebmer': 186, 'rebnut': 187, 'rebsap': 188, 'rebwoo': 189, 'redcro': 190, 'redhea': 191, 'reevir1': 192, 'renpha': 193, 'reshaw': 194, 'rethaw': 195, 'rewbla': 196, 'ribgul': 197, 'rinduc': 198, 'robgro': 199, 'rocpig': 200, 'rocwre': 201, 'rthhum': 202, 'ruckin': 203, 'rudduc': 204, 'rufgro': 205, 'rufhum': 206, 'rusbla': 207, 'sagspa1': 208, 'sagthr': 209, 'savspa': 210, 'saypho': 211, 'scatan': 212, 'scoori': 213, 'semplo': 214, 'semsan': 215, 'sheowl': 216, 'shshaw': 217, 'snobun': 218, 'snogoo': 219, 'solsan': 220, 'sonspa': 221, 'sora': 222, 'sposan': 223, 'spotow': 224, 'stejay': 225, 'swahaw': 226, 'swaspa': 227, 'swathr': 228, 'treswa': 229, 'truswa': 230, 'tuftit': 231, 'tunswa': 232, 'veery': 233, 'vesspa': 234, 'vigswa': 235, 'warvir': 236, 'wesblu': 237, 'wesgre': 238, 'weskin': 239, 'wesmea': 240, 'wessan': 241, 'westan': 242, 'wewpew': 243, 'whbnut': 244, 'whcspa': 245, 'whfibi': 246, 'whtspa': 247, 'whtswi': 248, 'wilfly': 249, 'wilsni1': 250, 'wiltur': 251, 'winwre3': 252, 'wlswar': 253, 'wooduc': 254, 'wooscj2': 255, 'woothr': 256, 'y00475': 257, 'yebfly': 258, 'yebsap': 259, 'yehbla': 260, 'yelwar': 261, 'yerwar': 262, 'yetvir': 263}
+  #     sample_rate: 16000
+  #     data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+  #   validation:
+  #     <<: *bird_base
+  #     split: cbi_validation
+  #   test:
+  #     <<: *bird_base
+  #     split: cbi_test
+  #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  # - name: "birdset_nbp_detection"
+  #   train: &nbp_base
+  #     dataset_name: birdset
+  #     split: NBP-train
+  #     type: detection
+  #     label_column: labels_as_list
+  #     audio_path_col: path
+  #     multi_label: true
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     transformations:
+  #       - type: labels_from_features
+  #         features:
+  #           - labels_as_list
+  #         override: true
+  #         label_map: {'Accipitriformes Accipitridae Buteo buteo': 0, 'Columbiformes Columbidae Columba palumbus': 1, 'Columbiformes Columbidae Streptopelia decaocto': 2, 'Columbiformes Columbidae Streptopelia turtur': 3, 'Passeriformes Aegithalidae Aegithalos caudatus': 4, 'Passeriformes Alaudidae Alauda arvensis': 5, 'Passeriformes Alaudidae Galerida cristata': 6, 'Passeriformes Alaudidae Galerida theklae': 7, 'Passeriformes Alaudidae Lullula arborea': 8, 'Passeriformes Certhiidae Certhia brachydactyla': 9, 'Passeriformes Cisticolidae Cisticola juncidis': 10, 'Passeriformes Corvidae Corvus corone': 11, 'Passeriformes Corvidae Garrulus glandarius': 12, 'Passeriformes Corvidae Pica pica': 13, 'Passeriformes Emberizidae Emberiza cirlus': 14, 'Passeriformes Fringillidae Carduelis carduelis': 15, 'Passeriformes Fringillidae Chloris chloris': 16, 'Passeriformes Fringillidae Fringilla coelebs': 17, 'Passeriformes Fringillidae Linaria cannabina': 18, 'Passeriformes Fringillidae Loxia curvirostra': 19, 'Passeriformes Fringillidae Pyrrhula pyrrhula': 20, 'Passeriformes Fringillidae Serinus serinus': 21, 'Passeriformes Hirundinidae Hirundo rustica': 22, 'Passeriformes Motacillidae Anthus trivialis': 23, 'Passeriformes Motacillidae Motacilla cinerea': 24, 'Passeriformes Muscicapidae Erithacus rubecula': 25, 'Passeriformes Muscicapidae Luscinia megarhynchos': 26, 'Passeriformes Muscicapidae Muscicapa striata': 27, 'Passeriformes Oriolidae Oriolus oriolus': 28, 'Passeriformes Paridae Cyanistes caeruleus': 29, 'Passeriformes Paridae Lophophanes cristatus': 30, 'Passeriformes Paridae Parus major': 31, 'Passeriformes Paridae Periparus ater': 32, 'Passeriformes Paridae Poecile palustris': 33, 'Passeriformes Passeridae Passer domesticus': 34, 'Passeriformes Passeridae Petronia petronia': 35, 'Passeriformes Phylloscopidae Phylloscopus collybita': 36, 'Passeriformes Prunellidae Prunella modularis': 37, 'Passeriformes Regulidae Regulus ignicapilla': 38, 'Passeriformes Scotocercidae Cettia cetti': 39, 'Passeriformes Sittidae Sitta europaea': 40, 'Passeriformes Sturnidae Sturnus vulgaris': 41, 'Passeriformes Sylviidae Curruca cantillans': 42, 'Passeriformes Sylviidae Curruca melanocephala': 43, 'Passeriformes Sylviidae Curruca undata': 44, 'Passeriformes Sylviidae Sylvia atricapilla': 45, 'Passeriformes Troglodytidae Troglodytes troglodytes': 46, 'Passeriformes Turdidae Turdus merula': 47, 'Passeriformes Turdidae Turdus philomelos': 48, 'Piciformes Picidae Dendrocopos major': 49, 'Piciformes Picidae Jynx torquilla': 50}
+  #     sample_rate: 16000
+  #     data_root: /home/marius_miron_earthspecies_org/data/16000/
+  #   validation:
+  #     <<: *nbp_base
+  #     split: NBP-validation
+  #   test:
+  #     <<: *nbp_base
+  #     split: NBP-test
+  #   metrics: [mAP]
+  # - name: "chiffchaff_id_across_year"
+  #   train:
+  #     dataset_name: "chiffchaff_id"
+  #     split: "train_across_year"
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "individual_id"
+  #         override: true
+  #         label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
 
-  - name: "dcase_detection"
-    train: &dcase_base
-      dataset_name: beans
-      split: dcase_train
-      type: detection
-      label_column: labels_as_list
-      audio_path_col: path
-      multi_label: true
-      label_type: supervised
-      audio_max_length_seconds: 5
-      transformations:
-        - type: labels_from_features
-          features:
-            - labels_as_list
-          override: true
-          label_map: {'American Redstart': 0, 'Bay-breasted Warbler': 1, 'Black-throated Blue Warbler': 2, 'Chipping Sparrow': 3, 'Common Yellowthroat': 4, 'Gray-cheeked Thrush': 5, 'Hyena giggle': 6, 'Hyena groan and moo': 7, 'Hyena squitter': 8, 'Jackdaw call': 9, 'Meerkat close call': 10, 'Meerkat short note': 11, 'Other Animal': 12, 'Ovenbird': 13, 'Rose-breasted Grosbeak': 14, 'Savannah Sparrow': 15, "Swainson's Thrush": 16, 'White-throated Sparrow': 17}
-      sample_rate: 16000
-      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
-    validation:
-      <<: *dcase_base
-      split: dcase_validation
-    test:
-      <<: *dcase_base
-      split: dcase_test
-    metrics: [mAP]
+  #   validation:
+  #     dataset_name: "chiffchaff_id"
+  #     split: "train_across_year"  # Use same as train
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "individual_id"
+  #         override: true
+  #         label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+  #   test:
+  #     dataset_name: "chiffchaff_id"
+  #     split: "test_across_year"
+  #     sample_rate: 16000
+  #     transformations:
+  #       - type: "label_from_feature"
+  #         feature: "individual_id"
+  #         override: true
+  #         label_map: {'F72726': 0, 'F91903': 1, 'F91907': 2, 'F91913': 3, 'F91915': 4, 'F91916': 5, 'F91954': 6, 'F91959': 7, 'F91969': 8, 'F91973': 9}
+
+  #   metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  # - name: "dcase_detection"
+  #   train: &dcase_base
+  #     dataset_name: beans
+  #     split: dcase_train
+  #     type: detection
+  #     label_column: labels_as_list
+  #     audio_path_col: path
+  #     multi_label: true
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     transformations:
+  #       - type: labels_from_features
+  #         features:
+  #           - labels_as_list
+  #         override: true
+  #         label_map: {'American Redstart': 0, 'Bay-breasted Warbler': 1, 'Black-throated Blue Warbler': 2, 'Chipping Sparrow': 3, 'Common Yellowthroat': 4, 'Gray-cheeked Thrush': 5, 'Hyena giggle': 6, 'Hyena groan and moo': 7, 'Hyena squitter': 8, 'Jackdaw call': 9, 'Meerkat close call': 10, 'Meerkat short note': 11, 'Other Animal': 12, 'Ovenbird': 13, 'Rose-breasted Grosbeak': 14, 'Savannah Sparrow': 15, "Swainson's Thrush": 16, 'White-throated Sparrow': 17}
+  #     sample_rate: 16000
+  #     data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+  #   validation:
+  #     <<: *dcase_base
+  #     split: dcase_validation
+  #   test:
+  #     <<: *dcase_base
+  #     split: dcase_test
+  #   metrics: [mAP]

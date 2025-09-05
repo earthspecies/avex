@@ -2,9 +2,9 @@
 dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
-  train_epochs: 100
+  train_epochs: 50
   lr: 0.001
-  batch_size: 64
+  batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
   amp: false
@@ -271,10 +271,10 @@ experiments:
   #   checkpoint_path: gs://representation-learning/models/efficientnet_audioset.pt
 
 # Where to save the evaluation results
-save_dir: evaluation_results/aaai/efficientnet_audioset
+save_dir: evaluation_results/icassp/efficientnet_audioset
 
 # Optional: Append results to a global CSV file for cross-model comparison
-results_csv_path: evaluation_results/all_models_results.csv
+results_csv_path: evaluation_results/icassp/all_models_results.csv
 
 device: cuda
 

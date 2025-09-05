@@ -2,12 +2,12 @@
 dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
-  train_epochs: 100
+  train_epochs: 50
   lr: 0.001
   batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
-  amp: true
+  amp: True
   amp_dtype: bf16
   gradient_clip_val: 1.0
   warmup_epochs: 5
@@ -15,24 +15,254 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: sl_eat_animalspeak_ssl_all
+  - run_name: sl_eat_animalspeak_ssl_all_attention_last
     run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
     probe_config:
-      probe_type: linear
-      target_layers: ["backbone"]
-      aggregation: "mean"
-      input_processing: "pooled"
-      freeze_backbone: true
-      online_training: false
-    ### whether to use pretrained model or the one we train on bioacoustic data
+      probe_type: weighted_attention
+      aggregation: none
+      input_processing: sequence
+      target_layers: ["last_layer"]
+      num_heads: 8
+      attention_dim: 64
+      num_layers: 1
+      max_sequence_length: 800
+      use_positional_encoding: False
+      dropout_rate: 0.3
+      freeze_backbone: True
+      online_training: True
     pretrained: false
     checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
 
+  - run_name: sl_eat_animalspeak_ssl_all_attention_all
+    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
+    probe_config:
+      probe_type: weighted_attention
+      aggregation: none
+      input_processing: sequence
+      target_layers: ["all"]
+      num_heads: 8
+      attention_dim: 64
+      num_layers: 1
+      max_sequence_length: 800
+      use_positional_encoding: False
+      dropout_rate: 0.3
+      freeze_backbone: True
+      online_training: True
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+
+  - run_name: sl_eat_animalspeak_ssl_all_attention_ft
+    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
+    probe_config:
+      probe_type: weighted_attention
+      aggregation: none
+      input_processing: sequence
+      target_layers: ["last_layer"]
+      num_heads: 8
+      attention_dim: 64
+      num_layers: 1
+      max_sequence_length: 800
+      use_positional_encoding: False
+      dropout_rate: 0.3
+      freeze_backbone: False
+      online_training: True
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+
+  - run_name: sl_eat_animalspeak_ssl_all_linear_last
+    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
+    probe_config:
+      probe_type: weighted_linear
+      aggregation: mean
+      input_processing: pooled
+      target_layers: ["last_layer"]
+      freeze_backbone: True
+      online_training: True
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+
+  - run_name: sl_eat_animalspeak_ssl_all_linear_all
+    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
+    probe_config:
+      probe_type: weighted_linear
+      target_layers: ["all"]
+      aggregation: mean
+      input_processing: pooled
+      freeze_backbone: True
+      online_training: True
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+
+  - run_name: sl_eat_animalspeak_ssl_all_linear_ft
+    run_config: configs/run_configs/aaai_train/ssl_eat_all.yml
+    probe_config:
+      probe_type: weighted_linear
+      aggregation: mean
+      input_processing: pooled
+      target_layers: ["last_layer"]
+      freeze_backbone: False
+      online_training: True
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_lstm_all
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_lstm"
+  #     aggregation: "none"
+  #     input_processing: "sequence"
+  #     target_layers: ["all"]
+  #     lstm_hidden_size: 64
+  #     num_layers: 1
+  #     bidirectional: true
+  #     max_sequence_length: 1000
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_lstm_last
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_lstm"
+  #     aggregation: "none"
+  #     input_processing: "sequence"
+  #     target_layers: ["last"]
+  #     lstm_hidden_size: 64
+  #     num_layers: 1
+  #     bidirectional: true
+  #     max_sequence_length: 1000
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_lstm_ft
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_lstm"
+  #     aggregation: "none"
+  #     input_processing: "sequence"
+  #     target_layers: ["last_layer"]
+  #     lstm_hidden_size: 64
+  #     num_layers: 1
+  #     bidirectional: true
+  #     max_sequence_length: 1000
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: false
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_mlp_all
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_mlp"
+  #     aggregation: "mean"
+  #     input_processing: "pooled"
+  #     target_layers: ["all"]
+  #     hidden_dims: [512, 256]
+  #     dropout_rate: 0.3
+  #     activation: "gelu"
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_mlp_last
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_mlp"
+  #     aggregation: "mean"
+  #     input_processing: "pooled"
+  #     target_layers: ["last"]
+  #     hidden_dims: [512, 256]
+  #     dropout_rate: 0.3
+  #     activation: "gelu"
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_mlp_ft
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_mlp"
+  #     aggregation: "mean"
+  #     input_processing: "pooled"
+  #     target_layers: ["last_layer"]
+  #     hidden_dims: [512, 256]
+  #     dropout_rate: 0.3
+  #     activation: "gelu"
+  #     freeze_backbone: false
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_transformer_all
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_transformer"
+  #     aggregation: "none"
+  #     input_processing: "sequence"
+  #     target_layers: ["all"]
+  #     num_heads: 8
+  #     attention_dim: 128
+  #     num_layers: 1
+  #     max_sequence_length: 1200
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_transformer_last
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_transformer"
+  #     aggregation: "none"
+  #     input_processing: "sequence"
+  #     target_layers: ["last"]
+  #     num_heads: 8
+  #     attention_dim: 128
+  #     num_layers: 1
+  #     max_sequence_length: 1200
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
+  # - run_name: sl_eat_animalspeak_ssl_all_transformer_ft
+  #   run_config: configs/run_configs/pretrained/beats_ft.yml
+  #   probe_config:
+  #     probe_type: "weighted_transformer"
+  #     aggregation: "none"
+  #     input_processing: "sequence"
+  #     target_layers: ["last_layer"]
+  #     num_heads: 8
+  #     attention_dim: 128
+  #     num_layers: 1
+  #     max_sequence_length: 1200
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: false
+  #     online_training: true
+  #   pretrained: false
+  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
+
 # Where to save the evaluation results
-save_dir: evaluation_results/aaai/sl_eat_animalspeak_ssl_all
+save_dir: evaluation_results/icassp/sl_eat_animalspeak_ssl_all
 
 # Optional: Append results to a global CSV file for cross-model comparison
-results_csv_path: evaluation_results/all_models_results.csv
+results_csv_path: evaluation_results/icassp/all_models_results.csv
 
 device: cuda
 

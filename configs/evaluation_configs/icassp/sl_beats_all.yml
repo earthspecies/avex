@@ -2,16 +2,16 @@
 dataset_config: configs/data_configs/benchmark.yml
 
 training_params:
-  train_epochs: 100
+  train_epochs: 50
   lr: 0.001
-  batch_size: 64
+  batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
   amp: false
   amp_dtype: bf16
-  gradient_clip_val: 1.0
+  gradient_clip_val: 10.0
   warmup_epochs: 5
-  scheduler_type: cosine
+  scheduler_type: none
 
 # Which experiments to evaluate
 experiments:
@@ -244,10 +244,10 @@ experiments:
   #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
 
 # Where to save the evaluation results
-save_dir: evaluation_results/aaai/sl_beats_all
+save_dir: evaluation_results/icassp/sl_beats_all
 
 # Optional: Append results to a global CSV file for cross-model comparison
-results_csv_path: evaluation_results/all_models_results.csv
+results_csv_path: evaluation_results/icassp/all_models_results.csv
 
 device: cuda
 
@@ -263,4 +263,4 @@ overwrite_embeddings: true
 
 # Control tqdm progress bar verbosity during fine-tuning
 # Set to true to disable progress bars and reduce output verbosity
-disable_tqdm: false
+disable_tqdm: true

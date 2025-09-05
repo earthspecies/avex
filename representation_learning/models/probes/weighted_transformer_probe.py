@@ -83,9 +83,7 @@ class WeightedTransformerProbe(torch.nn.Module):
         self.use_positional_encoding = use_positional_encoding
         self.target_length = target_length
 
-        # Register hooks for the specified layers if base_model is provided
-        if self.base_model is not None and not self.feature_mode:
-            self.base_model.register_hooks_for_layers(self.layers)
+        # Hooks are now registered in get_probe() after model mode is set
 
         # Initialize variables
         inferred_dim = None
@@ -127,7 +125,7 @@ class WeightedTransformerProbe(torch.nn.Module):
 
                     dummy = torch.randn(1, int(computed_target_length), device=device)
                     dummy_embeddings = base_model.extract_embeddings(
-                        dummy, aggregation=self.aggregation
+                        dummy, aggregation=self.aggregation, freeze_backbone=True
                     ).detach()
 
                     # feature_mode=True assumes that the embeddings are not lists
@@ -171,7 +169,7 @@ class WeightedTransformerProbe(torch.nn.Module):
 
                 dummy = torch.randn(1, int(computed_target_length), device=device)
                 dummy_embeddings = base_model.extract_embeddings(
-                    dummy, aggregation=self.aggregation
+                    dummy, aggregation=self.aggregation, freeze_backbone=True
                 )
 
                 # Handle the case where dummy_embeddings is a list (aggregation="none")
@@ -374,7 +372,7 @@ class WeightedTransformerProbe(torch.nn.Module):
                         inferred_dim = embedding_dims[0]
 
                     # Create learned weights for weighted sum
-                    self.layer_weights = nn.Parameter(torch.ones(num_embeddings))
+                    self.layer_weights = nn.Parameter(torch.zeros(num_embeddings))
 
                     # Log the setup
                     logger.info(
@@ -401,6 +399,32 @@ class WeightedTransformerProbe(torch.nn.Module):
                     if self.freeze_backbone:
                         dummy_embeddings = dummy_embeddings.detach()
 
+                    # Handle single 4D tensor by reshaping to 3D (same as
+                    # TransformerProbe)
+                    if dummy_embeddings.dim() == 4:
+                        # Handle 4D embeddings (B, C, H, W)
+                        batch_size, channels, height, width = dummy_embeddings.shape
+                        logger.debug(
+                            f"Processing 4D embedding: {dummy_embeddings.shape}"
+                        )
+                        # Reshape to (B, W, C*H) - treat width as sequence length,
+                        # C*H as features. Ensure proper memory layout for cuDNN
+                        dummy_embeddings = (
+                            dummy_embeddings.permute(0, 3, 1, 2)
+                            .contiguous()
+                            .view(batch_size, width, channels * height)
+                        )
+                        logger.info(
+                            f"Reshaped 4D embedding to: {dummy_embeddings.shape}"
+                        )
+
+                    if dummy_embeddings.dim() == 2:
+                        # Handle 2D embeddings by adding sequence dimension
+                        dummy_embeddings = dummy_embeddings.unsqueeze(2)
+                        logger.info(
+                            f"Reshaped 2D embedding to: {dummy_embeddings.shape}"
+                        )
+
                     if dummy_embeddings.dim() == 3:
                         inferred_dim = dummy_embeddings.shape[-1]
                         # No layer_weights needed for single embedding
@@ -411,9 +435,8 @@ class WeightedTransformerProbe(torch.nn.Module):
                         )
                     else:
                         raise ValueError(
-                            f"Transformer probe expects 3D embeddings (batch_size, "
-                            f"sequence_length, embedding_dim), got shape "
-                            f"{dummy_embeddings.shape}"
+                            f"Transformer probe expects 2D, 3D or 4D embeddings, "
+                            f"got shape {dummy_embeddings.shape}"
                         )
                 else:
                     # Single tensor case
@@ -552,7 +575,10 @@ class WeightedTransformerProbe(torch.nn.Module):
                 f"with aggregation='{self.aggregation}'"
             )
             embeddings = self.base_model.extract_embeddings(
-                x, padding_mask=padding_mask, aggregation=self.aggregation
+                x,
+                padding_mask=padding_mask,
+                aggregation=self.aggregation,
+                freeze_backbone=self.freeze_backbone,
             )
             logger.debug(
                 f"Transformer probe forward: Received embeddings type: "
@@ -566,12 +592,30 @@ class WeightedTransformerProbe(torch.nn.Module):
                 else:
                     embeddings = embeddings.detach()
 
+        # Handle single 4D tensor by reshaping to 3D (same as TransformerProbe)
+        if not isinstance(embeddings, list) and embeddings.dim() == 4:
+            # Handle 4D embeddings (B, C, H, W)
+            batch_size, channels, height, width = embeddings.shape
+            logger.debug(f"Processing 4D embedding: {embeddings.shape}")
+            # Reshape to (B, W, C*H) - treat width as sequence length,
+            # C*H as features. Ensure proper memory layout for cuDNN
+            embeddings = (
+                embeddings.permute(0, 3, 1, 2)
+                .contiguous()
+                .view(batch_size, width, channels * height)
+            )
+            logger.debug(f"Reshaped 4D embedding to: {embeddings.shape}")
+        elif not isinstance(embeddings, list) and embeddings.dim() == 2:
+            # Handle 2D embeddings by adding sequence dimension
+            embeddings = embeddings.unsqueeze(2)
+            logger.debug(f"Reshaped 2D embedding to: {embeddings.shape}")
+
         # Handle the case where embeddings is a list (aggregation="none")
         if isinstance(embeddings, list):
             # Apply individual embedding projectors to each embedding if enabled
             if (
                 hasattr(self, "embedding_projectors")
-                and self.embedding_projectors is not None
+                and getattr(self, "embedding_projectors", None) is not None
             ):
                 projected_embeddings = []
                 for i, (emb, projector) in enumerate(
@@ -665,7 +709,7 @@ class WeightedTransformerProbe(torch.nn.Module):
         This function prints the raw weights and normalized weights (softmax)
         for each layer when using list embeddings with aggregation='none'.
         """
-        if not hasattr(self, "layer_weights"):
+        if not hasattr(self, "layer_weights") or self.layer_weights is None:
             print(
                 "No learned weights found. This probe does not use weighted sum "
                 "of embeddings."
@@ -714,10 +758,10 @@ class WeightedTransformerProbe(torch.nn.Module):
             "target_length": self.target_length,
             "has_layer_weights": hasattr(self, "layer_weights"),
             "has_embedding_projectors": hasattr(self, "embedding_projectors")
-            and self.embedding_projectors is not None,
+            and getattr(self, "embedding_projectors", None) is not None,
         }
 
-        if hasattr(self, "layer_weights"):
+        if hasattr(self, "layer_weights") and self.layer_weights is not None:
             info["layer_weights"] = self.layer_weights.detach().cpu().numpy().tolist()
 
         return info

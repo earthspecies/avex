@@ -293,6 +293,7 @@ class EATHFModel(ModelBase):
         padding_mask: Optional[torch.Tensor] = None,
         pooling: str = "cls",
         aggregation: str = "none",
+        freeze_backbone: bool = True,
     ) -> Union[torch.Tensor, List[torch.Tensor]]:  # type: ignore[override]
         """Extract embeddings from all registered hooks in the EAT model.
 
@@ -302,6 +303,7 @@ class EATHFModel(ModelBase):
             pooling: Pooling method ("cls" or "mean")
             aggregation: Aggregation method for multiple layers ('mean', 'max',
                 'cls_token', 'none')
+            freeze_backbone: Whether to freeze the backbone and use torch.no_grad()
 
         Returns:
             Union[torch.Tensor, List[torch.Tensor]]: Model embeddings (tensor if
@@ -330,8 +332,12 @@ class EATHFModel(ModelBase):
             prev_pooling = self.pooling
             self.pooling = pooling
 
-            # Forward pass to trigger hooks
-            with torch.no_grad():
+            # Forward pass to trigger hooks (conditionally use torch.no_grad based on
+            # freeze_backbone)
+            if freeze_backbone:
+                with torch.no_grad():
+                    self.forward(wav, padding_mask)
+            else:
                 self.forward(wav, padding_mask)
 
             # Restore original pooling method

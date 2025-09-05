@@ -118,9 +118,7 @@ class WeightedAttentionProbe(torch.nn.Module):
         self.use_positional_encoding = use_positional_encoding
         self.target_length = target_length
 
-        # Register hooks for the specified layers if base_model is provided
-        if self.base_model is not None and not self.feature_mode:
-            self.base_model.register_hooks_for_layers(self.layers)
+        # Hooks are now registered in get_probe() after model mode is set
 
         # Initialize variables
         inferred_dim = None
@@ -416,7 +414,7 @@ class WeightedAttentionProbe(torch.nn.Module):
                         inferred_dim = embedding_dims[0]
 
                     # Create learned weights for weighted sum
-                    self.layer_weights = nn.Parameter(torch.ones(num_embeddings))
+                    self.layer_weights = nn.Parameter(torch.zeros(num_embeddings))
 
                     # Log the setup
                     logger.info(
@@ -554,6 +552,7 @@ class WeightedAttentionProbe(torch.nn.Module):
 
         # Create single attention mechanism for all cases
         self.attention_layers = nn.ModuleList()
+        self.layer_norms = nn.ModuleList()
         for _ in range(num_layers):
             attention_layer = nn.MultiheadAttention(
                 embed_dim=inferred_dim,
@@ -562,6 +561,7 @@ class WeightedAttentionProbe(torch.nn.Module):
                 batch_first=True,
             )
             self.attention_layers.append(attention_layer)
+            self.layer_norms.append(nn.LayerNorm(inferred_dim))
 
         # Optional positional encoding
         if use_positional_encoding:
@@ -596,7 +596,7 @@ class WeightedAttentionProbe(torch.nn.Module):
             f"num_embeddings={num_embeddings}, "
             f"has_layer_weights={hasattr(self, 'layer_weights')}, "
             f"has_embedding_projectors={hasattr(self, 'embedding_projectors')} "
-            f"and {self.embedding_projectors is not None}"
+            f"and {getattr(self, 'embedding_projectors', None) is not None}"
         )
 
     def __del__(self) -> None:
@@ -640,7 +640,10 @@ class WeightedAttentionProbe(torch.nn.Module):
                 f"with aggregation='{self.aggregation}'"
             )
             embeddings = self.base_model.extract_embeddings(
-                x, padding_mask=padding_mask, aggregation=self.aggregation
+                x,
+                padding_mask=padding_mask,
+                aggregation=self.aggregation,
+                freeze_backbone=self.freeze_backbone,
             )
             logger.debug(
                 f"Attention probe forward: Received embeddings type: "
@@ -659,7 +662,7 @@ class WeightedAttentionProbe(torch.nn.Module):
             # Apply individual embedding projectors to each embedding if enabled
             if (
                 hasattr(self, "embedding_projectors")
-                and self.embedding_projectors is not None
+                and getattr(self, "embedding_projectors", None) is not None
             ):
                 projected_embeddings = []
                 for i, (emb, projector) in enumerate(
@@ -748,11 +751,12 @@ class WeightedAttentionProbe(torch.nn.Module):
                 padding_mask = None
 
         # Pass through attention layers
-        for attention_layer in self.attention_layers:
+        for i, attention_layer in enumerate(self.attention_layers):
             attn_out, _ = attention_layer(
                 embeddings, embeddings, embeddings, key_padding_mask=padding_mask
             )
-            embeddings = attn_out
+            # Layer normalization
+            embeddings = self.layer_norms[i](embeddings + attn_out)
 
         # Global average pooling
         embeddings = embeddings.mean(dim=1)
@@ -772,7 +776,7 @@ class WeightedAttentionProbe(torch.nn.Module):
         This function prints the raw weights and normalized weights (softmax)
         for each layer when using list embeddings with aggregation='none'.
         """
-        if not hasattr(self, "layer_weights"):
+        if not hasattr(self, "layer_weights") or self.layer_weights is None:
             print(
                 "No learned weights found. This probe does not use weighted sum "
                 "of embeddings."
@@ -821,10 +825,10 @@ class WeightedAttentionProbe(torch.nn.Module):
             "target_length": self.target_length,
             "has_layer_weights": hasattr(self, "layer_weights"),
             "has_embedding_projectors": hasattr(self, "embedding_projectors")
-            and self.embedding_projectors is not None,
+            and getattr(self, "embedding_projectors", None) is not None,
         }
 
-        if hasattr(self, "layer_weights"):
+        if hasattr(self, "layer_weights") and self.layer_weights is not None:
             info["layer_weights"] = self.layer_weights.detach().cpu().numpy().tolist()
 
         return info
