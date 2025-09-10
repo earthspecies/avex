@@ -172,7 +172,8 @@ class PerchModel(ModelBase):
         outputs = tf_model.signatures["serving_default"](inputs=tf_audio)
 
         # Embeddings are stored under key "output_1"
-        emb = outputs["output_1"].numpy()  # np.ndarray [B, 1280]
+        # emb = outputs["output_1"].numpy()  # np.ndarray [B, 1280]
+        emb = outputs["output_0"].numpy()
 
         return torch.from_numpy(emb)
 
