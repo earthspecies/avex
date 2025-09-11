@@ -3,12 +3,13 @@ import torch
 import numpy as np
 import pandas as pd
 from zeroshot_detection_eval.data.dataloader import DataloaderBuilder
+from zeroshot_detection_eval.eval.evaluation import Scorer
 from esp_data.io import filesystem
 import os 
 from tqdm import tqdm
 
 DATASET = "powdermill"
-BATCH_SIZE = 1
+BATCH_SIZE = 4
 WINDOW_SIZE = 5
 N_WORKERS = 8
 ANNOTATION_COLUMN = "Species"
@@ -16,7 +17,8 @@ ANNOTATION_COLUMN = "Species"
 out_fp = f"perch_{DATASET}_{WINDOW_SIZE}_{ANNOTATION_COLUMN}.yaml"
 
 model = PerchModel(0)
-dl = DataloaderBuilder("powdermill", WINDOW_SIZE, WINDOW_SIZE, BATCH_SIZE, N_WORKERS)
+model.eval()
+dl = DataloaderBuilder("powdermill", WINDOW_SIZE, WINDOW_SIZE, BATCH_SIZE, N_WORKERS, sr=32000)
 
 # convert output labels ebird -> scientific name
 output_labels = pd.read_csv('perch_labels.csv')['ebird2021_code'].tolist()
@@ -31,21 +33,12 @@ info_df = pd.read_csv(info_fp)
 info_df = info_df[~pd.isna(info_df["scientific name"])]
 
 output_species_labels = []
+print("correcting species labels")
 for ebird_label in tqdm(output_labels):
     df_sub = info_df[info_df['species_code'] == ebird_label]
     if DATASET == "powdermill":
         if ebird_label == "haiwoo":
             scientific_name = 'Leuconotopicus villosus'
-            output_species_labels.append(scientific_name)
-            continue
-            
-        if ebird_label == "dowwoo":
-            scientific_name = 'Picoides pubescens'
-            output_species_labels.append(scientific_name)
-            continue
-
-        if ebird_label == "ruckin":
-            scientific_name = 'Regulus calendula'
             output_species_labels.append(scientific_name)
             continue
 
@@ -66,13 +59,16 @@ target_labels = dl.ds.get_available_labels(ANNOTATION_COLUMN)
 for species in target_labels:
     if not species in output_species_labels:
         print(species)
-        breakpoint()
 
-    
+S = Scorer()
+
 for i, x in enumerate(dl):
     dataloader = x['dataloader']
     selection_table = x['selection_table']
     print(f"inference for {i} out of {len(dl)}")
+    if len(selection_table) == 0:
+        print(f"skipping example {i} because it has no ground-truth events; see github issue for sed_scores_eval")
+        continue
 
     preds = []
     for batch in tqdm(dataloader):
@@ -81,15 +77,13 @@ for i, x in enumerate(dl):
             preds.append(batchpreds)
 
     preds = np.concatenate(preds,axis=0)
+    preds_df = pd.DataFrame(preds, columns=output_species_labels)
+    preds_df = preds_df[target_labels]
+    preds = preds_df.to_numpy()
+    preds = 1. / (1. + np.exp(-preds))
 
-            
+    S.update(preds, target_labels, 1/WINDOW_SIZE, selection_table, ANNOTATION_COLUMN)
+    # if i>0:
+    #     break
 
-# # audio = torch.tensor(np.random.normal(size=(1, 16000)))
-# # with torch.no_grad():
-# #     x = model(audio)
-# #     print(x)
-# #     print(x.size())
-
-# # print(dl[3]['selection_table'])
-
-# print(next(iter(dl[3]['dataloader'])))
+S.compute_scores(output_fp = out_fp)
