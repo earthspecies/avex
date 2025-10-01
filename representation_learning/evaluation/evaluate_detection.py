@@ -8,9 +8,9 @@ from esp_data.io import filesystem
 import os 
 from tqdm import tqdm
 
-DATASET = "powdermill"
+DATASET = "wabad"
 BATCH_SIZE = 4
-WINDOW_SIZE = 5
+WINDOW_SIZE = 0.5
 N_WORKERS = 8
 ANNOTATION_COLUMN = "Species"
 
@@ -18,19 +18,32 @@ out_fp = f"perch_{DATASET}_{WINDOW_SIZE}_{ANNOTATION_COLUMN}.yaml"
 
 model = PerchModel(0)
 model.eval()
-dl = DataloaderBuilder("powdermill", WINDOW_SIZE, WINDOW_SIZE, BATCH_SIZE, N_WORKERS, sr=32000)
+dl = DataloaderBuilder(DATASET, WINDOW_SIZE, WINDOW_SIZE, BATCH_SIZE, N_WORKERS, sr=32000)
 
 # convert output labels ebird -> scientific name
 output_labels = pd.read_csv('perch_labels.csv')['ebird2021_code'].tolist()
 
-info_fp = "Clements-v2024-October-2024-rev.csv"
-if not os.path.exists(info_fp):
-    fs = filesystem("gcs")
-    gcp_path = "gs://esp-ml-datasets/wabad/v0.1.0/Clements-v2024-October-2024-rev.csv"
-    fs.get(gcp_path, info_fp)
+if DATASET == "powdermill":
+    info_fp = "Clements-v2024-October-2024-rev.csv"
+    if not os.path.exists(info_fp):
+        fs = filesystem("gcs")
+        gcp_path = "gs://esp-ml-datasets/wabad/v0.1.0/Clements-v2024-October-2024-rev.csv"
+        fs.get(gcp_path, info_fp)
 
-info_df = pd.read_csv(info_fp)
-info_df = info_df[~pd.isna(info_df["scientific name"])]
+    info_df = pd.read_csv(info_fp)
+    info_df = info_df[~pd.isna(info_df["scientific name"])]
+if DATASET == "wabad":
+    info_fp = "eBird_Taxonomy_v2021.csv"
+    if not os.path.exists(info_fp):
+        fs = filesystem("gcs")
+        gcp_path = "gs://esp-ml-datasets/wabad/v0.1.0/eBird_Taxonomy_v2021.csv"
+        fs.get(gcp_path, info_fp)
+
+    info_df = pd.read_csv(info_fp)
+    info_df = info_df[~pd.isna(info_df["SCI_NAME"])]
+    info_df['species_code'] = info_df["SPECIES_CODE"]
+    info_df['scientific name'] = info_df["SCI_NAME"]
+
 
 output_species_labels = []
 print("correcting species labels")
@@ -47,20 +60,57 @@ for ebird_label in tqdm(output_labels):
             output_species_labels.append(scientific_name)
             continue
 
+    if DATASET == "wabad":
+        correction_dict = {}
+        # correction_dict = {"bkhbat1" : "Batis minor",
+        #                     "subwar1" : "Curruca cantillans",
+        #                     "leswhi1" : "Curruca curruca",
+        #                     "subwar1" : "Curruca iberiae",
+        #                     "grnjay1" : "Cyanocorax yncas",
+        #                     "ruwant4" : "Herpsilochmus frater",
+        #                     "blewhe1" : "Oenanthe hispanica",
+        #                     "blcapa2" : "Oreolais rufogularis",
+        #                     "grnwoo1" : "Picus viridis",
+        #                     "gowbar1" : "Psilopogon chrysopogon",
+        #                     "reevir" : "Vireo olivaceus",
+        #                     "butwoo2" : "Xiphorhynchus guttatus",}
+
+        if ebird_label in correction_dict.keys():
+            scientific_name = correction_dict[ebird_label]
+            output_species_labels.append(scientific_name)
+            continue
+
     if len(df_sub) == 0:
         scientific_name = ebird_label
     else:
         scientific_name = df_sub['scientific name'].tolist()[0]
     output_species_labels.append(scientific_name)
 
+if DATASET == "wabad" : 
+    bonus_columns = [("bkhbat1", "Batis minor"),
+                     ("subwar1" , "Curruca cantillans"),
+                     ("leswhi1" , "Curruca curruca"),
+                     ("subwar1" , "Curruca iberiae"),
+                     ("grnjay1" , "Cyanocorax yncas"),
+                     ("ruwant4" , "Herpsilochmus frater"),
+                     ("blewhe1" , "Oenanthe hispanica"),
+                     ("blcapa2" , "Oreolais rufogularis"),
+                     ("grnwoo1" , "Picus viridis"),
+                     ("gowbar1" , "Psilopogon chrysopogon"),
+                     ("reevir" , "Vireo olivaceus"),
+                     ("butwoo2" , "Xiphorhynchus guttatus")]
+else:
+    bonus_columns = []
+
 # check if output labels exist in targets
 target_labels = dl.ds.get_available_labels(ANNOTATION_COLUMN)
 
 for species in target_labels:
     if not species in output_species_labels:
-        print(species)
+        if not species in [x[1] for x in bonus_columns]:
+            print(species)
 
-S = Scorer()
+S = Scorer(temp_dir=f"{DATASET}_{WINDOW_SIZE}")
 
 for i, x in enumerate(dl):
     dataloader = x['dataloader']
@@ -78,6 +128,11 @@ for i, x in enumerate(dl):
 
     preds = np.concatenate(preds,axis=0)
     preds_df = pd.DataFrame(preds, columns=output_species_labels)
+    if DATASET == "wabad":
+        bonus_preds_df = pd.DataFrame(preds, columns=output_labels)
+        bonus_preds_df = bonus_preds_df[[x[0] for x in bonus_columns]]
+        bonus_preds_df.columns = [x[1] for x in bonus_columns]
+        preds_df = pd.concat([preds_df, bonus_preds_df], axis =1)
     preds_df = preds_df[target_labels]
     preds = preds_df.to_numpy()
     preds = 1. / (1. + np.exp(-preds))
@@ -86,4 +141,4 @@ for i, x in enumerate(dl):
     # if i>0:
     #     break
 
-S.compute_scores(output_fp = out_fp)
+S.compute_scores(output_fp = out_fp, delete_temp=False, num_jobs=12)
