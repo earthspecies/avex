@@ -62,18 +62,6 @@ for ebird_label in tqdm(output_labels):
 
     if DATASET == "wabad":
         correction_dict = {}
-        # correction_dict = {"bkhbat1" : "Batis minor",
-        #                     "subwar1" : "Curruca cantillans",
-        #                     "leswhi1" : "Curruca curruca",
-        #                     "subwar1" : "Curruca iberiae",
-        #                     "grnjay1" : "Cyanocorax yncas",
-        #                     "ruwant4" : "Herpsilochmus frater",
-        #                     "blewhe1" : "Oenanthe hispanica",
-        #                     "blcapa2" : "Oreolais rufogularis",
-        #                     "grnwoo1" : "Picus viridis",
-        #                     "gowbar1" : "Psilopogon chrysopogon",
-        #                     "reevir" : "Vireo olivaceus",
-        #                     "butwoo2" : "Xiphorhynchus guttatus",}
 
         if ebird_label in correction_dict.keys():
             scientific_name = correction_dict[ebird_label]
@@ -116,9 +104,9 @@ for i, x in enumerate(dl):
     dataloader = x['dataloader']
     selection_table = x['selection_table']
     print(f"inference for {i} out of {len(dl)}")
-    if len(selection_table) == 0:
-        print(f"skipping example {i} because it has no ground-truth events; see github issue for sed_scores_eval")
-        continue
+    # if len(selection_table) == 0:
+    #     print(f"skipping example {i} because it has no ground-truth events; see github issue for sed_scores_eval")
+    #     continue
 
     preds = []
     for batch in tqdm(dataloader):
