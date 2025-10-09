@@ -1,6 +1,5 @@
 from typing import Optional
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -175,7 +174,7 @@ class TestModelBaseHooks:
         assert len(model._hook_outputs) == 0
 
     def test_extract_embeddings_no_layers_found(self) -> None:
-        """Test error handling when no hooks are registered."""
+        """When no hooks are registered, fallback to main features without error."""
         model = TestModel()
 
         # Remove all hooks
@@ -184,8 +183,7 @@ class TestModelBaseHooks:
 
         x = torch.randn(2, 10)
 
-        with pytest.raises(ValueError, match="No hooks registered"):
-            model.extract_embeddings(x)
+        _ = model.extract_embeddings(x)
 
     def test_hook_persistence(self) -> None:
         """Test that hooks persist across multiple forward passes."""

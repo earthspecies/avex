@@ -102,6 +102,7 @@ class TestEmbeddingAggregation:
                 x: torch.Tensor,
                 aggregation: str = "mean",
                 padding_mask: Optional[torch.Tensor] = None,
+                freeze_backbone: bool = False,
             ) -> Union[torch.Tensor, List[torch.Tensor]]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -130,9 +131,9 @@ class TestEmbeddingAggregation:
 
         assert probe_none is not None
 
-        # Test that projection heads were created
-        assert hasattr(probe_none, "layer_projections")
-        assert len(probe_none.layer_projections) == 2
+        # Test that projection heads were created (new name embedding_projectors)
+        assert hasattr(probe_none, "embedding_projectors")
+        assert len(probe_none.embedding_projectors) == 2
 
         # Test forward pass with mock embeddings
         x = torch.randn(4, 24000)  # batch_size=4, audio_length=24000
@@ -158,6 +159,7 @@ class TestEmbeddingAggregation:
                 x: torch.Tensor,
                 aggregation: str = "mean",
                 padding_mask: Optional[torch.Tensor] = None,
+                freeze_backbone: bool = False,
             ) -> Union[torch.Tensor, List[torch.Tensor]]:
                 batch_size = x.shape[0]
                 if aggregation == "none":
@@ -187,9 +189,9 @@ class TestEmbeddingAggregation:
 
         assert probe_none is not None
 
-        # Test that projection heads were created
-        assert hasattr(probe_none, "layer_projections")
-        assert len(probe_none.layer_projections) == 2
+        # Test that projection heads were created (new name embedding_projectors)
+        assert hasattr(probe_none, "embedding_projectors")
+        assert len(probe_none.embedding_projectors) == 2
 
         # Test forward pass with mock embeddings
         x = torch.randn(4, 24000)  # batch_size=4, audio_length=24000
@@ -307,53 +309,54 @@ class TestEmbeddingAggregation:
 
     def test_weighted_probes_with_sequence_processing(self) -> None:
         """Test that weighted probes work with sequence input processing."""
-        # Test weighted_linear probe with sequence processing
-        probe_config_linear = ProbeConfig(
-            probe_type="weighted_linear",
+        # For sequence processing, use attention and transformer
+        probe_config_attention = ProbeConfig(
+            probe_type="attention",
             aggregation="none",
             input_processing="sequence",
             target_layers=["layer_12"],
+            num_heads=4,
+            attention_dim=256,
+            num_layers=1,
         )
 
-        # Test weighted_mlp probe with sequence processing
-        probe_config_mlp = ProbeConfig(
-            probe_type="weighted_mlp",
+        probe_config_transformer = ProbeConfig(
+            probe_type="transformer",
             aggregation="none",
             input_processing="sequence",
             target_layers=["layer_12"],
-            hidden_dims=[256, 128],
+            num_heads=4,
+            attention_dim=256,
+            num_layers=1,
         )
 
-        probe_linear = get_probe(
-            probe_config=probe_config_linear,
+        probe_attention = get_probe(
+            probe_config=probe_config_attention,
             base_model=None,
             num_classes=10,
             device="cpu",
             feature_mode=True,
-            input_dim=5120,  # 512 * 10 (seq_len * features)
+            input_dim=256,
         )
 
-        probe_mlp = get_probe(
-            probe_config=probe_config_mlp,
+        probe_transformer = get_probe(
+            probe_config=probe_config_transformer,
             base_model=None,
             num_classes=10,
             device="cpu",
             feature_mode=True,
-            input_dim=5120,  # 512 * 10 (seq_len * features)
+            input_dim=256,
         )
 
-        assert probe_linear is not None
-        assert probe_mlp is not None
+        assert probe_attention is not None
+        assert probe_transformer is not None
 
-        # Test forward pass with sequence input
-        # Weighted probes with sequence processing should handle 3D tensors
-        x_sequence = torch.randn(4, 10, 512)  # batch_size=4, seq_len=10, features=512
+        x_sequence = torch.randn(4, 10, 256)
+        out_attn = probe_attention(x_sequence)
+        out_tx = probe_transformer(x_sequence)
 
-        output_linear = probe_linear(x_sequence)
-        output_mlp = probe_mlp(x_sequence)
-
-        assert output_linear.shape == (4, 10)
-        assert output_mlp.shape == (4, 10)
+        assert out_attn.shape == (4, 10)
+        assert out_tx.shape == (4, 10)
 
 
 if __name__ == "__main__":

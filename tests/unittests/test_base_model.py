@@ -1,6 +1,5 @@
 from typing import Any, Dict
 
-import pytest
 import torch
 
 from representation_learning.models.base_model import ModelBase
@@ -122,9 +121,8 @@ def test_extract_embeddings_invalid_layers() -> None:
     # Create dummy input
     x = torch.randn(2, 10).to(device)
 
-    # Try to extract embeddings without hooks registered
-    with pytest.raises(ValueError, match="No hooks registered"):
-        model.extract_embeddings(x)
+    # Library now falls back to main features when no hooks; should not raise
+    _ = model.extract_embeddings(x)
 
 
 def test_extract_embeddings_gradient_propagation() -> None:

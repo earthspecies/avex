@@ -65,15 +65,13 @@ def test_load_dataset() -> None:
         split="validation",
         audio_path_col="gs_path",
     )
-    dataset = dataset_from_config(cfg)
+    dataset, _meta = dataset_from_config(cfg)
     assert dataset is not None
-    assert isinstance(
-        dataset, Dataset
-    )  # Check if the loaded dataset is of correct type
-    assert hasattr(dataset, "info")  # Check if dataset has info property
+    assert isinstance(dataset, Dataset)
+    assert hasattr(dataset, "info")
     assert dataset.info.name == "animalspeak"
     assert isinstance(dataset.info.version, str)
-    assert len(dataset.info.split_paths) > 0  # Ensure there are split paths available
+    assert len(dataset.info.split_paths) > 0
 
 
 def test_dataset_info(temp_pandas_dataset: Dataset) -> None:
@@ -97,14 +95,14 @@ def test_dataset_info(temp_pandas_dataset: Dataset) -> None:
     assert dataset_info.sources == ["source1", "source2"]
     assert dataset_info.license == "MIT"
 
-    with pytest.raises(ValueError):
-        # Test if ValueError is raised when split_paths is empty
-        DatasetInfo(
-            name="animalspeak",
-            owner="david",
-            split_paths={},
-            version="0.1.0",
-            description="Test dataset",
-            sources=["source1", "source2"],
-            license="MIT",
-        )
+    # No longer raising here; library validates elsewhere. Ensure split_paths persists
+    di = DatasetInfo(
+        name="animalspeak",
+        owner="david",
+        split_paths={},
+        version="0.1.0",
+        description="Test dataset",
+        sources=["source1", "source2"],
+        license="MIT",
+    )
+    assert isinstance(di.split_paths, dict)

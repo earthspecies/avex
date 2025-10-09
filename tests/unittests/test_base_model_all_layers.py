@@ -41,7 +41,7 @@ class TestExtractEmbeddingsAllLayers:
     """Test the 'all' functionality for extracting embeddings from all linear layers."""
 
     def test_extract_all_linear_layers(self) -> None:
-        """Test that 'all' correctly finds and extracts from all linear layers."""
+        """Test that 'all' includes all linear layers, including classifier."""
         model = SimpleTestModel(device="cpu")
 
         # Register hooks for all layers
@@ -54,9 +54,8 @@ class TestExtractEmbeddingsAllLayers:
         # Extract embeddings using 'all'
         embeddings = model.extract_embeddings(x=input_tensor, aggregation="mean")
 
-        # Should have embeddings from 3 linear layers (linear1, linear2, linear3)
-        # final_layer is excluded as it's the classification layer
-        expected_features = 20 + 15 + 8  # Sum of first 3 linear layer output dimensions
+        # Should have embeddings from all 4 linear layers (including final_layer)
+        expected_features = 20 + 15 + 8 + 5
         assert embeddings.shape == (batch_size, expected_features)
 
     def test_extract_specific_and_all_layers(self) -> None:
@@ -76,11 +75,8 @@ class TestExtractEmbeddingsAllLayers:
             aggregation="mean",
         )
 
-        # Should have embeddings from 3 linear layers (linear1 appears once)
-        # final_layer is excluded as it's the classification layer
-        expected_features = (
-            20 + 15 + 8
-        )  # Sum of first 3 linear layer outputs (no duplication)
+        # Should have embeddings from all 4 linear layers; 'all' deduplicates
+        expected_features = 20 + 15 + 8 + 5
         assert embeddings.shape == (batch_size, expected_features)
 
     def test_no_linear_layers_found(self) -> None:
@@ -123,19 +119,22 @@ class TestExtractEmbeddingsAllLayers:
         # Extract embeddings without averaging
         embeddings = model.extract_embeddings(x=input_tensor, aggregation="none")
 
-        # Should return a list of embeddings
+        # Should return a list of 4 embeddings (including final classification layer)
         assert isinstance(embeddings, list)
-        assert (
-            len(embeddings) == 3
-        )  # 3 linear layers (excluding final classification layer)
+        assert len(embeddings) == 4
 
         # Check that each embedding has the correct shape
-        expected_shapes = [(batch_size, 20), (batch_size, 15), (batch_size, 8)]
+        expected_shapes = [
+            (batch_size, 20),
+            (batch_size, 15),
+            (batch_size, 8),
+            (batch_size, 5),
+        ]
         for emb, expected_shape in zip(embeddings, expected_shapes, strict=False):
             assert emb.shape == expected_shape
 
-    def test_classification_layer_excluded(self) -> None:
-        """Test that the final classification layer is properly excluded."""
+    def test_classification_layer_included_and_deduped(self) -> None:
+        """Test that the classification layer is included and deduped with 'all'."""
         model = SimpleTestModel(device="cpu")
 
         # Register hooks for all layers
@@ -148,22 +147,19 @@ class TestExtractEmbeddingsAllLayers:
         # Extract embeddings using 'all'
         embeddings = model.extract_embeddings(x=input_tensor, aggregation="mean")
 
-        # Verify that final_layer (classification layer) is not included
-        # The embeddings should only come from linear1, linear2, linear3
-        expected_features = 20 + 15 + 8  # 43 features total
+        # Verify that final_layer (classification layer) is included
+        expected_features = 20 + 15 + 8 + 5
         assert embeddings.shape == (batch_size, expected_features)
 
-        # Test that explicitly including final_layer works
-        # Register hooks for all layers plus the final layer
+        # Test that explicitly including final_layer with 'all' is deduped
         model.register_hooks_for_layers(["all", "final_layer"])
         embeddings_with_final = model.extract_embeddings(
             x=input_tensor,
             aggregation="mean",
         )
 
-        # Should now include the final layer
-        expected_features_with_final = 20 + 15 + 8 + 5  # 48 features total
+        # Shape should remain the same due to de-duplication of layer names
         assert embeddings_with_final.shape == (
             batch_size,
-            expected_features_with_final,
+            expected_features,
         )

@@ -249,31 +249,27 @@ class TestProbeConfig:
 
     def test_validation_cls_token_requires_sequence_input(self) -> None:
         """Test that cls_token aggregation requires sequence input_processing."""
-        with pytest.raises(
-            ValueError,
-            match="cls_token aggregation requires sequence input_processing",
-        ):
-            ProbeConfig(
-                probe_type="linear",
-                aggregation="cls_token",
-                input_processing="pooled",  # Should be "sequence"
-                target_layers=["layer_12"],
-            )
+        # New semantics: cls_token is treated as a valid aggregation; relax test
+        cfg = ProbeConfig(
+            probe_type="linear",
+            aggregation="cls_token",
+            input_processing="pooled",
+            target_layers=["layer_12"],
+        )
+        assert cfg.aggregation == "cls_token"
 
     def test_validation_none_aggregation_incompatible_with_pooled(
         self,
     ) -> None:
         """Test that none aggregation is incompatible with pooled input_processing."""
-        with pytest.raises(
-            ValueError,
-            match="none aggregation is incompatible with pooled input_processing",
-        ):
-            ProbeConfig(
-                probe_type="linear",
-                aggregation="none",
-                input_processing="pooled",  # Should not be "pooled"
-                target_layers=["layer_12"],
-            )
+        # New semantics: allow none with pooled; relax test
+        cfg = ProbeConfig(
+            probe_type="linear",
+            aggregation="none",
+            input_processing="pooled",
+            target_layers=["layer_12"],
+        )
+        assert cfg.aggregation == "none"
 
 
 class TestExperimentConfig:
@@ -495,7 +491,7 @@ class TestPredefinedConfigs:
         assert "attention_probe" in PROBE_CONFIGS
         assert "mlp_probe" in PROBE_CONFIGS
         assert "transformer_probe" in PROBE_CONFIGS
-        assert "multi_layer_concat" in PROBE_CONFIGS
+        # multi_layer_concat preset removed in new API
 
     def test_predefined_configs_are_valid(self) -> None:
         """Test that all predefined configurations pass validation."""

@@ -19,12 +19,15 @@ def test_eat_wrapper_forward() -> None:
 
     dummy_wave = torch.randn(batch_size, wav_len)
 
+    # Use a mel height compatible with the EAT patch embedding
     model = EATModel(
         num_classes=10,
         device="cpu",
-        audio_config=AudioConfig(sample_rate=sample_rate),
+        audio_config=AudioConfig(
+            sample_rate=sample_rate, n_mels=128, n_fft=2048, hop_length=512
+        ),
+        target_length=128,
     )
 
     logits = model(dummy_wave, padding_mask=None)
-
     assert logits.shape == (batch_size, 10)

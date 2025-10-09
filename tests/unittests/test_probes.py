@@ -265,8 +265,9 @@ class TestProbeSystem:
 
         assert probe is not None
         assert hasattr(probe, "forward")
-        # When using feature_mode=True and aggregation="none", attention_layers are None
-        assert probe.attention_layers is None
+        # With new semantics, attention layers are always built
+        assert hasattr(probe, "attention_layers")
+        assert len(probe.attention_layers) == 2
 
     def test_attention_probe_with_attention_layers(self) -> None:
         """Test that Attention probe creates attention layers when needed."""
@@ -320,7 +321,6 @@ class TestProbeSystem:
         assert hasattr(probe, "forward")
         assert hasattr(probe, "attention_layers")
         assert hasattr(probe, "layer_norms")
-        assert hasattr(probe, "feed_forward")
 
     def test_attention_probe_with_target_length(self) -> None:
         """Test that Attention probe can be created with target_length parameter."""
@@ -347,8 +347,8 @@ class TestProbeSystem:
         assert probe is not None
         assert probe.target_length == 18000
         assert hasattr(probe, "forward")
-        # When using feature_mode=True and aggregation="none", attention_layers are None
-        assert probe.attention_layers is None
+        assert hasattr(probe, "attention_layers")
+        assert len(probe.attention_layers) == 2
 
     def test_attention_probe_target_length_override(self) -> None:
         """Test that target_length parameter overrides probe_config.target_length
@@ -378,8 +378,8 @@ class TestProbeSystem:
         assert probe is not None
         assert probe.target_length == 27000  # Should use override, not config value
         assert hasattr(probe, "forward")
-        # When using feature_mode=True and aggregation="none", attention_layers are None
-        assert probe.attention_layers is None
+        assert hasattr(probe, "attention_layers")
+        assert len(probe.attention_layers) == 2
 
     def test_transformer_probe_creation(self) -> None:
         """Test that transformer probe can be created."""
@@ -584,6 +584,80 @@ class TestProbeSystem:
 
             print(f"✓ {probe_type} probe target_length override works correctly")
 
+    @pytest.mark.parametrize(
+        "probe_type,aggregation,input_processing,input_dim,extra",
+        [
+            ("linear", "mean", "pooled", 512, {}),
+            ("mlp", "mean", "pooled", 512, {"hidden_dims": [128]}),
+            (
+                "lstm",
+                "none",
+                "sequence",
+                256,
+                {"lstm_hidden_size": 64, "num_layers": 1},
+            ),
+            (
+                "attention",
+                "none",
+                "sequence",
+                256,
+                {"num_heads": 4, "attention_dim": 256, "num_layers": 1},
+            ),
+            (
+                "transformer",
+                "none",
+                "sequence",
+                256,
+                {"num_heads": 4, "attention_dim": 256, "num_layers": 1},
+            ),
+        ],
+    )
+    def test_probe_factory_basic(
+        self,
+        probe_type: str,
+        aggregation: str,
+        input_processing: str,
+        input_dim: int,
+        extra: dict,
+    ) -> None:
+        """Parametrized sanity check over probe types and aggregation modes."""
+        cfg_kwargs = {
+            "probe_type": probe_type,
+            "aggregation": aggregation,
+            "input_processing": input_processing,
+            "target_layers": ["layer_12"],
+            **extra,
+        }
+        probe_config = ProbeConfig(**cfg_kwargs)
+
+        probe = get_probe(
+            probe_config=probe_config,
+            base_model=None,
+            num_classes=3,
+            device="cpu",
+            feature_mode=True,
+            input_dim=input_dim,
+        )
+        assert probe is not None
+
+    def test_invalid_input_processing_for_linear_sequence(self) -> None:
+        """Linear cannot use sequence input_processing."""
+        probe_config = ProbeConfig(
+            probe_type="linear",
+            aggregation="none",
+            input_processing="sequence",
+            target_layers=["layer_12"],
+        )
+        with pytest.raises(ValueError):
+            get_probe(
+                probe_config=probe_config,
+                base_model=None,
+                num_classes=3,
+                device="cpu",
+                feature_mode=True,
+                input_dim=128,
+            )
+
     def test_invalid_probe_type(self) -> None:
         """Test that invalid probe type raises error."""
         # Create a probe config with a valid type first, then modify it to test
@@ -652,6 +726,7 @@ class TestProbeSystem:
                 x: torch.Tensor,
                 padding_mask: Optional[torch.Tensor] = None,
                 aggregation: str = "mean",
+                freeze_backbone: bool = False,
             ) -> torch.Tensor:
                 # Return embeddings that require gradients
                 return torch.randn(2, 128, requires_grad=True)

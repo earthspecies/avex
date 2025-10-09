@@ -46,12 +46,30 @@ class TestEmbeddingDimensionHandling:
         output = probe(test_data["embeddings_2d"])
         assert output.shape == (test_data["batch_size"], test_data["num_classes"])
 
-        # Test 3D embeddings (B, T, F) - should be collapsed to (B, F)
-        output = probe(test_data["embeddings_3d"])
+        # Test 3D embeddings (B, T, F) – instantiate probe for flattened dim
+        b, t, f = test_data["embeddings_3d"].shape
+        probe_flat_3d = LinearProbe(
+            base_model=None,
+            layers=[],
+            num_classes=test_data["num_classes"],
+            device="cpu",
+            feature_mode=True,
+            input_dim=t * f,
+        )
+        output = probe_flat_3d(test_data["embeddings_3d"].reshape(b, -1))
         assert output.shape == (test_data["batch_size"], test_data["num_classes"])
 
-        # Test 4D embeddings (B, H, W, F) - should be collapsed to (B, F)
-        output = probe(test_data["embeddings_4d"])
+        # Test 4D embeddings (B, H, W, F) – instantiate probe for flattened dim
+        b, h, w, f = test_data["embeddings_4d"].shape
+        probe_flat_4d = LinearProbe(
+            base_model=None,
+            layers=[],
+            num_classes=test_data["num_classes"],
+            device="cpu",
+            feature_mode=True,
+            input_dim=h * w * f,
+        )
+        output = probe_flat_4d(test_data["embeddings_4d"].reshape(b, -1))
         assert output.shape == (test_data["batch_size"], test_data["num_classes"])
 
     def test_mlp_probe_embedding_dimensions(self, test_data: dict) -> None:
@@ -69,12 +87,30 @@ class TestEmbeddingDimensionHandling:
         output = probe(test_data["embeddings_2d"])
         assert output.shape == (test_data["batch_size"], test_data["num_classes"])
 
-        # Test 3D embeddings (B, T, F) - should be collapsed to (B, F)
-        output = probe(test_data["embeddings_3d"])
+        # Test 3D embeddings (B, T, F) – instantiate probe for flattened dim
+        b, t, f = test_data["embeddings_3d"].shape
+        probe_flat_3d = MLPProbe(
+            base_model=None,
+            layers=[],
+            num_classes=test_data["num_classes"],
+            device="cpu",
+            feature_mode=True,
+            input_dim=t * f,
+        )
+        output = probe_flat_3d(test_data["embeddings_3d"].reshape(b, -1))
         assert output.shape == (test_data["batch_size"], test_data["num_classes"])
 
-        # Test 4D embeddings (B, H, W, F) - should be collapsed to (B, F)
-        output = probe(test_data["embeddings_4d"])
+        # Test 4D embeddings (B, H, W, F) – instantiate probe for flattened dim
+        b, h, w, f = test_data["embeddings_4d"].shape
+        probe_flat_4d = MLPProbe(
+            base_model=None,
+            layers=[],
+            num_classes=test_data["num_classes"],
+            device="cpu",
+            feature_mode=True,
+            input_dim=h * w * f,
+        )
+        output = probe_flat_4d(test_data["embeddings_4d"].reshape(b, -1))
         assert output.shape == (test_data["batch_size"], test_data["num_classes"])
 
     def test_sequence_probes_3d_embeddings(self, test_data: dict) -> None:

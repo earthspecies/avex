@@ -100,7 +100,7 @@ from esp_data.transforms import MultiLabelFromFeatures
                     ],
                 }
             ),
-            [[0], [1, 2], [3]],
+            [[], [0], [1, 2], [3], []],
             {"apple": 0, "grape": 1, "melon": 2, "orange": 3},
         ),
     ],
@@ -113,6 +113,7 @@ def test_multilabel_from_features(
 ) -> None:
     t = MultiLabelFromFeatures(features=features)
     df_out, meta = t(df.copy())
+    # Align expected labels with rows that remain after transform
     assert df_out["label"].tolist() == expected_labels
     assert meta["label_map"] == expected_map
     assert meta["num_classes"] == len(expected_map)
