@@ -59,6 +59,13 @@ dev = [
   "ipykernel>=6.29.5",
 ]
 
+#to install these optional dependencies, use: uv sync --extra eval
+[project.optional-dependencies]
+eval = [
+  "zeroshot-detection-eval @ git+ssh://git@github.com/earthspecies/zeroshot_detection_eval.git",
+  "PretrainedSED @ git+ssh://git@github.com/earthspecies/PretrainedSED.git@packaging"
+]
+
 [project.scripts]
 repr-learn = "representation_learning.cli:cli"
 
@@ -92,6 +99,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["representation_learning", "esp_data"]
+
+#this lets me directly reference the ssh links of zeroshot_detection_eval and PretrainedSED
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 python_files = [
