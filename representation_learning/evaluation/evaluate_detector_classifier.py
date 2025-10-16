@@ -31,7 +31,7 @@ DATASET = "xeno_canto_annotated_jeantet_2023"
 ANNOTATION_COLUMN = "Species" 
 
 # Perch classifier parameters (configurable)
-PERCH_WINDOW = 2.5      # seconds
+PERCH_WINDOW = 2      # seconds
 PERCH_HOP = 1         # seconds
 PERCH_BATCH_SIZE = 4
 PERCH_N_WORKERS = 4
@@ -49,9 +49,10 @@ FRAME_RATE = 250 / SED_WINDOW  # ptsed outputs 250 frames per 10s clip
 
 # Visualization configuration
 VIZ_THRESHOLDS = [0.1, 0.3, 0.5, 0.7]  # Thresholds for visualization
-VIZ_OUTPUT_DIR = f"visualizations_{DATASET}"  # Output directory for plots
+VIZ_OUTPUT_DIR = f".results/vis_combined_{PERCH_WINDOW}_{PERCH_HOP}"  # Output directory for plots
 
-out_fp = f"perchSED_{DATASET}_window{PERCH_WINDOW}_hop{PERCH_HOP}_{ANNOTATION_COLUMN}.yaml"
+out_fp_combined = f".results/eval_combined_{PERCH_WINDOW}_{PERCH_HOP}.yaml"
+out_fp_perch_only = f".results/eval_perch_only_{PERCH_WINDOW}_{PERCH_HOP}.yaml"
 
 
 # ============= HELPER FUNCTIONS =============
@@ -107,10 +108,6 @@ def apply_sed_detector(
             y_strong, y_weak = sed_model(mel)  # Returns (strong, weak) tuple
             # y_strong: (batch, num_audioset_classes, num_time_frames)
             y_strong = torch.sigmoid(y_strong)
-            print("LOOK HERE! Y_STRONG SHAPE:")
-            print(y_strong.shape)
-            print("AS_STRONG_TRAIN_CLASSES LENGTH:")
-            print(len(as_strong_train_classes))
 
         # Extract animal class probabilities and take max across animal classes
         animal_probs = y_strong[:, animal_class_indices, :]  # (1, num_animal_classes, num_time_frames)
@@ -324,22 +321,20 @@ def main():
            species not in [x[1] for x in bonus_columns]:
             print(f"Warning: Species not in output labels: {species}")
 
-    # Initialize scorer
-    S = Scorer(temp_dir=f"eval_{PERCH_WINDOW}_{SED_WINDOW}_{DATASET}")
+    # Initialize scorers - one for combined (detection x classification), one for perch-only
+    S_combined = Scorer(temp_dir=f".results/eval_combined_{PERCH_WINDOW}_{PERCH_HOP}")
+    S_perch_only = Scorer(temp_dir=f".results/eval_perch_only_{PERCH_WINDOW}_{PERCH_HOP}")
     
     # Create visualization output directory
     os.makedirs(VIZ_OUTPUT_DIR, exist_ok=True)
-    print(f"Visualizations will be saved to: {VIZ_OUTPUT_DIR}")
     
     # Process each audio file
-    print(f"\nProcessing {len(perch_dl)} audio files...")
     for file_idx in range(len(perch_dl)):
-        # Skip files for quick testing (TODO: remove!)
-        if file_idx != 0:
-            continue
         print(f"\n{'='*60}")
         print(f"Processing file {file_idx + 1}/{len(perch_dl)}")
         print(f"{'='*60}")
+        if file_idx !=0:
+            continue
     
         # -------- STEP 1: PretrainedSED for Animal Detection --------
         
@@ -358,81 +353,70 @@ def main():
         audio_duration_sec = len(perch_audio) / SR_PERCH
         num_frames = int(np.ceil(audio_duration_sec * FRAME_RATE))
         animal_probs = animal_probs[:num_frames]
-        print(f"Animal detector output shape: {animal_probs.shape}")
         
         # -------- STEP 2: Perch for Species Classification --------
         
         # Get Perch dataloader (32kHz audio, 5s windows with 2.5s hop)
         perch_data = perch_dl[file_idx]
         perch_dataloader = perch_data['dataloader']
-        
-        all_perch_preds = []
-        for batch in tqdm(perch_dataloader, desc="  Perch windows"):
-            with torch.no_grad():
-                batch_preds = perch_model(batch).detach().numpy()
-                all_perch_preds.append(batch_preds)
-        
-        perch_preds = np.concatenate(all_perch_preds, axis=0)
-        perch_preds = 1. / (1. + np.exp(-perch_preds))  # sigmoid
 
-        # Prepare species labels for this file (may be extended for WABAD)
-        current_species_labels = output_species_labels.copy()
-        
-        if DATASET == "wabad": # add esoteric wabad bonus columns
-            perch_preds_df = pd.DataFrame(perch_preds, columns=output_species_labels) # Use scientific names as columns
-            bonus_preds_df = pd.DataFrame(perch_preds, columns=output_labels)
+        preds = []
+        for batch in tqdm(perch_dataloader):
+            with torch.no_grad():
+                batchpreds = perch_model(batch).detach().numpy()
+                preds.append(batchpreds)
+
+        preds = np.concatenate(preds,axis=0)
+        preds_df = pd.DataFrame(preds, columns=output_species_labels)
+        if DATASET == "wabad":
+            bonus_preds_df = pd.DataFrame(preds, columns=output_labels)
             bonus_preds_df = bonus_preds_df[[x[0] for x in bonus_columns]]
             bonus_preds_df.columns = [x[1] for x in bonus_columns]
-            perch_preds_df = pd.concat([perch_preds_df, bonus_preds_df], axis=1)
-            perch_preds = perch_preds_df.to_numpy()
-            # Update species labels to match extended predictions
-            current_species_labels = perch_preds_df.columns.tolist()
-
-        print(f"  Perch predictions shape: {perch_preds.shape}")
+            preds_df = pd.concat([preds_df, bonus_preds_df], axis =1)
+        preds_df = preds_df[target_labels]
+        preds = preds_df.to_numpy()
+        preds = 1. / (1. + np.exp(-preds))
 
         # -------- STEP 3: Combine Detection x Classification --------
         species_probs = align_windows_to_frames(
-            perch_preds, PERCH_WINDOW, PERCH_HOP, num_frames
+            preds, PERCH_WINDOW, PERCH_HOP, num_frames
         )
-        print(f"  Species probabilities shape: {species_probs.shape}")
 
         final_scores = species_probs * animal_probs[:, None]
-        print(f"  Final scores shape: {final_scores.shape}")
 
-        # Update scorer
-        S.update(final_scores, current_species_labels, FRAME_RATE, perch_data['selection_table'], ANNOTATION_COLUMN)
+        # Update scorers
+        S_combined.update(final_scores, target_labels, FRAME_RATE, perch_data['selection_table'], ANNOTATION_COLUMN)
+        S_perch_only.update(species_probs, target_labels, FRAME_RATE, perch_data['selection_table'], ANNOTATION_COLUMN)
 
         # -------- STEP 6: Create Visualizations --------
-        print("Creating visualizations...")
-        file_output_dir = os.path.join(VIZ_OUTPUT_DIR, f"{file_idx:03d}")
-        os.makedirs(file_output_dir, exist_ok=True)
-        
-        # Create visualizations at different thresholds
-        for threshold in VIZ_THRESHOLDS:
-            output_path = os.path.join(file_output_dir, 
-                                       f"{file_idx:03d}_thresh{threshold:.2f}.png")
+        # Only visualize every 50th file to save disk space
+        if file_idx % 50 == 0:
+            file_output_dir = os.path.join(VIZ_OUTPUT_DIR, f"{file_idx:03d}")
+            os.makedirs(file_output_dir, exist_ok=True)
             
-            plot_visualization(
-                audio=perch_audio,
-                sr=SR_PERCH,
-                species_probs=species_probs,
-                output_species_labels=current_species_labels,
-                animal_probs=animal_probs,
-                selection_table=perch_data['selection_table'],
-                annotation_column=ANNOTATION_COLUMN,
-                final_scores=final_scores,
-                frame_rate=FRAME_RATE,
-                threshold=threshold,
-                output_path=output_path
-            )
+            # Create visualizations at different thresholds
+            for threshold in VIZ_THRESHOLDS:
+                output_path = os.path.join(file_output_dir, 
+                                           f"{file_idx:03d}_thresh{threshold:.2f}.png")
+                
+                plot_visualization(
+                    audio=perch_audio,
+                    sr=SR_PERCH,
+                    species_probs=species_probs,
+                    output_species_labels=target_labels,
+                    animal_probs=animal_probs,
+                    selection_table=perch_data['selection_table'],
+                    annotation_column=ANNOTATION_COLUMN,
+                    final_scores=final_scores,
+                    frame_rate=FRAME_RATE,
+                    threshold=threshold,
+                    output_path=output_path
+                )
 
            
     # Compute final metrics
-    print(f"\n{'='*60}")
-    print("Computing final metrics...")
-    print(f"{'='*60}")
-    S.compute_scores(output_fp=out_fp, delete_temp=False, num_jobs=12)
-    print(f"\nResults saved to: {out_fp}")
+    S_combined.compute_scores(output_fp=out_fp_combined, delete_temp=False, num_jobs=12)
+    S_perch_only.compute_scores(output_fp=out_fp_perch_only, delete_temp=False, num_jobs=12)
 
 
 if __name__ == "__main__":
