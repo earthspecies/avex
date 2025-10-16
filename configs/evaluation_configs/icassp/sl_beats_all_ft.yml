@@ -18,7 +18,7 @@ experiments:
   - run_name: sl_beats_all_linear_ft
     run_config: configs/run_configs/pretrained/beats_ft.yml
     probe_config:
-      probe_type: "weighted_linear"
+      probe_type: "linear"
       aggregation: "mean"
       input_processing: "pooled"
       target_layers: ["last_layer"]
@@ -30,7 +30,7 @@ experiments:
   - run_name: sl_beats_all_attention_ft
     run_config: configs/run_configs/pretrained/beats_ft.yml
     probe_config:
-      probe_type: "weighted_attention"
+      probe_type: "attention"
       aggregation: "none"
       input_processing: "sequence"
       target_layers: ["last_layer"]
@@ -48,7 +48,7 @@ experiments:
   # - run_name: sl_beats_all_lstm_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_lstm"
+  #     probe_type: "lstm"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["all"]
@@ -66,7 +66,7 @@ experiments:
   # - run_name: sl_beats_all_lstm_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_lstm"
+  #     probe_type: "lstm"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["last_layer"]
@@ -84,7 +84,7 @@ experiments:
   # - run_name: sl_beats_all_lstm_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_lstm"
+  #     probe_type: "lstm"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["last_layer"]
@@ -102,7 +102,7 @@ experiments:
   # - run_name: sl_beats_all_transformer_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_transformer"
+  #     probe_type: "transformer"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["all"]
@@ -120,7 +120,7 @@ experiments:
   # - run_name: sl_beats_all_transformer_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_transformer"
+  #     probe_type: "transformer"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["last_layer"]
@@ -138,7 +138,7 @@ experiments:
   # - run_name: sl_beats_all_transformer_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_transformer"
+  #     probe_type: "transformer"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["last_layer"]
@@ -156,7 +156,7 @@ experiments:
   # - run_name: sl_beats_all_mlp_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_mlp"
+  #     probe_type: "mlp"
   #     aggregation: "mean"
   #     input_processing: "pooled"
   #     target_layers: ["last_layer"]
@@ -171,7 +171,7 @@ experiments:
   # - run_name: sl_beats_all_mlp_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_mlp"
+  #     probe_type: "mlp"
   #     aggregation: "mean"
   #     input_processing: "pooled"
   #     target_layers: ["all"]
@@ -199,7 +199,8 @@ num_workers: 8  # Enable workers for better memory management
 eval_modes:
   - probe
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true
 
 # Control tqdm progress bar verbosity during fine-tuning
 # Set to true to disable progress bars and reduce output verbosity

@@ -7,7 +7,7 @@ training_params:
   batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
-  amp: False
+  amp: false
   amp_dtype: bf16
   gradient_clip_val: 1.0
   warmup_epochs: 5
@@ -22,14 +22,14 @@ experiments:
       target_layers: ["features"]
       aggregation: mean
       input_processing: pooled
-      freeze_backbone: True
-      online_training: False
+      freeze_backbone: true
+      online_training: false
     pretrained: true
 
   - run_name: atst_frame_attention_last
     run_config: configs/run_configs/pretrained/atst_base.yml
     probe_config:
-      probe_type: weighted_attention
+      probe_type: attention
       aggregation: none
       input_processing: sequence
       target_layers: ["last_layer"]
@@ -37,16 +37,16 @@ experiments:
       attention_dim: 64
       num_layers: 1
       max_sequence_length: 800
-      use_positional_encoding: False
+      use_positional_encoding: false
       dropout_rate: 0.3
-      freeze_backbone: True
-      online_training: True
+      freeze_backbone: true
+      online_training: true
     pretrained: true
 
   - run_name: atst_frame_attention_all
     run_config: configs/run_configs/pretrained/atst_base.yml
     probe_config:
-      probe_type: weighted_attention
+      probe_type: attention
       aggregation: none
       input_processing: sequence
       target_layers: ["all"]
@@ -54,16 +54,16 @@ experiments:
       attention_dim: 64
       num_layers: 1
       max_sequence_length: 800
-      use_positional_encoding: False
+      use_positional_encoding: false
       dropout_rate: 0.3
-      freeze_backbone: True
-      online_training: True
+      freeze_backbone: true
+      online_training: true
     pretrained: true
 
   - run_name: atst_frame_attention_ft
     run_config: configs/run_configs/pretrained/atst_base.yml
     probe_config:
-      probe_type: weighted_attention
+      probe_type: attention
       aggregation: none
       input_processing: sequence
       target_layers: ["last_layer"]
@@ -71,49 +71,49 @@ experiments:
       attention_dim: 64
       num_layers: 1
       max_sequence_length: 800
-      use_positional_encoding: False
+      use_positional_encoding: false
       dropout_rate: 0.3
-      freeze_backbone: False
-      online_training: True
+      freeze_backbone: false
+      online_training: true
     pretrained: true
 
   - run_name: atst_frame_linear_last
     run_config: configs/run_configs/pretrained/atst_base.yml
     probe_config:
-      probe_type: weighted_linear
+      probe_type: linear
       aggregation: mean
       input_processing: pooled
       target_layers: ["last_layer"]
-      freeze_backbone: True
-      online_training: True
+      freeze_backbone: true
+      online_training: true
     pretrained: true
 
   - run_name: atst_frame_linear_all
     run_config: configs/run_configs/pretrained/atst_base.yml
     probe_config:
-      probe_type: weighted_linear
+      probe_type: linear
       target_layers: ["all"]
       aggregation: mean
       input_processing: pooled
-      freeze_backbone: True
-      online_training: True
+      freeze_backbone: true
+      online_training: true
     pretrained: true
 
   - run_name: atst_frame_linear_ft
     run_config: configs/run_configs/pretrained/atst_base.yml
     probe_config:
-      probe_type: weighted_linear
+      probe_type: linear
       aggregation: mean
       input_processing: pooled
       target_layers: ["last_layer"]
-      freeze_backbone: False
-      online_training: True
+      freeze_backbone: false
+      online_training: true
     pretrained: true
 
   # - run_name: atst_frame_lstm_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_lstm"
+  #     probe_type: "lstm"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["all"]
@@ -131,10 +131,10 @@ experiments:
   # - run_name: atst_frame_lstm_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_lstm"
+  #     probe_type: "lstm"
   #     aggregation: "none"
   #     input_processing: "sequence"
-  #     target_layers: ["last"]
+  #     target_layers: ["last_layer"]
   #     lstm_hidden_size: 64
   #     num_layers: 1
   #     bidirectional: true
@@ -149,7 +149,7 @@ experiments:
   # - run_name: atst_frame_lstm_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_lstm"
+  #     probe_type: "lstm"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["last_layer"]
@@ -167,7 +167,7 @@ experiments:
   # - run_name: atst_frame_mlp_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_mlp"
+  #     probe_type: "mlp"
   #     aggregation: "mean"
   #     input_processing: "pooled"
   #     target_layers: ["all"]
@@ -182,10 +182,10 @@ experiments:
   # - run_name: atst_frame_mlp_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_mlp"
+  #     probe_type: "mlp"
   #     aggregation: "mean"
   #     input_processing: "pooled"
-  #     target_layers: ["last"]
+  #     target_layers: ["last_layer"]
   #     hidden_dims: [512, 256]
   #     dropout_rate: 0.3
   #     activation: "gelu"
@@ -197,7 +197,7 @@ experiments:
   # - run_name: atst_frame_mlp_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_mlp"
+  #     probe_type: "mlp"
   #     aggregation: "mean"
   #     input_processing: "pooled"
   #     target_layers: ["last_layer"]
@@ -212,7 +212,7 @@ experiments:
   # - run_name: atst_frame_transformer_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_transformer"
+  #     probe_type: "transformer"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["all"]
@@ -230,10 +230,10 @@ experiments:
   # - run_name: atst_frame_transformer_last
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_transformer"
+  #     probe_type: "transformer"
   #     aggregation: "none"
   #     input_processing: "sequence"
-  #     target_layers: ["last"]
+  #     target_layers: ["last_layer"]
   #     num_heads: 8
   #     attention_dim: 128
   #     num_layers: 1
@@ -248,7 +248,7 @@ experiments:
   # - run_name: atst_frame_transformer_ft
   #   run_config: configs/run_configs/pretrained/beats_ft.yml
   #   probe_config:
-  #     probe_type: "weighted_transformer"
+  #     probe_type: "transformer"
   #     aggregation: "none"
   #     input_processing: "sequence"
   #     target_layers: ["last_layer"]
@@ -279,7 +279,8 @@ num_workers: 8  # Enable workers for better memory management
 eval_modes:
   - probe
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true
 
 # Control tqdm progress bar verbosity during fine-tuning
 # Set to true to disable progress bars and reduce output verbosity

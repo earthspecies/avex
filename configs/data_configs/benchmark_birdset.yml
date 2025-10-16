@@ -267,58 +267,58 @@ evaluation_sets:
           label_map: {'Anseriformes Anatidae Anas platyrhynchos': 0, 'Charadriiformes Scolopacidae Actitis macularius': 1, 'None': 2, 'Passeriformes Corvidae Nucifraga columbiana': 3, 'Passeriformes Fringillidae Haemorhous cassinii': 4, 'Passeriformes Fringillidae Leucosticte tephrocotis': 5, 'Passeriformes Icteridae Euphagus cyanocephalus': 6, 'Passeriformes Motacillidae Anthus rubescens': 7, 'Passeriformes Paridae Poecile gambeli': 8, 'Passeriformes Parulidae Leiothlypis celata': 9, 'Passeriformes Parulidae Setophaga coronata': 10, 'Passeriformes Parulidae Setophaga petechia': 11, 'Passeriformes Passerellidae Junco hyemalis': 12, 'Passeriformes Passerellidae Passerella iliaca': 13, 'Passeriformes Passerellidae Zonotrichia leucophrys': 14, 'Passeriformes Troglodytidae Salpinctes obsoletus': 15, 'Passeriformes Turdidae Catharus guttatus': 16, 'Passeriformes Turdidae Sialia currucoides': 17, 'Passeriformes Turdidae Turdus migratorius': 18, 'Passeriformes Tyrannidae Empidonax oberholseri': 19, 'Passeriformes Vireonidae Vireo gilvus': 20, 'Piciformes Picidae Colaptes auratus': 21}
     metrics: [mAP]
 
-  # - name: "birdset_uhh_detection"
-  #   train: &uhh_base
-  #     dataset_name: birdset
-  #     split: UHH-train
-  #     type: detection
-  #     label_column: labels_as_list
-  #     audio_path_col: path
-  #     multi_label: true
-  #     label_type: supervised
-  #     audio_max_length_seconds: 5
-  #     sample_rate: 16000
-  #     data_root: /home/marius_miron_earthspecies_org/data/16000/
-  #     transformations:
-  #       # First split the data into train/validation subsets
-  #       - type: train_val_split
-  #         subset: train
-  #         train_size: 0.8
-  #         random_state: 42
-  #         stratify_column: labels_as_list
-  #       # Then create the label mapping from the resulting subset
-  #       - type: labels_from_features
-  #         features:
-  #           - labels_as_list
-  #         override: true
-  #         label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
-  #   validation:
-  #     <<: *uhh_base
-  #     split: UHH-train
-  #     transformations:
-  #       # First split the data into train/validation subsets
-  #       - type: train_val_split
-  #         subset: validation
-  #         train_size: 0.8
-  #         random_state: 42
-  #         stratify_column: labels_as_list
-  #       # Then create the label mapping from the resulting subset
-  #       - type: labels_from_features
-  #         features:
-  #           - labels_as_list
-  #         override: true
-  #         label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
-  #   test:
-  #     <<: *uhh_base
-  #     split: UHH-test
-  #     transformations:
-  #       # Test uses original labels_from_features without train_val_split
-  #       - type: labels_from_features
-  #         features:
-  #           - labels_as_list
-  #         override: true
-  #         label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
-  #   metrics: [mAP]
+  - name: "birdset_uhh_detection"
+    train: &uhh_base
+      dataset_name: birdset
+      split: UHH-train
+      type: detection
+      label_column: labels_as_list
+      audio_path_col: path
+      multi_label: true
+      label_type: supervised
+      audio_max_length_seconds: 5
+      sample_rate: 16000
+      data_root: /home/marius_miron_earthspecies_org/data/16000/
+      transformations:
+        # First split the data into train/validation subsets
+        - type: train_val_split
+          subset: train
+          train_size: 0.8
+          random_state: 42
+          stratify_column: labels_as_list
+        # Then create the label mapping from the resulting subset
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
+    validation:
+      <<: *uhh_base
+      split: UHH-train
+      transformations:
+        # First split the data into train/validation subsets
+        - type: train_val_split
+          subset: validation
+          train_size: 0.8
+          random_state: 42
+          stratify_column: labels_as_list
+        # Then create the label mapping from the resulting subset
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
+    test:
+      <<: *uhh_base
+      split: UHH-test
+      transformations:
+        # Test uses original labels_from_features without train_val_split
+        - type: labels_from_features
+          features:
+            - labels_as_list
+          override: true
+          label_map: {'Accipitriformes Accipitridae Buteo solitarius': 0, 'Anseriformes Anatidae Branta sandvicensis': 1, 'Galliformes Odontophoridae Callipepla californica': 2, 'Galliformes Phasianidae Alectoris chukar': 3, 'Galliformes Phasianidae Francolinus francolinus': 4, 'Galliformes Phasianidae Lophura leucomelanos': 5, 'Galliformes Phasianidae Meleagris gallopavo': 6, 'Galliformes Phasianidae Pternistis erckelii': 7, 'Passeriformes Alaudidae Alauda arvensis': 8, 'Passeriformes Cardinalidae Cardinalis cardinalis': 9, 'Passeriformes Estrildidae Estrilda astrild': 10, 'Passeriformes Fringillidae Chlorodrepanis virens': 11, 'Passeriformes Fringillidae Crithagra mozambica': 12, 'Passeriformes Fringillidae Drepanis coccinea': 13, 'Passeriformes Fringillidae Haemorhous mexicanus': 14, 'Passeriformes Fringillidae Himatione sanguinea': 15, 'Passeriformes Fringillidae Loxioides bailleui': 16, 'Passeriformes Fringillidae Loxops coccineus': 17, 'Passeriformes Fringillidae Loxops mana': 18, 'Passeriformes Leiothrichidae Garrulax canorus': 19, 'Passeriformes Leiothrichidae Leiothrix lutea': 20, 'Passeriformes Monarchidae Chasiempis sandwichensis': 21, 'Passeriformes Scotocercidae Horornis diphone': 22, 'Passeriformes Turdidae Myadestes obscurus': 23, 'Passeriformes Zosteropidae Zosterops japonicus': 24, 'Procellariiformes Hydrobatidae Hydrobates castro': 25, 'Procellariiformes Procellariidae Pterodroma sandwichensis': 26}
+    metrics: [mAP]
 
   - name: "birdset_sne_detection"
     train: &sne_base

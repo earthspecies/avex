@@ -37,4 +37,5 @@ eval_modes:
   # - probe
   - retrieval
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true

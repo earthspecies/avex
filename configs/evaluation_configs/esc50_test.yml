@@ -36,4 +36,5 @@ num_workers: 8
 eval_modes:
   - probe
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true

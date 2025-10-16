@@ -18,39 +18,36 @@ evaluation_sets:
           override: true
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
       sample_rate: 16000
-      # data_root: "/scratch-representation-learning/beans/v0.1.0/raw/"
-      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
     validation:
       <<: *dogs_base
       split: dogs_validation
     test:
       <<: *dogs_base
       split: dogs_test
-    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
-  - name: "esc50_classification"
-    train: &esc50_base
-      dataset_name: beans
-      split: esc50_train
-      type: classification
-      label_column: label
-      audio_path_col: path
-      multi_label: false
-      label_type: supervised
-      audio_max_length_seconds: 5
-      transformations:
-        - type: label_from_feature
-          feature: label
-          override: true
-          label_map: {'airplane': 0, 'breathing': 1, 'brushing_teeth': 2, 'can_opening': 3, 'car_horn': 4, 'cat': 5, 'chainsaw': 6, 'chirping_birds': 7, 'church_bells': 8, 'clapping': 9, 'clock_alarm': 10, 'clock_tick': 11, 'coughing': 12, 'cow': 13, 'crackling_fire': 14, 'crickets': 15, 'crow': 16, 'crying_baby': 17, 'dog': 18, 'door_wood_creaks': 19, 'door_wood_knock': 20, 'drinking_sipping': 21, 'engine': 22, 'fireworks': 23, 'footsteps': 24, 'frog': 25, 'glass_breaking': 26, 'hand_saw': 27, 'helicopter': 28, 'hen': 29, 'insects': 30, 'keyboard_typing': 31, 'laughing': 32, 'mouse_click': 33, 'pig': 34, 'pouring_water': 35, 'rain': 36, 'rooster': 37, 'sea_waves': 38, 'sheep': 39, 'siren': 40, 'sneezing': 41, 'snoring': 42, 'thunderstorm': 43, 'toilet_flush': 44, 'train': 45, 'vacuum_cleaner': 46, 'washing_machine': 47, 'water_drops': 48, 'wind': 49}
-      sample_rate: 16000
-      data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
-    validation:
-      <<: *esc50_base
-      split: esc50_validation
-    test:
-      <<: *esc50_base
-      split: esc50_test
-    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+    metrics: [accuracy, balanced_accuracy]
+  # - name: "esc50_classification"
+  #   train: &esc50_base
+  #     dataset_name: beans
+  #     split: esc50_train
+  #     type: classification
+  #     label_column: label
+  #     audio_path_col: path
+  #     multi_label: false
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     transformations:
+  #       - type: label_from_feature
+  #         feature: label
+  #         override: true
+  #         label_map: {'airplane': 0, 'breathing': 1, 'brushing_teeth': 2, 'can_opening': 3, 'car_horn': 4, 'cat': 5, 'chainsaw': 6, 'chirping_birds': 7, 'church_bells': 8, 'clapping': 9, 'clock_alarm': 10, 'clock_tick': 11, 'coughing': 12, 'cow': 13, 'crackling_fire': 14, 'crickets': 15, 'crow': 16, 'crying_baby': 17, 'dog': 18, 'door_wood_creaks': 19, 'door_wood_knock': 20, 'drinking_sipping': 21, 'engine': 22, 'fireworks': 23, 'footsteps': 24, 'frog': 25, 'glass_breaking': 26, 'hand_saw': 27, 'helicopter': 28, 'hen': 29, 'insects': 30, 'keyboard_typing': 31, 'laughing': 32, 'mouse_click': 33, 'pig': 34, 'pouring_water': 35, 'rain': 36, 'rooster': 37, 'sea_waves': 38, 'sheep': 39, 'siren': 40, 'sneezing': 41, 'snoring': 42, 'thunderstorm': 43, 'toilet_flush': 44, 'train': 45, 'vacuum_cleaner': 46, 'washing_machine': 47, 'water_drops': 48, 'wind': 49}
+  #     sample_rate: 16000
+  #   validation:
+  #     <<: *esc50_base
+  #     split: esc50_validation
+  #   test:
+  #     <<: *esc50_base
+  #     split: esc50_test
+  #   metrics: [accuracy, balanced_accuracy]
   # - name: "bird_classification"
   #   train: &bird_base
   #     dataset_name: beans
