@@ -374,9 +374,10 @@ class TestLinearProbe:
             sys.stdout = sys.__stdout__
 
         assert "Learned Layer Weights:" in output
-        assert "layer1" in output
-        assert "layer2" in output
-        assert "layer3" in output
+        # Generic labels are always used
+        assert "Layer_0" in output
+        assert "Layer_1" in output
+        assert "Layer_2" in output
         assert "Raw Weight" in output
         assert "Normalized" in output
         assert "Percentage" in output

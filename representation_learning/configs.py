@@ -360,15 +360,8 @@ class ProbeConfig(BaseModel):
         "linear",
         "mlp",
         "attention",
-        "attention_minimal",
         "lstm",
         "transformer",
-        "weighted_linear",
-        "weighted_mlp",
-        "weighted_attention",
-        "weighted_attention_minimal",
-        "weighted_lstm",
-        "weighted_transformer",
     ] = Field("linear", description="Type of probe to use")
 
     aggregation: Literal["mean", "max", "cls_token", "none"] = Field(
@@ -474,7 +467,7 @@ class ProbeConfig(BaseModel):
             If the configuration is invalid or inconsistent.
         """
         # Validate MLP-specific parameters
-        if self.probe_type in ["mlp", "weighted_mlp"]:
+        if self.probe_type in ["mlp"]:
             if self.hidden_dims is None:
                 raise ValueError("MLP probe requires hidden_dims to be specified")
             if len(self.hidden_dims) == 0:
@@ -486,8 +479,6 @@ class ProbeConfig(BaseModel):
         if self.probe_type in [
             "attention",
             "transformer",
-            "weighted_attention",
-            "weighted_transformer",
         ]:
             if self.num_heads is None:
                 raise ValueError(
@@ -503,16 +494,28 @@ class ProbeConfig(BaseModel):
                 )
 
         # Validate LSTM-specific parameters
-        if self.probe_type in ["lstm", "weighted_lstm"]:
+        if self.probe_type in ["lstm"]:
             if self.lstm_hidden_size is None:
                 raise ValueError("LSTM probe requires lstm_hidden_size to be specified")
             if self.num_layers is None:
                 raise ValueError("LSTM probe requires num_layers to be specified")
 
-        # Validate weighted attention minimal-specific parameters
-        if self.probe_type == "weighted_attention_minimal":
-            # Weighted attention minimal uses default num_heads=1 if not specified
-            pass
+        # Enforce: offline training requires a frozen backbone
+        # If online_training is explicitly set to False (offline), the backbone
+        # must be frozen to use pre-computed embeddings safely.
+        if self.online_training is False and not self.freeze_backbone:
+            raise ValueError(
+                "When online_training=False, freeze_backbone must be True to use "
+                "offline embedding-based probing."
+            )
+
+        # Enforce: unfrozen backbone requires online training
+        # If freeze_backbone is False, online_training must be True for fine-tuning
+        if not self.freeze_backbone and self.online_training is False:
+            raise ValueError(
+                "When freeze_backbone=False, online_training must be True for "
+                "fine-tuning with raw audio."
+            )
 
         return self
 
@@ -1017,9 +1020,7 @@ class ExperimentConfig(BaseModel):
         Returns
         -------
         str
-            The probe type (e.g., 'linear', 'mlp', 'attention', 'lstm', 'transformer',
-            'weighted_linear', 'weighted_mlp', 'weighted_attention', 'weighted_lstm',
-            'weighted_transformer')
+            The probe type (e.g., 'linear', 'mlp', 'attention', 'lstm', 'transformer')
         """
         if self.probe_config is not None:
             return self.probe_config.probe_type
@@ -1151,95 +1152,84 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         "attention, transformer)",
     )
 
-    # Whether to force recomputation of embeddings even if cached versions exist
-    overwrite_embeddings: bool = Field(
-        False,
-        description=(
-            "If False and cached embeddings are found on disk, they will be loaded "
-            "instead of recomputed.  If True, embeddings are always recomputed and "
-            "the cache is overwritten."
-        ),
-    )
+    # Offline embeddings behavior (loading/saving/extraction)
+    class OfflineEmbeddingsConfig(BaseModel):
+        memory_limit_gb: int = Field(
+            32,
+            ge=1,
+            description=(
+                "Maximum file size (in GB) to load embeddings fully into memory. "
+                "Larger files will use HDF5-backed loading."
+            ),
+        )
+        overwrite_embeddings: bool = Field(
+            False,
+            description=(
+                "If False and cached embeddings are found on disk, they will be "
+                "loaded instead of recomputed. If True, embeddings are always "
+                "recomputed and the cache is overwritten."
+            ),
+        )
+        use_streaming_embeddings: bool = Field(
+            False,
+            description=(
+                "If True, use streaming approach for embedding extraction to prevent "
+                "OOM issues. Saves embeddings directly to disk in chunks."
+            ),
+        )
+        cache_size_limit_gb: float = Field(
+            8.0,
+            ge=1,
+            description=(
+                "Maximum RAM (in GB) used to cache HDF5 embeddings in memory when "
+                "loading for offline probing. If the full dataset doesn't fit, we "
+                "cache labels and as many layers as possible within this budget."
+            ),
+        )
+        streaming_chunk_size: int = Field(
+            1000,
+            ge=100,
+            description=("Samples per chunk when using streaming extraction."),
+        )
+        hdf5_compression: str = Field(
+            "gzip",
+            description=("HDF5 compression algorithm for embedding storage."),
+        )
+        hdf5_compression_level: int = Field(
+            4,
+            ge=1,
+            le=9,
+            description=("Compression level for gzip (1-9)."),
+        )
+        auto_chunk_size: bool = Field(
+            True,
+            description=(
+                "Auto-calculate optimal chunk size based on available GPU memory."
+            ),
+        )
+        max_chunk_size: int = Field(
+            2000,
+            ge=100,
+            description=("Maximum chunk size when auto-calculating."),
+        )
+        min_chunk_size: int = Field(
+            100,
+            ge=10,
+            description=("Minimum chunk size when auto-calculating."),
+        )
+        batch_chunk_size: int = Field(
+            10,
+            ge=1,
+            description=(
+                "Number of batches to process before writing during streaming."
+            ),
+        )
 
-    # Memory optimization for embedding extraction
-    use_streaming_embeddings: bool = Field(
-        False,
-        description=(
-            "If True, use streaming approach for embedding extraction when extracting "
-            "from many layers (e.g., 'all' layers in EfficientNet) to prevent OOM "
-            "issues. This saves embeddings directly to disk in chunks instead of "
-            "accumulating in memory. Default is False for backward compatibility."
-        ),
-    )
+        model_config = ConfigDict(extra="forbid")
 
-    streaming_chunk_size: int = Field(
-        1000,
-        ge=100,
-        description=(
-            "Number of samples to process in memory at once when using streaming "
-            "embedding extraction. Smaller values use less memory but may be slower."
-        ),
-    )
-
-    # HDF5 storage configuration
-    hdf5_compression: str = Field(
-        "gzip",
-        description=(
-            "HDF5 compression algorithm for embedding storage. "
-            "Options: 'gzip', 'lzf', 'szip', 'none'. "
-            "Gzip provides good compression but may be slower."
-        ),
-    )
-
-    hdf5_compression_level: int = Field(
-        4,
-        ge=1,
-        le=9,
-        description=(
-            "Compression level for gzip compression (1-9). "
-            "Higher levels provide better compression but are slower. "
-            "Only applies when hdf5_compression is 'gzip'."
-        ),
-    )
-
-    # Memory calculation settings
-    auto_chunk_size: bool = Field(
-        True,
-        description=(
-            "If True, automatically calculate optimal chunk size based on available "
-            "GPU memory. If False, use streaming_chunk_size directly. "
-            "Auto-calculation may provide better memory efficiency."
-        ),
-    )
-
-    max_chunk_size: int = Field(
-        2000,
-        ge=100,
-        description=(
-            "Maximum chunk size when auto-calculating. "
-            "Prevents extremely large chunks that could cause memory issues."
-        ),
-    )
-
-    min_chunk_size: int = Field(
-        100,
-        ge=10,
-        description=(
-            "Minimum chunk size when auto-calculating. "
-            "Prevents extremely small chunks that could be inefficient."
-        ),
-    )
-
-    # Hybrid approach: number of batches to process before writing to disk
-    # Higher values reduce I/O overhead but use more memory
-    batch_chunk_size: int = Field(
-        10,
-        ge=1,
-        description=(
-            "Number of batches to process in memory before writing to disk when "
-            "using streaming embedding extraction. Higher values reduce I/O overhead "
-            "but use more memory. Default is 10 for a good balance."
-        ),
+    offline_embeddings: OfflineEmbeddingsConfig = Field(
+        default_factory=OfflineEmbeddingsConfig,
+        description="Configuration for offline embeddings load/save/extraction",
     )
 
     # Optional path to append all results to a single CSV file

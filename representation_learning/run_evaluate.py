@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -36,11 +37,12 @@ from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
     eval_clustering,
 )
+from representation_learning.evaluation.embedding_manager import (
+    EmbeddingDataSource,
+    EmbeddingDataSourceConfig,
+)
 from representation_learning.evaluation.embedding_utils import (
-    EmbeddingDataset,
-    extract_embeddings_for_split,
     load_embeddings_arrays,
-    save_embeddings_arrays,
 )
 from representation_learning.evaluation.finetune import (
     train_and_eval_offline,
@@ -109,6 +111,9 @@ def run_experiment(
     experiment_name = experiment_cfg.run_name
     freeze_backbone = experiment_cfg.is_frozen()  # Checks probe_config.freeze_backbone
 
+    # Measure total training wall-clock time per evaluation setting
+    _training_start_time = time.time()
+
     logger.info(
         "Running experiment '%s' on dataset '%s' with freeze_backbone: %s",
         experiment_name,
@@ -156,11 +161,22 @@ def run_experiment(
                         f"to model sample rate {target_sample_rate}"
                     )
 
+    # Save embeddings at dataset+model level, not experiment level, so all probe types
+    # can reuse the same embeddings for a given dataset+model combination
     embedding_dir_name = evaluation_dataset_name or dataset_name
-    emb_base_dir = save_dir / experiment_name / embedding_dir_name
-    train_path = emb_base_dir / "embedding_train.h5"
-    val_path = emb_base_dir / "embedding_val.h5"
-    test_path = emb_base_dir / "embedding_test.h5"
+
+    # Extract model name from run_config (e.g., "beats_pretrained" from
+    # "beats_pretrained.yml")
+    model_name = run_cfg.run_name
+    if model_name is None:
+        # Fallback: try to extract from model_spec.name
+        model_name = run_cfg.model_spec.name
+        logger.warning(
+            f"No run_name in run_config, using model_spec.name: {model_name}"
+        )
+
+    # Create folder structure: {save_dir}/{dataset_name}_{model_name}/
+    emb_base_dir = save_dir / f"{embedding_dir_name}_{model_name}"
 
     # Flags to determine which embeddings we need
     need_probe = "probe" in eval_cfg.eval_modes
@@ -168,10 +184,63 @@ def run_experiment(
     need_clustering = "clustering" in eval_cfg.eval_modes
 
     # Get training mode and aggregation method from probe configuration
-    # Note: online_training and offline_training are mutually exclusive by design
     online_training = need_probe and experiment_cfg.get_training_mode()
-    offline_training = need_probe and not experiment_cfg.get_training_mode()
-    aggregation_method = experiment_cfg.get_aggregation_method()
+
+    def generate_embedding_filename(split: str, layer_names: List[str]) -> Path:
+        """Generate embedding filename with layer names.
+
+        Args:
+            split: Dataset split ('train', 'val', 'test')
+            layer_names: List of layer names to extract embeddings from
+
+        Returns:
+            Path object for the embedding file
+        """
+        # Create a safe layer identifier from layer names
+        if len(layer_names) == 1:
+            # Single layer: use the layer name directly
+            layer_id = layer_names[0].replace(".", "_").replace("backbone_", "")
+        else:
+            # Multiple layers: create a combined identifier
+            layer_id = f"multi_{len(layer_names)}_layers"
+
+        # Create filename: embedding_{split}_{layer_id}.h5
+        filename = f"embedding_{split}_{layer_id}.h5"
+        return emb_base_dir / filename
+
+    # Get layer names for filename generation
+    layer_names = experiment_cfg.get_target_layers()
+
+    # Generate filenames based on layer names
+    train_path = generate_embedding_filename("train", layer_names)
+    val_path = generate_embedding_filename("val", layer_names)
+    test_path = generate_embedding_filename("test", layer_names)
+    test_path_clustering = emb_base_dir / "embedding_test_clustering.h5"
+    train_path_clustering = emb_base_dir / "embedding_train_clustering.h5"
+
+    # Log the generated filenames (only when probing is enabled)
+    if need_probe:
+        logger.info("Generated embedding filenames:")
+        logger.info(f"  Train path: {train_path}")
+        logger.info(f"  Val path: {val_path}")
+        logger.info(f"  Test path: {test_path}")
+
+    # Log clustering/retrieval paths when those modes are enabled
+    if need_retrieval or need_clustering:
+        logger.info("Generated clustering/retrieval embedding filenames:")
+        logger.info(f"  Train clustering path: {train_path_clustering}")
+        logger.info(f"  Test clustering path: {test_path_clustering}")
+
+    # For offline training, always save embeddings with aggregation="none" so they
+    # can be reused by different probe types (2D probes can aggregate as needed,
+    # 3D probes use full sequence)
+    if not online_training:
+        aggregation_method = "none"
+        logger.info(
+            "Using aggregation='none' for offline training to enable probe reuse"
+        )
+    else:
+        aggregation_method = experiment_cfg.get_aggregation_method()
 
     # Log probe configuration details
     if need_probe:
@@ -191,28 +260,23 @@ def run_experiment(
         if probe_specific_params:
             logger.info(f"Probe-specific parameters: {probe_specific_params}")
 
-    # For online training (LSTM probes), we don't need to extract embeddings for
-    # training
-    # For offline training (linear probes), we extract embeddings for training
-    need_embedding_extraction_train = (
-        need_probe or need_retrieval or need_clustering
-    ) and not online_training
+    # For online training, we don't need to extract embeddings for training
+    # For offline training, we extract embeddings for training
+    need_embedding_extraction_probe_train = need_probe and not online_training
 
-    # For retrieval and clustering, we always need test embeddings
-    # Use "mean" aggregation for evaluation even when training online with LSTM
-    need_embedding_extraction_test = need_retrieval or need_clustering
+    need_embedding_extraction_probe_test = need_probe and not online_training
 
     logger.info(
-        f"Need to write embeddings for train: {need_embedding_extraction_train} "
-        f"and test: {need_embedding_extraction_test}"
+        f"Need to write embeddings for probing train: "
+        f"{need_embedding_extraction_probe_train} and test: "
+        f"{need_embedding_extraction_probe_test}"
     )
 
-    if online_training:
-        logger.info("Training online.")
-    elif offline_training:
-        logger.info("Training offline.")
-    else:
-        logger.info("Not training.")
+    if need_probe:
+        if online_training:
+            logger.info("Training online.")
+        else:
+            logger.info("Training offline.")
 
     logger.info(f"Need to probe: {need_probe}")
     logger.info(f"Need to retrieve: {need_retrieval}")
@@ -224,14 +288,24 @@ def run_experiment(
         if evaluation_set and evaluation_set.retrieval_mode is not None
         else "test_vs_test"
     )
+    need_embedding_extraction_probe_train_clustering = (
+        need_clustering or need_retrieval and retrieval_mode == "train_vs_test"
+    )
+    need_embedding_extraction_probe_test_clustering = need_clustering or need_retrieval
 
-    overwrite = getattr(eval_cfg, "overwrite_embeddings", False)
+    overwrite = getattr(eval_cfg.offline_embeddings, "overwrite_embeddings", False)
 
     # Determine what embeddings need to be recomputed
     if overwrite:
         # When overwrite=True, only recompute what we actually need
-        need_recompute_embeddings_train = need_embedding_extraction_train
-        need_recompute_embeddings_test = need_embedding_extraction_test
+        need_recompute_embeddings_train = need_embedding_extraction_probe_train
+        need_recompute_embeddings_test = need_embedding_extraction_probe_test
+        need_recompute_embeddings_train_clustering = (
+            need_embedding_extraction_probe_train_clustering
+        )
+        need_recompute_embeddings_test_clustering = (
+            need_embedding_extraction_probe_test_clustering
+        )
 
         if need_recompute_embeddings_train or need_recompute_embeddings_test:
             logger.info(
@@ -247,6 +321,8 @@ def run_experiment(
                 paths_to_remove.extend([train_path, val_path])
             if need_recompute_embeddings_test:
                 paths_to_remove.append(test_path)
+            if need_recompute_embeddings_test_clustering:
+                paths_to_remove.append(test_path_clustering)
 
             for path in paths_to_remove:
                 if path.exists():
@@ -256,34 +332,55 @@ def run_experiment(
                     except Exception as e:
                         logger.warning(f"Could not remove {path}: {e}")
     else:
-        # Normal logic: check file existence
+        # Normal logic: check file existence for the appropriate aggregation method
         need_recompute_embeddings_train = (
             need_probe
             and not (train_path.exists() and val_path.exists())
             and not online_training
-        ) or (
-            need_retrieval
-            and retrieval_mode == "train_vs_test"
-            and not train_path.exists()
         )
         need_recompute_embeddings_test = (
-            need_retrieval or (need_probe and not online_training) or need_clustering
-        ) and not test_path.exists()
+            need_probe and not online_training and not test_path.exists()
+        )
+        need_recompute_embeddings_train_clustering = (
+            need_clustering
+            or need_retrieval
+            and retrieval_mode == "train_vs_test"
+            and not train_path_clustering.exists()
+        )
+        need_recompute_embeddings_test_clustering = (
+            need_clustering or need_retrieval and not test_path_clustering.exists()
+        )
     logger.info(
-        "Need to recompute embeddings for train: %s and test: %s",
+        "Need to recompute embeddings for probing, train: %s and test: %s",
         need_recompute_embeddings_train,
         need_recompute_embeddings_test,
     )
+    logger.info(
+        "Need to recompute embeddings for probing, train clustering: %s and "
+        "test clustering: %s",
+        need_recompute_embeddings_train_clustering,
+        need_recompute_embeddings_test_clustering,
+    )
 
-    need_base_model = online_training or need_recompute_embeddings_train
+    need_base_model = (
+        online_training
+        or need_recompute_embeddings_train
+        or need_recompute_embeddings_train_clustering
+    )
     logger.info(f"Need to load base model: {need_base_model}")
 
-    need_raw_dataloaders = online_training or need_recompute_embeddings_train
+    need_raw_dataloaders = (
+        online_training
+        or need_recompute_embeddings_train
+        or need_recompute_embeddings_train_clustering
+    )
     logger.info(f"Need to build raw dataloaders: {need_raw_dataloaders}")
 
     # ------------------------------------------------------------------ #
     #  Dataloaders (raw audio)
     # ------------------------------------------------------------------ #
+    # Ensure dataset_audio_max_length is defined regardless of loader needs
+    dataset_audio_max_length = getattr(dataset_cfg, "audio_max_length_seconds", None)
     train_dl_raw = None
     val_dl_raw = None
     test_dl_raw = None
@@ -297,11 +394,7 @@ def run_experiment(
             or ([dataset_cfg] if "probe" in eval_cfg.eval_modes else None),
             test_datasets=[dataset_cfg],  # Always use the current dataset for testing
         )
-
-        # Extract dataset-level audio constraint (benchmark constraint) if it exists
-        dataset_audio_max_length = getattr(
-            dataset_cfg, "audio_max_length_seconds", None
-        )
+        # dataset_audio_max_length already obtained above
         if dataset_audio_max_length is not None:
             logger.info(
                 f"Dataset audio constraint: {dataset_audio_max_length}s, "
@@ -404,12 +497,10 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     #  Layer selection
     # ------------------------------------------------------------------ #
+    # Do not reset layer_names when base_model is None; keep experiment config
     if base_model is not None:
         layer_names = experiment_cfg.get_target_layers()
-        logger.info(f"Target layers for experiment: {layer_names}")
-    else:
-        # When base_model is None, we don't need layer names
-        layer_names = []
+    logger.info(f"Target layers for experiment: {layer_names}")
 
     # ------------------------------------------------------------------ #
     #  Calculate target_length for probes
@@ -444,271 +535,89 @@ def run_experiment(
             "Setting disable_layerdrop=True for BEATs model to prevent layerdrop issues"
         )
 
-    train_ds: EmbeddingDataset | None = None  # will remain None if not needed
-    val_ds: EmbeddingDataset | None = None
     test_embeds: torch.Tensor | None = None
     test_labels: torch.Tensor | None = None
     train_embeds: torch.Tensor | None = None
     train_labels: torch.Tensor | None = None
 
-    # ------------------- embeddings for linear probe ------------------- #
-    if offline_training:
-        if not need_recompute_embeddings_train:
-            train_embeds, train_labels, num_labels = load_embeddings_arrays(train_path)
-            val_embeds, val_labels, _ = load_embeddings_arrays(val_path)
+    # ------------------------------------------------------------------ #
+    #  (1) Probing
+    # ------------------------------------------------------------------ #
+
+    # ------------------- embeddings for probing ------------------- #
+    if not online_training:
+        # Configure unified data sources (streaming vs in-memory decided internally)
+        memory_limit_gb = getattr(eval_cfg.offline_embeddings, "memory_limit_gb", 32)
+        memory_limit_bytes = int(memory_limit_gb * 1024**3)
+
+        base_cfg_common = dict(
+            memory_limit_bytes=memory_limit_bytes,
+            use_streaming_embeddings=eval_cfg.offline_embeddings.use_streaming_embeddings,
+            cache_size_limit_gb=getattr(
+                eval_cfg.offline_embeddings, "cache_size_limit_gb", 8.0
+            ),
+            chunk_size=eval_cfg.offline_embeddings.streaming_chunk_size,
+            compression=eval_cfg.offline_embeddings.hdf5_compression,
+            compression_level=eval_cfg.offline_embeddings.hdf5_compression_level,
+            auto_chunk_size=eval_cfg.offline_embeddings.auto_chunk_size,
+            max_chunk_size=eval_cfg.offline_embeddings.max_chunk_size,
+            min_chunk_size=eval_cfg.offline_embeddings.min_chunk_size,
+            batch_chunk_size=eval_cfg.offline_embeddings.batch_chunk_size,
+            disable_tqdm=eval_cfg.disable_tqdm,
+            disable_layerdrop=disable_layerdrop_for_embeddings,
+        )
+
+        train_src = EmbeddingDataSource(
+            save_path=train_path,
+            layer_names=layer_names,
+            aggregation=aggregation_method,
+            config=EmbeddingDataSourceConfig(save_path=train_path, **base_cfg_common),
+        )
+        val_src = EmbeddingDataSource(
+            save_path=val_path,
+            layer_names=layer_names,
+            aggregation=aggregation_method,
+            config=EmbeddingDataSourceConfig(save_path=val_path, **base_cfg_common),
+        )
+        test_src = EmbeddingDataSource(
+            save_path=test_path,
+            layer_names=layer_names,
+            aggregation=aggregation_method,
+            config=EmbeddingDataSourceConfig(save_path=test_path, **base_cfg_common),
+        )
+
+        # Only run probing section if we actually need probing
+        if need_probe:
+            if need_recompute_embeddings_train:
+                train_ds = train_src.get_dataset(
+                    base_model=base_model, dataloader=train_dl_raw, device=device
+                )
+                val_ds = val_src.get_dataset(
+                    base_model=base_model, dataloader=val_dl_raw, device=device
+                )
+                test_ds = test_src.get_dataset(
+                    base_model=base_model, dataloader=test_dl_raw, device=device
+                )
+            else:
+                # Fallback: try to load from existing files
+                train_ds = train_src.get_dataset()
+                val_ds = val_src.get_dataset()
+                test_ds = test_src.get_dataset()
         else:
-            if base_model is None:
-                raise ValueError("base_model is required to compute embeddings")
+            # When not doing probing, set datasets to None
+            train_ds = None
+            val_ds = None
+            test_ds = None
 
-            # Use streaming approach for memory efficiency when extracting from many
-            # layers. This prevents OOM issues when using "all" layers in EfficientNet
-            use_streaming = eval_cfg.use_streaming_embeddings and (
-                len(layer_names) > 5 or "all" in layer_names
-            )
-
-            if use_streaming:
-                logger.info(
-                    f"Using streaming approach for memory-efficient embedding "
-                    f"extraction (layers: {len(layer_names)}, streaming enabled: "
-                    f"{eval_cfg.use_streaming_embeddings}) - "
-                    f"Computing embeddings for train and val"
+        if num_labels is None and need_probe:
+            # Prefer num_labels computed by the data source
+            num_labels = getattr(train_src, "num_labels", None)
+            if num_labels is None:
+                raise ValueError(
+                    "num_labels could not be determined from EmbeddingDataSource; "
+                    "ensure embeddings were saved with num_labels or provide it "
+                    "explicitly."
                 )
-                train_embeds, train_labels = extract_embeddings_for_split(
-                    base_model,
-                    train_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method,
-                    save_path=train_path,
-                    chunk_size=eval_cfg.streaming_chunk_size,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                    auto_chunk_size=eval_cfg.auto_chunk_size,
-                    max_chunk_size=eval_cfg.max_chunk_size,
-                    min_chunk_size=eval_cfg.min_chunk_size,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-                val_embeds, val_labels = extract_embeddings_for_split(
-                    base_model,
-                    val_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method,
-                    save_path=val_path,
-                    chunk_size=eval_cfg.streaming_chunk_size,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                    auto_chunk_size=eval_cfg.auto_chunk_size,
-                    max_chunk_size=eval_cfg.max_chunk_size,
-                    min_chunk_size=eval_cfg.min_chunk_size,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-            else:
-                logger.info(
-                    f"Using standard in-memory embedding extraction "
-                    f"(layers: {len(layer_names)}, streaming disabled: "
-                    f"{eval_cfg.use_streaming_embeddings}) - "
-                    f"Computing embeddings for train and val"
-                )
-                train_embeds, train_labels = extract_embeddings_for_split(
-                    base_model,
-                    train_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-                val_embeds, val_labels = extract_embeddings_for_split(
-                    base_model,
-                    val_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-
-                save_embeddings_arrays(
-                    train_embeds,
-                    train_labels,
-                    train_path,
-                    num_labels,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                )
-                save_embeddings_arrays(
-                    val_embeds,
-                    val_labels,
-                    val_path,
-                    num_labels,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                )
-
-        train_ds = EmbeddingDataset(train_embeds, train_labels)
-        val_ds = EmbeddingDataset(val_embeds, val_labels)
-        num_labels = len(train_labels.unique()) if num_labels is None else num_labels
-
-    # ------------------- embeddings for train-vs-test retrieval -------- #
-    if need_retrieval and retrieval_mode == "train_vs_test" and train_embeds is None:
-        if not need_recompute_embeddings_train:
-            train_embeds, train_labels, _ = load_embeddings_arrays(train_path)
-        else:
-            if base_model is None:
-                raise ValueError("base_model is required to compute embeddings")
-
-            # Use streaming approach for memory efficiency when extracting from many
-            # layers
-            use_streaming = eval_cfg.use_streaming_embeddings and (
-                len(layer_names) > 5 or "all" in layer_names
-            )
-
-            # We need to force aggregation method to "mean" for retrieval if it's
-            # different from "mean" or "max"
-            if aggregation_method not in ["mean", "max"]:
-                aggregation_method_retrieval = "mean"
-                logger.info(
-                    f"Forcing aggregation method to 'mean' for retrieval "
-                    f"(aggregation_method: {aggregation_method_retrieval})"
-                )
-            else:
-                aggregation_method_retrieval = aggregation_method
-
-            if use_streaming:
-                logger.info(
-                    f"Using streaming approach for memory-efficient embedding "
-                    f"extraction (retrieval) (layers: {len(layer_names)}, streaming "
-                    f"enabled: {eval_cfg.use_streaming_embeddings}) - "
-                    f"Computing embeddings for train and val"
-                )
-                train_embeds, train_labels = extract_embeddings_for_split(
-                    base_model,
-                    train_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method_retrieval,
-                    save_path=train_path,
-                    chunk_size=eval_cfg.streaming_chunk_size,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                    auto_chunk_size=eval_cfg.auto_chunk_size,
-                    max_chunk_size=eval_cfg.max_chunk_size,
-                    min_chunk_size=eval_cfg.min_chunk_size,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-            else:
-                logger.info(
-                    f"Using standard in-memory embedding extraction (retrieval) "
-                    f"(layers: {len(layer_names)}, streaming disabled: "
-                    f"{eval_cfg.use_streaming_embeddings})"
-                )
-                train_embeds, train_labels = extract_embeddings_for_split(
-                    base_model,
-                    train_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method_retrieval,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-
-                save_embeddings_arrays(
-                    train_embeds,
-                    train_labels,
-                    train_path,
-                    num_labels,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                )
-
-    # ------------------- embeddings for retrieval and clustering -------- #
-    if need_retrieval or (need_probe and not online_training) or need_clustering:
-        test_path = emb_base_dir / "embedding_test.h5"
-        logger.info(test_path)
-
-        if (not overwrite) and test_path.exists():
-            test_embeds, test_labels, _ = load_embeddings_arrays(test_path)
-        else:
-            if base_model is None:
-                raise ValueError("base_model is required to compute embeddings")
-
-            # Use streaming approach for memory efficiency when extracting from many
-            # layers
-            use_streaming = eval_cfg.use_streaming_embeddings and (
-                len(layer_names) > 5 or "all" in layer_names
-            )
-
-            # We need to force aggregation method to "mean" for retrieval if it's
-            # different from "mean" or "max"
-            if aggregation_method not in ["mean", "max"]:
-                aggregation_method_retrieval = "mean"
-                logger.info(
-                    f"Forcing aggregation method to 'mean' for retrieval "
-                    f"(aggregation_method: {aggregation_method_retrieval})"
-                )
-            else:
-                aggregation_method_retrieval = aggregation_method
-
-            if use_streaming:
-                logger.info(
-                    f"Using streaming approach for memory-efficient embedding "
-                    f"extraction (test) (layers: {len(layer_names)}, streaming "
-                    f"enabled: {eval_cfg.use_streaming_embeddings}) - "
-                    f"Computing embeddings for test"
-                )
-                test_embeds, test_labels = extract_embeddings_for_split(
-                    base_model,
-                    test_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method_retrieval,
-                    save_path=test_path,
-                    chunk_size=eval_cfg.streaming_chunk_size,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                    auto_chunk_size=eval_cfg.auto_chunk_size,
-                    max_chunk_size=eval_cfg.max_chunk_size,
-                    min_chunk_size=eval_cfg.min_chunk_size,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-            else:
-                logger.info(
-                    f"Using standard in-memory embedding extraction (test) "
-                    f"(layers: {len(layer_names)}, streaming disabled: "
-                    f"{eval_cfg.use_streaming_embeddings}) - "
-                    f"Computing embeddings for test"
-                )
-                test_embeds, test_labels = extract_embeddings_for_split(
-                    base_model,
-                    test_dl_raw,
-                    layer_names,
-                    device,
-                    aggregation=aggregation_method_retrieval,
-                    batch_chunk_size=getattr(eval_cfg, "batch_chunk_size", 10),
-                    disable_tqdm=eval_cfg.disable_tqdm,
-                    disable_layerdrop=disable_layerdrop_for_embeddings,
-                )
-
-                save_embeddings_arrays(
-                    test_embeds,
-                    test_labels,
-                    test_path,
-                    num_labels,
-                    compression=eval_cfg.hdf5_compression,
-                    compression_level=eval_cfg.hdf5_compression_level,
-                )
-
-        num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 
     # ------------------------------------------------------------------ #
     #  Experiment logger
@@ -719,7 +628,7 @@ def run_experiment(
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ #
-    #  (1) Linear probe
+    #  Probing training and evaluation
     # ------------------------------------------------------------------ #
     train_metrics: Dict[str, float] = {}
     val_metrics: Dict[str, float] = {}
@@ -735,7 +644,7 @@ def run_experiment(
             m for m in dataset_metrics if not m.startswith("clustering_")
         ]
 
-        if offline_training:
+        if not online_training and need_probe:
             logger.info("Training offline")
             # Get multi-label setting from dataset config, with fallback based on type
             is_multi_label = getattr(
@@ -743,6 +652,8 @@ def run_experiment(
                 "multi_label",
                 getattr(dataset_cfg, "type", None) == "detection",
             )
+            # Provide embedding dims for offline training from data source
+            train_embeds_dims_for_offline = getattr(train_src, "embedding_dims", None)
             (
                 train_metrics,
                 val_metrics,
@@ -750,7 +661,8 @@ def run_experiment(
             ) = train_and_eval_offline(
                 train_ds,
                 val_ds,
-                EmbeddingDataset(test_embeds, test_labels),
+                test_ds,
+                train_embeds_dims_for_offline,
                 num_labels,
                 layer_names,
                 eval_cfg,
@@ -762,18 +674,13 @@ def run_experiment(
                 target_length=target_length,
             )
 
-            # Log total trainable parameters for offline training
-            if need_probe:
-                logger.info(
-                    "Offline training completed - parameters logged during creation"
-                )
-
-                # Print learned weights if the probe supports it
-                if hasattr(exp_logger, "probe_model") and hasattr(
-                    exp_logger.probe_model, "print_learned_weights"
-                ):
-                    logger.info("Printing learned weights for probe:")
-                    exp_logger.probe_model.print_learned_weights()
+            # Print learned weights if the probe supports it
+            if hasattr(exp_logger, "probe_model") and hasattr(
+                exp_logger.probe_model, "get_learned_weights_table"
+            ):
+                logger.info("Printing learned weights for probe:")
+                weights_table = exp_logger.probe_model.get_learned_weights_table()
+                logger.info(weights_table)
         else:
             logger.info("Training online")
             # For fine-tuning, use raw dataloaders
@@ -804,22 +711,216 @@ def run_experiment(
             )
 
             # Log total trainable parameters for online training
-            if need_probe:
-                logger.info(
-                    "Online training completed - parameters logged during creation"
-                )
+            logger.info("Online training completed - parameters logged during creation")
 
-                # Print learned weights if the probe supports it
-                if hasattr(exp_logger, "probe_model") and hasattr(
-                    exp_logger.probe_model, "print_learned_weights"
-                ):
-                    logger.info("Printing learned weights for probe:")
-                    exp_logger.probe_model.print_learned_weights()
+            # Print learned weights if the probe supports it
+            if hasattr(exp_logger, "probe_model") and hasattr(
+                exp_logger.probe_model, "get_learned_weights_table"
+            ):
+                logger.info("Printing learned weights for probe:")
+                weights_table = exp_logger.probe_model.get_learned_weights_table()
+                logger.info(weights_table)
     else:
         logger.info("Probe not run because not in eval_modes")
 
+    _training_duration = time.time() - _training_start_time
+    logger.info(
+        "Training completed in %.2fs [dataset=%s, eval_set=%s, exp=%s]",
+        _training_duration,
+        dataset_name,
+        evaluation_dataset_name,
+        experiment_name,
+    )
+    # Log as a final train metric for easy aggregation
+    exp_logger.log_metrics(
+        {"training_total_duration_s": _training_duration},
+        step=0,
+        split="train_final",
+    )
+
     # ------------------------------------------------------------------ #
-    #  (2) Retrieval (from cached test embeddings)
+    #  (2) Retrieval and Clustering
+    # ------------------------------------------------------------------ #
+
+    # ------------------- embeddings for train-vs-test retrieval -------- #
+    if need_retrieval and retrieval_mode == "train_vs_test":
+        if not need_recompute_embeddings_train_clustering:
+            train_embeds_dict, train_labels, _ = load_embeddings_arrays(
+                train_path_clustering
+            )
+
+            # Extract the last layer for evaluation (most processed features)
+            if isinstance(train_embeds_dict, dict):
+                last_layer_name = list(train_embeds_dict.keys())[-1]
+                train_embeds = train_embeds_dict[last_layer_name]
+                logger.info(f"Using layer '{last_layer_name}' for retrieval evaluation")
+            else:
+                train_embeds = train_embeds_dict
+        else:
+            if base_model is None:
+                raise ValueError("base_model is required to compute embeddings")
+
+            # We need to force aggregation method to "mean" for retrieval if it's
+            # different from "mean" or "max"
+            if aggregation_method not in ["mean", "max"]:
+                aggregation_method_retrieval = "mean"
+                logger.info(
+                    f"Forcing aggregation method to 'mean' for retrieval "
+                    f"(aggregation_method: {aggregation_method_retrieval})"
+                )
+            else:
+                aggregation_method_retrieval = aggregation_method
+
+            logger.info(
+                f"Using EmbeddingDataSource for train embeddings (retrieval) "
+                f"(layers: {len(layer_names)})"
+            )
+            # Use in-memory configuration for clustering/retrieval
+            retrieval_cfg_common = dict(
+                memory_limit_bytes=memory_limit_bytes,
+                use_streaming_embeddings=False,  # Always use in-memory for retrieval
+                cache_size_limit_gb=getattr(
+                    eval_cfg.offline_embeddings, "cache_size_limit_gb", 8.0
+                ),
+                chunk_size=eval_cfg.offline_embeddings.streaming_chunk_size,
+                compression=eval_cfg.offline_embeddings.hdf5_compression,
+                compression_level=eval_cfg.offline_embeddings.hdf5_compression_level,
+                auto_chunk_size=eval_cfg.offline_embeddings.auto_chunk_size,
+                max_chunk_size=eval_cfg.offline_embeddings.max_chunk_size,
+                min_chunk_size=eval_cfg.offline_embeddings.min_chunk_size,
+                batch_chunk_size=eval_cfg.offline_embeddings.batch_chunk_size,
+                disable_tqdm=eval_cfg.disable_tqdm,
+                disable_layerdrop=disable_layerdrop_for_embeddings,
+            )
+            # Use EmbeddingDataSource for consistency with training phase
+            train_src_retrieval = EmbeddingDataSource(
+                save_path=train_path_clustering,
+                layer_names=layer_names,
+                aggregation=aggregation_method_retrieval,
+                config=EmbeddingDataSourceConfig(
+                    save_path=train_path_clustering, **retrieval_cfg_common
+                ),
+            )
+            train_ds_retrieval = train_src_retrieval.get_dataset(
+                base_model=base_model,
+                dataloader=train_dl_raw,
+                device=device,
+            )
+
+            # EmbeddingDataSource already saved the embeddings, just extract
+            # for retrieval
+            # Get the first sample to determine the structure
+            sample = train_ds_retrieval[0]
+            if isinstance(sample, dict):
+                # Multi-layer case - use the first layer
+                first_layer_name = list(sample.keys())[0] if sample else "embed"
+                train_embeds = torch.stack(
+                    [
+                        train_ds_retrieval[i][first_layer_name]
+                        for i in range(len(train_ds_retrieval))
+                    ]
+                )
+                logger.info(
+                    f"Using layer '{first_layer_name}' for retrieval evaluation"
+                )
+            else:
+                # Single tensor case
+                train_embeds = torch.stack(
+                    [train_ds_retrieval[i] for i in range(len(train_ds_retrieval))]
+                )
+
+    # ------------------- embeddings for retrieval and clustering -------- #
+    if need_retrieval or need_clustering:
+        # Use the regular test path - filename encoding handles different
+        # aggregation methods
+        test_embeds_path = test_path_clustering
+        logger.info(f"Test embeddings path: {test_embeds_path}")
+
+        if (not overwrite) and test_embeds_path.exists():
+            test_embeds_dict, test_labels, _ = load_embeddings_arrays(test_embeds_path)
+
+            # Extract the last layer for evaluation (most processed features)
+            if isinstance(test_embeds_dict, dict):
+                last_layer_name = list(test_embeds_dict.keys())[-1]
+                test_embeds = test_embeds_dict[last_layer_name]
+                logger.info(f"Using layer '{last_layer_name}' for test evaluation")
+            else:
+                test_embeds = test_embeds_dict
+        else:
+            if base_model is None:
+                raise ValueError("base_model is required to compute embeddings")
+
+            # We need to force aggregation method to "mean" for retrieval if it's
+            # different from "mean" or "max"
+            if aggregation_method not in ["mean", "max"]:
+                aggregation_method_retrieval = "mean"
+                logger.info(
+                    f"Forcing aggregation method to 'mean' for retrieval "
+                    f"(aggregation_method: {aggregation_method_retrieval})"
+                )
+            else:
+                aggregation_method_retrieval = aggregation_method
+
+            logger.info(
+                f"Using EmbeddingDataSource for test embeddings (retrieval) "
+                f"(layers: {len(layer_names)})"
+            )
+            # Use in-memory configuration for clustering/retrieval
+            retrieval_cfg_common = dict(
+                memory_limit_bytes=memory_limit_bytes,
+                use_streaming_embeddings=False,  # Always use in-memory for retrieval
+                cache_size_limit_gb=getattr(
+                    eval_cfg.offline_embeddings, "cache_size_limit_gb", 8.0
+                ),
+                chunk_size=eval_cfg.offline_embeddings.streaming_chunk_size,
+                compression=eval_cfg.offline_embeddings.hdf5_compression,
+                compression_level=eval_cfg.offline_embeddings.hdf5_compression_level,
+                auto_chunk_size=eval_cfg.offline_embeddings.auto_chunk_size,
+                max_chunk_size=eval_cfg.offline_embeddings.max_chunk_size,
+                min_chunk_size=eval_cfg.offline_embeddings.min_chunk_size,
+                batch_chunk_size=eval_cfg.offline_embeddings.batch_chunk_size,
+                disable_tqdm=eval_cfg.disable_tqdm,
+                disable_layerdrop=disable_layerdrop_for_embeddings,
+            )
+            # Use EmbeddingDataSource for consistency with training phase
+            test_src_retrieval = EmbeddingDataSource(
+                save_path=test_embeds_path,
+                layer_names=layer_names,
+                aggregation=aggregation_method_retrieval,
+                config=EmbeddingDataSourceConfig(
+                    save_path=test_embeds_path, **retrieval_cfg_common
+                ),
+            )
+            test_ds_retrieval = test_src_retrieval.get_dataset(
+                base_model=base_model,
+                dataloader=test_dl_raw,
+                device=device,
+            )
+
+            # EmbeddingDataSource already saved the embeddings, just extract
+            # for retrieval
+            # Get the first sample to determine the structure
+            sample = test_ds_retrieval[0]
+            if isinstance(sample, dict):
+                # Multi-layer case - use the last layer
+                last_layer_name = list(sample.keys())[-1] if sample else "embed"
+                test_embeds = torch.stack(
+                    [
+                        test_ds_retrieval[i][last_layer_name]
+                        for i in range(len(test_ds_retrieval))
+                    ]
+                )
+                logger.info(f"Using layer '{last_layer_name}' for test evaluation")
+            else:
+                # Single tensor case
+                test_embeds = torch.stack(
+                    [test_ds_retrieval[i] for i in range(len(test_ds_retrieval))]
+                )
+
+        num_labels = len(test_labels.unique()) if num_labels is None else num_labels
+
+    # ------------------------------------------------------------------ #
+    #  Retrieval (from cached test embeddings)
     # ------------------------------------------------------------------ #
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
@@ -833,7 +934,7 @@ def run_experiment(
             retrieval_metrics = eval_retrieval(test_embeds, test_labels)
 
     # ------------------------------------------------------------------ #
-    #  (3) Clustering (from cached test embeddings)
+    #  Clustering (from cached test embeddings)
     # ------------------------------------------------------------------ #
     clustering_metrics: Dict[str, float] = {}
     if "clustering" in eval_cfg.eval_modes:

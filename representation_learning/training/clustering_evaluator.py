@@ -172,7 +172,7 @@ class ClusteringEvaluator:
         with torch.no_grad():
             # Register hooks for the specified layers outside the loop
             if hasattr(model, "register_hooks_for_layers"):
-                model.register_hooks_for_layers(layer_names)
+                layer_names = model.register_hooks_for_layers(layer_names)
             else:
                 logger.warning("Model does not support register_hooks_for_layers")
 
