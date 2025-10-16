@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -293,10 +294,12 @@ class FineTuneTrainer:
 
         for batch in iterator:
             if "embed" in batch:
+                # Single tensor case (backward compatibility)
                 z = batch["embed"].to(self.device)
                 logits = self.model(z)
                 y = batch["label"].to(self.device)
-            else:
+            elif "raw_wav" in batch:
+                # Raw audio case
                 x = batch["raw_wav"].to(self.device)
                 mask = batch.get("padding_mask")
                 if mask is not None:
@@ -308,6 +311,22 @@ class FineTuneTrainer:
                     if mask is not None
                     else self.model(x)
                 )
+            else:
+                # Dictionary embeddings case (no raw_wav key)
+                embed_keys = [k for k in batch.keys() if k != "label"]
+                z = {}
+                for k in embed_keys:
+                    value = batch[k]
+                    if isinstance(value, list):
+                        # Filter out Nones safely
+                        tensors = [t for t in value if t is not None]
+                        z[k] = [t.to(self.device) for t in tensors]
+                    else:
+                        if value is None:
+                            continue
+                        z[k] = value.to(self.device)
+                logits = self.model(z)
+                y = batch["label"].to(self.device)
 
             # Calculate loss - handle different label formats for different loss
             # functions
@@ -394,6 +413,28 @@ class FineTuneTrainer:
         # Load the checkpoint
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
+
+        # Re-register hooks on base_model if needed (they can be cleared by load)
+        try:
+            if hasattr(self.model, "base_model") and hasattr(self.model, "layers"):
+                base_model = self.model.base_model
+                layers = self.model.layers
+                if (
+                    base_model is not None
+                    and hasattr(base_model, "register_hooks_for_layers")
+                    and hasattr(base_model, "_hooks")
+                    and isinstance(base_model._hooks, dict)
+                    and len(base_model._hooks) == 0
+                ):
+                    logging.getLogger("run_finetune").info(
+                        "Re-registering hooks on base_model for layers: %s", layers
+                    )
+                    layers = base_model.register_hooks_for_layers(layers)
+        except Exception as hook_err:
+            logging.getLogger("run_finetune").warning(
+                "Could not re-register base_model hooks after checkpoint load: %s",
+                hook_err,
+            )
         logger.info(
             f"Restored best model from {ckpt_path} "
             f"(val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
@@ -406,7 +447,8 @@ class FineTuneTrainer:
 def train_and_eval_offline(
     train_ds: torch.utils.data.Dataset,
     val_ds: torch.utils.data.Dataset,
-    test_embed_ds: torch.utils.data.Dataset,
+    test_ds: torch.utils.data.Dataset,
+    input_dim: List[Tuple[int, ...]],
     num_labels: int,
     layer_names: List[str],
     eval_cfg: EvaluateConfig,
@@ -432,9 +474,14 @@ def train_and_eval_offline(
         If no dataset metrics are provided in the evaluation configuration
     """
 
-    # Get input dimension from the first batch of training data
-    first_batch = next(iter(torch.utils.data.DataLoader(train_ds, batch_size=1)))
-    input_dim = first_batch["embed"].shape[1]
+    # Validate embeddings_dims
+    if input_dim is None or len(input_dim) == 0:
+        raise ValueError(
+            "input_dim is required for offline training but was not provided. "
+            "This usually happens when loading embeddings from H5 files. "
+            "Please ensure embedding dimensions are properly extracted from the "
+            "dataset."
+        )
 
     # Use experiment's probe configuration if available, otherwise create default
     if experiment_cfg and experiment_cfg.probe_config:
@@ -483,6 +530,9 @@ def train_and_eval_offline(
     # Store probe model in exp_logger for later access (e.g., printing learned weights)
     exp_logger.probe_model = probe
 
+    # Use spawn context for DataLoaders to avoid fork-related issues (e.g., HDF5)
+    ctx = multiprocessing.get_context("spawn")
+
     trainer = FineTuneTrainer(
         model=probe,
         optimizer=optim,
@@ -490,11 +540,17 @@ def train_and_eval_offline(
             train_ds,
             batch_size=eval_cfg.training_params.batch_size,
             shuffle=True,
+            pin_memory=True,
+            num_workers=eval_cfg.num_workers,
+            multiprocessing_context=ctx,
         ),
         val_loader=torch.utils.data.DataLoader(
             val_ds,
             batch_size=eval_cfg.training_params.batch_size,
             shuffle=False,
+            pin_memory=True,
+            num_workers=eval_cfg.num_workers,
+            multiprocessing_context=ctx,
         ),
         device=device,
         cfg=eval_cfg,
@@ -513,9 +569,12 @@ def train_and_eval_offline(
 
     # ---------- probe evaluation on cached test embeddings ----------
     test_loader = torch.utils.data.DataLoader(
-        test_embed_ds,
+        test_ds,
         batch_size=eval_cfg.training_params.batch_size,
         shuffle=False,
+        pin_memory=True,
+        num_workers=eval_cfg.num_workers,
+        multiprocessing_context=ctx,
     )
 
     # Metric selection - require explicit metrics, no fallbacks
@@ -531,7 +590,27 @@ def train_and_eval_offline(
     probe.eval()  # feature_mode stays True (inputs are embeddings)
     with torch.no_grad():
         for batch in test_loader:
-            z = batch["embed"].to(device)
+            # Handle both dictionary and single tensor cases
+            if "embed" in batch:
+                # Single tensor case (backward compatibility)
+                z = batch["embed"].to(device)
+            else:
+                # Dictionary case: pass all embedding keys to probe
+                embed_keys = [k for k in batch.keys() if k != "label"]
+                if not embed_keys:
+                    raise ValueError("No embedding keys found in batch")
+
+                # Create dictionary with all embedding layers
+                z = {}
+                for k in embed_keys:
+                    if isinstance(batch[k], list):
+                        # Handle list of tensors (aggregation="none" case)
+                        z[k] = [tensor.to(device) for tensor in batch[k]]
+                    else:
+                        # Handle single tensor (other aggregation methods)
+                        z[k] = batch[k].to(device)
+                logger.debug(f"Using all layers for test evaluation: {embed_keys}")
+
             y = batch["label"].to(device)
 
             logits = probe(z)
