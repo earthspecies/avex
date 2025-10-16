@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=1-9%4
+#SBATCH --array=1-9
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
@@ -24,19 +24,19 @@ declare -A configs=(
 
 declare -A configs_ft=(
     [1]="sl_efficientnet_animalspeak_audioset_ft.yml"
-    [2]="ssl_eat_all_ft.yml"
+    [2]="sl_beats_all_ft.yml"
     [3]="bird_aves_bio_ft.yml"
     [4]="beats_ft.yml"
     [5]="beats_naturelm_ft.yml"
     [6]="eat_hf_ft.yml"
     [7]="eat_hf_finetuned_ft.yml"
-    [8]="sl_beats_all_ft.yml"
+    [8]="ssl_eat_all_ft.yml"
     [9]="sl_eat_all_ssl_all_ft.yml"
 )
 
 
 # Get the config file for this array task
-config_file=${configs[$SLURM_ARRAY_TASK_ID]}
+config_file=${configs_ft[$SLURM_ARRAY_TASK_ID]}
 
 if [ -z "$config_file" ]; then
     echo "Error: No config file found for array task ID $SLURM_ARRAY_TASK_ID"

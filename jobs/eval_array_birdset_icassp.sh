@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=1-9%4
+#SBATCH --array=1-9
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --ntasks-per-gpu=1
@@ -35,7 +35,7 @@ declare -A configs_ft=(
 )
 
 # Get the config file for this array task
-config_file=${configs[$SLURM_ARRAY_TASK_ID]}
+config_file=${configs_ft[$SLURM_ARRAY_TASK_ID]}
 
 if [ -z "$config_file" ]; then
     echo "Error: No config file found for array task ID $SLURM_ARRAY_TASK_ID"
