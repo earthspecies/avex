@@ -323,7 +323,8 @@ class EATHFModel(ModelBase):
         Raises:
             ValueError: If no hooks are registered or no outputs are captured
         """
-        # Check if hooks are registered
+        # Ensure hooks are present (self-heal if they were cleared externally)
+        self.ensure_hooks_registered()
         if not self._hooks:
             raise ValueError("No hooks are registered in the model.")
 

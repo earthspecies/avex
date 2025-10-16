@@ -69,8 +69,8 @@ class ModelBase(nn.Module):
 
         return hook_fn
 
-    def register_hooks_for_layers(self, layer_names: List[str]) -> None:
-        """Register forward hooks for the specified layers.
+    def register_hooks_for_layers(self, layer_names: List[str]) -> List[str]:
+        """Register forward hooks for the specified layers and return them.
 
         Parameters
         ----------
@@ -79,6 +79,12 @@ class ModelBase(nn.Module):
             Special values:
             - 'all': Register hooks for all discoverable layers
             - 'last_layer': Register hooks for only the last (non-classification) layer
+
+        Returns
+        -------
+        List[str]
+            The resolved list of concrete layer names that hooks were
+            registered for.
 
         Raises
         ------
@@ -94,10 +100,6 @@ class ModelBase(nn.Module):
             # Replace 'all' with all discoverable layers, excluding the final
             # classification layer
             all_layers = self._layer_names.copy()
-            # Remove the final classification layer if it exists
-            if len(all_layers) > 0:
-                # Assume the last layer is the classification layer and exclude it
-                all_layers = all_layers[:-1]
             # Remove 'all' from the list and add all discoverable layers
             layer_names = [name for name in layer_names if name != "all"]
             layer_names.extend(all_layers)
@@ -142,6 +144,25 @@ class ModelBase(nn.Module):
                 self._hooks[layer_name] = hook_handle
             except AttributeError as err:
                 raise ValueError(f"Layer '{layer_name}' not found in model") from err
+
+        return layer_names
+
+    def ensure_hooks_registered(self) -> None:
+        """Ensure hooks are registered for previously requested layers.
+
+        This is a resilience helper: if hooks were cleared by external lifecycle
+        events (e.g., GC calling a probe's __del__), and we know which layers we
+        should be hooked on (tracked in `_hook_layers`), re-register them.
+
+        It is a no-op if hooks are already present or if no target layers were
+        recorded.
+        """
+        if self._hooks:
+            return
+        if not self._hook_layers:
+            return
+        # Re-register hooks on the previously requested layers
+        self.register_hooks_for_layers(self._hook_layers)
 
     def deregister_all_hooks(self) -> None:
         """Remove all registered hooks and clear outputs."""
@@ -330,6 +351,9 @@ class ModelBase(nn.Module):
         """
         # Clear previous hook outputs
         self._clear_hook_outputs()
+
+        # Self-heal: re-register hooks if they were cleared externally
+        self.ensure_hooks_registered()
 
         # Check if hooks are registered
         if not self._hooks:
