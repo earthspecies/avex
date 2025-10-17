@@ -296,7 +296,11 @@ class TestAudioProcessor:
         expected_time_bins = (
             16000 + audio_config.hop_length - 1
         ) // audio_config.hop_length
-        assert output.shape == (batch_size, audio_config.n_mels, expected_time_bins)
+        assert output.shape == (
+            batch_size,
+            audio_config.n_mels,
+            expected_time_bins,
+        )
 
     def test_numpy_input(self, audio_config: AudioConfig) -> None:
         """Test processing numpy array input."""

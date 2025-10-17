@@ -18,10 +18,16 @@ training_params:
 experiments:
   - run_name: perch_base_cpu
     run_config: configs/run_configs/perch_base_cpu.yml
-    layers: last_layer  # special-case handled by PerchModel
-    checkpoint_path: null  # use pretrained TF-Hub weights
     pretrained: true
-    frozen: true  # Freeze backbone during linear-probe training
+    probe_config:
+      probe_type: linear
+      target_layers: ["last_layer"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+    checkpoint_path: null  # use pretrained TF-Hub weights
+
 
 # Where to persist evaluation outputs
 save_dir: evaluation_results/perch
@@ -33,5 +39,5 @@ num_workers: 0  # keep single-process I/O for simplicity
 
 # Evaluation modes to execute
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval

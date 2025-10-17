@@ -109,7 +109,11 @@ class TrainValSplitTransform:
             If stratify_column is specified but not found in data
         """
         if len(data) == 0:
-            return data, {"subset": self.subset, "original_size": 0, "split_size": 0}
+            return data, {
+                "subset": self.subset,
+                "original_size": 0,
+                "split_size": 0,
+            }
 
         # Prepare stratification
         stratify = None

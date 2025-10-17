@@ -295,7 +295,11 @@ def prepare_data_for_leaderboard(df: pd.DataFrame) -> pd.DataFrame:
     df_copy = df.copy()
 
     # Remove JSON configuration columns from display
-    config_columns_to_hide = ["eval_config", "training_params", "run_config_params"]
+    config_columns_to_hide = [
+        "eval_config",
+        "training_params",
+        "run_config_params",
+    ]
     for col in config_columns_to_hide:
         if col in df_copy.columns:
             df_copy = df_copy.drop(columns=[col])
@@ -573,16 +577,20 @@ def main() -> None:
             )
             metric_sort = gr.Dropdown(
                 choices=display_metric_columns,
-                value=display_metric_columns[0]
-                if display_metric_columns
-                else "timestamp",
+                value=(
+                    display_metric_columns[0] if display_metric_columns else "timestamp"
+                ),
                 label="Sort by Metric",
             )
             refresh_btn = gr.Button("Refresh Data")
 
         # Create the leaderboard component
         # Define columns to hide from display
-        columns_to_hide = ["eval_config", "training_params", "run_config_params"]
+        columns_to_hide = [
+            "eval_config",
+            "training_params",
+            "run_config_params",
+        ]
 
         # Get display columns (exclude hidden ones)
         display_columns = [

@@ -159,7 +159,11 @@ class MulticlassBinaryF1Score:
         macro_rec = recall_score(y_true, y_pred, average="macro", zero_division=0)
         macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
 
-        return {"macro_prec": macro_prec, "macro_rec": macro_rec, "macro_f1": macro_f1}
+        return {
+            "macro_prec": macro_prec,
+            "macro_rec": macro_rec,
+            "macro_f1": macro_f1,
+        }
 
     def get_primary_metric(self) -> float:
         """Get the primary metric value.

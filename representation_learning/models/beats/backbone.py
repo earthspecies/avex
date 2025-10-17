@@ -106,7 +106,8 @@ class TransformerEncoder(nn.Module):
                 )
                 nn.init.xavier_normal_(self.layers[i].self_attn.q_proj.weight, gain=1)
                 nn.init.xavier_normal_(
-                    self.layers[i].self_attn.out_proj.weight, gain=deep_norm_beta
+                    self.layers[i].self_attn.out_proj.weight,
+                    gain=deep_norm_beta,
                 )
                 nn.init.xavier_normal_(self.layers[i].fc1.weight, gain=deep_norm_beta)
                 nn.init.xavier_normal_(self.layers[i].fc2.weight, gain=deep_norm_beta)
@@ -120,6 +121,7 @@ class TransformerEncoder(nn.Module):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
         layer: Optional[int] = None,
+        disable_layerdrop: bool = False,
     ) -> Tuple[torch.Tensor, list]:
         """Forward pass through the transformer encoder.
 
@@ -127,11 +129,14 @@ class TransformerEncoder(nn.Module):
             x: Input tensor
             padding_mask: Optional padding mask
             layer: Optional target layer index
+            disable_layerdrop: Whether to disable layerdrop during forward pass
 
         Returns:
             Tuple[torch.Tensor, list]: Encoded features and layer results
         """
-        x, layer_results = self.extract_features(x, padding_mask, layer)
+        x, layer_results = self.extract_features(
+            x, padding_mask, layer, disable_layerdrop
+        )
 
         if self.layer_norm_first and layer is None:
             x = self.layer_norm(x)
@@ -143,6 +148,7 @@ class TransformerEncoder(nn.Module):
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
         tgt_layer: Optional[int] = None,
+        disable_layerdrop: bool = False,
     ) -> Tuple[torch.Tensor, list]:
         """Extract features from input through transformer layers.
 
@@ -150,6 +156,7 @@ class TransformerEncoder(nn.Module):
             x: Input tensor
             padding_mask: Optional padding mask
             tgt_layer: Optional target layer to stop at
+            disable_layerdrop: Whether to disable layerdrop during forward pass
 
         Returns:
             Tuple[torch.Tensor, list]: Extracted features and layer results
@@ -178,8 +185,17 @@ class TransformerEncoder(nn.Module):
         for i, layer in enumerate(self.layers):
             if self.layer_wise_gradient_decay_ratio != 1.0:
                 x = GradMultiply.apply(x, self.layer_wise_gradient_decay_ratio)
-            dropout_probability = np.random.random()
-            if not self.training or (dropout_probability > self.layerdrop):
+            if disable_layerdrop:
+                # When layerdrop is disabled, always execute the layer
+                should_execute = True
+            else:
+                # Normal layerdrop behavior
+                dropout_probability = np.random.random()
+                should_execute = not self.training or (
+                    dropout_probability > self.layerdrop
+                )
+
+            if should_execute:
                 x, z, pos_bias = layer(
                     x,
                     self_attn_padding_mask=padding_mask,
@@ -404,13 +420,17 @@ class MultiheadAttention(nn.Module):
         q_embed_dim = embed_dim
 
         self.k_proj = quant_noise(
-            nn.Linear(self.kdim, k_embed_dim, bias=k_bias), q_noise, qn_block_size
+            nn.Linear(self.kdim, k_embed_dim, bias=k_bias),
+            q_noise,
+            qn_block_size,
         )
         self.v_proj = quant_noise(
             nn.Linear(self.vdim, embed_dim, bias=bias), q_noise, qn_block_size
         )
         self.q_proj = quant_noise(
-            nn.Linear(embed_dim, q_embed_dim, bias=bias), q_noise, qn_block_size
+            nn.Linear(embed_dim, q_embed_dim, bias=bias),
+            q_noise,
+            qn_block_size,
         )
 
         self.out_proj = quant_noise(
@@ -625,7 +645,8 @@ class MultiheadAttention(nn.Module):
             v = torch.cat([v, self.bias_v.repeat(1, bsz, 1)])
             if attn_mask is not None:
                 attn_mask = torch.cat(
-                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)], dim=1
+                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)],
+                    dim=1,
                 )
             if key_padding_mask is not None:
                 key_padding_mask = torch.cat(
@@ -712,7 +733,8 @@ class MultiheadAttention(nn.Module):
             v = torch.cat([v, v.new_zeros((v.size(0), 1) + v.size()[2:])], dim=1)
             if attn_mask is not None:
                 attn_mask = torch.cat(
-                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)], dim=1
+                    [attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)],
+                    dim=1,
                 )
             if key_padding_mask is not None:
                 key_padding_mask = torch.cat(
@@ -731,7 +753,11 @@ class MultiheadAttention(nn.Module):
         ) * alpha
         attn_weights = self.apply_sparse_mask(attn_weights, tgt_len, src_len, bsz)
 
-        assert list(attn_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
+        assert list(attn_weights.size()) == [
+            bsz * self.num_heads,
+            tgt_len,
+            src_len,
+        ]
 
         if attn_mask is not None:
             attn_mask = attn_mask.unsqueeze(0)
@@ -783,7 +809,11 @@ class MultiheadAttention(nn.Module):
 
         assert v is not None
         attn = torch.bmm(attn_probs, v)
-        assert list(attn.size()) == [bsz * self.num_heads, tgt_len, self.head_dim]
+        assert list(attn.size()) == [
+            bsz * self.num_heads,
+            tgt_len,
+            self.head_dim,
+        ]
         attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
         attn = self.out_proj(attn)
         attn_weights: Optional[Tensor] = None
@@ -810,7 +840,8 @@ class MultiheadAttention(nn.Module):
             new_key_padding_mask = prev_key_padding_mask
         elif prev_key_padding_mask is not None and key_padding_mask is not None:
             new_key_padding_mask = torch.cat(
-                [prev_key_padding_mask.float(), key_padding_mask.float()], dim=1
+                [prev_key_padding_mask.float(), key_padding_mask.float()],
+                dim=1,
             )
         # During incremental decoding, as the padding token enters and
         # leaves the frame, there will be a time when prev or current
@@ -842,7 +873,8 @@ class MultiheadAttention(nn.Module):
         return new_key_padding_mask
 
     def _get_input_buffer(
-        self, incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]]
+        self,
+        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]],
     ) -> Dict[str, Optional[Tensor]]:
         result = self.get_incremental_state(incremental_state, "attn_state")
         if result is not None:

@@ -205,6 +205,7 @@ class BEATs(nn.Module):
         fbank_mean: float = 15.41663,
         fbank_std: float = 6.55582,
         feature_only: bool = False,
+        disable_layerdrop: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
         """Extract features from audio input.
 
@@ -214,6 +215,7 @@ class BEATs(nn.Module):
             fbank_mean: Mean for filterbank normalization
             fbank_std: Standard deviation for filterbank normalization
             feature_only: Whether to return only features (no predictions)
+            disable_layerdrop: Whether to disable layerdrop during forward pass
 
         Returns:
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
@@ -243,6 +245,7 @@ class BEATs(nn.Module):
         x, layer_results = self.encoder(
             x,
             padding_mask=padding_mask,
+            disable_layerdrop=disable_layerdrop,
         )
 
         if not feature_only and self.predictor is not None:
@@ -263,16 +266,22 @@ class BEATs(nn.Module):
         return x, padding_mask
 
     def forward(
-        self, source: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
+        self,
+        source: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        disable_layerdrop: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
         """Forward pass of BEATs model.
 
         Args:
             source: Input audio tensor
             padding_mask: Optional padding mask
+            disable_layerdrop: Whether to disable layerdrop during forward pass
 
         Returns:
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
                 Model output (features or predictions)
         """
-        return self.extract_features(source, padding_mask, feature_only=True)
+        return self.extract_features(
+            source, padding_mask, feature_only=True, disable_layerdrop=disable_layerdrop
+        )

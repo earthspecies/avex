@@ -60,7 +60,10 @@ class AudioDataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self, ds: Dataset, metadata: dict, postprocessors: Optional[list[Any]] = None
+        self,
+        ds: Dataset,
+        metadata: dict,
+        postprocessors: Optional[list[Any]] = None,
     ) -> None:
         """Initialize the AudioDataset with a Dataset instance."""
         self.ds = ds
@@ -195,7 +198,9 @@ def _build_one_dataset_split(
 
 
 def _build_datasets(
-    cfg: DatasetCollectionConfig, postprocessors: list[Callable], label_type: str
+    cfg: DatasetCollectionConfig,
+    postprocessors: list[Callable],
+    label_type: str,
 ) -> list[AudioDataset]:
     """Build datasets from the provided configuration.
     Parameters
@@ -390,7 +395,9 @@ class Collater:
 
             # Step 2: Apply model requirement (pad/truncate to target length)
             wav, pad_mask = pad_or_window(
-                wav, self.audio_max_length_seconds * self.sr, self.window_selection
+                wav,
+                self.audio_max_length_seconds * self.sr,
+                self.window_selection,
             )
             audios.append(wav)
             masks.append(pad_mask)
@@ -418,7 +425,8 @@ class Collater:
             # Convert integer labels to one-hot vectors for classification
             if self.num_labels > 0:
                 label_tensor = torch.nn.functional.one_hot(
-                    torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
+                    torch.tensor(labels, dtype=torch.long),
+                    num_classes=self.num_labels,
                 ).float()
             else:
                 # For CLAP models without numeric labels, create dummy tensor

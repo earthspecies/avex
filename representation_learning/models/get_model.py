@@ -137,6 +137,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
 
         use_naturelm = getattr(model_config, "use_naturelm", False)
         fine_tuned = getattr(model_config, "fine_tuned", False)
+        disable_layerdrop = getattr(model_config, "disable_layerdrop", False)
 
         return BeatsModel(
             num_classes=num_classes,
@@ -145,6 +146,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
             use_naturelm=use_naturelm,
             fine_tuned=fine_tuned,
+            disable_layerdrop=disable_layerdrop,
         )
     elif model_name == "eat_hf":
         from representation_learning.models.eat_hf import (

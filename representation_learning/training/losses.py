@@ -249,7 +249,9 @@ class ClipLoss(nn.Module):
         output_dict: bool = False,
         output_logits: bool = False,
     ) -> Union[
-        torch.Tensor, Tuple[torch.Tensor, torch.Tensor], Dict[str, torch.Tensor]
+        torch.Tensor,
+        Tuple[torch.Tensor, torch.Tensor],
+        Dict[str, torch.Tensor],
     ]:
         """Forward pass for contrastive loss calculation.
 

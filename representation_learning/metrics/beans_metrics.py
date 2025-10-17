@@ -38,7 +38,7 @@ class Accuracy:
             Dictionary with key ``"acc"`` holding the running accuracy.
         """
         return {
-            "acc": 0.0 if self.num_total == 0 else self.num_correct / self.num_total
+            "acc": (0.0 if self.num_total == 0 else self.num_correct / self.num_total)
         }
 
     def get_primary_metric(self) -> float:  # noqa: ANN001 (keep interface)

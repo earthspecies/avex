@@ -84,7 +84,9 @@ class _DummyModel(torch.nn.Module):
 # --------------------------------------------------------------------- #
 #  Test
 # --------------------------------------------------------------------- #
-def test_run_experiment_small(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: D401
+def test_run_experiment_small(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # noqa: D401
     """Verify that `run_experiment` executes end-to-end on a minimal setup."""
     # Patch dataloader builders ------------------------------------------------
     from representation_learning.data import dataset as dataset_mod

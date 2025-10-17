@@ -1,26 +1,51 @@
-import sys
-import types
+from __future__ import annotations
 
+import os
+import random
+from typing import Generator
+
+import numpy as np
+import pytest
 import torch
 
-# -----------------------------------------------------------------------------
-# Stub **optional** third-party packages so that imports succeed even when the
-# actual libraries are not installed in the minimal CI environment.
-# -----------------------------------------------------------------------------
 
-# 1. bitsandbytes – only required when using the 8-bit Adam optimiser variant.
-#    We replace it with a minimal stub exposing the attribute accessed by the
-#    code-base (PagedAdamW8bit -> torch.optim.AdamW).
-if "bitsandbytes" not in sys.modules:
-    bnb_stub = types.ModuleType("bitsandbytes")
-    optim_stub = types.ModuleType("optim")
-    optim_stub.PagedAdamW8bit = torch.optim.AdamW  # type: ignore[attr-defined]
-    bnb_stub.optim = optim_stub  # type: ignore[attr-defined]
-    sys.modules["bitsandbytes"] = bnb_stub
+@pytest.fixture(autouse=True, scope="session")
+def set_global_determinism() -> None:
+    """Set deterministic flags and seeds for reproducible tests."""
+    seed = int(os.environ.get("PYTEST_SEED", "42"))
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
-# 2. google-cloud-storage – only needed for logging/remote paths.  Provide a
-#    dummy `Client` class so `from google.cloud.storage.client import Client`
-#    succeeds.
+
+@pytest.fixture()
+def torch_no_grad() -> Generator[None, None, None]:
+    """Context manager fixture to ensure no grad during test scopes when used."""
+    with torch.no_grad():
+        yield
+
+
+# # -----------------------------------------------------------------------------
+# # Stub **optional** third-party packages so that imports succeed even when the
+# # actual libraries are not installed in the minimal CI environment.
+# # -----------------------------------------------------------------------------
+
+# # 1. bitsandbytes – only required when using the 8-bit Adam optimiser variant.
+# #    We replace it with a minimal stub exposing the attribute accessed by the
+# #    code-base (PagedAdamW8bit -> torch.optim.AdamW).
+# if "bitsandbytes" not in sys.modules:
+#     bnb_stub = types.ModuleType("bitsandbytes")
+#     optim_stub = types.ModuleType("optim")
+#     optim_stub.PagedAdamW8bit = torch.optim.AdamW  # type: ignore[attr-defined]
+#     bnb_stub.optim = optim_stub  # type: ignore[attr-defined]
+#     sys.modules["bitsandbytes"] = bnb_stub
+
+# # 2. google-cloud-storage – only needed for logging/remote paths.  Provide a
+# #    dummy `Client` class so `from google.cloud.storage.client import Client`
+# #    succeeds.
 # if "google" not in sys.modules:
 #     google_mod = types.ModuleType("google")
 #     cloud_mod = types.ModuleType("google.cloud")
@@ -30,7 +55,7 @@ if "bitsandbytes" not in sys.modules:
 #     class _DummyClient:  # pylint: disable=too-few-public-methods
 #         """Bare-bones replacement for GCS Client used only for type checks."""
 
-#         def __init__(self, *args, **kwargs) -> None:  # noqa: D401, ANN001, ANN002, ANN003, E501
+#         def __init__(self, *args, **kwargs) -> None:  # noqa: D401, ANN001, ANN002
 #             pass
 
 #     client_mod.Client = _DummyClient  # type: ignore[attr-defined]
@@ -47,9 +72,9 @@ if "bitsandbytes" not in sys.modules:
 #     cloud_mod.storage = storage_mod  # type: ignore[attr-defined]
 #     storage_mod.client = client_mod  # type: ignore[attr-defined]
 
-# 3. esp_data – the original codebase relies on a separate *esp-data* package
-#    for path helpers (anypath, AnyPathT).  For unit tests we provide a
-#    lightweight substitute that fulfils the import-time requirements.
+# # 3. esp_data – the original codebase relies on a separate *esp-data* package
+# #    for path helpers (anypath, AnyPathT).  For unit tests we provide a
+# #    lightweight substitute that fulfils the import-time requirements.
 # if "esp_data" not in sys.modules:
 #     esp_mod = types.ModuleType("esp_data")
 #     io_mod = types.ModuleType("esp_data.io")
@@ -87,5 +112,5 @@ if "bitsandbytes" not in sys.modules:
 #     )
 #     esp_mod.io = io_mod  # type: ignore[attr-defined]
 
-# No fixtures are defined at the moment – the stubs above are imported eagerly
-# by Pytest before test collection, ensuring all subsequent imports succeed.
+# # No fixtures are defined at the moment – the stubs above are imported eagerly
+# # by Pytest before test collection, ensuring all subsequent imports succeed.

@@ -7,7 +7,10 @@ class PatchPaddingHandler:
     """Handles patch-level padding masks for EAT spectrograms."""
 
     def __init__(
-        self, patch_size: int = 16, hop_length: int = 160, threshold: float = 0.5
+        self,
+        patch_size: int = 16,
+        hop_length: int = 160,
+        threshold: float = 0.5,
     ) -> None:
         """
         Args:
