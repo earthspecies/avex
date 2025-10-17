@@ -14,8 +14,13 @@ training_params:
 experiments:
   - run_name: sl_beats_all
     run_config: configs/run_configs/pretrained/beats_ft.yml
-    ### which layers to probe for embeddings
-    layers: backbone
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: false
     checkpoint_path: gs://representation-learning/models/sl_beats_all.pt
@@ -35,8 +40,9 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
   - clustering
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true

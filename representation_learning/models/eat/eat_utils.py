@@ -393,7 +393,9 @@ def compute_block_mask_2d(
                 assert cand_sz > 0, f"{nbs} {cand_sz}"
 
                 to_mask = torch.multinomial(
-                    cands.float(), min(cand_sz, int(target_len - n)), replacement=False
+                    cands.float(),
+                    min(cand_sz, int(target_len - n)),
+                    replacement=False,
                 )
                 m[to_mask] = 1
                 assert to_mask.numel() > 0
@@ -523,7 +525,9 @@ def compute_block_mask_1d(
                 assert cand_sz > 0, f"{nbs} {cand_sz}"
 
                 to_mask = torch.multinomial(
-                    cands.float(), min(cand_sz, int(target_len - n)), replacement=False
+                    cands.float(),
+                    min(cand_sz, int(target_len - n)),
+                    replacement=False,
                 )
                 m[to_mask] = 1
                 assert to_mask.numel() > 0

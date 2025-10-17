@@ -219,6 +219,7 @@ class Model(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         average_over_time: bool = True,
+        freeze_backbone: bool = True,
     ) -> torch.Tensor:
         """Extract embeddings from BirdMAE.
 
@@ -232,6 +233,8 @@ class Model(ModelBase):
             Padding mask for the input (not used by BirdMAE)
         average_over_time : bool
             Whether to average over time dimension (handled automatically)
+        freeze_backbone : bool
+            Whether to freeze the backbone and use torch.no_grad()
 
         Returns
         -------
@@ -247,13 +250,13 @@ class Model(ModelBase):
         self.model.eval()
 
         try:
-            # Process audio and get embeddings
-            if not self.training:
-                # In eval mode, disable gradients for efficiency
+            # Process audio and get embeddings (conditionally use torch.no_grad based on
+            # freeze_backbone)
+            if freeze_backbone:
                 with torch.no_grad():
                     embeddings = self.forward(x, padding_mask)
             else:
-                # In training mode, keep gradients enabled for fine-tuning
+                # Keep gradients enabled for fine-tuning
                 embeddings = self.forward(x, padding_mask)
             return embeddings
         finally:

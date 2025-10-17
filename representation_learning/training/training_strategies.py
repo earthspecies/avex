@@ -135,7 +135,9 @@ class SupervisedStrategy(TrainingStrategy):
                     targets = target.detach()
 
         return TrainingResult(
-            loss=loss, metrics_data=(predictions, targets), batch_size=target.size(0)
+            loss=loss,
+            metrics_data=(predictions, targets),
+            batch_size=target.size(0),
         )
 
 

@@ -37,6 +37,28 @@ class ClusteringEvaluator:
         self.device = device
         self.layer_names = self._parse_layer_names(config.layers)
 
+    def _get_aggregation_method(self, model: torch.nn.Module) -> str:
+        """Determine the appropriate aggregation method based on model type.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            The model to determine aggregation for
+
+        Returns
+        -------
+        str
+            Aggregation method: 'cls_token' for transformers, 'mean' for CNNs
+        """
+        # Transformer-based models that support cls_token
+        # if any(transformer_name in model_class_name for transformer_name in
+        # transformer_models):
+        #     return "cls_token"
+        # else:
+        #     # CNN-based models (EfficientNet, etc.)
+        #     return "mean"
+        return "mean"
+
     def _parse_layer_names(self, layers_str: str) -> List[str]:
         """Parse layer names from configuration string.
 
@@ -141,10 +163,19 @@ class ClusteringEvaluator:
                     linear_layers[-1] if name == "last_layer" else name
                     for name in layer_names
                 ]
+                logger.info(
+                    f"Resolved 'last_layer' to actual layer name: '{linear_layers[-1]}'"
+                )
             else:
                 logger.warning("No linear layers found, using 'last_layer' as-is")
 
         with torch.no_grad():
+            # Register hooks for the specified layers outside the loop
+            if hasattr(model, "register_hooks_for_layers"):
+                layer_names = model.register_hooks_for_layers(layer_names)
+            else:
+                logger.warning("Model does not support register_hooks_for_layers")
+
             for batch in tqdm(dataloader, desc="Extracting embeddings"):
                 if self.config.max_samples and sample_count >= self.config.max_samples:
                     break
@@ -158,11 +189,18 @@ class ClusteringEvaluator:
 
                 # Extract embeddings
                 try:
+                    # Determine aggregation method based on model type
+                    aggregation_method = self._get_aggregation_method(model)
+
                     if padding_mask is None:
-                        embeddings = model.extract_embeddings(wav, layers=layer_names)
+                        embeddings = model.extract_embeddings(
+                            wav, aggregation=aggregation_method
+                        )
                     else:
                         inp = {"raw_wav": wav, "padding_mask": padding_mask}
-                        embeddings = model.extract_embeddings(inp, layers=layer_names)
+                        embeddings = model.extract_embeddings(
+                            inp, aggregation=aggregation_method
+                        )
 
                     # Move to CPU for memory efficiency
                     embeddings_list.append(embeddings.cpu())
@@ -185,6 +223,11 @@ class ClusteringEvaluator:
                 except Exception as e:
                     logger.warning(f"Failed to extract embeddings for batch: {e}")
                     continue
+
+        if hasattr(model, "deregister_all_hooks"):
+            model.deregister_all_hooks()
+        else:
+            logger.warning("Model does not support deregister_all_hooks")
 
         if not embeddings_list:
             logger.warning("No embeddings were successfully extracted")

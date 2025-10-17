@@ -15,8 +15,13 @@ training_params:
 experiments:
   - run_name: resnet18_probe
     run_config: configs/run_configs/resnet18.yml
-    layers: last_layer
-    frozen: true
+    probe_config:
+      probe_type: linear
+      target_layers: ["last_layer"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
 
 save_dir: evaluation_results_resnet
 
@@ -26,5 +31,5 @@ num_workers: 0
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval

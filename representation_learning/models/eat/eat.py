@@ -550,9 +550,11 @@ class Data2VecMultiModel(nn.Module):
         masked_b = encoder_mask.mask.bool()
         y = y[masked_b]
         xs_masked = [
-            x_[masked_b]
-            if x_.size(1) == masked_b.size(1)
-            else x_.reshape(-1, x_.size(-1))
+            (
+                x_[masked_b]
+                if x_.size(1) == masked_b.size(1)
+                else x_.reshape(-1, x_.size(-1))
+            )
             for x_ in xs
         ]
         sample_size = encoder_mask.mask.sum().long()
@@ -646,7 +648,8 @@ class Data2VecMultiModel(nn.Module):
                     self.cfg.softmax_temperature_teacher,
                 )
                 self.center.mul_(self.cfg.center_exp).add_(
-                    cls_target.mean(dim=0, keepdim=True), alpha=1 - self.cfg.center_exp
+                    cls_target.mean(dim=0, keepdim=True),
+                    alpha=1 - self.cfg.center_exp,
                 )
             else:
                 loss_cls = _d2v_loss_fn(cls_pred, cls_target)

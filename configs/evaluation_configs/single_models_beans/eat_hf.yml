@@ -14,10 +14,15 @@ training_params:
 experiments:
   - run_name: eat_hf_pretrained
     run_config: configs/run_configs/pretrained/eat_base.yml
-    ### which layers to probe for embeddings
-    layers: backbone
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
 
 # Where to save the evaluation results
 save_dir: evaluation_results/aaai/eat_hf_pretrained
@@ -33,8 +38,9 @@ num_workers: 12  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
   - clustering
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true

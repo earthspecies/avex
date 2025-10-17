@@ -102,7 +102,11 @@ class CLIPModel(ModelBase):
         """
         current_device = next(self.parameters()).device
         tokens = self.text_tokenizer(
-            text, padding=True, truncation=True, max_length=70, return_tensors="pt"
+            text,
+            padding=True,
+            truncation=True,
+            max_length=70,
+            return_tensors="pt",
         ).to(current_device)
 
         outputs = self.text_encoder(**tokens)

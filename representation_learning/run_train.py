@@ -1,8 +1,4 @@
-"""
-Entry‑point script for training experiments.
-"""
-
-from __future__ import annotations
+"""Training script for representation learning models."""
 
 import json
 import logging
@@ -12,29 +8,29 @@ from pathlib import Path
 
 import torch
 import yaml
+from esp_data.io.paths import anypath  # type: ignore
 
-mp.set_start_method("spawn", force=True)
-
-
-from esp_data.io.paths import anypath  # type: ignore  # noqa: E402
-
-from representation_learning.configs import (  # type: ignore  # noqa: E402
-    RunConfig,
-)
-from representation_learning.data.dataset import build_dataloaders  # noqa: E402
-from representation_learning.models.get_model import get_model  # noqa: E402
-from representation_learning.training.distributed import (  # noqa: E402
+from representation_learning.configs import RunConfig
+from representation_learning.data.dataset import build_dataloaders
+from representation_learning.models.get_model import get_model
+from representation_learning.training.distributed import (
     get_local_device_index,
     init_distributed,
 )
-from representation_learning.training.optimisers import get_optimizer  # noqa: E402
-from representation_learning.training.trainer_factory import (  # noqa: E402
+from representation_learning.training.optimisers import (
+    get_optimizer,
+)
+from representation_learning.training.trainer_factory import (
     TrainerFactory,
 )
-from representation_learning.training.training_utils import (  # noqa: E402
+from representation_learning.training.training_utils import (
     build_scheduler,
 )
-from representation_learning.utils import ExperimentLogger  # noqa: E402
+from representation_learning.utils import ExperimentLogger
+
+# Configure multiprocessing
+mp.set_start_method("spawn", force=True)
+
 
 # Configure logging to ensure INFO level logs are visible
 logging.basicConfig(

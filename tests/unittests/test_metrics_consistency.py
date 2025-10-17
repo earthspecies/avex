@@ -23,7 +23,10 @@ def create_mock_results() -> List[Dict]:
             "experiment_name": "test_exp_1",
             "train_metrics": {"loss": 0.1, "acc": 0.95},
             "val_metrics": {"loss": 0.15, "acc": 0.92},
-            "probe_test_metrics": {"accuracy": 0.93, "balanced_accuracy": 0.91},
+            "probe_test_metrics": {
+                "accuracy": 0.93,
+                "balanced_accuracy": 0.91,
+            },
             "retrieval_metrics": {
                 "retrieval_roc_auc": 0.88,
                 "retrieval_precision_at_1": 0.85,
@@ -34,7 +37,10 @@ def create_mock_results() -> List[Dict]:
             "experiment_name": "test_exp_1",
             "train_metrics": {"loss": 0.2, "acc": 0.88},
             "val_metrics": {"loss": 0.25, "acc": 0.85},
-            "probe_test_metrics": {"accuracy": 0.87, "balanced_accuracy": 0.84},
+            "probe_test_metrics": {
+                "accuracy": 0.87,
+                "balanced_accuracy": 0.84,
+            },
             "retrieval_metrics": {
                 "retrieval_roc_auc": 0.82,
                 "retrieval_precision_at_1": 0.79,

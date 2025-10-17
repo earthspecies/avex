@@ -24,9 +24,19 @@ from esp_data import DatasetConfig
 # --------------------------------------------------------------------------- #
 #  3rd‑party imports
 # --------------------------------------------------------------------------- #
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from pydantic.v1.utils import deep_update
-from pydantic_settings import BaseSettings, CliSettingsSource, YamlConfigSettingsSource
+from pydantic_settings import (
+    BaseSettings,
+    CliSettingsSource,
+    YamlConfigSettingsSource,
+)
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -64,6 +74,15 @@ class TrainingParams(BaseModel):
         False, description="Enable gradient checkpointing to save memory"
     )
 
+    # Gradient clipping for training stability
+    gradient_clip_val: Optional[float] = Field(
+        None,
+        ge=0,
+        description=(
+            "Maximum gradient norm for clipping. If None, no clipping is applied."
+        ),
+    )
+
     # Two-stage fine-tuning parameters
     freeze_backbone_epochs: int = Field(
         0,
@@ -94,7 +113,19 @@ class TrainingParams(BaseModel):
 
     # Skip validation during training
     skip_validation: bool = Field(
-        False, description="Skip validation epochs during training (train-only mode)"
+        False,
+        description="Skip validation epochs during training (train-only mode)",
+    )
+
+    # Learning rate scheduler parameters
+    warmup_epochs: int = Field(
+        5,
+        ge=0,
+        description="Number of warmup epochs for learning rate scheduling",
+    )
+    scheduler_type: Literal["none", "cosine", "linear", "step"] = Field(
+        "cosine",
+        description="Type of learning rate scheduler to use",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -314,6 +345,253 @@ class ModelSpec(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+#  Probe configuration
+# --------------------------------------------------------------------------- #
+
+
+class ProbeConfig(BaseModel):
+    """Configuration for different types of probing strategies.
+
+    This class defines the configuration for various probe types including
+    linear probes, MLPs, attention mechanisms, and sequence models.
+    """
+
+    probe_type: Literal[
+        "linear",
+        "mlp",
+        "attention",
+        "lstm",
+        "transformer",
+    ] = Field("linear", description="Type of probe to use")
+
+    aggregation: Literal["mean", "max", "cls_token", "none"] = Field(
+        "mean", description="How to aggregate multiple dimensional embeddings"
+    )
+
+    input_processing: Literal["flatten", "sequence", "pooled", "none"] = Field(
+        "pooled",
+        description="How to process input embeddings before feeding to probe",
+    )
+
+    target_layers: List[str] = Field(
+        ..., description="List of layer names to extract embeddings from"
+    )
+
+    freeze_backbone: bool = Field(
+        True, description="Whether to freeze the backbone model during probing"
+    )
+
+    # MLP-specific parameters
+    hidden_dims: Optional[List[int]] = Field(
+        None, description="Hidden dimensions for MLP probe (e.g., [512, 256])"
+    )
+
+    dropout_rate: float = Field(
+        0.1, ge=0, le=1, description="Dropout rate for non-linear probes"
+    )
+
+    activation: Literal["relu", "gelu", "tanh", "swish"] = Field(
+        "relu", description="Activation function for non-linear probes"
+    )
+
+    # Attention/Transformer-specific parameters
+    num_heads: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Number of attention heads for attention/transformer probes",
+    )
+
+    attention_dim: Optional[int] = Field(
+        None, ge=1, description="Dimension for attention mechanism"
+    )
+
+    num_layers: Optional[int] = Field(
+        None, ge=1, description="Number of layers for transformer/LSTM probes"
+    )
+
+    # LSTM-specific parameters
+    lstm_hidden_size: Optional[int] = Field(
+        None, ge=1, description="Hidden size for LSTM probe"
+    )
+
+    bidirectional: bool = Field(False, description="Whether to use bidirectional LSTM")
+
+    # Sequence processing parameters
+    max_sequence_length: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Maximum sequence length for sequence-based probes",
+    )
+
+    use_positional_encoding: bool = Field(
+        False,
+        description="Whether to add positional encoding for sequence probes",
+    )
+
+    # Target length configuration
+    target_length: Optional[int] = Field(
+        None,
+        ge=1,
+        description=(
+            "Target length in samples for audio processing. If None, will be "
+            "computed from base_model.audio_processor"
+        ),
+    )
+
+    # Training mode configuration
+    online_training: Optional[bool] = Field(
+        None,
+        description=(
+            "Whether to train online (using raw audio) or offline (using "
+            "pre-computed embeddings). If None, automatically determined based "
+            "on aggregation method: 'mean'/'max' -> offline, 'none'/'cls_token' "
+            "-> online. Online training is required for sequence-"
+            "based probes (LSTM, attention, transformer)."
+        ),
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_probe_configuration(self) -> "ProbeConfig":
+        """Validate the overall probe configuration for consistency.
+
+        Returns
+        -------
+        ProbeConfig
+            The validated probe configuration.
+
+        Raises
+        ------
+        ValueError
+            If the configuration is invalid or inconsistent.
+        """
+        # Validate MLP-specific parameters
+        if self.probe_type in ["mlp"]:
+            if self.hidden_dims is None:
+                raise ValueError("MLP probe requires hidden_dims to be specified")
+            if len(self.hidden_dims) == 0:
+                raise ValueError("MLP probe hidden_dims cannot be empty")
+            if any(dim <= 0 for dim in self.hidden_dims):
+                raise ValueError("MLP probe hidden_dims must all be positive")
+
+        # Validate attention/transformer-specific parameters
+        if self.probe_type in [
+            "attention",
+            "transformer",
+        ]:
+            if self.num_heads is None:
+                raise ValueError(
+                    f"{self.probe_type} probe requires num_heads to be specified"
+                )
+            if self.attention_dim is None:
+                raise ValueError(
+                    f"{self.probe_type} probe requires attention_dim to be specified"
+                )
+            if self.num_layers is None:
+                raise ValueError(
+                    f"{self.probe_type} probe requires num_layers to be specified"
+                )
+
+        # Validate LSTM-specific parameters
+        if self.probe_type in ["lstm"]:
+            if self.lstm_hidden_size is None:
+                raise ValueError("LSTM probe requires lstm_hidden_size to be specified")
+            if self.num_layers is None:
+                raise ValueError("LSTM probe requires num_layers to be specified")
+
+        # Enforce: offline training requires a frozen backbone
+        # If online_training is explicitly set to False (offline), the backbone
+        # must be frozen to use pre-computed embeddings safely.
+        if self.online_training is False and not self.freeze_backbone:
+            raise ValueError(
+                "When online_training=False, freeze_backbone must be True to use "
+                "offline embedding-based probing."
+            )
+
+        # Enforce: unfrozen backbone requires online training
+        # If freeze_backbone is False, online_training must be True for fine-tuning
+        if not self.freeze_backbone and self.online_training is False:
+            raise ValueError(
+                "When freeze_backbone=False, online_training must be True for "
+                "fine-tuning with raw audio."
+            )
+
+        return self
+
+    def get_training_mode(self) -> bool:
+        """Determine whether to use online training based on configuration.
+
+        Returns
+        -------
+        bool
+            True for online training (raw audio), False for offline training "
+            "(embeddings)"
+        """
+        # If explicitly set, use that value
+        if self.online_training is not None:
+            return self.online_training
+
+        # If backbone is not frozen, we must train online (fine-tuning)
+        if not self.freeze_backbone:
+            return True
+
+        # Auto-determine based on aggregation method
+        if self.aggregation in ["mean", "max", "cls_token"]:
+            return False  # Offline training with pre-computed embeddings
+        else:
+            return True  # Online training with raw audio (required for sequence probes)
+
+
+# Predefined probe configurations for common use cases
+PROBE_CONFIGS = {
+    "simple_linear": ProbeConfig(
+        probe_type="linear",
+        aggregation="mean",
+        input_processing="pooled",
+        target_layers=["layer_12"],
+    ),
+    "sequence_lstm": ProbeConfig(
+        probe_type="lstm",
+        aggregation="none",
+        input_processing="sequence",
+        target_layers=["layer_8", "layer_12"],
+        lstm_hidden_size=256,
+        num_layers=2,
+        bidirectional=True,
+    ),
+    "attention_probe": ProbeConfig(
+        probe_type="attention",
+        aggregation="none",
+        input_processing="sequence",
+        target_layers=["layer_6", "layer_10"],
+        num_heads=8,
+        attention_dim=512,
+        num_layers=2,
+    ),
+    "mlp_probe": ProbeConfig(
+        probe_type="mlp",
+        aggregation="mean",
+        input_processing="pooled",
+        target_layers=["layer_12"],
+        hidden_dims=[512, 256],
+        dropout_rate=0.2,
+        activation="gelu",
+    ),
+    "transformer_probe": ProbeConfig(
+        probe_type="transformer",
+        aggregation="none",
+        input_processing="sequence",
+        target_layers=["layer_6", "layer_8", "layer_10", "layer_12"],
+        num_heads=8,
+        attention_dim=512,
+        num_layers=3,
+        use_positional_encoding=True,
+    ),
+}
+
+
+# --------------------------------------------------------------------------- #
 #  Top-level run-configuration
 # --------------------------------------------------------------------------- #
 
@@ -381,10 +659,12 @@ class ClusteringEvalConfig(BaseModel):
     enabled: bool = Field(False, description="Enable clustering evaluation")
     frequency: int = Field(5, ge=1, description="Evaluate clustering every N epochs")
     layers: str = Field(
-        "last_layer", description="Comma-separated layer names for embedding extraction"
+        "last_layer",
+        description="Comma-separated layer names for embedding extraction",
     )
     use_validation_set: bool = Field(
-        True, description="Use validation set for clustering (else use train set)"
+        True,
+        description="Use validation set for clustering (else use train set)",
     )
     max_samples: Optional[int] = Field(
         None, ge=100, description="Maximum samples to use (None = use all)"
@@ -435,7 +715,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         ),
     )
     distributed_backend: Literal["nccl"] = Field(
-        "nccl", description="Backend for distributed training (nccl for GPU training)"
+        "nccl",
+        description="Backend for distributed training (nccl for GPU training)",
     )
     distributed_port: int = Field(
         29500, description="Base port for distributed training communication"
@@ -471,7 +752,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     # Clustering evaluation configuration
     clustering_eval: Optional[ClusteringEvalConfig] = Field(
-        None, description="Configuration for clustering evaluation during training"
+        None,
+        description="Configuration for clustering evaluation during training",
     )
 
     # Debug mode
@@ -581,9 +863,20 @@ class ExperimentConfig(BaseModel):
     run_name: str = Field(..., description="Name of the experiment run")
     run_config: RunConfig
     pretrained: bool = Field(True, description="Whether to use pretrained weights")
-    layers: str = Field(
-        ...,
-        description="List of layer names to extract embeddings from, comma separated",
+
+    # Legacy layers field (deprecated, use probe_config instead)
+    layers: Optional[str] = Field(
+        None,
+        description="Deprecated: Use probe_config.target_layers instead. "
+        "Comma separated list of layer names to extract embeddings from. "
+        "Use probe_config.target_layers instead.",
+    )
+
+    # New flexible probe configuration
+    probe_config: Optional[ProbeConfig] = Field(
+        None,
+        description="Configuration for the probing strategy. If not provided, "
+        "uses legacy linear probe with 'layers' field.",
     )
 
     # Optional path to a trained model checkpoint (ignored when `pretrained=True`)
@@ -597,9 +890,12 @@ class ExperimentConfig(BaseModel):
     )
 
     # Whether to freeze the backbone and train only the linear probe
-    frozen: bool = Field(
-        True,
-        description="If True, do not update base model weights during linear probing.",
+    # This is now controlled by probe_config.freeze_backbone if probe_config is provided
+    frozen: Optional[bool] = Field(
+        None,
+        description="Deprecated: Use probe_config.freeze_backbone instead. "
+        "Whether to update base model weights during linear probing. "
+        "Use probe_config.freeze_backbone instead.",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -616,6 +912,209 @@ class ExperimentConfig(BaseModel):
                 return yaml.safe_load(f)
         # Otherwise, let normal validation proceed
         return raw
+
+    @model_validator(mode="after")
+    def validate_experiment_config(self) -> "ExperimentConfig":
+        """Validate experiment configuration and handle legacy field migration.
+
+        Returns
+        -------
+        ExperimentConfig
+            The validated experiment configuration.
+
+        Raises
+        ------
+        ValueError
+            If the configuration is invalid or inconsistent.
+        """
+        # Handle legacy configuration migration
+        if self.probe_config is None:
+            # Legacy mode: create a default linear probe config from legacy fields
+            if self.layers is None:
+                raise ValueError(
+                    "Either probe_config or layers must be provided. "
+                    "Use probe_config for flexible probing strategies."
+                )
+
+            # Create a default linear probe configuration
+            default_config = ProbeConfig(
+                probe_type="linear",
+                aggregation="mean",
+                input_processing="pooled",
+                target_layers=self.layers.split(","),
+                freeze_backbone=(self.frozen if self.frozen is not None else True),
+            )
+
+            self.probe_config = default_config
+
+            # Log deprecation warning
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Experiment '{self.run_name}' uses deprecated 'layers' and "
+                f"'frozen' fields. "
+                f"Consider migrating to probe_config for more flexibility."
+            )
+        else:
+            # New mode: validate that legacy fields are not conflicting
+            if self.layers is not None:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Experiment '{self.run_name}' has both probe_config and "
+                    f"legacy 'layers' field. "
+                    f"Ignoring 'layers' field in favor of "
+                    f"probe_config.target_layers."
+                )
+
+            if self.frozen is not None:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Experiment '{self.run_name}' has both probe_config and "
+                    f"legacy 'frozen' field. "
+                    f"Ignoring 'frozen' field in favor of "
+                    f"probe_config.freeze_backbone."
+                )
+
+        return self
+
+    def get_target_layers(self) -> List[str]:
+        """Get the target layers for this experiment.
+
+        Returns
+        -------
+        List[str]
+            List of target layer names
+
+        Raises
+        ------
+        ValueError
+            If no target layers are configured
+        """
+        if self.probe_config is not None:
+            return self.probe_config.target_layers
+        elif self.layers is not None:
+            return self.layers.split(",")
+        else:
+            raise ValueError("No target layers specified in experiment configuration")
+
+    def is_frozen(self) -> bool:
+        """Check if the backbone should be frozen for this experiment.
+
+        Returns
+        -------
+        bool
+            True if the backbone should be frozen, False otherwise
+        """
+        if self.probe_config is not None:
+            return self.probe_config.freeze_backbone
+        return True  # Default to frozen for backward compatibility
+
+    def get_probe_type(self) -> str:
+        """Get the probe type for this experiment.
+
+        Returns
+        -------
+        str
+            The probe type (e.g., 'linear', 'mlp', 'attention', 'lstm', 'transformer')
+        """
+        if self.probe_config is not None:
+            return self.probe_config.probe_type
+        else:
+            return "linear"  # Default to linear for backward compatibility
+
+    def get_probe_specific_params(self) -> Dict[str, Any]:
+        """Get probe-specific parameters for this experiment.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary of probe-specific parameters
+        """
+        if self.probe_config is not None:
+            # Return all probe-specific parameters as a dictionary
+            params = {}
+
+            # MLP parameters
+            if self.probe_config.hidden_dims is not None:
+                params["hidden_dims"] = self.probe_config.hidden_dims
+            if self.probe_config.dropout_rate is not None:
+                params["dropout_rate"] = self.probe_config.dropout_rate
+            if self.probe_config.activation is not None:
+                params["activation"] = self.probe_config.activation
+
+            # Attention/Transformer parameters
+            if self.probe_config.num_heads is not None:
+                params["num_heads"] = self.probe_config.num_heads
+            if self.probe_config.attention_dim is not None:
+                params["attention_dim"] = self.probe_config.attention_dim
+            if self.probe_config.num_layers is not None:
+                params["num_layers"] = self.probe_config.num_layers
+
+            # LSTM parameters
+            if self.probe_config.lstm_hidden_size is not None:
+                params["lstm_hidden_size"] = self.probe_config.lstm_hidden_size
+            if self.probe_config.bidirectional is not None:
+                params["bidirectional"] = self.probe_config.bidirectional
+
+            # Sequence processing parameters
+            if self.probe_config.max_sequence_length is not None:
+                params["max_sequence_length"] = self.probe_config.max_sequence_length
+            if self.probe_config.use_positional_encoding is not None:
+                params["use_positional_encoding"] = (
+                    self.probe_config.use_positional_encoding
+                )
+
+            return params
+        else:
+            return {}  # No probe-specific parameters for legacy configuration
+
+    def get_aggregation_method(self) -> str:
+        """Get the aggregation method for this experiment.
+
+        Returns
+        -------
+        str
+            The aggregation method (e.g., 'mean', 'max', 'cls_token', 'none')
+        """
+        if self.probe_config is not None:
+            return self.probe_config.aggregation
+        else:
+            return "mean"  # Default to mean for backward compatibility
+
+    def get_input_processing_method(self) -> str:
+        """Get the input processing method for this experiment.
+
+        Returns
+        -------
+        str
+            The input processing method (e.g., 'flatten', 'sequence', 'pooled', 'none')
+        """
+        if self.probe_config is not None:
+            return self.probe_config.input_processing
+        else:
+            return "pooled"  # Default to pooled for backward compatibility
+
+    def get_training_mode(self) -> bool:
+        """Get the training mode for this experiment.
+
+        Returns
+        -------
+        bool
+            True for online training (raw audio), False for offline training "
+            "(embeddings)"
+        """
+        if self.probe_config is not None:
+            return self.probe_config.get_training_mode()
+        else:
+            # Legacy mode: determine based on frozen status
+            # If not frozen, we're fine-tuning (online)
+            # If frozen, we're doing linear probing (offline)
+            return not self.is_frozen()
 
 
 class EvaluateConfig(BaseCLIConfig, extra="forbid"):
@@ -646,19 +1145,91 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     num_workers: int = Field(..., description="Number of workers for evaluation")
 
     # Which evaluation phases to run
-    eval_modes: List[Literal["linear_probe", "retrieval", "clustering"]] = Field(
-        default_factory=lambda: ["linear_probe"],
-        description="Which evaluation types to execute during run_evaluate.py",
+    eval_modes: List[Literal["probe", "retrieval", "clustering"]] = Field(
+        default_factory=lambda: ["probe"],
+        description="Configuration for flexible probing system in "
+        "run_evaluate.py (probe covers all probe types: linear, MLP, LSTM, "
+        "attention, transformer)",
     )
 
-    # Whether to force recomputation of embeddings even if cached versions exist
-    overwrite_embeddings: bool = Field(
-        False,
-        description=(
-            "If False and cached embeddings are found on disk, they will be loaded "
-            "instead of recomputed.  If True, embeddings are always recomputed and "
-            "the cache is overwritten."
-        ),
+    # Offline embeddings behavior (loading/saving/extraction)
+    class OfflineEmbeddingsConfig(BaseModel):
+        memory_limit_gb: int = Field(
+            32,
+            ge=1,
+            description=(
+                "Maximum file size (in GB) to load embeddings fully into memory. "
+                "Larger files will use HDF5-backed loading."
+            ),
+        )
+        overwrite_embeddings: bool = Field(
+            False,
+            description=(
+                "If False and cached embeddings are found on disk, they will be "
+                "loaded instead of recomputed. If True, embeddings are always "
+                "recomputed and the cache is overwritten."
+            ),
+        )
+        use_streaming_embeddings: bool = Field(
+            False,
+            description=(
+                "If True, use streaming approach for embedding extraction to prevent "
+                "OOM issues. Saves embeddings directly to disk in chunks."
+            ),
+        )
+        cache_size_limit_gb: float = Field(
+            8.0,
+            ge=1,
+            description=(
+                "Maximum RAM (in GB) used to cache HDF5 embeddings in memory when "
+                "loading for offline probing. If the full dataset doesn't fit, we "
+                "cache labels and as many layers as possible within this budget."
+            ),
+        )
+        streaming_chunk_size: int = Field(
+            1000,
+            ge=100,
+            description=("Samples per chunk when using streaming extraction."),
+        )
+        hdf5_compression: str = Field(
+            "gzip",
+            description=("HDF5 compression algorithm for embedding storage."),
+        )
+        hdf5_compression_level: int = Field(
+            4,
+            ge=1,
+            le=9,
+            description=("Compression level for gzip (1-9)."),
+        )
+        auto_chunk_size: bool = Field(
+            True,
+            description=(
+                "Auto-calculate optimal chunk size based on available GPU memory."
+            ),
+        )
+        max_chunk_size: int = Field(
+            2000,
+            ge=100,
+            description=("Maximum chunk size when auto-calculating."),
+        )
+        min_chunk_size: int = Field(
+            100,
+            ge=10,
+            description=("Minimum chunk size when auto-calculating."),
+        )
+        batch_chunk_size: int = Field(
+            10,
+            ge=1,
+            description=(
+                "Number of batches to process before writing during streaming."
+            ),
+        )
+
+        model_config = ConfigDict(extra="forbid")
+
+    offline_embeddings: OfflineEmbeddingsConfig = Field(
+        default_factory=OfflineEmbeddingsConfig,
+        description="Configuration for offline embeddings load/save/extraction",
     )
 
     # Optional path to append all results to a single CSV file
@@ -668,6 +1239,16 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             "Optional path to a CSV file where all evaluation results will be "
             "appended. If provided, results from each experiment will be written "
             "to this file with appropriate metadata for tracking across multiple runs."
+        ),
+    )
+
+    # Control tqdm progress bar verbosity
+    disable_tqdm: bool = Field(
+        False,
+        description=(
+            "If True, disable tqdm progress bars during fine-tuning and evaluation. "
+            "Useful for reducing output verbosity in automated runs or when logging "
+            "to files."
         ),
     )
 
@@ -775,7 +1356,8 @@ class EvaluationSet(BaseModel):
     """Configuration for a single evaluation set (train/val/test triplet)."""
 
     name: str = Field(
-        ..., description="Name of this evaluation set (e.g., 'dog_classification')"
+        ...,
+        description="Name of this evaluation set (e.g., 'dog_classification')",
     )
     train: DatasetConfig = Field(..., description="Training dataset configuration")
     validation: DatasetConfig = Field(
@@ -882,7 +1464,9 @@ class BenchmarkEvaluationConfig(BaseModel):
             f"'{self.benchmark_name}'"
         )
 
-    def get_all_evaluation_sets(self) -> List[Tuple[str, DatasetCollectionConfig]]:
+    def get_all_evaluation_sets(
+        self,
+    ) -> List[Tuple[str, DatasetCollectionConfig]]:
         """Get all evaluation sets as (name, DatasetCollectionConfig) pairs.
 
         This is the main interface for evaluation loops - it provides each evaluation

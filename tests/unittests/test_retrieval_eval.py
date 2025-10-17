@@ -162,7 +162,9 @@ def test_none_class_skipping() -> None:
     )
 
     # Double-check the skipping logic by verifying _binary_relevance_matrix behavior
-    from representation_learning.evaluation.retrieval import _binary_relevance_matrix
+    from representation_learning.evaluation.retrieval import (
+        _binary_relevance_matrix,
+    )
 
     # None samples should have no relevant items (including each other)
     relevance_none_1 = _binary_relevance_matrix(labels, 4)
@@ -176,7 +178,9 @@ def test_none_class_impact_on_average() -> None:
     """Demonstrate the measurable impact of skipping None samples."""
     import numpy as np
 
-    from representation_learning.evaluation.retrieval import _binary_relevance_matrix
+    from representation_learning.evaluation.retrieval import (
+        _binary_relevance_matrix,
+    )
 
     # Setup: 3 labeled samples + 3 None samples
     labels: NDArray[np.int64] = np.array(
@@ -236,7 +240,9 @@ def test_none_class_skipping_comparison() -> None:
 
     import numpy as np
 
-    from representation_learning.evaluation.retrieval import _binary_relevance_matrix
+    from representation_learning.evaluation.retrieval import (
+        _binary_relevance_matrix,
+    )
 
     def evaluate_precision_no_skip(
         embeddings: np.ndarray,

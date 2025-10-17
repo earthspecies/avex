@@ -99,7 +99,10 @@ def test_clip_mini_inference() -> None:
     diag_vals = torch.diag(sim_matrix)
     off_diag_vals = sim_matrix[~torch.eye(len(texts), dtype=torch.bool)]
 
-    print("\nDiagonal similarities (paired samples):", [f"{v:.2f}" for v in diag_vals])
+    print(
+        "\nDiagonal similarities (paired samples):",
+        [f"{v:.2f}" for v in diag_vals],
+    )
     print("Mean diagonal:", diag_vals.mean().item())
     print("Mean off-diag :", off_diag_vals.mean().item())
 

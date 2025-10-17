@@ -14,21 +14,30 @@ training_params:
 # Which experiments to evaluate
 # TODO: all checkpoints to be gs paths and uploaded during train
 experiments:
-
-  - run_name: efficientnet_pretrained_test
-    run_config: configs/run_configs/efficientnet_base_beans.yml
-    ### which layers to probe for embeddings
-    layers: model.avgpool
-    ### whether to use pretrained model or the one we train on bioacoustic data
-    pretrained: false
-    checkpoint_path: runs/efficientnet_base_test/2025-06-16_07-08-36/checkpoints/final_model.pt
-
-  - run_name: efficientnet_frozen_test
-    run_config: configs/run_configs/efficientnet_base_beans.yml
-    ### which layers to probe for embeddings
-    layers: model.avgpool
+  # - run_name: efficientnet_pretrained_test
+  #   run_config: configs/run_configs/efficientnet_base_beans.yml
+  #   probe_config:
+  #     probe_type: linear
+  #     target_layers: ["model.avgpool"]
+  #     aggregation: "mean"
+  #     input_processing: "pooled"
+  #     freeze_backbone: true
+  #     online_training: false
+  #   ### whether to use pretrained model or the one we train on bioacoustic data
+  #   pretrained: false
+  #   checkpoint_path: runs/efficientnet_base_test/2025-06-16_07-08-36/checkpoints/final_model.pt
+  #
+  - run_name: efficientnet_animalspeak
+    run_config: configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
+    probe_config:
+      probe_type: linear
+      target_layers: ["model.avgpool"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
 
 # Where to save the evaluation results
 save_dir: evaluation_results/debug
@@ -41,7 +50,7 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
 
 overwrite_embeddings: false

@@ -28,7 +28,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from representation_learning.configs import RunConfig
-from representation_learning.training.checkpoint_manager import CheckpointManager
+from representation_learning.training.checkpoint_manager import (
+    CheckpointManager,
+)
 from representation_learning.training.distributed import (
     cleanup_distributed,
     get_local_device_index,

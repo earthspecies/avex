@@ -74,7 +74,10 @@ def eval_retrieval_cross_set(
         Retrieval metrics
     """
     roc_auc = evaluate_auc_roc_cross_set(
-        query_embeds.numpy(), query_labels.numpy(), db_embeds.numpy(), db_labels.numpy()
+        query_embeds.numpy(),
+        query_labels.numpy(),
+        db_embeds.numpy(),
+        db_labels.numpy(),
     )
     precision_at_1 = evaluate_precision_cross_set(
         query_embeds.numpy(),
@@ -279,7 +282,9 @@ def evaluate_auc_roc_batched(
                 aucs.append(float(auc))
             except ValueError as v:  # pragma: no cover – extremely rare but safe-guard
                 logger.warning(
-                    "ROC-AUC computation failed for query %d (reason: %s)", i, v
+                    "ROC-AUC computation failed for query %d (reason: %s)",
+                    i,
+                    v,
                 )
                 continue
 

@@ -14,11 +14,15 @@ training_params:
 experiments:
   - run_name: atst_frame
     run_config: configs/run_configs/pretrained/atst_base.yml
-    ### which layers to probe for embeddings (ignored by ATST but required by schema)
-    layers: features
+    probe_config:
+      probe_type: linear
+      target_layers: ["features"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
-    frozen: true
 
 # Where to save the evaluation results
 save_dir: evaluation_results/atst_frame
@@ -34,8 +38,9 @@ num_workers: 8  # Enable workers for better memory management
 
 # Evaluation phases
 eval_modes:
-  - linear_probe
+  - probe
   - retrieval
   - clustering
 
-overwrite_embeddings: true
+offline_embeddings:
+  overwrite_embeddings: true

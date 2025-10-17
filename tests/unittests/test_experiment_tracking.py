@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import Dict
 
 import pytest
+from esp_data import DatasetConfig
 
 from representation_learning.configs import (
     AudioConfig,
+    DatasetCollectionConfig,
     ModelSpec,
     RunConfig,
     SchedulerConfig,
@@ -39,12 +41,23 @@ def temp_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def mock_config() -> RunConfig:
+def mock_config(tmp_path: Path) -> RunConfig:
     """Create a mock RunConfig for testing.
 
     Returns:
         RunConfig: A mock configuration object for testing.
     """
+    # Build a minimal DatasetCollectionConfig expected by RunConfig
+    ds_cfg = DatasetCollectionConfig(
+        val_datasets=[
+            DatasetConfig(
+                dataset_name="animalspeak",
+                split="validation",
+                audio_path_col="gs_path",
+            )
+        ]
+    )
+
     return RunConfig(
         model_spec=ModelSpec(
             name="efficientnet",
@@ -71,7 +84,7 @@ def mock_config() -> RunConfig:
             optimizer="adamw",
             weight_decay=0.01,
         ),
-        dataset_config="test_dataset.yml",
+        dataset_config=ds_cfg,
         output_dir="test_output",
         loss_function="cross_entropy",
         scheduler=SchedulerConfig(),

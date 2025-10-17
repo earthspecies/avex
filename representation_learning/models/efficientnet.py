@@ -1,12 +1,14 @@
-from typing import List, Optional
+import logging
+from typing import List, Optional, Union
 
 import torch
-import torch.nn as nn
 import torch.utils.checkpoint
 from torchvision.models import efficientnet_b0, efficientnet_b1
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
+
+logger = logging.getLogger(__name__)
 
 
 # EfficientNet (B0/B1). Each class should be called "Model."
@@ -23,9 +25,10 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
-        # Store the flag
+        # Store the flag and config
         self.return_features_only = return_features_only
         self.gradient_checkpointing = False
+        self.audio_config = audio_config
 
         # Load the appropriate EfficientNet variant based on configuration
         if efficientnet_variant == "b0":
@@ -37,11 +40,80 @@ class Model(ModelBase):
                 f"Unsupported EfficientNet variant: {efficientnet_variant}"
             )
 
-        # Modify the classifier only if not returning features and num_classes differs.
-        if not self.return_features_only and num_classes != 1000:
-            in_features = self.model.classifier[1].in_features
-            self.model.classifier[1] = nn.Linear(in_features, num_classes)
-        # No need to modify classifier if return_features_only is True
+        # Move model to device
+        self.model = self.model.to(self.device)
+
+        # -------------------------------------------------------------- #
+        #  Pre-discover convolutional layers for efficient hook management #
+        # -------------------------------------------------------------- #
+        # Convolutional layers will be discovered in _discover_linear_layers override
+
+    def _discover_linear_layers(self) -> None:
+        """Discover and cache only the EfficientNet layers that are useful
+        for embeddings.
+
+        This method is called when target_layers=["all"] is used.
+        Specifically filters for:
+        - Initial conv layer (model.features.0.0)
+        - Final projection layers from each block (model.features.X.Y.block.3.0)
+        - Final conv layer (model.features.8.0)
+        - Excludes expansion layers, depthwise convs, SE layers, and avgpool
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            for name, _module in self.named_modules():
+                # Keep the initial conv layer
+                if name == "model.features.0.0":
+                    self._layer_names.append(name)
+
+                # Keep final projection layers (last conv in each MBConv block)
+                # Pattern: model.features.X.Y.block.3.0
+                elif name.endswith(".block.3.0") and "model.features." in name:
+                    self._layer_names.append(name)
+
+                # Keep the final conv layer
+                elif name == "model.features.8.0":
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding-relevant layers "
+                f"in EfficientNet model: "
+                f"{self._layer_names}"
+            )
+
+    def _discover_embedding_layers(self) -> None:
+        """Discover and cache only the EfficientNet layers that are useful
+        for embeddings.
+
+        Specifically filters for:
+        - Initial conv layer (model.features.0.0)
+        - Final projection layers from each block (model.features.X.Y.block.3.0)
+        - Final conv layer (model.features.8.0)
+        - Excludes expansion layers, depthwise convs, SE layers, and avgpool
+        """
+        if len(self._layer_names) == 0:  # Only discover once
+            self._layer_names = []
+
+            for name, _module in self.named_modules():
+                # Keep the initial conv layer
+                if name == "model.features.0.0":
+                    self._layer_names.append(name)
+
+                # Keep final projection layers (last conv in each MBConv block)
+                # Pattern: model.features.X.Y.block.3.0
+                elif name.endswith(".block.3.0") and "model.features." in name:
+                    self._layer_names.append(name)
+
+                # Keep the final conv layer
+                elif name == "model.features.8.0":
+                    self._layer_names.append(name)
+
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding-relevant layers "
+                f"in EfficientNet model: "
+                f"{self._layer_names}"
+            )
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """Process audio input and adapt it for EfficientNet's 3-channel input.
@@ -124,37 +196,116 @@ class Model(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Extract embeddings from the model with automatic batch splitting.
+        aggregation: str = "none",
+        freeze_backbone: bool = True,
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Extract embeddings from all registered hooks in the EfficientNet model.
 
         Parameters
         ----------
         x : torch.Tensor | dict[str, torch.Tensor]
             Input audio tensor or dictionary containing 'raw_wav'
-        layers : List[str]
-            List of layer names (ignored for EfficientNet)
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input (ignored for EfficientNet)
+        aggregation : str
+            Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none').
+            When 'none', 4D embeddings (B, C, H, W) are reshaped to 3D (B, H, C*W)
+            for sequence probe compatibility.
+        freeze_backbone : bool
+            Whether to freeze the backbone and use torch.no_grad()
 
         Returns
         -------
-        torch.Tensor
-            Model embeddings
+        Union[torch.Tensor, List[torch.Tensor]]
+            Model embeddings (tensor if aggregated, list of 3D tensors if
+            aggregation='none')
+
+        Raises
+        ------
+        ValueError
+            If no hooks are registered or no outputs are captured
         """
-        # Extract features
-        if isinstance(x, dict):
-            x = x["raw_wav"]
-        x = self.process_audio(x)
+        # Check if hooks are registered
+        if not self._hooks:
+            raise ValueError("No hooks are registered in the model.")
 
-        # Extract features with optional gradient checkpointing
-        if self.gradient_checkpointing and self.training:
-            features = self._checkpointed_features(x)
-        else:
-            features = self.model.features(x)
+        # Clear previous hook outputs
+        self._clear_hook_outputs()
 
-        pooled_features = self.model.avgpool(features)
-        flattened_features = torch.flatten(pooled_features, 1)
-        return flattened_features
+        try:
+            # Process input
+            if isinstance(x, dict):
+                wav = x["raw_wav"]
+            else:
+                wav = x
+
+            # Forward pass to trigger hooks (conditionally use torch.no_grad based on
+            # freeze_backbone)
+            if freeze_backbone:
+                with torch.no_grad():
+                    self.forward(wav, padding_mask)
+            else:
+                self.forward(wav, padding_mask)
+
+            # Collect embeddings from hook outputs
+            embeddings = []
+            for layer_name in self._hook_outputs:
+                if layer_name in self._hook_outputs:
+                    embeddings.append(self._hook_outputs[layer_name])
+                    logger.debug(
+                        f"Found embedding for {layer_name}: "
+                        f"{self._hook_outputs[layer_name].shape}"
+                    )
+                else:
+                    logger.warning(f"No output captured for layer: {layer_name}")
+
+            logger.debug(f"Collected {len(embeddings)} embeddings")
+
+            # Check if we got any embeddings
+            if not embeddings:
+                raise ValueError("No outputs were captured from registered hooks.")
+
+            logger.debug(f" Aggregation: {aggregation}")
+            # Process embeddings based on aggregation parameter
+            if aggregation == "none":
+                if len(embeddings) == 1:
+                    return embeddings[0]
+                else:
+                    return embeddings
+            else:
+                logger.debug(f"Using aggregation method: {aggregation}")
+                # Average over time and concatenate
+                for i in range(len(embeddings)):
+                    if embeddings[i].dim() == 2:
+                        pass
+                    else:
+                        if aggregation == "mean":
+                            embeddings[i] = embeddings[i].mean(dim=-1)
+                        elif aggregation == "max":
+                            embeddings[i] = embeddings[i].max(dim=-1)[
+                                0
+                            ]  # max returns (values, indices)
+                        elif aggregation == "cls_token":
+                            embeddings[i] = embeddings[i][:, 0, :]
+                        else:
+                            raise ValueError(
+                                f"Unsupported aggregation method: {aggregation}"
+                            )
+                        if embeddings[i].dim() == 3:
+                            batch_size, channels, width = embeddings[i].shape
+                            embeddings[i] = embeddings[i].view(batch_size, -1)
+                        else:
+                            raise ValueError(
+                                f"Unexpected embedding dimension: "
+                                f"{embeddings[i].dim()}. Expected 2, 3, or 4."
+                            )
+                # Concatenate all embeddings
+                embeddings = torch.cat(embeddings, dim=1)
+                logger.debug(f"Returning concatenated embeddings: {embeddings.shape}")
+                return embeddings
+
+        finally:
+            # Clear hook outputs for next call
+            self._clear_hook_outputs()
