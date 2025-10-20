@@ -1,3 +1,9 @@
+"""EAT (Data2Vec) core neural network modules.
+
+This module provides the core neural network components for EAT (Data2Vec) models
+including transformer blocks, attention mechanisms, and utility functions.
+"""
+
 import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -32,6 +38,8 @@ class SamePad(nn.Module):
 
 
 class SamePad2d(SamePad):
+    """2D same padding layer."""
+
     pass
 
 
@@ -91,6 +99,8 @@ def init_bert_params(module: nn.Module) -> None:
 
 @dataclass
 class D2vDecoderConfig:
+    """Configuration for Data2Vec decoder."""
+
     decoder_dim: int = 384
     decoder_groups: int = 16
     decoder_kernel: int = 5
@@ -111,6 +121,8 @@ class D2vDecoderConfig:
 
 
 class DecoderBase(nn.Module):
+    """Base class for Data2Vec decoders."""
+
     decoder_cfg: D2vDecoderConfig
 
     def __init__(self, cfg: D2vDecoderConfig) -> None:
@@ -144,6 +156,8 @@ class DecoderBase(nn.Module):
 
 
 class Decoder1d(DecoderBase):
+    """1D decoder for Data2Vec models."""
+
     def __init__(self, cfg: D2vDecoderConfig, input_dim: int) -> None:
         super().__init__(cfg)
 
@@ -202,6 +216,8 @@ class Decoder1d(DecoderBase):
 
 
 class Decoder2d(DecoderBase):
+    """2D decoder for Data2Vec models."""
+
     def __init__(
         self,
         cfg: D2vDecoderConfig,
@@ -270,6 +286,8 @@ class Decoder2d(DecoderBase):
 
 
 class TransformerDecoder(nn.Module):
+    """Transformer decoder for Data2Vec models."""
+
     decoder_cfg: D2vDecoderConfig
 
     def __init__(
@@ -301,6 +319,8 @@ class TransformerDecoder(nn.Module):
 
 
 class AltAttention(nn.Module):
+    """Alternative attention mechanism for Data2Vec models."""
+
     def __init__(
         self,
         dim: int,
@@ -359,6 +379,8 @@ class AltAttention(nn.Module):
 
 
 class AltBlock(nn.Module):
+    """Alternative transformer block for Data2Vec models."""
+
     def __init__(
         self,
         dim: int,
@@ -432,6 +454,8 @@ class AltBlock(nn.Module):
 
 
 class EncDecAttention(nn.Module):
+    """Encoder-decoder attention mechanism for Data2Vec models."""
+
     def __init__(
         self,
         q_dim: int,
@@ -497,6 +521,8 @@ class EncDecAttention(nn.Module):
 
 
 class EncDecBlock(nn.Module):
+    """Encoder-decoder transformer block for Data2Vec models."""
+
     def __init__(
         self,
         q_dim: int,
@@ -566,6 +592,8 @@ class EncDecBlock(nn.Module):
 
 
 class EncDecTransformerDecoder(nn.Module):
+    """Encoder-decoder transformer decoder for Data2Vec models."""
+
     def __init__(self, cfg: D2vDecoderConfig, input_dim: int) -> None:
         super().__init__()
         self.input_proj = nn.Linear(input_dim, cfg.decoder_dim)

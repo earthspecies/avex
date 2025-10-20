@@ -8,9 +8,10 @@ configuration files raise immediately.
 
 Usage
 -----
->>> from pathlib import Path, yaml
->>> from configs import RunConfig
->>> cfg = RunConfig.model_validate(yaml.safe_load(Path("run.yml").read_text()))
+>>> from pathlib import Path
+>>> import yaml
+>>> from representation_learning.configs import RunConfig
+>>> # RunConfig is available for configuration management
 """
 
 from __future__ import annotations
@@ -137,6 +138,12 @@ class TrainingParams(BaseModel):
 
 
 class NoiseAugment(BaseModel):
+    """Configuration for noise augmentation during training.
+
+    This augmentation adds background noise to audio samples to improve
+    model robustness and generalization.
+    """
+
     kind: Literal["noise"] = "noise"
     noise_dirs: List[str]
     snr_db_range: Tuple[int, int] = Field(..., min_length=2, max_length=2)
@@ -152,6 +159,12 @@ class NoiseAugment(BaseModel):
 
 
 class MixupAugment(BaseModel):
+    """Configuration for mixup augmentation during training.
+
+    This augmentation creates convex combinations of pairs of examples and their labels
+    to improve model generalization and robustness.
+    """
+
     kind: Literal["mixup"] = "mixup"
     alpha: float = Field(..., gt=0)
     n_mixup: int = Field(1, ge=1, description="Number of mixup pairs per batch")
@@ -169,6 +182,12 @@ Augment = Union[NoiseAugment, MixupAugment]
 
 
 class AudioConfig(BaseModel):
+    """Configuration for audio processing parameters.
+
+    This class defines how audio data should be processed, including sample rate,
+    windowing parameters, and representation type.
+    """
+
     sample_rate: int = 16000
     n_fft: int = 2048
     hop_length: Optional[int] = None
@@ -1154,6 +1173,12 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
 
     # Offline embeddings behavior (loading/saving/extraction)
     class OfflineEmbeddingsConfig(BaseModel):
+        """Configuration for offline embeddings behavior.
+
+        This class controls how embeddings are loaded, saved, and extracted
+        when using offline embedding-based probing.
+        """
+
         memory_limit_gb: int = Field(
             32,
             ge=1,

@@ -1,3 +1,9 @@
+"""EAT (Data2Vec) main model implementation.
+
+This module provides the main EAT (Data2Vec) model implementation for
+multimodal representation learning tasks.
+"""
+
 import copy
 import logging
 from dataclasses import dataclass, field
@@ -39,6 +45,8 @@ logger = logging.getLogger(__name__)
 
 
 class Modality(Enum):
+    """Supported modalities for EAT (Data2Vec) models."""
+
     AUDIO = auto()
     IMAGE = auto()
     TEXT = auto()
@@ -46,11 +54,15 @@ class Modality(Enum):
 
 @dataclass
 class D2vModalitiesConfig:
+    """Configuration for Data2Vec modalities."""
+
     image: D2vImageConfig = field(default_factory=D2vImageConfig)
 
 
 @dataclass
 class Data2VecMultiConfig:
+    """Main configuration for Data2Vec multimodal model."""
+
     # loss & scaling
     loss_beta: float = 0.0
     loss_scale: Optional[float] = None

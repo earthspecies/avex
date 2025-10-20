@@ -1,3 +1,9 @@
+"""AVES model implementation for audio representation learning.
+
+This module provides the AVES (Audio-Visual Event Segmentation) model implementation
+for audio representation learning tasks.
+"""
+
 # import logging
 # from typing import List, Optional, Union
 
@@ -311,6 +317,8 @@ logger = logging.getLogger(__name__)
 
 
 class AVESConfig:
+    """Configuration for AVES model."""
+
     def __init__(self, cfg: Optional[dict] = None) -> None:
         # Extractor configuration
         self.extractor_mode: str = "group_norm"  # mode for feature extractor

@@ -1,3 +1,9 @@
+"""BirdMAE model implementation for bioacoustic representation learning.
+
+This module provides the BirdMAE (Bird Masked Autoencoder) model implementation
+for bioacoustic representation learning tasks.
+"""
+
 from typing import List, Optional
 
 import torch
@@ -9,6 +15,12 @@ from representation_learning.models.base_model import ModelBase
 
 
 class Model(ModelBase):
+    """BirdMAE model for bioacoustic representation learning.
+
+    Implements a masked autoencoder model specifically designed for
+    bioacoustic representation learning tasks.
+    """
+
     def __init__(
         self,
         num_classes: int = 1000,

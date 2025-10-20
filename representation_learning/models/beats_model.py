@@ -1,3 +1,9 @@
+"""BEATs model implementation for audio representation learning.
+
+This module provides BEATs Bidirectional Encoder representation from Audio Transformers
+model implementation for audio representation learning tasks.
+"""
+
 import logging
 from typing import List, Optional, Union
 

@@ -18,6 +18,11 @@ from sklearn.metrics import (
 
 
 class Accuracy:
+    """Accuracy metric for classification tasks.
+
+    Computes the fraction of correct predictions over total predictions.
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_pred = []
@@ -60,6 +65,11 @@ class Accuracy:
 
 
 class BinaryF1Score:
+    """Binary F1 score metric for binary classification tasks.
+
+    Computes precision, recall, and F1 score for binary classification.
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_pred = []
@@ -111,6 +121,12 @@ class BinaryF1Score:
 
 
 class MulticlassBinaryF1Score:
+    """Multiclass F1 score metric using macro averaging.
+
+    Computes macro-averaged precision, recall, and F1 score for multiclass
+    classification tasks.
+    """
+
     def __init__(self, num_classes: int) -> None:
         self.num_classes = num_classes
         self.y_true = []
@@ -161,6 +177,12 @@ class MulticlassBinaryF1Score:
 
 
 class AveragePrecision:
+    """Average precision metric for multilabel classification.
+
+    Computes the average precision score for each class in multilabel
+    classification tasks.
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_scores = []
@@ -218,6 +240,11 @@ class AveragePrecision:
 
 
 class MeanAveragePrecision:
+    """Mean average precision metric for multilabel classification.
+
+    Computes the mean of average precision scores across all classes.
+    """
+
     def __init__(self) -> None:
         self.ap = AveragePrecision()
 
@@ -255,6 +282,12 @@ class MeanAveragePrecision:
 
 
 class BalancedAccuracy:
+    """Balanced accuracy metric for classification tasks.
+
+    Computes the balanced accuracy which accounts for class imbalance by
+    averaging the recall obtained on each class.
+    """
+
     def __init__(self) -> None:
         self.y_true = []
         self.y_pred = []

@@ -1,3 +1,15 @@
+"""BEATs: Audio Pre-Training with Acoustic Tokenizers.
+
+This module provides the BEATs
+Bidirectional Encoder representation from Audio Transformers
+model implementation for audio representation learning tasks.
+
+Based on:
+- Paper: https://arxiv.org/abs/2212.09058
+- Original implementation: https://github.com/microsoft/unilm/tree/master/beats
+- Copyright (c) 2022 Microsoft, Licensed under The MIT License
+"""
+
 # --------------------------------------------------------
 # BEATs: Audio Pre-Training with Acoustic Tokenizers (https://arxiv.org/abs/2212.09058)
 # Github source: https://github.com/microsoft/unilm/tree/master/beats
@@ -6,7 +18,6 @@
 # Based on fairseq code bases
 # https://github.com/pytorch/fairseq
 # --------------------------------------------------------
-
 
 import logging
 from typing import Any, Dict, Optional, Tuple, Union

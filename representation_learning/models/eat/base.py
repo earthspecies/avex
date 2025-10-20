@@ -1,3 +1,12 @@
+"""EAT (Data2Vec) base classes and utilities.
+
+This module provides the base classes and utilities for EAT (Data2Vec) models,
+including modality configurations and core functionality.
+
+Copyright (c) Facebook, Inc. and its affiliates.
+Licensed under the MIT license.
+"""
+
 # base.py  – Fairseq-free re-implementation
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Licensed under the MIT license.
@@ -84,6 +93,8 @@ def index_put(
 
 
 class Modality(Enum):
+    """Supported modalities for EAT (Data2Vec) models."""
+
     AUDIO = auto()
     IMAGE = auto()
     TEXT = auto()
@@ -91,6 +102,8 @@ class Modality(Enum):
 
 @dataclass
 class D2vModalityConfig:
+    """Configuration for Data2Vec modality-specific settings."""
+
     # architecture -------------------------------------------------------
     type: Modality = MISSING
     prenet_depth: int = 4

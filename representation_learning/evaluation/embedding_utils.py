@@ -1,3 +1,9 @@
+"""Embedding extraction and management utilities.
+
+This module provides utilities for extracting, storing, and loading embeddings
+from representation learning models for offline analysis and evaluation.
+"""
+
 from __future__ import annotations
 
 import logging

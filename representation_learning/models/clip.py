@@ -1,3 +1,9 @@
+"""CLIP model implementation for multimodal representation learning.
+
+This module provides a CLIP (Contrastive Language-Image Pre-training) model
+that combines audio and text encoders for multimodal representation learning.
+"""
+
 import math
 from typing import Any, Dict, Optional, Tuple
 

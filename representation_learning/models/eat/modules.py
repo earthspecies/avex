@@ -1,3 +1,9 @@
+"""EAT (Data2Vec) neural network modules.
+
+This module provides the core neural network components for EAT (Data2Vec) models
+including transformer blocks, encoders, and utility functions.
+"""
+
 from __future__ import annotations
 
 from typing import Optional

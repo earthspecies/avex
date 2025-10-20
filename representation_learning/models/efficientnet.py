@@ -1,3 +1,9 @@
+"""EfficientNet model implementation for audio classification.
+
+This module provides EfficientNet model implementations for audio classification
+tasks, including B0 and B1 variants with audio-specific preprocessing.
+"""
+
 import logging
 from typing import List, Optional, Union
 
@@ -13,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 # EfficientNet (B0/B1). Each class should be called "Model."
 class Model(ModelBase):
+    """EfficientNet model for audio classification.
+
+    Implements EfficientNet B0/B1 variants for audio classification tasks
+    with audio-specific preprocessing and feature extraction.
+    """
+
     def __init__(
         self,
         num_classes: int = 1000,

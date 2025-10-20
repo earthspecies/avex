@@ -1,3 +1,9 @@
+"""Fine-tuning utilities for representation learning models.
+
+This module provides utilities for fine-tuning models during evaluation,
+including probe training and model optimization.
+"""
+
 import logging
 import multiprocessing
 import time
@@ -25,6 +31,12 @@ logging.basicConfig(
 #  FineTuneTrainer
 # -------------------------------------------------------------------- #
 class FineTuneTrainer:
+    """Fine-tuning trainer for representation learning models.
+
+    Handles the training loop for fine-tuning models during evaluation,
+    including probe training and optimization.
+    """
+
     def __init__(
         self,
         model: torch.nn.Module,

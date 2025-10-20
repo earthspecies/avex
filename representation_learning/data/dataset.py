@@ -1,3 +1,9 @@
+"""Dataset classes and utilities for representation learning.
+
+This module provides dataset classes and utilities for loading, processing,
+and managing datasets used in representation learning tasks.
+"""
+
 from __future__ import annotations
 
 import os

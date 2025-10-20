@@ -1,3 +1,12 @@
+"""EAT (Data2Vec) image modality encoder.
+
+This module provides the image modality encoder for EAT (Data2Vec) models,
+including image preprocessing and feature extraction.
+
+Copyright (c) Facebook, Inc. and its affiliates.
+Licensed under the MIT license.
+"""
+
 # images.py – Fairseq-free EAT image-modality encoder
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Licensed under the MIT license.
@@ -35,6 +44,8 @@ from .modules import (
 
 
 class Modality(Enum):
+    """Supported modalities for EAT (Data2Vec) models."""
+
     AUDIO = auto()
     IMAGE = auto()
     TEXT = auto()
@@ -42,6 +53,8 @@ class Modality(Enum):
 
 @dataclass
 class D2vImageConfig(D2vModalityConfig):
+    """Configuration for Data2Vec image modality settings."""
+
     type: Modality = Modality.IMAGE
 
     # patch embedding ----------------------------------------------------

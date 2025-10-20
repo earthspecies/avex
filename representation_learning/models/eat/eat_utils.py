@@ -1,3 +1,12 @@
+"""EAT (Data2Vec) utility functions.
+
+This module provides utility functions for EAT (Data2Vec) models including
+masking, positional encoding, and other helper functions.
+
+Copyright (c) Facebook, Inc. and its affiliates.
+Licensed under the MIT license.
+"""
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the

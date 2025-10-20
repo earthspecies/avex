@@ -1,3 +1,9 @@
+"""Embedding management utilities for offline evaluation.
+
+This module provides utilities for managing embedding datasets, including
+loading, saving, and caching embeddings for offline evaluation tasks.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EmbeddingDataSourceConfig:
+    """Configuration for embedding data source.
+
+    Specifies the path where embeddings are saved and loaded from.
+    """
+
     save_path: Path
     memory_limit_bytes: int = 32 * 1024 * 1024 * 1024  # 32GB default
     # If explicitly set, overrides automatic decisions for both load & compute paths

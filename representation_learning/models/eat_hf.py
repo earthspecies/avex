@@ -1,3 +1,9 @@
+"""EAT (Data2Vec) HuggingFace model implementation.
+
+This module provides HuggingFace-compatible EAT (Data2Vec) model implementation
+for audio representation learning tasks.
+"""
+
 from __future__ import annotations
 
 import logging

@@ -1,3 +1,14 @@
+"""BEATs transformer backbone implementation.
+
+This module provides the transformer backbone architecture for BEATs including
+the encoder, attention mechanisms, and positional encoding.
+
+Based on:
+- Paper: https://arxiv.org/abs/2212.09058
+- Original implementation: https://github.com/microsoft/unilm/tree/master/beats
+- Copyright (c) 2022 Microsoft, Licensed under The MIT License
+"""
+
 # --------------------------------------------------------
 # BEATs: Audio Pre-Training with Acoustic Tokenizers (https://arxiv.org/abs/2212.09058)
 # Github source: https://github.com/microsoft/unilm/tree/master/beats

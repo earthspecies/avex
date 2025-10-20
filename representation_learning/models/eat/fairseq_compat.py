@@ -208,6 +208,8 @@ def compute_mask_indices(
 
 @dataclass
 class EMAModuleConfig:
+    """Configuration for EMA (Exponential Moving Average) module."""
+
     ema_decay: float = 0.9999
     ema_fp32: bool = False
     add_missing_params: bool = True

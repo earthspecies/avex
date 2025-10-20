@@ -1,3 +1,11 @@
+"""MAE (Masked Autoencoder) Vision Transformer implementation.
+
+This module provides a minimal MAE / BEiT-style Vision Transformer implementation
+for EAT (Data2Vec) models.
+
+Based on Facebook's original implementation, rewritten without fairseq dependencies.
+"""
+
 # mae_vanilla.py – Minimal MAE / BEiT-style Vision Transformer
 # (Fairseq-free rewrite of Facebook's original implementation)
 
@@ -22,6 +30,8 @@ except ImportError:  # fallback to PyTorch LN
 
 @dataclass
 class MaeConfig:
+    """Configuration for MAE (Masked Autoencoder) model."""
+
     # patch embedding
     input_size: int = 224
     in_chans: int = 3
@@ -148,6 +158,11 @@ def get_2d_sincos_pos_embed_flexible(
 #  MAE Model                                                                    #
 # -----------------------------------------------------------------------------#
 class MaeModel(nn.Module):
+    """MAE (Masked Autoencoder) model implementation.
+
+    Implements a Vision Transformer with masked autoencoder pre-training.
+    """
+
     def __init__(self, cfg: MaeConfig) -> None:
         super().__init__()
         self.cfg = cfg

@@ -1,3 +1,9 @@
+"""EAT (Data2Vec) audio model implementation.
+
+This module provides the audio model implementation for EAT (Data2Vec) models,
+including audio preprocessing and feature extraction.
+"""
+
 from __future__ import annotations
 
 import logging
