@@ -17,7 +17,7 @@ from representation_learning.evaluation.clustering import (
 # Constants to avoid magic numbers
 TOLERANCE = 1e-12
 MIN_METRIC_THRESHOLD = 0.5
-SILHOUETTE_THRESHOLD = 0.1
+# SILHOUETTE_THRESHOLD removed - silhouette metric no longer computed
 EXPECTED_ARI_VALUE = 0.75
 
 
@@ -70,14 +70,13 @@ class TestClusteringIntegration:
             "clustering_ari",
             "clustering_nmi",
             "clustering_v_measure",
-            "clustering_silhouette",
         }
         assert set(metrics.keys()) == expected_metrics
 
         # For well-separated clusters, metrics should be reasonably high
         assert metrics["clustering_ari"] > MIN_METRIC_THRESHOLD
         assert metrics["clustering_nmi"] > MIN_METRIC_THRESHOLD
-        assert metrics["clustering_silhouette"] > SILHOUETTE_THRESHOLD
+        # Silhouette metric was removed for speed
 
     @pytest.mark.parametrize(
         "eval_modes",
@@ -149,7 +148,7 @@ class TestClusteringIntegration:
         clustering_metrics = {
             "clustering_ari": EXPECTED_ARI_VALUE,
             "clustering_nmi": 0.82,
-            "clustering_silhouette": 0.45,
+            # clustering_silhouette removed for speed
         }
 
         # Create ExperimentResult with clustering metrics
@@ -208,7 +207,7 @@ class TestClusteringIntegration:
             "clustering_ari",
             "clustering_nmi",
             "clustering_v_measure",
-            "clustering_silhouette",
+            # clustering_silhouette removed for speed
         }
         assert set(empty_metrics.keys()) == expected_keys
         assert all(v == 0.0 for v in empty_metrics.values())
@@ -234,9 +233,8 @@ class TestClusteringIntegration:
 
             # Should always return the expected metrics
             assert "clustering_ari" in metrics
-            assert "clustering_silhouette" in metrics
+            # clustering_silhouette removed for speed
             assert isinstance(metrics["clustering_ari"], float)
-            assert isinstance(metrics["clustering_silhouette"], float)
 
     def test_clustering_deterministic_behavior(self) -> None:
         """Test that clustering evaluation produces deterministic results."""

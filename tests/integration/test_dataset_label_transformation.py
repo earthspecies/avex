@@ -85,7 +85,7 @@ class TestDatasetLabelTransformation:
                 multilabel=False,
                 device="cpu",
                 seed=42,
-                num_workers=0,
+                num_workers=2,
                 run_name="test_run",
                 wandb_project="test-project",
                 scheduler=scheduler,
