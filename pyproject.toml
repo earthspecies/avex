@@ -62,9 +62,12 @@ dev = [
 #to install these optional dependencies, use: uv sync --extra eval
 [project.optional-dependencies]
 eval = [
-  "zeroshot-detection-eval @ git+ssh://git@github.com/earthspecies/zeroshot_detection_eval.git",
-  "PretrainedSED @ git+ssh://git@github.com/earthspecies/PretrainedSED.git@packaging"
+  "zeroshot_detection_eval @ /home/anthony_earthspecies_org/zeroshot_detection_eval",
+  "PretrainedSED @ /home/anthony_earthspecies_org/PretrainedSED"
 ]
+  #"zeroshot-detection-eval @ git+ssh://git@github.com/earthspecies/zeroshot_detection_eval.git",
+  #"PretrainedSED @ git+ssh://git@github.com/earthspecies/PretrainedSED.git@packaging"
+
 
 [project.scripts]
 repr-learn = "representation_learning.cli:cli"

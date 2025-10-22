@@ -16,6 +16,7 @@ from zeroshot_detection_eval.data.dataloader import DataloaderBuilder
 from zeroshot_detection_eval.eval.evaluation import Scorer
 from esp_data.io import filesystem
 import os 
+import time
 from tqdm import tqdm
 
 # Import visualization function
@@ -27,7 +28,7 @@ from PretrainedSED.models.beats.BEATs_wrapper import BEATsWrapper
 from PretrainedSED.models.prediction_wrapper import PredictionsWrapper
 
 # ============= CONFIGURATION =============
-DATASET = "xeno_canto_annotated_jeantet_2023"
+DATASET = "wabad"
 ANNOTATION_COLUMN = "Species" 
 
 # Perch classifier parameters (configurable)
@@ -40,7 +41,7 @@ PERCH_N_WORKERS = 4
 SED_WINDOW = 10.0       # Required window size for BEATs model
 SED_HOP = 10.0          # seconds
 SED_N_WORKERS = 0
-SED_LOWPASS_CUTOFF = 2.0  # Hz - Low-pass filter cutoff frequency for smoothing animal detection
+SED_LOWPASS_CUTOFF = 10  # Hz - Low-pass filter cutoff frequency for smoothing animal detection
 
 # Output frame rate from ptsed (fixed by model architecture)
 SR_SED = 16000  # All PretrainedSED models require 16kHz
@@ -49,10 +50,15 @@ FRAME_RATE = 250 / SED_WINDOW  # ptsed outputs 250 frames per 10s clip
 
 # Visualization configuration
 VIZ_THRESHOLDS = [0.1, 0.3, 0.5, 0.7]  # Thresholds for visualization
-VIZ_OUTPUT_DIR = f".results/vis_combined_{PERCH_WINDOW}_{PERCH_HOP}"  # Output directory for plots
 
-out_fp_combined = f".results/eval_combined_{PERCH_WINDOW}_{PERCH_HOP}.yaml"
-out_fp_perch_only = f".results/eval_perch_only_{PERCH_WINDOW}_{PERCH_HOP}.yaml"
+# Output paths organized by dataset
+RESULTS_BASE_DIR = f"results/{DATASET}"
+VIZ_OUTPUT_DIR = f"{RESULTS_BASE_DIR}/vis_combined_{PERCH_WINDOW}_{PERCH_HOP}"  # Output directory for plots
+TEMP_DIR_COMBINED = f"{RESULTS_BASE_DIR}/temp_combined_{PERCH_WINDOW}_{PERCH_HOP}"
+TEMP_DIR_PERCH_ONLY = f"{RESULTS_BASE_DIR}/temp_perch_only_{PERCH_WINDOW}_{PERCH_HOP}"
+
+out_fp_combined = f"{RESULTS_BASE_DIR}/eval_combined_{PERCH_WINDOW}_{PERCH_HOP}.yaml"
+out_fp_perch_only = f"{RESULTS_BASE_DIR}/eval_perch_only_{PERCH_WINDOW}_{PERCH_HOP}.yaml"
 
 
 # ============= HELPER FUNCTIONS =============
@@ -283,6 +289,9 @@ def load_species_label_mapping(dataset: str):
 # ============= MAIN =============
 
 def main():
+    # Create results directory for this dataset
+    os.makedirs(RESULTS_BASE_DIR, exist_ok=True)
+    
     # Load perch
     perch_model = PerchModel(0)
     perch_model.eval()
@@ -322,19 +331,20 @@ def main():
             print(f"Warning: Species not in output labels: {species}")
 
     # Initialize scorers - one for combined (detection x classification), one for perch-only
-    S_combined = Scorer(temp_dir=f".results/eval_combined_{PERCH_WINDOW}_{PERCH_HOP}")
-    S_perch_only = Scorer(temp_dir=f".results/eval_perch_only_{PERCH_WINDOW}_{PERCH_HOP}")
-    
+    S_combined = Scorer(temp_dir=TEMP_DIR_COMBINED)
+    S_perch_only = Scorer(temp_dir=TEMP_DIR_PERCH_ONLY)
+
     # Create visualization output directory
     os.makedirs(VIZ_OUTPUT_DIR, exist_ok=True)
+    
+    # Start timing the main processing loop
+    start_time = time.time()
     
     # Process each audio file
     for file_idx in range(len(perch_dl)):
         print(f"\n{'='*60}")
         print(f"Processing file {file_idx + 1}/{len(perch_dl)}")
         print(f"{'='*60}")
-        if file_idx !=0:
-            continue
     
         # -------- STEP 1: PretrainedSED for Animal Detection --------
         
@@ -417,6 +427,10 @@ def main():
     # Compute final metrics
     S_combined.compute_scores(output_fp=out_fp_combined, delete_temp=False, num_jobs=12)
     S_perch_only.compute_scores(output_fp=out_fp_perch_only, delete_temp=False, num_jobs=12)
+    
+    # Calculate and print elapsed time
+    elapsed_time = time.time() - start_time
+    print(f"done! Processing took {elapsed_time / 60}m")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ runs/
 static/
 labels/
 wandb/
+results/
+resources/
 
 # VSCode
 .vscode/
@@ -197,3 +199,5 @@ cython_debug/
 
 # Notebooks
 notebooks/*
+representation_learning/evaluation/eBird_Taxonomy_v2021.csv
+representation_learning/evaluation/Clements-v2024-October-2024-rev.csv

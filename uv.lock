@@ -219,12 +219,6 @@ wheels = [
 ]
 
 [[package]]
-name = "av"
-version = "11.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/21/e8/fadad78511fd108e17f0df1dd2a29755020e92345791e4fe207d304a0cd4/av-11.0.0.tar.gz", hash = "sha256:48223f000a252070f8e700ff634bb7fb3aa1b7bc7e450373029fbdd6f369ac31", size = 3652129, upload-time = "2023-11-10T12:17:07.639Z" }
-
-[[package]]
 name = "azure-core"
 version = "1.35.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1990,19 +1984,6 @@ wheels = [
 ]
 
 [[package]]
-name = "minimp3py"
-version = "0.2.3"
-source = { url = "https://github.com/f0k/minimp3py/archive/master.zip" }
-sdist = { hash = "sha256:eebf952c416f0331b0084018751007a4f3f411d0eab713a45ee67e83bc1630ae" }
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", marker = "extra == 'test'" },
-    { name = "pytest", marker = "extra == 'test'" },
-]
-provides-extras = ["test"]
-
-[[package]]
 name = "mir-eval"
 version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2700,9 +2681,8 @@ wheels = [
 [[package]]
 name = "pretrainedsed"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/earthspecies/PretrainedSED.git?rev=packaging#37a56a00be8dccd12388d0a115686b5419e6a8bd" }
+source = { directory = "../PretrainedSED" }
 dependencies = [
-    { name = "av" },
     { name = "cython" },
     { name = "datasets" },
     { name = "h5py" },
@@ -2711,12 +2691,31 @@ dependencies = [
     { name = "intervaltree" },
     { name = "jsonpickle" },
     { name = "librosa" },
-    { name = "minimp3py" },
     { name = "more-itertools" },
     { name = "nnaudio" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pytorch-lightning" },
+    { name = "timm" },
+    { name = "transformers" },
+    { name = "wandb" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cython" },
+    { name = "datasets", specifier = ">=2.15.0" },
+    { name = "h5py", specifier = ">=3.8.0" },
+    { name = "hf-fastup", specifier = ">=0.0.5" },
+    { name = "hf-transfer", specifier = ">=0.1.4" },
+    { name = "intervaltree" },
+    { name = "jsonpickle", specifier = ">=3.0.1" },
+    { name = "librosa" },
+    { name = "more-itertools" },
+    { name = "nnaudio" },
+    { name = "numpy", specifier = "<2" },
+    { name = "pandas" },
+    { name = "pytorch-lightning", specifier = ">=2.0.0" },
     { name = "timm" },
     { name = "transformers" },
     { name = "wandb" },
@@ -3270,7 +3269,7 @@ requires-dist = [
     { name = "numpy", specifier = "==1.26.4" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pandas", specifier = ">=2.2.3" },
-    { name = "pretrainedsed", marker = "extra == 'eval'", git = "ssh://git@github.com/earthspecies/PretrainedSED.git?rev=packaging" },
+    { name = "pretrainedsed", marker = "extra == 'eval'", directory = "../PretrainedSED" },
     { name = "psutil", specifier = ">=7.0.0" },
     { name = "pydantic", specifier = ">=2.11.3" },
     { name = "pydantic-settings", specifier = ">=2.9.1" },
@@ -3288,7 +3287,7 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "transformers" },
     { name = "wandb", specifier = ">=0.21.0" },
-    { name = "zeroshot-detection-eval", marker = "extra == 'eval'", git = "ssh://git@github.com/earthspecies/zeroshot_detection_eval.git" },
+    { name = "zeroshot-detection-eval", marker = "extra == 'eval'", directory = "../zeroshot_detection_eval" },
 ]
 provides-extras = ["eval"]
 
@@ -4456,7 +4455,7 @@ wheels = [
 [[package]]
 name = "zeroshot-detection-eval"
 version = "1.0.0"
-source = { git = "ssh://git@github.com/earthspecies/zeroshot_detection_eval.git#c98e0e2b8388b62ce23005679daf3e766f915e50" }
+source = { directory = "../zeroshot_detection_eval" }
 dependencies = [
     { name = "esp-data" },
     { name = "librosa" },
@@ -4470,6 +4469,33 @@ dependencies = [
     { name = "torch" },
     { name = "torchaudio" },
     { name = "tqdm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "esp-data", specifier = ">=1.2.2", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "librosa", specifier = ">=0.11.0" },
+    { name = "mir-eval", specifier = ">=0.8.2" },
+    { name = "numpy", specifier = "==1.26.4" },
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "scikit-learn", specifier = ">=1.7.1" },
+    { name = "scipy", specifier = ">=1.15.3" },
+    { name = "soundfile", specifier = ">=0.13.1" },
+    { name = "torch", specifier = "==2.5.0" },
+    { name = "torchaudio", specifier = ">=2.2.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "click", specifier = "<=8.1.7" },
+    { name = "deptry", specifier = "<=0.23.0" },
+    { name = "isort", specifier = "<=5.13.2" },
+    { name = "pre-commit", specifier = "<=4.2.0" },
+    { name = "pytest", specifier = "<=7.4.0" },
+    { name = "ruff", specifier = "<=0.11.2" },
+    { name = "yamllint", specifier = "<=1.35.1" },
 ]
 
 [[package]]
