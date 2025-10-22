@@ -6,7 +6,6 @@ import os
 os.environ.setdefault("HF_HUB_ENABLE_XET", "0")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
-os.environ.setdefault("HF_TOKEN", "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")
 
 from pathlib import Path
 from typing import Any
