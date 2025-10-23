@@ -1,3 +1,9 @@
+"""Base model class for representation learning models.
+
+This module provides the base class for all representation learning models,
+including functionality for hook management, embedding extraction, and audio processing.
+"""
+
 import logging
 from typing import Any, Dict, List, Optional, Union
 
@@ -11,6 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class ModelBase(nn.Module):
+    """Base class for all representation learning models.
+
+    Provides common functionality for hook management, embedding extraction,
+    and audio processing that all model implementations can inherit from.
+    """
+
     def __init__(
         self, device: str, audio_config: Optional[Dict[str, Any]] = None
     ) -> None:

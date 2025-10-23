@@ -15,7 +15,7 @@ training_params:
 # TODO: all checkpoints to be gs paths and uploaded during train
 experiments:
   - run_name: efficientnet_frozen_test
-    run_config: configs/run_configs/efficientnet_base_test.yml
+    run_config: configs/run_configs/pretrained/efficientnet_base.yml
     ### whether to use pretrained model or the one we train on bioacoustic data
     pretrained: true
     probe_config:

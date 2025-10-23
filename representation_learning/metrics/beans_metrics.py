@@ -266,6 +266,11 @@ class AveragePrecision:
 
 
 class MeanAveragePrecision:
+    """Mean average precision metric for multilabel classification.
+
+    Computes the mean of average precision scores across all classes.
+    """
+
     def __init__(self) -> None:
         self.ap = AveragePrecision()
 

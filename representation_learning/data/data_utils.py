@@ -1,3 +1,9 @@
+"""Data utility functions for dataset processing and balancing.
+
+This module provides utility functions for data preprocessing, balancing,
+and manipulation operations commonly used in representation learning tasks.
+"""
+
 from __future__ import annotations
 
 from typing import List

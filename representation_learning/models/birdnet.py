@@ -1,3 +1,9 @@
+"""BirdNet model implementation for bioacoustic classification.
+
+This module provides a BirdNet model wrapper for bioacoustic classification
+tasks, including species identification and audio analysis.
+"""
+
 # representation_learning/models/birdnet.py
 import contextlib
 import logging

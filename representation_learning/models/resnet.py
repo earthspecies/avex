@@ -1,3 +1,9 @@
+"""ResNet model implementation for audio classification.
+
+This module provides ResNet model implementation for audio classification tasks,
+using 2D ResNet backbones on mel-spectrogram inputs.
+"""
+
 # ResNet audio classifier integrated with the common **ModelBase** interface
 # so it can be used transparently by the training / evaluation utilities.
 

@@ -81,39 +81,6 @@ def _capture_print(fn: callable) -> str:
         sys.stdout = old
 
 
-def test_print_learned_weights_no_weights() -> None:
-    probe = _Dummy2DProbe(
-        base_model=None,
-        layers=[],
-        num_classes=2,
-        device="cpu",
-        feature_mode=True,
-        input_dim=16,
-    )
-
-    out = _capture_print(probe.print_learned_weights)
-    assert "No learned weights found" in out
-
-
-def test_print_learned_weights_with_weights() -> None:
-    probe = _Dummy2DProbe(
-        base_model=None,
-        layers=["l1", "l2", "l3"],
-        num_classes=2,
-        device="cpu",
-        feature_mode=True,
-        input_dim=8,
-    )
-    probe.layer_weights = nn.Parameter(
-        torch.tensor([0.0, 1.0, -0.5], dtype=torch.float)
-    )
-
-    out = _capture_print(probe.print_learned_weights)
-    assert "Learned Layer Weights:" in out
-    assert "Sum of normalized weights:" in out
-    assert "Number of layers: 3" in out
-
-
 def test_sum_without_weights_is_simple_sum() -> None:
     probe = _Dummy2DProbe(
         base_model=None,

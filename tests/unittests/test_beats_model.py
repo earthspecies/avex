@@ -16,7 +16,14 @@ class TestBEATsModelEmbeddingExtraction:
         Returns:
             Model: A configured BEATs model for testing.
         """
-        return Model(num_classes=10, return_features_only=True, device="cpu")
+        return Model(
+            num_classes=10,
+            pretrained=True,
+            return_features_only=True,
+            device="cpu",
+            use_naturelm=True,  # Use NatureLM like the working integration tests
+            disable_layerdrop=True,
+        )
 
     @pytest.fixture
     def beats_model_with_classifier(self) -> Model:
@@ -25,7 +32,14 @@ class TestBEATsModelEmbeddingExtraction:
         Returns:
             Model: A configured BEATs model with classifier for testing.
         """
-        return Model(num_classes=10, return_features_only=False, device="cpu")
+        return Model(
+            num_classes=10,
+            pretrained=True,
+            return_features_only=False,
+            device="cpu",
+            use_naturelm=True,  # Use NatureLM like the working integration tests
+            disable_layerdrop=True,
+        )
 
     @pytest.fixture
     def sample_audio(self) -> torch.Tensor:

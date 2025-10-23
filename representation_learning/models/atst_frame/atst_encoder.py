@@ -1,3 +1,9 @@
+"""ATST Frame encoder implementation.
+
+This module provides the ATST (Audio Spectrogram Transformer) Frame encoder
+implementation for audio representation learning tasks.
+"""
+
 from typing import List, Optional
 
 import torch

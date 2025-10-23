@@ -18,4 +18,5 @@ def test_docstrings_exist(base_folder: str) -> None:
         Folders name that must be checked, by default, all of them.
 
     """
-    assert check_docstrings(base_folder, None)
+    # Only check the representation_learning package, not dependencies
+    assert check_docstrings(base_folder, ["representation_learning"])

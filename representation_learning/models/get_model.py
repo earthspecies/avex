@@ -1,3 +1,9 @@
+"""Model factory for representation learning models.
+
+This module provides a factory function to instantiate different types of
+representation learning models based on configuration specifications.
+"""
+
 from representation_learning.configs import ModelSpec
 from representation_learning.models.aves_model import Model as AVESModel
 from representation_learning.models.base_model import ModelBase

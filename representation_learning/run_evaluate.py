@@ -69,6 +69,12 @@ logger = logging.getLogger("run_finetune")
 # -------------------------------------------------------------------- #
 @dataclass
 class ExperimentResult:
+    """Result container for experiment evaluation metrics.
+
+    Stores evaluation results from different phases of an experiment including
+    training, validation, probing, retrieval, and clustering metrics.
+    """
+
     dataset_name: str
     experiment_name: str
     evaluation_dataset_name: Optional[

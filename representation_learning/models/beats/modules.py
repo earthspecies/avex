@@ -1,3 +1,14 @@
+"""BEATs neural network modules and components.
+
+This module provides the core neural network components for BEATs including
+transformer layers, attention mechanisms, and utility functions.
+
+Based on:
+- Paper: https://arxiv.org/abs/2212.09058
+- Original implementation: https://github.com/microsoft/unilm/tree/master/beats
+- Copyright (c) 2022 Microsoft, Licensed under The MIT License
+"""
+
 # --------------------------------------------------------
 # BEATs: Audio Pre-Training with Acoustic Tokenizers (https://arxiv.org/abs/2212.09058)
 # Github source: https://github.com/microsoft/unilm/tree/master/beats

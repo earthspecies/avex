@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict
+from unittest.mock import MagicMock, patch
 
 import pytest
 from esp_data import DatasetConfig
@@ -144,10 +145,17 @@ def test_save_and_load_experiment_metadata(
     assert model_spec["audio_config"]["sample_rate"] == 16000
 
 
+@patch("representation_learning.utils.experiment_tracking._fs")
 def test_save_and_load_evaluation_metadata(
-    temp_dir: Path, mock_config: RunConfig, mock_metrics: Dict[str, float]
+    mock_fs: MagicMock,
+    temp_dir: Path,
+    mock_config: RunConfig,
+    mock_metrics: Dict[str, float],
 ) -> None:
     """Test saving and loading evaluation metadata."""
+    # Mock the filesystem operations
+    mock_fs.open.return_value.__enter__.return_value = MagicMock()
+
     # Save metadata
     save_evaluation_metadata(
         output_dir=temp_dir,
@@ -258,10 +266,17 @@ def test_append_to_existing_metadata(
     assert model_spec["audio_config"]["sample_rate"] == 16000
 
 
+@patch("representation_learning.utils.experiment_tracking._fs")
 def test_evaluation_metadata_with_training_metadata(
-    temp_dir: Path, mock_config: RunConfig, mock_metrics: Dict[str, float]
+    mock_fs: MagicMock,
+    temp_dir: Path,
+    mock_config: RunConfig,
+    mock_metrics: Dict[str, float],
 ) -> None:
     """Test evaluation metadata with training metadata."""
+    # Mock the filesystem operations
+    mock_fs.open.return_value.__enter__.return_value = MagicMock()
+
     # Create training metadata DataFrame
     import pandas as pd
 

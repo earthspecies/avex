@@ -1,3 +1,9 @@
+"""Loss functions for representation learning training.
+
+This module provides various loss functions used in representation learning
+tasks, including contrastive losses, focal loss, and distributed training utilities.
+"""
+
 import os
 from typing import Dict, Optional, Tuple, Union
 

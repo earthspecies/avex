@@ -1,6 +1,4 @@
-# Re-export the main EAT audio model so callers can simply do
-# ``from representation_learning.models.eat import Model``.
+# Export the audio processor that's actually used by the HuggingFace implementation
+from .audio_processor import EATAudioProcessor  # noqa: F401
 
-from .audio_model import Model  # noqa: F401
-
-__all__ = ["Model"]
+__all__ = ["EATAudioProcessor"]

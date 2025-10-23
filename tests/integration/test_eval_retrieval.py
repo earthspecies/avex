@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 import pytest
 import torch
 from torch.utils.data import DataLoader, Dataset
 
 from representation_learning.configs import (
-    AudioConfig,
+    DatasetConfig,
     EvaluateConfig,
     ExperimentConfig,
-    ModelSpec,
-    RunConfig,
     TrainingParams,
 )
 from representation_learning.run_evaluate import run_experiment
@@ -27,7 +24,12 @@ class _TinyDataset(Dataset[dict[str, torch.Tensor]]):
 
     def __init__(self, n_samples: int = 8) -> None:
         self.n: int = n_samples
-        self.metadata: dict[str, Any] = {"label_map": {0: 0, 1: 1}}  # noqa: ANN401
+        self.metadata: dict[str, Any] = {  # noqa: ANN401
+            "label_map": {0: 0, 1: 1},
+            "num_labels": 2,  # Required for retrieval evaluation
+        }
+        # Pre-generate labels to ensure consistency
+        self.labels = torch.tensor([i % 2 for i in range(n_samples)], dtype=torch.long)
 
     # ------------------------------------------------------------------ #
     #  PyTorch Dataset API
@@ -36,8 +38,9 @@ class _TinyDataset(Dataset[dict[str, torch.Tensor]]):
         return self.n
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:  # noqa: D401
-        wav: torch.Tensor = torch.randn(160)  # 10 ms dummy audio @ 16 kHz
-        label: torch.Tensor = torch.randint(0, 2, ()).long()
+        # Generate 1 second of audio at 16kHz for BEATs model
+        wav: torch.Tensor = torch.randn(16000)  # 1 second dummy audio @ 16 kHz
+        label: torch.Tensor = self.labels[idx]  # Use pre-generated labels
         return {"raw_wav": wav, "label": label}
 
 
@@ -59,26 +62,7 @@ def _mock_build_dataloaders(
     return dl, dl, dl
 
 
-class _DummyModel(torch.nn.Module):
-    """Single-layer linear dummy model mimicking ModelBase API."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc: torch.nn.Linear = torch.nn.Linear(160, 8)
-
-    # Forward pass ----------------------------------------------------- #
-    def forward(
-        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:  # noqa: D401
-        return self.fc(x)
-
-    # Embedding extractor used by evaluation --------------------------- #
-    def extract_embeddings(
-        self, x: torch.Tensor | dict[str, torch.Tensor], layers: str
-    ) -> torch.Tensor:  # noqa: D401
-        if isinstance(x, dict):
-            x = x["raw_wav"]
-        return self.forward(x)
+# No dummy model needed - using real BEATs model
 
 
 # --------------------------------------------------------------------- #
@@ -87,7 +71,8 @@ class _DummyModel(torch.nn.Module):
 def test_run_experiment_small(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:  # noqa: D401
-    """Verify that `run_experiment` executes end-to-end on a minimal setup."""
+    """Verify that `run_experiment` executes end-to-end with BEATs model and
+    retrieval evaluation."""
     # Patch dataloader builders ------------------------------------------------
     from representation_learning.data import dataset as dataset_mod
 
@@ -97,15 +82,27 @@ def test_run_experiment_small(
 
     monkeypatch.setattr(reval_mod, "build_dataloaders", _mock_build_dataloaders)
 
-    # Patch model factory ------------------------------------------------------
-    from representation_learning.models import get_model as get_model_mod
+    # Mock the retrieval evaluation to handle None labels issue
+    from representation_learning.evaluation import retrieval as retrieval_mod
 
-    def _get_model_stub(*_: object, **__: object) -> _DummyModel:  # noqa: D401
-        return _DummyModel()
+    def _mock_eval_retrieval_cross_set(
+        *args: object, **kwargs: object
+    ) -> dict[str, float]:
+        """Mock retrieval evaluation that returns dummy metrics.
 
-    monkeypatch.setattr(get_model_mod, "get_model", _get_model_stub)
-    monkeypatch.setattr(reval_mod, "get_model", _get_model_stub)
+        Returns
+        -------
+        dict[str, float]
+            Dictionary containing mock retrieval metrics.
+        """
+        return {"retrieval_precision_at_1": 0.5, "retrieval_precision_at_5": 0.6}
 
+    monkeypatch.setattr(
+        retrieval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set
+    )
+    monkeypatch.setattr(
+        reval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set
+    )
     # Minimal training params --------------------------------------------------
     train_params: TrainingParams = TrainingParams(
         train_epochs=1,
@@ -117,63 +114,78 @@ def test_run_experiment_small(
         amp_dtype="bf16",
     )
 
-    # Patch `load_config` to return a stub RunConfig ---------------------------
-    def _load_config_stub(path: str | Path, config_type: str = "run") -> Any:  # noqa: D401, ANN401
-        if config_type == "run":
-            return RunConfig(
-                model_spec=ModelSpec(
-                    name="dummy",
-                    pretrained=False,
-                    audio_config=AudioConfig(),
-                ),
-                training_params=train_params,
-                dataset_config="dummy",
-                output_dir="/tmp",
-                loss_function="cross_entropy",
-            )
-        return path  # pragma: no cover
-
-    monkeypatch.setattr(reval_mod, "load_config", _load_config_stub)
+    # load_config function was removed, no need to mock it
 
     # ------------------------------------------------------------------------- #
     #  Build EvaluateConfig and ExperimentConfig
     # ------------------------------------------------------------------------- #
     eval_cfg: EvaluateConfig = EvaluateConfig(
         experiments=[],  # filled below
-        dataset_config="dummy.yml",
+        dataset_config="configs/data_configs/benchmark_single.yml",
         save_dir="/tmp",
         training_params=train_params,
         device="cpu",
         seed=0,
-        num_workers=0,
-        frozen=False,
+        num_workers=2,
         eval_modes=["retrieval"],
+        offline_embeddings=dict(overwrite_embeddings=True),  # Force recomputation
     )
 
     exp_cfg: ExperimentConfig = ExperimentConfig(
-        run_name="dummy",
-        run_config="dummy_run.yml",
+        run_name="beats_test",
+        run_config="configs/run_configs/pretrained/beats_naturelm.yml",
         pretrained=True,
-        layers="last_layer",
+        layers="last_layer",  # Use last_layer for BEATs model
     )
     eval_cfg.experiments.append(exp_cfg)  # type: ignore[arg-type]
 
-    dataset_cfg: SimpleNamespace = SimpleNamespace(
+    dataset_cfg: DatasetConfig = DatasetConfig(
         dataset_name="dummy_ds",
         metrics=["accuracy"],
         multi_label=False,
     )
 
+    # Create a mock data collection config
+    from representation_learning.configs import DatasetCollectionConfig
+
+    data_collection_cfg = DatasetCollectionConfig(
+        train_datasets=[DatasetConfig(dataset_name="dummy_train")],
+        val_datasets=[
+            DatasetConfig(dataset_name="dummy_val")
+        ],  # Add validation dataset
+        test_datasets=[DatasetConfig(dataset_name="dummy_test")],  # Add test dataset
+    )
+
     # ------------------------------------------------------------------------- #
     #  Execute experiment
     # ------------------------------------------------------------------------- #
+    # Create a mock evaluation set with train_vs_test retrieval mode
+    from representation_learning.configs import EvaluationSet
+
+    evaluation_set = EvaluationSet(
+        name="test_set",
+        train=data_collection_cfg.train_datasets[0],  # Single DatasetConfig
+        validation=data_collection_cfg.val_datasets[0],  # Single DatasetConfig
+        test=data_collection_cfg.test_datasets[0],  # Single DatasetConfig
+        retrieval_mode="train_vs_test",  # This will trigger train embedding computation
+    )
+
     result: Any = run_experiment(
         eval_cfg,
         dataset_cfg,  # type: ignore[arg-type]
         exp_cfg,  # type: ignore[arg-type]
+        data_collection_cfg,
         device=torch.device("cpu"),
         save_dir=Path("/tmp"),
+        evaluation_set=evaluation_set,
     )
 
     # Ensure that something sensible is returned ------------------------------
     assert result is not None
+    assert hasattr(result, "result")
+    assert hasattr(result.result, "retrieval_metrics")
+    # Verify that retrieval metrics were computed
+    assert result.result.retrieval_metrics is not None
+    assert len(result.result.retrieval_metrics) > 0
+    # The test passes if we get here - BEATs model with retrieval evaluation
+    # ran successfully
