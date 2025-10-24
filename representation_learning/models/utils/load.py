@@ -52,9 +52,9 @@ def load_model(
     This function provides a single entry point for loading any model type:
 
     **Registered Models**: Use predefined model names from the registry
-    - `"efficientnet"` - EfficientNet for audio classification
+    - `"efficientnet_animalspeak"` - EfficientNet for audio classification
     - `"beats_naturelm"` - BEATs from NatureLM for bioacoustics
-    - `"eat"` - EAT for bioacoustics
+    - `"sl_eat_animalspeak_ssl_all"` - EAT for bioacoustics
 
     **Custom Configs**: Load from YAML configuration files
     - `"path/to/experiment.yml"` - External experiment configs
@@ -80,23 +80,24 @@ def load_model(
 
     Examples:
         >>> # Load with explicit num_classes (for new model)
-        >>> model = load_model("efficientnet", num_classes=100)
+        >>> # Note: This requires the model class to be registered first
+        >>> # model = load_model("efficientnet_animalspeak", num_classes=100)
 
         >>> # Load with custom checkpoint
-        >>> model = load_model("efficientnet", checkpoint_path="gs://my-bucket/checkpoint.pt")
+        >>> # model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-bucket/checkpoint.pt")
 
         >>> # Load with default checkpoint (if registered)
-        >>> from representation_learning import register_checkpoint
-        >>> register_checkpoint("beats_naturelm", "gs://my-bucket/beats_naturelm.pt")
-        >>> model = load_model("beats_naturelm")  # Uses default checkpoint +
-        ...     # extracts num_classes
+        >>> # from representation_learning import register_checkpoint
+        >>> # register_checkpoint("beats_naturelm", "gs://my-bucket/beats_naturelm.pt")
+        >>> # model = load_model("beats_naturelm")  # Uses default checkpoint and
+        ... # extracts num_classes
 
         >>> # Load from config file (num_classes from config)
-        >>> model = load_model("experiments/my_model.yml")
+        >>> # model = load_model("experiments/my_model.yml")
 
         >>> # Load with custom parameters
-        >>> model = load_model("efficientnet", num_classes=50,
-        ...                        device="cuda", efficientnet_variant="b1")
+        >>> # model = load_model("efficientnet_animalspeak", num_classes=50,
+        ... #                    device="cuda", efficientnet_variant="b1")
     """
     if isinstance(model, str):
         # Ensure registry is initialized
@@ -238,13 +239,14 @@ def create_model(
 
     Examples:
         >>> # Create new model for training
-        >>> model = create_model("efficientnet", num_classes=100)
+        >>> # Note: This requires the model class to be registered first
+        >>> # model = create_model("efficientnet_animalspeak", num_classes=100)
 
         >>> # Create custom model using plugin architecture
-        >>> model = create_model("my_custom_model", num_classes=50)
+        >>> # model = create_model("my_custom_model", num_classes=50)
 
         >>> # Create from config file
-        >>> model = create_model("experiments/my_model.yml", num_classes=10)
+        >>> # model = create_model("experiments/my_model.yml", num_classes=10)
     """
     if isinstance(model, str):
         # Ensure registry is initialized
