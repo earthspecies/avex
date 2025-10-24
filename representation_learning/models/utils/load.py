@@ -89,15 +89,13 @@ def load_model(
         >>> # Load with default checkpoint (if registered)
         >>> # from representation_learning import register_checkpoint
         >>> # register_checkpoint("beats_naturelm", "gs://my-bucket/beats_naturelm.pt")
-        >>> # model = load_model("beats_naturelm")  # Uses default checkpoint and
-        ... # extracts num_classes
+        >>> # model = load_model("beats_naturelm")  # Uses default checkpoint
 
         >>> # Load from config file (num_classes from config)
         >>> # model = load_model("experiments/my_model.yml")
 
         >>> # Load with custom parameters
-        >>> # model = load_model("efficientnet_animalspeak", num_classes=50,
-        ... #                    device="cuda", efficientnet_variant="b1")
+        >>> # model = load_model("efficientnet_animalspeak", num_classes=50)
     """
     if isinstance(model, str):
         # Ensure registry is initialized
