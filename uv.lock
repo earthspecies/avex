@@ -690,7 +690,7 @@ wheels = [
 
 [[package]]
 name = "esp-data"
-version = "1.2.1"
+version = "1.2.2"
 source = { registry = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" }
 dependencies = [
     { name = "cloudpathlib", extra = ["all"] },
@@ -706,9 +706,9 @@ dependencies = [
     { name = "semver" },
     { name = "soundfile" },
 ]
-sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.1.tar.gz", hash = "sha256:ef0f7c3ae7c132ad33a65dbacda77390fe323170a398f22f82f7959603cbf4de" }
+sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.2.tar.gz", hash = "sha256:c8170715b233d72a0d5e4781074d4dfc290e733546f65af58154ea9601df9e91" }
 wheels = [
-    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.1-py3-none-any.whl", hash = "sha256:28e4f0561fcb6f2e62287964dd768063c7e13e3db886afa00eee1c5d57145901" },
+    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.2.2-py3-none-any.whl", hash = "sha256:b9f38e1e54be44b8bf829a3e42de08c52086befe47701e3f62d8e44c5ce715dd" },
 ]
 
 [[package]]

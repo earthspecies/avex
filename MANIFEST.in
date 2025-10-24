@@ -1,0 +1,32 @@
+# Include package data
+include README.md
+include LICENSE
+include pyproject.toml
+include requirements.txt
+include requirements-dev.txt
+
+# Include official model configs
+recursive-include representation_learning/configs/official_models *.yml
+
+# Include all Python files
+recursive-include representation_learning *.py
+
+# Include test files
+recursive-include tests *.py
+
+# Include documentation
+recursive-include docs *.md
+
+# Exclude unnecessary files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .coverage
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .ruff_cache
+
