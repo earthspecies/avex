@@ -259,12 +259,6 @@ def register_model_class(cls: Type) -> Type:
     Returns:
         The registered class (for use as decorator)
 
-    Example:
-        ```python
-        @register_model_class
-        class MyModel(ModelBase):
-            name = "my_model"
-        ```
     """
     name = getattr(cls, "name", cls.__name__.lower())
 
