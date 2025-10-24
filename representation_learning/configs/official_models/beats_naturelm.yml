@@ -1,0 +1,73 @@
+---
+# Official BEATs model with NatureLM for audio classification
+model_spec:
+  name: beats
+  pretrained: false  # Set to true when loading pretrained BEATs weights
+  device: cuda
+  use_naturelm: true  # Enable NatureLM for BEATs
+  audio_config:
+    sample_rate: 16000
+    representation: raw  # BEATs expects raw waveform
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+# Dataset configuration (placeholder - not used for model loading)
+dataset_config:
+  train_datasets:
+    - dataset_name: placeholder
+      dataset_version: 0.0
+      split: train
+      balance: false
+      subset_percentage: 1.0
+      audio_max_length_seconds: 10
+      audio_path_col: path
+      data_root: /tmp
+      transformations: []
+  val_datasets:
+    - dataset_name: placeholder
+      dataset_version: 0.0
+      split: validation
+      balance: false
+      subset_percentage: 1.0
+      audio_max_length_seconds: 10
+      audio_path_col: path
+      data_root: /tmp
+      transformations: []
+  concatenate_train: true
+  concatenate_val: true
+  concatenate_method: soft
+
+# Output directory for checkpoints and logs
+output_dir: "./beats_naturelm_official"
+label_type: supervised
+
+# General settings
+sr: 16000
+debug_mode: false
+
+# Training parameters (for reference)
+training_params:
+  train_epochs: 20
+  lr: 0.0001
+  batch_size: 64
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+# Learning rate scheduler
+scheduler:
+  name: cosine
+  warmup_steps: 500
+  min_lr: 1e-6
+
+# Loss function
+loss_function: cross_entropy
+
+# General settings
+seed: 42
+num_workers: 10
+
+# Run name
+run_name: beats_naturelm_official

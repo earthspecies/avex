@@ -215,35 +215,6 @@ class ModelBase(nn.Module):
         # This handles cases where all layers are internal encoder layers
         return self._layer_names[-1]
 
-    # def _get_last_non_classification_layer(self) -> Optional[str]:
-    #     """Get the last non-classification layer name.
-
-    #     Returns:
-    #         Optional[str]: Name of the last non-classification layer, or None if
-    #             not found
-    #     """
-    #     if not self._layer_names:
-    #         return None
-
-    #     # Look for the last layer that's not a classification head
-    #     # Start from the second-to-last layer (assuming last is classifier)
-    #     for i in range(len(self._layer_names) - 2, -1, -1):
-    #         name = self._layer_names[i]
-    #         # Skip classification head layers (common patterns)
-    #         if not any(
-    #             skip in name.lower()
-    #             for skip in ["classifier", "head", "fc", "linear"]
-    #         ):
-    #             return name
-
-    #     # If we can't find a non-classification layer, return the second-to-last layer
-    #     # (assuming the last layer is the classifier)
-    #     if len(self._layer_names) >= 2:
-    #         return self._layer_names[-2]
-
-    #     # Fallback to the last layer if only one layer exists
-    #     return self._layer_names[-1]
-
     def _get_all_linear_layers(self) -> List[str]:
         """Get all linear layer names including the classification layer.
 

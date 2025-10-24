@@ -1,15 +1,12 @@
 """
-Representation Learning Framework
+Utilities for model management and loading.
 
-A comprehensive Python-based system for training, evaluating, and analyzing
-audio representation learning models with support for both supervised and
-self-supervised learning paradigms.
+This package contains utilities for model registration, loading, and factory functions.
 """
 
-from .api import (
-    build_model,
-    build_model_from_spec,
-    create_model,
+from .factory import build_model, build_model_from_spec
+from .load import create_model, load_model
+from .registry import (
     describe_model,
     get_checkpoint,
     get_model,
@@ -19,7 +16,6 @@ from .api import (
     list_model_classes,
     list_model_names,
     list_models,
-    load_model,
     register_checkpoint,
     register_model,
     register_model_class,
@@ -29,9 +25,10 @@ from .api import (
     update_model,
 )
 
-__version__ = "0.1.0"
-
 __all__ = [
+    # Model factory
+    "build_model",
+    "build_model_from_spec",
     # Model loading
     "load_model",
     "create_model",
@@ -44,17 +41,14 @@ __all__ = [
     "list_model_names",
     "is_registered",
     "describe_model",
+    # Checkpoint management
+    "register_checkpoint",
+    "get_checkpoint",
+    "unregister_checkpoint",
     # Model class management
     "register_model_class",
     "get_model_class",
     "list_model_classes",
     "is_model_class_registered",
     "unregister_model_class",
-    # Model factory
-    "build_model",
-    "build_model_from_spec",
-    # Checkpoint management
-    "register_checkpoint",
-    "get_checkpoint",
-    "unregister_checkpoint",
 ]

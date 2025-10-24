@@ -1,0 +1,36 @@
+---
+# EfficientNet model fine-tuned on AnimalSpeak dataset
+model_spec:
+  name: efficientnet
+  pretrained: false  # Set to false when loading from checkpoint
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+
+# Dataset configuration (placeholder - not used for model loading)
+dataset_config:
+  train_datasets:
+    - dataset_name: placeholder
+  val_datasets:
+    - dataset_name: placeholder
+
+# Minimal required fields for RunConfig validation (not used for training)
+training_params:
+  train_epochs: 1
+  lr: 0.001
+  batch_size: 1
+  optimizer: adamw
+  weight_decay: 0.0
+
+output_dir: "./runs/placeholder"
+loss_function: bce
+multilabel: true

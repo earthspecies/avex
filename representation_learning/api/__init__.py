@@ -6,7 +6,7 @@ audio representation learning models with support for both supervised and
 self-supervised learning paradigms.
 """
 
-from .api import (
+from .core import (
     build_model,
     build_model_from_spec,
     create_model,

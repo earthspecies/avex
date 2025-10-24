@@ -1,15 +1,16 @@
 """
-Representation Learning Framework
+Core API for the representation learning framework.
 
-A comprehensive Python-based system for training, evaluating, and analyzing
-audio representation learning models with support for both supervised and
-self-supervised learning paradigms.
+This module provides the main user-facing API for loading models and managing
+the model registry. It re-exports functionality from the models package.
 """
 
-from .api import (
+from representation_learning.models.utils.factory import (
     build_model,
     build_model_from_spec,
-    create_model,
+)
+from representation_learning.models.utils.load import create_model, load_model
+from representation_learning.models.utils.registry import (
     describe_model,
     get_checkpoint,
     get_model,
@@ -19,7 +20,6 @@ from .api import (
     list_model_classes,
     list_model_names,
     list_models,
-    load_model,
     register_checkpoint,
     register_model,
     register_model_class,
@@ -28,8 +28,6 @@ from .api import (
     unregister_model_class,
     update_model,
 )
-
-__version__ = "0.1.0"
 
 __all__ = [
     # Model loading
