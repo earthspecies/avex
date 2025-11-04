@@ -5,9 +5,11 @@ This module provides functionality to build model instances by linking
 ModelSpec configurations with registered model classes.
 """
 
+import inspect
 import logging
 from typing import Optional
 
+from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 
 from .registry import get_model as get_model_spec
@@ -156,11 +158,18 @@ def build_model_from_spec(
         ) from None
 
     # Prepare initialization arguments (same logic as build_model)
+    # Convert audio_config dict to AudioConfig object if needed
+    audio_config = None
+    if model_spec.audio_config:
+        if isinstance(model_spec.audio_config, AudioConfig):
+            audio_config = model_spec.audio_config
+        else:
+            # If it's a dict, convert to AudioConfig
+            audio_config = AudioConfig(**model_spec.audio_config)
+
     init_kwargs = {
         "device": device,
-        "audio_config": model_spec.audio_config.model_dump()
-        if model_spec.audio_config
-        else None,
+        "audio_config": audio_config,
         **kwargs,
     }
 
@@ -171,12 +180,19 @@ def build_model_from_spec(
     if num_classes is not None:
         init_kwargs["num_classes"] = num_classes
 
+    # Filter init_kwargs to only include parameters accepted by the model class
+    # This prevents passing model-specific parameters (e.g., eat_norm_mean) to
+    # models that don't accept them (e.g., BEATs)
+    sig = inspect.signature(model_class.__init__)
+    valid_params = set(sig.parameters.keys())
+    filtered_kwargs = {k: v for k, v in init_kwargs.items() if k in valid_params}
+
     logger.info(f"Building model from spec with class '{model_type}'")
-    logger.debug(f"Initialization kwargs: {init_kwargs}")
+    logger.debug(f"Initialization kwargs: {filtered_kwargs}")
 
     # Instantiate the model
     try:
-        model = model_class(**init_kwargs)
+        model = model_class(**filtered_kwargs)
         logger.info("Successfully built model from spec")
         return model
     except Exception as e:

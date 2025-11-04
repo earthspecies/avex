@@ -162,6 +162,9 @@ def _load_from_modelspec(
     # Override device
     model_spec.device = device
 
+    # Track if num_classes was originally None (means we want to keep classifier)
+    num_classes_was_none = num_classes is None
+
     # Use default checkpoint path from registry if not provided and no explicit
     # num_classes
     if not checkpoint_path and num_classes is None:
@@ -197,8 +200,13 @@ def _load_from_modelspec(
     backbone = build_model_from_spec(model_spec, device, num_classes, **kwargs)
 
     # Load checkpoint if provided
+    # Keep classifier weights if num_classes was originally None
+    # (extracted from checkpoint)
     if checkpoint_path:
-        _load_checkpoint(backbone, checkpoint_path, device)
+        keep_classifier = num_classes_was_none
+        _load_checkpoint(
+            backbone, checkpoint_path, device, keep_classifier=keep_classifier
+        )
 
     return backbone.to(device)
 
@@ -326,19 +334,43 @@ def _extract_num_classes_from_checkpoint(
             processed_state_dict = _process_state_dict(checkpoint, keep_classifier=True)
 
             # Look for classifier/head layer weights in processed state dict
-            for key in processed_state_dict.keys():
-                if any(
-                    term in key.lower()
-                    for term in ["classifier", "head", "fc", "linear"]
-                ):
-                    if "weight" in key and len(processed_state_dict[key].shape) == 2:
-                        num_classes = processed_state_dict[key].shape[0]
-                        logger.info(f"Found num_classes={num_classes} from {key}")
-                        return num_classes
-                    elif "bias" in key and len(processed_state_dict[key].shape) == 1:
-                        num_classes = processed_state_dict[key].shape[0]
-                        logger.info(f"Found num_classes={num_classes} from {key}")
-                        return num_classes
+            # First, prioritize classifier-specific keys
+            # (avoid matching backbone layers)
+            classifier_keys = [
+                key
+                for key in processed_state_dict.keys()
+                if any(term in key.lower() for term in ["classifier", "head"])
+                and not any(
+                    exclude in key.lower()
+                    for exclude in ["backbone", "encoder", "fc1", "fc2", "grep"]
+                )
+            ]
+
+            # If no classifier-specific keys found, fall back to looking for
+            # top-level linear layers
+            if not classifier_keys:
+                classifier_keys = [
+                    key
+                    for key in processed_state_dict.keys()
+                    if any(
+                        term in key.lower()
+                        for term in ["classifier", "head", "fc", "linear"]
+                    )
+                    and not any(
+                        exclude in key.lower()
+                        for exclude in ["backbone", "encoder", "fc1", "fc2", "grep"]
+                    )
+                ]
+
+            for key in classifier_keys:
+                if "weight" in key and len(processed_state_dict[key].shape) == 2:
+                    num_classes = processed_state_dict[key].shape[0]
+                    logger.info(f"Found num_classes={num_classes} from {key}")
+                    return num_classes
+                elif "bias" in key and len(processed_state_dict[key].shape) == 1:
+                    num_classes = processed_state_dict[key].shape[0]
+                    logger.info(f"Found num_classes={num_classes} from {key}")
+                    return num_classes
 
             # Look for metadata in original checkpoint
             if "num_classes" in checkpoint:
@@ -357,8 +389,17 @@ def _extract_num_classes_from_checkpoint(
         return None
 
 
-def _load_checkpoint(model: object, checkpoint_path: str, device: str) -> None:
+def _load_checkpoint(
+    model: object, checkpoint_path: str, device: str, keep_classifier: bool = False
+) -> None:
     """Load checkpoint weights into model.
+
+    Args:
+        model: Model to load weights into
+        checkpoint_path: Path to checkpoint file
+        device: Device to load checkpoint on
+        keep_classifier: If True, keep classifier/head layers from checkpoint.
+            If False, remove classifier layers (default).
 
     Raises:
         FileNotFoundError: If checkpoint file doesn't exist
@@ -376,8 +417,11 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str) -> None:
     checkpoint = torch.load(ckpt_path, map_location=device)
 
     # Process state dict if needed
-    state_dict = _process_state_dict(checkpoint)
+    state_dict = _process_state_dict(checkpoint, keep_classifier=keep_classifier)
 
     # Load weights
     model.load_state_dict(state_dict, strict=False)
-    logger.info("Checkpoint loaded successfully")
+    if keep_classifier:
+        logger.info("Checkpoint loaded successfully with classifier/head weights")
+    else:
+        logger.info("Checkpoint loaded successfully (classifier/head weights removed)")
