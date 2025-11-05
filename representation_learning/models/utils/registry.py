@@ -161,17 +161,22 @@ def unregister_model(name: str) -> None:
     logger.info(f"Unregistered model: {name}")
 
 
-def get_model(name: str) -> Optional[ModelSpec]:
+def get_model(name: str) -> ModelSpec:
     """Get a model spec by name.
 
     Args:
         name: Name of the model
 
     Returns:
-        ModelSpec if found, None otherwise
+        ModelSpec if found
+
+    Raises:
+        KeyError: If model is not registered
     """
     ensure_initialized()
-    return _MODEL_REGISTRY.get(name)
+    if name not in _MODEL_REGISTRY:
+        raise KeyError(f"Model '{name}' is not registered")
+    return _MODEL_REGISTRY[name]
 
 
 def list_models() -> Dict[str, ModelSpec]:
@@ -260,9 +265,11 @@ def describe_model(name: str, verbose: bool = False) -> dict:
         KeyError: If model is not found in registry
     """
     ensure_initialized()
-    spec = get_model(name)
-    if not spec:
-        raise KeyError(f"Model '{name}' not found in registry")
+    # get_model() raises KeyError if model is not found, so no need to check for None
+    try:
+        spec = get_model(name)
+    except KeyError:
+        raise  # Re-raise to satisfy DOC502 - KeyError is raised by get_model()
 
     # Get the full model dump with all fields
     model_info = spec.model_dump()

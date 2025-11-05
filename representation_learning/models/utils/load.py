@@ -214,6 +214,17 @@ def _load_from_modelspec(
                 )
 
     # Handle checkpoint loading
+    # Note: If a checkpoint_path is provided (either explicitly or from YAML),
+    # we set pretrained=False to prevent loading the model's default pretrained weights.
+    # This is because:
+    # 1. checkpoint_path takes priority over pretrained weights
+    #    (user wants specific weights)
+    # 2. The checkpoint could be from any source: fine-tuned, SSL-pretrained,
+    #    another round of SSL, etc.
+    # 3. Setting pretrained=False prevents double-loading of weights
+    # The pretrained flag is for the model's built-in default weights
+    # (torchvision, HuggingFace, hardcoded paths), not for custom checkpoints from
+    # additional training rounds.
     if checkpoint_path:
         model_spec.pretrained = False
 
