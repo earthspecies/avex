@@ -139,13 +139,8 @@ def main() -> None:
     # Example 3: Model introspection
     print("\n📊 Model Introspection:")
     try:
-        # Get detailed model information
-        model_info = describe_model("custom_efficientnet")
-        print(f"Model: {model_info['_metadata']['name']}")
-        print(f"Type: {model_info['_metadata']['model_type']}")
-        print(f"Audio config sample rate: {model_info['audio_config']['sample_rate']}")
-        print(f"EfficientNet variant: {model_info['efficientnet_variant']}")
-        print(f"Has audio config: {model_info['_metadata']['has_audio_config']}")
+        # Pretty-print detailed model information
+        describe_model("custom_efficientnet", verbose=True)
 
     except Exception as e:
         print(f"❌ Error in model introspection: {e}")
@@ -192,11 +187,13 @@ def main() -> None:
         print(f"Created YAML config at: {yaml_path}")
 
         # Load model from YAML file using get_model
-        from representation_learning.configs import RunConfig
         from representation_learning.models.get_model import get_model as create_model
+        from representation_learning.models.utils.registry import (
+            load_model_spec_from_yaml,
+        )
 
-        run_cfg = RunConfig.from_sources(yaml_file=yaml_path, cli_args=())
-        model = create_model(run_cfg.model_spec, num_classes=30)
+        model_spec = load_model_spec_from_yaml(yaml_path)
+        model = create_model(model_spec, num_classes=30)
         model = model.cpu()  # Ensure on CPU
         print(f"✅ Created model from YAML: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")

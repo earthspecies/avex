@@ -58,11 +58,7 @@ def main() -> None:
     # Get model information
     print(f"\n📊 Model Information for {model_name}:")
     try:
-        model_info = describe_model(model_name)
-        print(f"  Model type: {model_info['_metadata']['model_type']}")
-        print(f"  Pretrained: {model_info['_metadata']['pretrained']}")
-        print(f"  Sample rate: {model_info['audio_config']['sample_rate']} Hz")
-        print(f"  Representation: {model_info['audio_config']['representation']}")
+        describe_model(model_name, verbose=True)
 
     except Exception as e:
         print(f"❌ Error getting model info: {e}")

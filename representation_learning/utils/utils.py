@@ -140,7 +140,8 @@ def _process_state_dict(state_dict: dict, keep_classifier: bool = False) -> dict
 
         # Conditionally skip classifier layers based on keep_classifier parameter
         if not keep_classifier and any(
-            term in processed_key.lower() for term in ["classifier", "head", "fc"]
+            term in processed_key.lower()
+            for term in ["classifier", "head", "classification", "classification_head"]
         ):
             continue
 

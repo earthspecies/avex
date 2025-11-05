@@ -7,24 +7,32 @@ automatically loading official models and allowing custom model registration.
 
 import logging
 from pathlib import Path
-from threading import Lock
-from typing import Dict, Optional, Type
+from typing import Dict, Optional, Type, Union
 
-from representation_learning.configs import ModelSpec, RunConfig
+from representation_learning.configs import ModelSpec
+
+try:
+    import yaml
+except Exception:  # pragma: no cover - yaml is a standard dep in this repo
+    yaml = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-# Global model registry
-MODEL_REGISTRY: Dict[str, ModelSpec] = {}
+# Private global model registry
+_MODEL_REGISTRY: Dict[str, ModelSpec] = {}
 
-# Global checkpoint registry for default checkpoint paths
-CHECKPOINT_REGISTRY: Dict[str, str] = {}
+# Private global checkpoint registry for default checkpoint paths
+_CHECKPOINT_REGISTRY: Dict[str, str] = {}
 
-# Global model class registry for dynamic model registration
-MODEL_CLASSES: Dict[str, Type] = {}
+# Private global model class registry for dynamic model registration
+_MODEL_CLASSES: Dict[str, Type] = {}
 
-# Thread safety lock for registry operations
-_registry_lock = Lock()
+# Path to official model configurations directory
+# Calculated relative to this file: go up from utils/ to models/ to
+# representation_learning/, then into configs/official_models/
+_OFFICIAL_MODELS_DIR = (
+    Path(__file__).resolve().parents[2] / "configs" / "official_models"
+)
 
 
 def _auto_register_from_yaml(config_dir: Path) -> None:
@@ -37,8 +45,8 @@ def _auto_register_from_yaml(config_dir: Path) -> None:
     for yml_path in config_dir.glob("*.yml"):
         name = yml_path.stem
         try:
-            run_cfg = RunConfig.from_sources(yaml_file=yml_path, cli_args=())
-            MODEL_REGISTRY[name] = run_cfg.model_spec
+            spec = load_model_spec_from_yaml(yml_path)
+            _MODEL_REGISTRY[name] = spec
             registered_count += 1
             logger.debug(f"Registered model: {name}")
         except Exception as e:
@@ -51,18 +59,50 @@ def _auto_register_from_yaml(config_dir: Path) -> None:
 
 def initialize_registry() -> None:
     """Initialize built-in registry from packaged configs."""
-    # Get the package root directory (go up from utils/ to models/ to
-    # representation_learning/)
-    root = Path(__file__).resolve().parents[2]
-    official_dir = root / "configs" / "official_models"
-
-    logger.info(f"Initializing model registry from: {official_dir}")
-    _auto_register_from_yaml(official_dir)
+    logger.info(f"Initializing model registry from: {_OFFICIAL_MODELS_DIR}")
+    _auto_register_from_yaml(_OFFICIAL_MODELS_DIR)
 
     logger.info(
-        f"Model registry initialized with {len(MODEL_REGISTRY)} models: "
-        f"{list(MODEL_REGISTRY.keys())}"
+        f"Model registry initialized with {len(_MODEL_REGISTRY)} models: "
+        f"{list(_MODEL_REGISTRY.keys())}"
     )
+
+
+def load_model_spec_from_yaml(yaml_path: Union[str, Path]) -> ModelSpec:
+    """Load a ModelSpec directly from YAML.
+
+    This function extracts the model specification from YAML files, supporting:
+    1) Files with top-level `model_spec: {...}` key (e.g., full RunConfig files)
+    2) Files with ModelSpec fields directly at the root level
+
+    Args:
+        yaml_path: Path to a YAML file containing a model definition
+
+    Returns:
+        A validated ModelSpec instance
+
+    Raises:
+        ValueError: If YAML cannot be parsed into a ModelSpec
+    """
+    if yaml is None:
+        raise ValueError("PyYAML not available to parse YAML files")
+
+    path = Path(yaml_path)
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError("YAML must define a mapping for model specification")
+
+    # Accept either top-level model_spec or direct ModelSpec fields at root
+    model_dict = data.get("model_spec", data)
+    if not isinstance(model_dict, dict):
+        raise ValueError("Invalid model specification structure in YAML")
+
+    try:
+        return ModelSpec(**model_dict)
+    except Exception as e:
+        raise ValueError(f"Failed to build ModelSpec from YAML: {e}") from e
 
 
 def register_model(name: str, model_spec: ModelSpec) -> None:
@@ -78,15 +118,13 @@ def register_model(name: str, model_spec: ModelSpec) -> None:
     # Initialize first (without lock to avoid deadlock)
     ensure_initialized()
 
-    with _registry_lock:
-        if name in MODEL_REGISTRY:
-            raise ValueError(
-                f"Model '{name}' is already registered. Use update_model() to "
-                f"overwrite."
-            )
+    if name in _MODEL_REGISTRY:
+        raise ValueError(
+            f"Model '{name}' is already registered. Use update_model() to overwrite."
+        )
 
-        MODEL_REGISTRY[name] = model_spec
-        logger.info(f"Registered custom model: {name}")
+    _MODEL_REGISTRY[name] = model_spec
+    logger.info(f"Registered custom model: {name}")
 
 
 def update_model(name: str, model_spec: ModelSpec) -> None:
@@ -99,9 +137,8 @@ def update_model(name: str, model_spec: ModelSpec) -> None:
     # Initialize first (without lock to avoid deadlock)
     ensure_initialized()
 
-    with _registry_lock:
-        MODEL_REGISTRY[name] = model_spec
-        logger.info(f"Updated model: {name}")
+    _MODEL_REGISTRY[name] = model_spec
+    logger.info(f"Updated model: {name}")
 
 
 def unregister_model(name: str) -> None:
@@ -116,12 +153,11 @@ def unregister_model(name: str) -> None:
     # Initialize first (without lock to avoid deadlock)
     ensure_initialized()
 
-    with _registry_lock:
-        if name not in MODEL_REGISTRY:
-            raise KeyError(f"Model '{name}' is not registered")
+    if name not in _MODEL_REGISTRY:
+        raise KeyError(f"Model '{name}' is not registered")
 
-        del MODEL_REGISTRY[name]
-        logger.info(f"Unregistered model: {name}")
+    del _MODEL_REGISTRY[name]
+    logger.info(f"Unregistered model: {name}")
 
 
 def get_model(name: str) -> Optional[ModelSpec]:
@@ -134,7 +170,7 @@ def get_model(name: str) -> Optional[ModelSpec]:
         ModelSpec if found, None otherwise
     """
     ensure_initialized()
-    return MODEL_REGISTRY.get(name)
+    return _MODEL_REGISTRY.get(name)
 
 
 def list_models() -> Dict[str, ModelSpec]:
@@ -144,7 +180,7 @@ def list_models() -> Dict[str, ModelSpec]:
         Copy of the model registry
     """
     ensure_initialized()
-    return MODEL_REGISTRY.copy()
+    return _MODEL_REGISTRY.copy()
 
 
 def list_model_names() -> list[str]:
@@ -154,7 +190,7 @@ def list_model_names() -> list[str]:
         List of model names
     """
     ensure_initialized()
-    return list(MODEL_REGISTRY.keys())
+    return list(_MODEL_REGISTRY.keys())
 
 
 def is_registered(name: str) -> bool:
@@ -167,7 +203,7 @@ def is_registered(name: str) -> bool:
         True if registered, False otherwise
     """
     ensure_initialized()
-    return name in MODEL_REGISTRY
+    return name in _MODEL_REGISTRY
 
 
 def register_checkpoint(name: str, checkpoint_path: str) -> None:
@@ -177,9 +213,8 @@ def register_checkpoint(name: str, checkpoint_path: str) -> None:
         name: Name of the model
         checkpoint_path: Default checkpoint path
     """
-    with _registry_lock:
-        CHECKPOINT_REGISTRY[name] = checkpoint_path
-        logger.info(f"Registered default checkpoint for '{name}': {checkpoint_path}")
+    _CHECKPOINT_REGISTRY[name] = checkpoint_path
+    logger.info(f"Registered default checkpoint for '{name}': {checkpoint_path}")
 
 
 def get_checkpoint(name: str) -> Optional[str]:
@@ -191,7 +226,7 @@ def get_checkpoint(name: str) -> Optional[str]:
     Returns:
         Checkpoint path if found, None otherwise
     """
-    return CHECKPOINT_REGISTRY.get(name)
+    return _CHECKPOINT_REGISTRY.get(name)
 
 
 def unregister_checkpoint(name: str) -> None:
@@ -203,19 +238,19 @@ def unregister_checkpoint(name: str) -> None:
     Raises:
         KeyError: If checkpoint is not registered
     """
-    with _registry_lock:
-        if name not in CHECKPOINT_REGISTRY:
-            raise KeyError(f"No default checkpoint registered for model '{name}'")
+    if name not in _CHECKPOINT_REGISTRY:
+        raise KeyError(f"No default checkpoint registered for model '{name}'")
 
-        del CHECKPOINT_REGISTRY[name]
-        logger.info(f"Unregistered default checkpoint for: {name}")
+    del _CHECKPOINT_REGISTRY[name]
+    logger.info(f"Unregistered default checkpoint for: {name}")
 
 
-def describe_model(name: str) -> dict:
+def describe_model(name: str, verbose: bool = False) -> dict:
     """Return a detailed summary of the model configuration.
 
     Args:
         name: Name of the model to describe
+        verbose: If True, pretty-print the model information to stdout
 
     Returns:
         Dictionary containing the model's configuration details
@@ -243,6 +278,15 @@ def describe_model(name: str) -> dict:
         "is_pretraining_mode": spec.pretraining_mode,
     }
 
+    if verbose:
+        try:
+            import json
+
+            print(json.dumps(model_info, indent=2, sort_keys=True, default=str))
+        except Exception:
+            # Fallback to repr if something is not JSON-serializable
+            print(model_info)
+
     return model_info
 
 
@@ -262,11 +306,10 @@ def register_model_class(cls: Type) -> Type:
     """
     name = getattr(cls, "name", cls.__name__.lower())
 
-    with _registry_lock:
-        if name in MODEL_CLASSES:
-            logger.warning(f"Model class '{name}' is already registered, overwriting.")
-        MODEL_CLASSES[name] = cls
-        logger.info(f"Registered model class: {name}")
+    if name in _MODEL_CLASSES:
+        logger.warning(f"Model class '{name}' is already registered, overwriting.")
+    _MODEL_CLASSES[name] = cls
+    logger.info(f"Registered model class: {name}")
 
     return cls
 
@@ -284,10 +327,9 @@ def get_model_class(name: str) -> Type:
     Raises:
         KeyError: If the model class is not registered
     """
-    with _registry_lock:
-        if name not in MODEL_CLASSES:
-            raise KeyError(f"Model class '{name}' is not registered.")
-        return MODEL_CLASSES[name]
+    if name not in _MODEL_CLASSES:
+        raise KeyError(f"Model class '{name}' is not registered.")
+    return _MODEL_CLASSES[name]
 
 
 def list_model_classes() -> list[str]:
@@ -296,8 +338,7 @@ def list_model_classes() -> list[str]:
     Returns:
         List of registered model class names
     """
-    with _registry_lock:
-        return list(MODEL_CLASSES.keys())
+    return list(_MODEL_CLASSES.keys())
 
 
 def is_model_class_registered(name: str) -> bool:
@@ -309,8 +350,7 @@ def is_model_class_registered(name: str) -> bool:
     Returns:
         True if registered, False otherwise
     """
-    with _registry_lock:
-        return name in MODEL_CLASSES
+    return name in _MODEL_CLASSES
 
 
 def unregister_model_class(name: str) -> None:
@@ -322,16 +362,14 @@ def unregister_model_class(name: str) -> None:
     Raises:
         KeyError: If model class is not registered
     """
-    with _registry_lock:
-        if name not in MODEL_CLASSES:
-            raise KeyError(f"Model class '{name}' is not registered")
+    if name not in _MODEL_CLASSES:
+        raise KeyError(f"Model class '{name}' is not registered")
 
-        del MODEL_CLASSES[name]
-        logger.info(f"Unregistered model class: {name}")
+    del _MODEL_CLASSES[name]
+    logger.info(f"Unregistered model class: {name}")
 
 
 def ensure_initialized() -> None:
     """Ensure the registry is initialized before use."""
-    with _registry_lock:
-        if not MODEL_REGISTRY:
-            initialize_registry()
+    if not _MODEL_REGISTRY:
+        initialize_registry()

@@ -365,10 +365,7 @@ def main() -> None:
         print(f"✅ Created model from complex config: {type(model).__name__}")
 
         # Get detailed information
-        model_info = describe_model("complex_efficientnet")
-        print(f"   Sample rate: {model_info['audio_config']['sample_rate']}")
-        print(f"   Mel bins: {model_info['audio_config']['n_mels']}")
-        print(f"   Variant: {model_info['efficientnet_variant']}")
+        describe_model("complex_efficientnet", verbose=True)
 
     except Exception as e:
         print(f"❌ Error with complex configuration: {e}")
@@ -450,11 +447,8 @@ def main() -> None:
         models = list_models()
         for name, _spec in list(models.items())[:2]:  # Test first 2 models
             try:
-                info = describe_model(name)
                 print(f"   {name}:")
-                print(f"     Type: {info['_metadata']['model_type']}")
-                print(f"     Has audio config: {info['_metadata']['has_audio_config']}")
-                print(f"     Pretrained: {info['_metadata']['pretrained']}")
+                describe_model(name, verbose=True)
             except Exception as e:
                 print(f"   Error describing {name}: {e}")
 

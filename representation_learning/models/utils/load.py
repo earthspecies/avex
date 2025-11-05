@@ -13,16 +13,20 @@ from typing import Optional, Union
 
 import torch
 
-from representation_learning.configs import ModelSpec, RunConfig
+from representation_learning.configs import ModelSpec
 from representation_learning.utils.utils import _process_state_dict
 
 from .factory import build_model_from_spec
 from .registry import (
-    MODEL_REGISTRY,
     ensure_initialized,
     get_checkpoint,
+    get_model,
     get_model_class,
     is_model_class_registered,
+    is_registered,
+    list_model_names,
+    list_models,
+    load_model_spec_from_yaml,
     register_model,
 )
 
@@ -102,8 +106,8 @@ def load_model(
         ensure_initialized()
 
         # Case 1: Registered model
-        if model in MODEL_REGISTRY:
-            model_spec = MODEL_REGISTRY[model]
+        if is_registered(model):
+            model_spec = get_model(model)
             logger.info(f"Loading registered model: {model}")
             return _load_from_modelspec(
                 model_spec, num_classes, device, checkpoint_path, **kwargs
@@ -112,16 +116,16 @@ def load_model(
         # Case 2: YAML path
         if model.endswith((".yml", ".yaml")) or Path(model).exists():
             logger.info(f"Loading model from config file: {model}")
-            run_cfg = RunConfig.from_sources(yaml_file=model, cli_args=())
-            # Auto-register the model for future use
+            spec = load_model_spec_from_yaml(model)
+            # Auto-register the model for future use (by file stem)
             model_name = Path(model).stem
-            register_model(model_name, run_cfg.model_spec)
+            register_model(model_name, spec)
             return _load_from_modelspec(
-                run_cfg.model_spec, num_classes, device, checkpoint_path, **kwargs
+                spec, num_classes, device, checkpoint_path, **kwargs
             )
 
         # Case 3: Unknown model identifier
-        available_models = list(MODEL_REGISTRY.keys())
+        available_models = list_model_names()
         raise ValueError(
             f"Unknown model identifier: '{model}'. "
             f"Available models: {available_models}. "
@@ -170,7 +174,7 @@ def _load_from_modelspec(
     if not checkpoint_path and num_classes is None:
         # Try to get default checkpoint from registry based on model registry key
         # We need to find the registry key for this model_spec
-        for reg_key, reg_spec in MODEL_REGISTRY.items():
+        for reg_key, reg_spec in list_models().items():
             if reg_spec == model_spec:
                 default_checkpoint = get_checkpoint(reg_key)
                 if default_checkpoint:
@@ -265,24 +269,22 @@ def create_model(
             return model_class(device=device, num_classes=num_classes, **kwargs)
 
         # Case 2: Registered model spec
-        if model in MODEL_REGISTRY:
-            model_spec = MODEL_REGISTRY[model]
+        if is_registered(model):
+            model_spec = get_model(model)
             logger.info(f"Creating registered model: {model}")
             return build_model_from_spec(model_spec, device, num_classes, **kwargs)
 
         # Case 3: YAML path
         if model.endswith((".yml", ".yaml")) or Path(model).exists():
             logger.info(f"Creating model from config file: {model}")
-            run_cfg = RunConfig.from_sources(yaml_file=model, cli_args=())
+            spec = load_model_spec_from_yaml(model)
             # Auto-register the model for future use
             model_name = Path(model).stem
-            register_model(model_name, run_cfg.model_spec)
-            return build_model_from_spec(
-                run_cfg.model_spec, device, num_classes, **kwargs
-            )
+            register_model(model_name, spec)
+            return build_model_from_spec(spec, device, num_classes, **kwargs)
 
         # Case 4: Unknown model identifier
-        available_models = list(MODEL_REGISTRY.keys())
+        available_models = list_model_names()
         raise ValueError(
             f"Unknown model identifier: '{model}'. "
             f"Available models: {available_models}. "
@@ -334,33 +336,37 @@ def _extract_num_classes_from_checkpoint(
             processed_state_dict = _process_state_dict(checkpoint, keep_classifier=True)
 
             # Look for classifier/head layer weights in processed state dict
-            # First, prioritize classifier-specific keys
+            # Prioritize classifier-specific keys
             # (avoid matching backbone layers)
             classifier_keys = [
                 key
                 for key in processed_state_dict.keys()
-                if any(term in key.lower() for term in ["classifier", "head"])
+                if any(
+                    term in key.lower()
+                    for term in [
+                        "classifier",
+                        "head",
+                        "classification",
+                        "classification_head",
+                    ]
+                )
                 and not any(
                     exclude in key.lower()
-                    for exclude in ["backbone", "encoder", "fc1", "fc2", "grep"]
+                    for exclude in [
+                        "backbone",
+                        "encoder",
+                        "fc1",
+                        "fc2",
+                        "fc3",
+                        "projection",
+                        "dense",
+                    ]
                 )
             ]
 
-            # If no classifier-specific keys found, fall back to looking for
-            # top-level linear layers
-            if not classifier_keys:
-                classifier_keys = [
-                    key
-                    for key in processed_state_dict.keys()
-                    if any(
-                        term in key.lower()
-                        for term in ["classifier", "head", "fc", "linear"]
-                    )
-                    and not any(
-                        exclude in key.lower()
-                        for exclude in ["backbone", "encoder", "fc1", "fc2", "grep"]
-                    )
-                ]
+            if len(classifier_keys) == 0:
+                logger.warning("Could not find classifier/head weights in checkpoint")
+                return None
 
             for key in classifier_keys:
                 if "weight" in key and len(processed_state_dict[key].shape) == 2:

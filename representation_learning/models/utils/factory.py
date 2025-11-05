@@ -61,7 +61,7 @@ def build_model(
     Build a model instance from a registered model class and ModelSpec.
 
     Args:
-        model_name: Name of the model in MODEL_REGISTRY (ModelSpec)
+        model_name: Name of the model in the registry (ModelSpec)
         device: Device for model
         num_classes: Number of output classes (optional)
         **kwargs: Additional args passed to model __init__
@@ -76,9 +76,9 @@ def build_model(
     # Get the ModelSpec for this model
     model_spec = get_model_spec(model_name)
     if model_spec is None:
-        from .registry import list_model_names
+        from .registry import list_models
 
-        available_models = list_model_names()
+        available_models = list(list_models().keys())
         raise ValueError(
             f"No ModelSpec found for '{model_name}'. "
             f"Available models: {available_models}"
