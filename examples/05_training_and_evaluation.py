@@ -17,7 +17,6 @@ from representation_learning import (
     create_model,
     list_models,
     load_model,
-    register_checkpoint,
     register_model_class,
 )
 from representation_learning.models.base_model import ModelBase
@@ -329,7 +328,13 @@ def main() -> None:
         print(f"   Trained model - Loss: {train_loss:.4f}, Acc: {train_acc:.2f}%")
 
         # Save checkpoint
-        checkpoint_path = "example_checkpoint.pt"
+        from pathlib import Path
+
+        # Ensure checkpoints directory exists
+        checkpoints_dir = Path(__file__).parent.parent / "checkpoints"
+        checkpoints_dir.mkdir(exist_ok=True)
+
+        checkpoint_path = checkpoints_dir / "example_checkpoint.pt"
         checkpoint = {
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
@@ -341,12 +346,11 @@ def main() -> None:
         torch.save(checkpoint, checkpoint_path)
         print(f"✅ Saved checkpoint to: {checkpoint_path}")
 
-        # Register checkpoint with the framework
-        register_checkpoint("training_example", checkpoint_path)
-        print("✅ Registered checkpoint with framework")
-
-        # Load model from checkpoint
-        loaded_model = load_model("training_example", device=device)
+        # Load model from checkpoint (pass checkpoint_path directly)
+        loaded_model = load_model(
+            "training_example", checkpoint_path=str(checkpoint_path), device=device
+        )
+        print("✅ Loaded model from checkpoint")
         print(f"✅ Loaded model from checkpoint: {type(loaded_model).__name__}")
 
         # Verify the loaded model works

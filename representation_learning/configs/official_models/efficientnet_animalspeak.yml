@@ -1,5 +1,8 @@
 ---
 # EfficientNet model fine-tuned on AnimalSpeak dataset
+# Default checkpoint path for this model (can be overridden when loading)
+checkpoint_path: gs://representation-learning/models/efficientnet_animalspeak.pt
+
 model_spec:
   name: efficientnet
   pretrained: false  # Set to false when loading from checkpoint

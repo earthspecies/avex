@@ -21,9 +21,6 @@ logger = logging.getLogger(__name__)
 # Private global model registry
 _MODEL_REGISTRY: Dict[str, ModelSpec] = {}
 
-# Private global checkpoint registry for default checkpoint paths
-_CHECKPOINT_REGISTRY: Dict[str, str] = {}
-
 # Private global model class registry for dynamic model registration
 _MODEL_CLASSES: Dict[str, Type] = {}
 
@@ -58,7 +55,11 @@ def _auto_register_from_yaml(config_dir: Path) -> None:
 
 
 def initialize_registry() -> None:
-    """Initialize built-in registry from packaged configs."""
+    """Initialize built-in registry from packaged configs.
+
+    Checkpoint paths are automatically registered from ModelSpec.checkpoint_path
+    in the YAML files.
+    """
     logger.info(f"Initializing model registry from: {_OFFICIAL_MODELS_DIR}")
     _auto_register_from_yaml(_OFFICIAL_MODELS_DIR)
 
@@ -206,43 +207,43 @@ def is_registered(name: str) -> bool:
     return name in _MODEL_REGISTRY
 
 
-def register_checkpoint(name: str, checkpoint_path: str) -> None:
-    """Register a default checkpoint path for a model.
+def get_checkpoint_path(name: str) -> Optional[str]:
+    """Get default checkpoint path for a model from its YAML configuration.
+
+    Reads checkpoint_path directly from the YAML file associated with the model.
+    For official models, this is configs/official_models/{name}.yml
 
     Args:
-        name: Name of the model
-        checkpoint_path: Default checkpoint path
-    """
-    _CHECKPOINT_REGISTRY[name] = checkpoint_path
-    logger.info(f"Registered default checkpoint for '{name}': {checkpoint_path}")
-
-
-def get_checkpoint(name: str) -> Optional[str]:
-    """Get default checkpoint path for a model.
-
-    Args:
-        name: Name of the model
+        name: Name of the model (must be registered in MODEL_REGISTRY)
 
     Returns:
-        Checkpoint path if found, None otherwise
-    """
-    return _CHECKPOINT_REGISTRY.get(name)
-
-
-def unregister_checkpoint(name: str) -> None:
-    """Remove default checkpoint path for a model.
-
-    Args:
-        name: Name of the model
+        Checkpoint path if found in YAML, None otherwise
 
     Raises:
-        KeyError: If checkpoint is not registered
+        KeyError: If model is not registered
     """
-    if name not in _CHECKPOINT_REGISTRY:
-        raise KeyError(f"No default checkpoint registered for model '{name}'")
+    ensure_initialized()
 
-    del _CHECKPOINT_REGISTRY[name]
-    logger.info(f"Unregistered default checkpoint for: {name}")
+    if name not in _MODEL_REGISTRY:
+        raise KeyError(f"Model '{name}' is not registered")
+
+    # For official models, read checkpoint_path from YAML file
+    official_model_path = _OFFICIAL_MODELS_DIR / f"{name}.yml"
+    if official_model_path.exists():
+        try:
+            with official_model_path.open("r", encoding="utf-8") as f:
+                yaml_data = yaml.safe_load(f)
+            if isinstance(yaml_data, dict) and "checkpoint_path" in yaml_data:
+                checkpoint_path = yaml_data["checkpoint_path"]
+                if checkpoint_path:
+                    return checkpoint_path
+        except Exception as e:
+            logger.debug(
+                f"Failed to read checkpoint_path from {official_model_path}: {e}"
+            )
+
+    # Model is registered but no checkpoint_path in YAML
+    return None
 
 
 def describe_model(name: str, verbose: bool = False) -> dict:

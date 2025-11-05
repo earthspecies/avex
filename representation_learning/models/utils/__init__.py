@@ -8,7 +8,7 @@ from .factory import build_model, build_model_from_spec
 from .load import create_model, load_model
 from .registry import (
     describe_model,
-    get_checkpoint,
+    get_checkpoint_path,
     get_model,
     get_model_class,
     is_model_class_registered,
@@ -16,10 +16,8 @@ from .registry import (
     list_model_classes,
     list_model_names,
     list_models,
-    register_checkpoint,
     register_model,
     register_model_class,
-    unregister_checkpoint,
     unregister_model,
     unregister_model_class,
     update_model,
@@ -42,9 +40,7 @@ __all__ = [
     "is_registered",
     "describe_model",
     # Checkpoint management
-    "register_checkpoint",
-    "get_checkpoint",
-    "unregister_checkpoint",
+    "get_checkpoint_path",
     # Model class management
     "register_model_class",
     "get_model_class",

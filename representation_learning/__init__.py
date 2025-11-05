@@ -11,7 +11,7 @@ from .api import (
     build_model_from_spec,
     create_model,
     describe_model,
-    get_checkpoint,
+    get_checkpoint_path,
     get_model,
     get_model_class,
     is_model_class_registered,
@@ -20,10 +20,8 @@ from .api import (
     list_model_names,
     list_models,
     load_model,
-    register_checkpoint,
     register_model,
     register_model_class,
-    unregister_checkpoint,
     unregister_model,
     unregister_model_class,
     update_model,
@@ -54,7 +52,5 @@ __all__ = [
     "build_model",
     "build_model_from_spec",
     # Checkpoint management
-    "register_checkpoint",
-    "get_checkpoint",
-    "unregister_checkpoint",
+    "get_checkpoint_path",
 ]

@@ -12,7 +12,7 @@ from representation_learning.models.utils.factory import (
 from representation_learning.models.utils.load import create_model, load_model
 from representation_learning.models.utils.registry import (
     describe_model,
-    get_checkpoint,
+    get_checkpoint_path,
     get_model,
     get_model_class,
     is_model_class_registered,
@@ -20,10 +20,8 @@ from representation_learning.models.utils.registry import (
     list_model_classes,
     list_model_names,
     list_models,
-    register_checkpoint,
     register_model,
     register_model_class,
-    unregister_checkpoint,
     unregister_model,
     unregister_model_class,
     update_model,
@@ -52,7 +50,5 @@ __all__ = [
     "build_model",
     "build_model_from_spec",
     # Checkpoint management
-    "register_checkpoint",
-    "get_checkpoint",
-    "unregister_checkpoint",
+    "get_checkpoint_path",
 ]

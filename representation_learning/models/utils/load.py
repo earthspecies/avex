@@ -19,7 +19,7 @@ from representation_learning.utils.utils import _process_state_dict
 from .factory import build_model_from_spec
 from .registry import (
     ensure_initialized,
-    get_checkpoint,
+    get_checkpoint_path,
     get_model,
     get_model_class,
     is_model_class_registered,
@@ -110,7 +110,12 @@ def load_model(
             model_spec = get_model(model)
             logger.info(f"Loading registered model: {model}")
             return _load_from_modelspec(
-                model_spec, num_classes, device, checkpoint_path, **kwargs
+                model_spec,
+                num_classes,
+                device,
+                checkpoint_path,
+                registry_key=model,
+                **kwargs,
             )
 
         # Case 2: YAML path
@@ -121,7 +126,12 @@ def load_model(
             model_name = Path(model).stem
             register_model(model_name, spec)
             return _load_from_modelspec(
-                spec, num_classes, device, checkpoint_path, **kwargs
+                spec,
+                num_classes,
+                device,
+                checkpoint_path,
+                registry_key=model_name,
+                **kwargs,
             )
 
         # Case 3: Unknown model identifier
@@ -153,6 +163,7 @@ def _load_from_modelspec(
     num_classes: Optional[int],
     device: str,
     checkpoint_path: Optional[str],
+    registry_key: Optional[str] = None,
     **kwargs: object,
 ) -> object:
     """Load from ModelSpec object using factory + checkpoint loading.
@@ -169,21 +180,38 @@ def _load_from_modelspec(
     # Track if num_classes was originally None (means we want to keep classifier)
     num_classes_was_none = num_classes is None
 
-    # Use default checkpoint path from registry if not provided and no explicit
-    # num_classes
+    # Determine checkpoint path with priority:
+    # 1. User-provided checkpoint_path parameter (highest priority - already handled)
+    # 2. Registry checkpoint path from YAML (second priority)
     if not checkpoint_path and num_classes is None:
-        # Try to get default checkpoint from registry based on model registry key
-        # We need to find the registry key for this model_spec
-        for reg_key, reg_spec in list_models().items():
-            if reg_spec == model_spec:
-                default_checkpoint = get_checkpoint(reg_key)
-                if default_checkpoint:
-                    checkpoint_path = default_checkpoint
-                    logger.info(
-                        f"Using default checkpoint path from registry: "
-                        f"{checkpoint_path}"
-                    )
-                break
+        # Use registry key directly if provided (from string identifier or YAML path)
+        # Otherwise, find registry key by matching ModelSpec
+        if registry_key is not None:
+            reg_key = registry_key
+        else:
+            # Optimized lookup: Filter by model_spec.name first, then compare
+            # This avoids comparing against all models when we can filter by name
+            all_models = list_models()
+            candidates = {
+                key: spec
+                for key, spec in all_models.items()
+                if spec.name == model_spec.name
+            }
+
+            # Compare only the filtered candidates (much faster than comparing all)
+            reg_key = None
+            for key, spec in candidates.items():
+                if spec == model_spec:
+                    reg_key = key
+                    break
+
+        if reg_key is not None:
+            default_checkpoint = get_checkpoint_path(reg_key)
+            if default_checkpoint:
+                checkpoint_path = default_checkpoint
+                logger.info(
+                    f"Using default checkpoint path from YAML config: {checkpoint_path}"
+                )
 
     # Handle checkpoint loading
     if checkpoint_path:
@@ -198,7 +226,33 @@ def _load_from_modelspec(
             )
         logger.info(f"Extracted num_classes={num_classes} from checkpoint")
     elif num_classes is None:
-        raise ValueError("num_classes must be provided when loading without checkpoint")
+        # Try to build model without num_classes for embedding extraction
+        # Check if model supports return_features_only to optimize the build
+        import inspect
+
+        from .factory import get_model_class
+
+        model_type = model_spec.name
+        # Try to check if model supports return_features_only
+        # If model class not registered, get_model_class will raise KeyError
+        # which will propagate - build_model_from_spec will handle it
+        model_class = get_model_class(model_type)
+        sig = inspect.signature(model_class.__init__)
+        supports_return_features_only = "return_features_only" in sig.parameters
+
+        if supports_return_features_only:
+            # Model explicitly supports embedding extraction without classifier
+            # Set return_features_only=True and use dummy num_classes
+            kwargs["return_features_only"] = True
+            # Dummy value (not used when return_features_only=True)
+            # This is because some models require num_classes in their signature
+            # but it won't be used when return_features_only=True
+            # It also doesn't affect models that don't have classifiers (EAT)
+            num_classes = 1
+            logger.info(
+                f"Building {model_type} model without classifier "
+                f"(return_features_only=True) for embedding extraction"
+            )
 
     # Create model using factory
     backbone = build_model_from_spec(model_spec, device, num_classes, **kwargs)

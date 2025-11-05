@@ -2,25 +2,22 @@
 Example 2: Checkpoint Loading and Management
 
 This example demonstrates:
+- Loading models with default checkpoints (from YAML)
 - Loading models with custom checkpoints
-- Registering default checkpoints
 - Extracting num_classes from checkpoints
 - Working with cloud storage paths
 
-IMPORTANT: Model specifications (architecture, parameters) are defined in YAML files
-in configs/official_models/, while checkpoint paths (pre-trained weights) are registered
-separately using register_checkpoint(). This separation allows for flexible model
-loading with different checkpoint sources.
+IMPORTANT: Model specifications (architecture, parameters) and default checkpoint paths
+are defined in YAML files in configs/official_models/. Checkpoint paths can be
+overridden by passing checkpoint_path parameter to load_model().
 """
 
 import torch
 
 from representation_learning import (
-    get_checkpoint,
+    get_checkpoint_path,
     list_models,
     load_model,
-    register_checkpoint,
-    unregister_checkpoint,
 )
 
 
@@ -28,47 +25,25 @@ def main() -> None:
     print("🚀 Example 2: Checkpoint Loading and Management")
     print("=" * 50)
 
-    # Example 1: Register default checkpoints
-    print("\n📋 Registering default checkpoints:")
+    # Example 1: View default checkpoints from YAML
+    print("\n📋 Default checkpoints from YAML configurations:")
     print(
-        "   Note: Model specs define architecture, checkpoints define "
-        "pre-trained weights"
-    )
-    print(
-        "   These are registered separately - model specs come from YAML, "
-        "checkpoints from registry"
+        "   Note: Checkpoint paths are defined in YAML files in "
+        "configs/official_models/"
     )
 
     try:
-        # Register checkpoints for different models
-        # These checkpoint paths are separate from the model specifications in
-        # YAML files
-        # Register real checkpoint paths from Google Cloud Storage
-        register_checkpoint(
-            "beats_naturelm", "gs://representation-learning/models/beats_naturelm.pt"
-        )
-        register_checkpoint(
-            "efficientnet_animalspeak",
-            "gs://representation-learning/models/efficientnet_animalspeak.pt",
-        )
-        register_checkpoint(
-            "sl_eat_animalspeak_ssl_all",
-            "gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt",
-        )
-
-        print("✅ Registered default checkpoints")
-
-        # List registered checkpoints
+        # List registered models and their default checkpoint paths
         models = list_models()
         for model_name in models.keys():
-            checkpoint = get_checkpoint(model_name)
+            checkpoint = get_checkpoint_path(model_name)
             if checkpoint:
                 print(f"  - {model_name}: {checkpoint}")
             else:
                 print(f"  - {model_name}: No default checkpoint (model spec only)")
 
     except Exception as e:
-        print(f"❌ Error registering checkpoints: {e}")
+        print(f"❌ Error listing checkpoints: {e}")
 
     # Example 2: Load model with default checkpoint
     print("\n🔧 Loading model with default checkpoint:")
@@ -97,7 +72,13 @@ def main() -> None:
     print("\n🔧 Loading model with custom checkpoint:")
     try:
         # Create a dummy checkpoint for demonstration
-        dummy_checkpoint_path = "dummy_checkpoint.pt"
+        from pathlib import Path
+
+        # Ensure checkpoints directory exists
+        checkpoints_dir = Path(__file__).parent.parent / "checkpoints"
+        checkpoints_dir.mkdir(exist_ok=True)
+
+        dummy_checkpoint_path = checkpoints_dir / "dummy_checkpoint.pt"
         dummy_state_dict = {
             "classifier.weight": torch.randn(15, 768),  # 15 classes
             "classifier.bias": torch.randn(15),
@@ -106,7 +87,7 @@ def main() -> None:
 
         # Load with custom checkpoint
         model = load_model(
-            "beats_naturelm", checkpoint_path=dummy_checkpoint_path, device="cpu"
+            "beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device="cpu"
         )
         print(f"✅ Loaded model with custom checkpoint: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -118,10 +99,10 @@ def main() -> None:
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
         print(f"   Extracted num_classes: {output.shape[-1]}")
 
-        # Clean up dummy checkpoint
-        import os
-
-        os.remove(dummy_checkpoint_path)
+        # Note: Checkpoint saved to checkpoints/ directory for future use
+        print(f"   Checkpoint saved to: {dummy_checkpoint_path}")
+        # Optionally clean up:
+        # dummy_checkpoint_path.unlink()
 
     except Exception as e:
         print(f"❌ Error loading with custom checkpoint: {e}")
@@ -163,22 +144,16 @@ def main() -> None:
         print("   (This is expected if the cloud checkpoint doesn't exist)")
 
     # Example 6: Checkpoint management
-    print("\n📊 Checkpoint Management:")
+    print("\n📊 Checkpoint Information:")
     try:
-        # Get checkpoint info
-        checkpoint = get_checkpoint("beats_naturelm")
-        print(f"Default checkpoint for beats_naturelm: {checkpoint}")
-
-        # Unregister a checkpoint
-        unregister_checkpoint("efficientnet_animalspeak")
-        print("✅ Unregistered efficientnet_animalspeak checkpoint")
-
-        # Check if it's gone
-        checkpoint = get_checkpoint("efficientnet_animalspeak")
-        print(f"Checkpoint after unregistering: {checkpoint}")
+        # Get checkpoint info from YAML
+        checkpoint = get_checkpoint_path("efficientnet_animalspeak")
+        print(f"Default checkpoint for efficientnet_animalspeak: {checkpoint}")
+        print("   Note: Checkpoint paths are read from YAML files")
+        print("   To override, pass checkpoint_path parameter to load_model()")
 
     except Exception as e:
-        print(f"❌ Error in checkpoint management: {e}")
+        print(f"❌ Error getting checkpoint info: {e}")
 
 
 if __name__ == "__main__":

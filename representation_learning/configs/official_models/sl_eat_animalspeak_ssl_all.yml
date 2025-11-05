@@ -1,5 +1,8 @@
 ---
 # EAT model fine-tuned on AnimalSpeak dataset with SSL
+# Default checkpoint path for this model (can be overridden when loading)
+checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+
 model_spec:
   name: eat_hf
   pretrained: false  # Set to false when loading from checkpoint
