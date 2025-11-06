@@ -1,21 +1,3 @@
-# Include package data
-include README.md
-include LICENSE
-include pyproject.toml
-include requirements.txt
-include requirements-dev.txt
-
-# Include official model configs
-recursive-include representation_learning/configs/official_models *.yml
-
-# Include all Python files
-recursive-include representation_learning *.py
-
-# Include test files
-recursive-include tests *.py
-
-# Include documentation
-recursive-include docs *.md
 
 # Exclude unnecessary files
 global-exclude *.pyc

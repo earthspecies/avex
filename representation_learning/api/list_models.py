@@ -7,8 +7,9 @@ Usage:
     python -m representation_learning.api.list_models --detailed
 """
 
-import argparse
 import sys
+
+import click
 
 from representation_learning.models.utils.registry import list_models
 
@@ -52,21 +53,19 @@ def print_models(detailed: bool = False) -> None:
             print(f"  Pretrained: {pretrained_str} | Device: {model_spec.device}")
 
 
-def main() -> None:
-    """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="List available models in the representation learning registry"
-    )
-    parser.add_argument(
-        "--detailed", "-d", action="store_true", help="Show detailed model information"
-    )
-
-    args = parser.parse_args()
-
+@click.command()
+@click.option(
+    "--detailed",
+    "-d",
+    is_flag=True,
+    help="Show detailed model information",
+)
+def main(detailed: bool) -> None:
+    """List available models in the representation learning registry."""
     try:
-        print_models(detailed=args.detailed)
+        print_models(detailed=detailed)
     except Exception as e:
-        print(f"Error listing models: {e}", file=sys.stderr)
+        click.echo(f"Error listing models: {e}", err=True)
         sys.exit(1)
 
 

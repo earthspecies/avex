@@ -6,10 +6,12 @@ audio representation learning models with support for both supervised and
 self-supervised learning paradigms.
 """
 
-from .api import (
+from .models.utils.factory import (
     build_model,
     build_model_from_spec,
-    create_model,
+)
+from .models.utils.load import create_model, load_model
+from .models.utils.registry import (
     describe_model,
     get_checkpoint_path,
     get_model,
@@ -19,7 +21,6 @@ from .api import (
     list_model_classes,
     list_model_names,
     list_models,
-    load_model,
     register_model,
     register_model_class,
     unregister_model,
@@ -27,7 +28,13 @@ from .api import (
     update_model,
 )
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version
+
+    __version__ = version("representation-learning")
+except Exception:
+    # Fallback for development or if package not installed
+    __version__ = "0.1.0"
 
 __all__ = [
     # Model loading

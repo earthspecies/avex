@@ -5,52 +5,111 @@ This guide explains how to install the `representation-learning` package.
 ## Prerequisites
 
 - Python 3.11 or 3.12
-- pip or uv package manager
+- `uv` package manager (recommended) or `pip`
 
-## Installation Methods
+## Installation
 
-### Method 1: Using uv (Recommended)
+`representation-learning` is currently a private package, hosted on ESP's internal Python package repository. Because it isn't available on the public PyPI index, you'll need to configure your project to use ESP's private package index in order to install and update it.
 
-The easiest and most reliable way to install the package:
+### 1. Install keyring (one-time setup)
+
+To authenticate and interact with Python repositories hosted on Artifact Registry, you'll need to install the keyring library system-wide (not inside a virtual environment), along with the Google Artifact Registry backend. This step is required only once per system, typically when setting up your VM or laptop (not needed on Slurm compute nodes):
 
 ```bash
-# Clone the repository
-git clone https://github.com/earthspecies/representation-learning.git
-cd representation-learning
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+```
 
-# Install with uv (handles private index automatically)
+**Slurm**
+
+This step is NOT required for Slurm jobs. All nodes on the cluster already have this package installed.
+
+> **Info**
+>
+> You only need to do this step once on your system.
+
+> **Tip**
+>
+> `uv tool` allows you to install Python packages that provide command-line interfaces for system-wide use. The dependencies are installed in an isolated virtual environment, separate from your current project.
+
+### 2. Choose your installation scenario
+
+There are three scenarios for installing `representation-learning`:
+
+#### Scenario 1: Just want to use the package
+
+You just want to use `representation-learning` package and don't care about its source code and implementation. In that case, the installation is very similar to the esp-data guide.
+
+**Configure your project to use the private index**
+
+Add the following to your `pyproject.toml` to configure your project to use the private package index:
+
+```toml
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+representation-learning = { index = "esp-pypi" }
+
+[tool.uv]
+keyring-provider = "subprocess"
+```
+
+**Add representation-learning as a dependency**
+
+You can now add `representation-learning` to your project by running:
+
+```bash
+uv add representation-learning
+```
+
+Alternatively, you can manually update the dependencies section of your `pyproject.toml` and then run:
+
+```bash
 uv sync
 ```
 
-### Method 2: Using the Setup Script
+#### Scenario 2: Use as dependency but want to hack/patch the code
 
-Alternative installation using the provided setup script:
+You want to use `representation-learning` as a dependency but want to hack/patch the code. In that case, clone this repo and add it as an editable dependency:
 
 ```bash
 # Clone the repository
 git clone https://github.com/earthspecies/representation-learning.git
 cd representation-learning
 
-# Install with private dependencies
-python setup.py
+# In your project, add as editable dependency
+uv add --editable "/path/to/representation-learning"
 ```
 
-### Method 3: Using pip with Private Index
+Or manually add to your `pyproject.toml`:
+
+```toml
+[tool.uv.sources]
+representation-learning = { path = "/path/to/representation-learning", editable = true }
+```
+
+Then run:
 
 ```bash
-# Install with the private esp-data index
-pip install -e . --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+uv sync
 ```
 
-### Method 4: From Built Wheel
+#### Scenario 3: You're a developer of this package
+
+You're a developer of this package. In that case, you just clone and do `uv sync`:
 
 ```bash
-# Build the package
-python -m build
+# Clone the repository
+git clone https://github.com/earthspecies/representation-learning.git
+cd representation-learning
 
-# Install from wheel
-python setup.py --wheel
+# Install dependencies (handles private index automatically)
+uv sync
 ```
+
+This will install all dependencies including `esp-data` and `esp-sweep` from the private index, as configured in the repository's `pyproject.toml`.
 
 ## Verification
 
@@ -64,25 +123,14 @@ from representation_learning import load_model, list_models
 models = list_models()
 print(f"Available models: {list(models.keys())}")
 
-# Load a new model with explicit num_classes
-model = load_model("efficientnet", num_classes=100)
+# Load a model
+model = load_model("efficientnet_animalspeak", num_classes=10, device="cpu")
 print(f"Model loaded: {type(model).__name__}")
-
-# Load from checkpoint (num_classes extracted automatically)
-model = load_model("efficientnet", checkpoint_path="path/to/checkpoint.pt")
-print(f"Model loaded from checkpoint: {type(model).__name__}")
-
-# Load with default checkpoint (if model has one registered)
-from representation_learning import register_checkpoint
-register_checkpoint("beats_naturelm", "gs://my-bucket/beats_naturelm.pt")
-model = load_model("beats_naturelm")  # Uses default checkpoint + extracts num_classes
-print(f"Model loaded with default checkpoint: {type(model).__name__}")
 ```
 
 ```bash
 # Test CLI commands
 list-models
-list-models --detailed
 ```
 
 ## Troubleshooting
@@ -91,37 +139,21 @@ list-models --detailed
 
 If you get an error about `esp-data` not being found:
 
-1. Make sure you're using the private index URL
+1. Make sure you've configured the private index in your `pyproject.toml` (see Scenario 1)
 2. Check that you have access to the Earth Species private PyPI repository
 3. Verify your authentication token is valid
+4. Make sure you've installed keyring (see step 1)
 
 ### Permission Errors
 
-If you get permission errors during installation:
-
-```bash
-# Install in user space
-pip install -e . --user --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
-```
+If you get permission errors during installation, ensure you have the correct permissions to access the private repository.
 
 ### CUDA Issues
 
-If you encounter CUDA-related issues:
+If you encounter CUDA-related issues, you can install CPU-only PyTorch:
 
 ```bash
-# Install CPU-only version
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-```
-
-## Development Installation
-
-For development work:
-
-```bash
-# Clone and install in editable mode
-git clone https://github.com/earthspecies/representation-learning.git
-cd representation-learning
-uv sync
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
 ## Dependencies

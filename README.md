@@ -497,26 +497,26 @@ with torch.no_grad():
 
 ```
 representation_learning/
-├── __init__.py              # Main API exports
-├── api/                     # Public API
-│   ├── __init__.py
-│   └── core.py             # Core API functions
-├── configs/                 # Configuration schemas
-│   ├── __init__.py
-│   └── configs.py          # Pydantic models
+├── __init__.py              # Main API exports and version
+├── api/                     # CLI utilities (e.g., list_models)
+├── cli.py                   # Command-line interface
+├── configs.py               # Pydantic configuration models
+├── configs/                 # Official model configurations
+│   └── official_models/    # YAML configs for official models
 ├── data/                    # Data loading and processing
 ├── evaluation/              # Evaluation utilities
 ├── metrics/                 # Evaluation metrics
 ├── models/                  # Model implementations
-│   ├── base_model.py       # Base model class
-│   ├── factory.py          # Model factory
-│   ├── get_model.py        # Original model factory
-│   ├── load.py             # Model loading utilities
-│   ├── registry.py         # Model registry
-│   └── [model_files].py    # Individual model implementations
+│   ├── utils/              # Model utilities (factory, load, registry)
+│   ├── probes/             # Probe implementations
+│   ├── beats/              # BEATs model components
+│   ├── eat/                # EAT model components
+│   └── atst_frame/         # ATST-Frame model components
 ├── preprocessing/           # Audio preprocessing
 ├── training/                # Training utilities
-└── utils/                   # Utility functions
+├── utils/                   # Utility functions
+├── run_train.py            # Training entry point
+└── run_evaluate.py         # Evaluation entry point
 ```
 
 ## 🧪 Testing

@@ -6,6 +6,7 @@ automatically loading official models and allowing custom model registration.
 """
 
 import logging
+from importlib import resources
 from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
@@ -24,34 +25,45 @@ _MODEL_REGISTRY: Dict[str, ModelSpec] = {}
 # Private global model class registry for dynamic model registration
 _MODEL_CLASSES: Dict[str, Type] = {}
 
-# Path to official model configurations directory
-# Calculated relative to this file: go up from utils/ to models/ to
-# representation_learning/, then into configs/official_models/
-_OFFICIAL_MODELS_DIR = (
-    Path(__file__).resolve().parents[2] / "configs" / "official_models"
-)
+# Package containing official model YAML configurations
+_OFFICIAL_MODELS_PKG = "representation_learning.configs.official_models"
 
 
-def _auto_register_from_yaml(config_dir: Path) -> None:
-    """Automatically load YAML configs as ModelSpec objects."""
-    if not config_dir.exists():
-        logger.warning(f"Config directory does not exist: {config_dir}")
-        return
+def _auto_register_from_yaml() -> None:
+    """Automatically load packaged YAML configs as ModelSpec objects.
 
+    Uses importlib.resources.files() to enumerate YAML files from the
+    installed package, which works both in editable installs and when the
+    package is installed as a dependency (including zipped wheels). YAML is
+    read with entry.open() for zip-safety.
+    """
     registered_count = 0
-    for yml_path in config_dir.glob("*.yml"):
-        name = yml_path.stem
-        try:
-            spec = load_model_spec_from_yaml(yml_path)
-            _MODEL_REGISTRY[name] = spec
-            registered_count += 1
-            logger.debug(f"Registered model: {name}")
-        except Exception as e:
-            logger.exception(
-                f"Failed to register model config from {yml_path.name}: {e}"
-            )
-
-    logger.info(f"Auto-registered {registered_count} models from {config_dir}")
+    try:
+        root = resources.files(_OFFICIAL_MODELS_PKG)
+        for entry in root.iterdir():
+            if not entry.name.endswith(".yml") or not entry.is_file():
+                continue
+            name = Path(entry.name).stem
+            try:
+                # Use as_file to obtain a filesystem path (zip-safe), then reuse
+                # load_model_spec_from_yaml for consistent parsing and validation.
+                with resources.as_file(entry) as yaml_path:
+                    spec = load_model_spec_from_yaml(yaml_path)
+                _MODEL_REGISTRY[name] = spec
+                registered_count += 1
+                logger.debug(f"Registered model: {name}")
+            except Exception as e:  # pragma: no cover - defensive
+                logger.exception(
+                    f"Failed to register model config from {entry.name}: {e}"
+                )
+        logger.info(
+            f"Auto-registered {registered_count} models from package "
+            f"{_OFFICIAL_MODELS_PKG}"
+        )
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning(
+            f"Failed to load models from package {_OFFICIAL_MODELS_PKG}: {e}"
+        )
 
 
 def initialize_registry() -> None:
@@ -60,8 +72,8 @@ def initialize_registry() -> None:
     Checkpoint paths are automatically registered from ModelSpec.checkpoint_path
     in the YAML files.
     """
-    logger.info(f"Initializing model registry from: {_OFFICIAL_MODELS_DIR}")
-    _auto_register_from_yaml(_OFFICIAL_MODELS_DIR)
+    logger.info(f"Initializing model registry from package: {_OFFICIAL_MODELS_PKG}")
+    _auto_register_from_yaml()
 
     logger.info(
         f"Model registry initialized with {len(_MODEL_REGISTRY)} models: "
@@ -77,7 +89,8 @@ def load_model_spec_from_yaml(yaml_path: Union[str, Path]) -> ModelSpec:
     2) Files with ModelSpec fields directly at the root level
 
     Args:
-        yaml_path: Path to a YAML file containing a model definition
+        yaml_path: Path to a YAML file (str or Path) containing a model
+            definition.
 
     Returns:
         A validated ModelSpec instance
@@ -232,20 +245,24 @@ def get_checkpoint_path(name: str) -> Optional[str]:
     if name not in _MODEL_REGISTRY:
         raise KeyError(f"Model '{name}' is not registered")
 
-    # For official models, read checkpoint_path from YAML file
-    official_model_path = _OFFICIAL_MODELS_DIR / f"{name}.yml"
-    if official_model_path.exists():
-        try:
-            with official_model_path.open("r", encoding="utf-8") as f:
+    # For official models, read checkpoint_path from YAML file packaged in resources
+    try:
+        root = resources.files(_OFFICIAL_MODELS_PKG)
+        yaml_file = root / f"{name}.yml"
+        if yaml_file.is_file():
+            # Use entry.open() for zip-safe reading
+            with yaml_file.open("r", encoding="utf-8") as f:
                 yaml_data = yaml.safe_load(f)
             if isinstance(yaml_data, dict) and "checkpoint_path" in yaml_data:
                 checkpoint_path = yaml_data["checkpoint_path"]
                 if checkpoint_path:
                     return checkpoint_path
-        except Exception as e:
-            logger.debug(
-                f"Failed to read checkpoint_path from {official_model_path}: {e}"
-            )
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug(
+            "Failed to read checkpoint_path from packaged resource for %s: %s",
+            name,
+            e,
+        )
 
     # Model is registered but no checkpoint_path in YAML
     return None
