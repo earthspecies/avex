@@ -12,9 +12,12 @@ import torch
 
 from representation_learning import (
     load_model,
+    register_model,
     register_model_class,
+    unregister_model,
     unregister_model_class,
 )
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.beats_model import Model as BeatsModel
 
 
@@ -22,11 +25,11 @@ class TestLoadModelClassifierHead:
     """Test classifier head loading behavior in load_model."""
 
     @pytest.fixture(autouse=True)
-    def setup_model_class(self) -> None:
-        """Register BEATs model class for testing.
+    def setup_model_class_and_registry(self) -> None:
+        """Register BEATs model class and model spec for testing.
 
         Yields:
-            None: Fixture yields nothing, just sets up the model class.
+            None: Fixture yields nothing, just sets up the model class and registry.
         """
         # Register the BEATs model class so build_model_from_spec can find it
         # The model spec uses "beats" as the name, so we need to register it as "beats"
@@ -35,10 +38,26 @@ class TestLoadModelClassifierHead:
         BeatsModel.name = "beats"  # type: ignore[attr-defined]
         try:
             register_model_class(BeatsModel)
+            # Register the model spec for sl_beats_animalspeak
+            model_spec = ModelSpec(
+                name="beats",
+                pretrained=False,
+                fine_tuned=True,
+                device="cpu",
+                audio_config=AudioConfig(
+                    sample_rate=16000,
+                    representation="raw",
+                    normalize=False,
+                    target_length_seconds=10,
+                    window_selection="random",
+                ),
+            )
+            register_model("sl_beats_animalspeak", model_spec)
             yield
         finally:
             # Cleanup: unregister and restore original name
             unregister_model_class("beats")
+            unregister_model("sl_beats_animalspeak")
             if original_name is not None:
                 BeatsModel.name = original_name  # type: ignore[attr-defined]
             elif hasattr(BeatsModel, "name"):

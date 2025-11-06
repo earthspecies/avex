@@ -198,6 +198,12 @@ checkpoint_path: "gs://my-bucket/checkpoint.pt"
         sys.path.insert(0, str(tmp_path))
 
         try:
+            # Import the test package to make it available to importlib.resources
+            import importlib
+
+            importlib.import_module("test_pkg")
+            importlib.import_module("test_pkg.official_models")
+
             from representation_learning.models.utils import registry
 
             original_pkg = registry._OFFICIAL_MODELS_PKG
@@ -207,7 +213,9 @@ checkpoint_path: "gs://my-bucket/checkpoint.pt"
 
             # Force materialization and verify registration
             models = registry.list_models()
-            assert "test_model" in models
+            assert "test_model" in models, (
+                f"Expected 'test_model' in {list(models.keys())}"
+            )
 
             # Verify checkpoint path is read correctly
             checkpoint = registry.get_checkpoint_path("test_model")
