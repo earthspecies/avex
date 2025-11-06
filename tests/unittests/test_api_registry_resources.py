@@ -175,8 +175,13 @@ class TestCheckpointPathReading:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Test get_checkpoint_path uses resources.files() correctly."""
+        # Use a unique package name to avoid module caching conflicts
+        import importlib
+        import sys
+
+        pkg_name = f"test_pkg_{id(tmp_path)}"
         # Create temporary package
-        pkg_dir = tmp_path / "test_pkg" / "official_models"
+        pkg_dir = tmp_path / pkg_name / "official_models"
         pkg_dir.mkdir(parents=True, exist_ok=True)
         (pkg_dir / "__init__.py").write_text("")
         (pkg_dir.parent / "__init__.py").write_text("")
@@ -193,21 +198,23 @@ checkpoint_path: "gs://my-bucket/checkpoint.pt"
             encoding="utf-8",
         )
 
-        import sys
-
         sys.path.insert(0, str(tmp_path))
 
         try:
-            # Import the test package to make it available to importlib.resources
-            import importlib
+            # Clear any cached modules with the same name
+            if pkg_name in sys.modules:
+                del sys.modules[pkg_name]
+            if f"{pkg_name}.official_models" in sys.modules:
+                del sys.modules[f"{pkg_name}.official_models"]
 
-            importlib.import_module("test_pkg")
-            importlib.import_module("test_pkg.official_models")
+            # Import the test package to make it available to importlib.resources
+            importlib.import_module(pkg_name)
+            importlib.import_module(f"{pkg_name}.official_models")
 
             from representation_learning.models.utils import registry
 
             original_pkg = registry._OFFICIAL_MODELS_PKG
-            registry._OFFICIAL_MODELS_PKG = "test_pkg.official_models"
+            registry._OFFICIAL_MODELS_PKG = f"{pkg_name}.official_models"
             registry._MODEL_REGISTRY.clear()
             registry.initialize_registry()
 
@@ -224,6 +231,11 @@ checkpoint_path: "gs://my-bucket/checkpoint.pt"
             # Restore
             registry._OFFICIAL_MODELS_PKG = original_pkg
         finally:
+            # Clean up modules
+            if pkg_name in sys.modules:
+                del sys.modules[pkg_name]
+            if f"{pkg_name}.official_models" in sys.modules:
+                del sys.modules[f"{pkg_name}.official_models"]
             sys.path.remove(str(tmp_path))
             registry._MODEL_REGISTRY.clear()
             registry.initialize_registry()
