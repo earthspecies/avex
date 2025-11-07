@@ -64,9 +64,7 @@ class Conv4DProjector(nn.Module):
 
         # Use parameter-free projection if requested
         if self.use_parameter_free:
-            return self._project_4d_to_sequence_param_free(
-                x, self.target_sequence_length, self.target_feature_dim
-            )
+            return self._project_4d_to_sequence_param_free(x, self.target_sequence_length, self.target_feature_dim)
 
         # Apply 1x1 convolution if target_feature_dim is specified
         if self.target_feature_dim is not None:
@@ -77,15 +75,10 @@ class Conv4DProjector(nn.Module):
             # If feature dimensions already match target, just do format conversion
             if current_feature_dim == self.target_feature_dim:
                 # No feature projection needed - just reshape to 3D format
-                x_output = x.transpose(1, 3).reshape(
-                    batch_size, width, channels * height
-                )
+                x_output = x.transpose(1, 3).reshape(batch_size, width, channels * height)
 
                 # Handle target sequence length if specified
-                if (
-                    self.target_sequence_length is not None
-                    and current_seq_len != self.target_sequence_length
-                ):
+                if self.target_sequence_length is not None and current_seq_len != self.target_sequence_length:
                     # Use interpolation to resize sequence length
                     # x_output shape: (batch, seq_len, features)
                     # We need to interpolate along the sequence dimension (dim=1)
@@ -122,9 +115,7 @@ class Conv4DProjector(nn.Module):
                 # Reshape to get width as sequence:
                 # (batch, target_feature_dim, 1, width)
                 # -> (batch, width, target_feature_dim)
-                x_output = x_conv.squeeze(2).transpose(
-                    1, 2
-                )  # Remove height dim and transpose
+                x_output = x_conv.squeeze(2).transpose(1, 2)  # Remove height dim and transpose
 
                 # Handle target sequence length if specified
                 if self.target_sequence_length is not None:
@@ -185,9 +176,7 @@ class Conv4DProjector(nn.Module):
         B, C, H, W = x.shape
 
         # 1) Pool spatial H dimension to 1 → reduces (B, C, H, W) → (B, C, 1, W)
-        x_pooled = torch.nn.functional.adaptive_avg_pool2d(
-            x, (1, W)
-        )  # keeps temporal dimension W
+        x_pooled = torch.nn.functional.adaptive_avg_pool2d(x, (1, W))  # keeps temporal dimension W
 
         # 2) Collapse C x 1 to "features": (B, C, 1, W) → (B, C, W)
         x_pooled = x_pooled.squeeze(2)  # (B, C, W)
@@ -261,19 +250,14 @@ class Sequence3DProjector(nn.Module):
             ValueError: If input tensor is not 3D
         """
         if x.dim() != 3:
-            raise ValueError(
-                f"Sequence3DProjector expects 3D input, got shape {x.shape} "
-                f"with {x.dim()} dimensions"
-            )
+            raise ValueError(f"Sequence3DProjector expects 3D input, got shape {x.shape} with {x.dim()} dimensions")
 
         batch_size, seq_len, features = x.shape
         original_shape = x.shape
 
         # Use parameter-free projection if requested
         if self.use_parameter_free:
-            return self._project_3d_to_sequence_param_free(
-                x, self.target_sequence_length, self.target_feature_dim
-            )
+            return self._project_3d_to_sequence_param_free(x, self.target_sequence_length, self.target_feature_dim)
 
         # Apply projection if needed
         if self.target_feature_dim is not None:
@@ -283,10 +267,7 @@ class Sequence3DProjector(nn.Module):
                 x_standardized = x
 
                 # Handle target sequence length if specified
-                if (
-                    self.target_sequence_length is not None
-                    and seq_len != self.target_sequence_length
-                ):
+                if self.target_sequence_length is not None and seq_len != self.target_sequence_length:
                     # Use interpolation to resize sequence length
                     # x_standardized shape: (batch, seq_len, features)
                     # We need to interpolate along the sequence dimension (dim=1)
@@ -297,13 +278,8 @@ class Sequence3DProjector(nn.Module):
                         align_corners=False,
                     ).transpose(1, 2)  # Back to (batch, seq_len, features)
             else:
-                if (
-                    self.projection_layer is None
-                    or self.projection_layer.in_features != features
-                ):
-                    self.projection_layer = nn.Linear(
-                        features, self.target_feature_dim
-                    ).to(x.device)
+                if self.projection_layer is None or self.projection_layer.in_features != features:
+                    self.projection_layer = nn.Linear(features, self.target_feature_dim).to(x.device)
                 x_standardized = self.projection_layer(x)
         else:
             x_standardized = x
@@ -377,9 +353,7 @@ class Sequence3DProjector(nn.Module):
 
             # Remove dummy dimension and reshape back
             x_squeezed = x_interp.squeeze(1)  # (B*T, target_feature_dim)
-            x_features = x_squeezed.reshape(
-                B, T, target_feature_dim
-            )  # (B, T, target_feature_dim)
+            x_features = x_squeezed.reshape(B, T, target_feature_dim)  # (B, T, target_feature_dim)
         else:
             x_features = x_seq
 
@@ -467,13 +441,8 @@ class EmbeddingProjector(nn.Module):
                         x, self.target_sequence_length, self.target_feature_dim
                     )
                 elif self.target_feature_dim is not None:
-                    if (
-                        not hasattr(self, "linear2d_projector")
-                        or self.linear2d_projector.in_features != features
-                    ):
-                        self.linear2d_projector = nn.Linear(
-                            features, self.target_feature_dim
-                        ).to(x.device)
+                    if not hasattr(self, "linear2d_projector") or self.linear2d_projector.in_features != features:
+                        self.linear2d_projector = nn.Linear(features, self.target_feature_dim).to(x.device)
                     x_3d = self.linear2d_projector(x_3d)
 
                 # Handle target sequence length if specified
@@ -496,20 +465,14 @@ class EmbeddingProjector(nn.Module):
                 # For 2D output, apply projection if needed
                 if self.target_feature_dim is not None:
                     batch_size, features = x.shape
-                    if (
-                        not hasattr(self, "linear2d_projector")
-                        or self.linear2d_projector.in_features != features
-                    ):
-                        self.linear2d_projector = nn.Linear(
-                            features, self.target_feature_dim
-                        ).to(x.device)
+                    if not hasattr(self, "linear2d_projector") or self.linear2d_projector.in_features != features:
+                        self.linear2d_projector = nn.Linear(features, self.target_feature_dim).to(x.device)
                     x = self.linear2d_projector(x)
                     logger.debug(f"EmbeddingProjector 2D->2D: {x.shape} -> {x.shape}")
                 return x
         else:
             raise ValueError(
-                f"EmbeddingProjector supports 2D, 3D, and 4D tensors, "
-                f"got shape {x.shape} with {x.dim()} dimensions"
+                f"EmbeddingProjector supports 2D, 3D, and 4D tensors, got shape {x.shape} with {x.dim()} dimensions"
             )
 
     def get_output_shape_info(self, input_shape: Tuple[int, ...]) -> dict:
@@ -599,6 +562,4 @@ class EmbeddingProjector(nn.Module):
         x_3d = x.unsqueeze(1)  # (B, 1, F)
 
         # Use the 3D parameter-free projection method
-        return self.seq3d_projector._project_3d_to_sequence_param_free(
-            x_3d, target_seq_len, target_feature_dim
-        )
+        return self.seq3d_projector._project_3d_to_sequence_param_free(x_3d, target_seq_len, target_feature_dim)

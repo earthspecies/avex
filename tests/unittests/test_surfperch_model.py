@@ -25,9 +25,7 @@ class TestSurfPerchModel:
             Mock: A mock TensorFlow model with serving signatures.
         """
         mock_model = Mock()
-        mock_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         return mock_model
 
     @pytest.fixture
@@ -71,15 +69,11 @@ class TestSurfPerchModel:
         """Test SurfPerchModel initialization."""
         # Mock the TF model and its output
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
         # Mock the TF forward pass to return embeddings
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -96,14 +90,10 @@ class TestSurfPerchModel:
     def test_surfperch_model_no_classifier(self, mock_load_tf: Mock) -> None:
         """Test SurfPerchModel without classifier."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=0, device="cpu")
@@ -112,54 +102,38 @@ class TestSurfPerchModel:
             assert model.classifier is None
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_extract_embeddings_aggregation_mean(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_mean(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test extract_embeddings with aggregation='mean' (default)."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
 
             # Test with tensor input
-            result = model.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="mean"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 160000), aggregation="mean")
 
             assert isinstance(result, torch.Tensor)
             assert result.shape == (2, 1280)
             assert torch.allclose(result, mock_embeddings)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_extract_embeddings_aggregation_none(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_none(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test extract_embeddings with aggregation='none' for sequence probes."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
 
             # Test with aggregation="none"
-            result = model.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="none"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 160000), aggregation="none")
 
             assert isinstance(result, list)
             assert len(result) == 1  # Single layer model
@@ -167,52 +141,36 @@ class TestSurfPerchModel:
             assert result[0].shape == (2, 1, 1280)  # (B, 1, embed_dim)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_extract_embeddings_aggregation_max(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_max(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test extract_embeddings with aggregation='max'."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
 
-            result = model.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="max"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 160000), aggregation="max")
 
             assert isinstance(result, torch.Tensor)
             assert result.shape == (2, 1280)
             assert torch.allclose(result, mock_embeddings)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_extract_embeddings_aggregation_cls_token(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_cls_token(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test extract_embeddings with aggregation='cls_token'."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
 
-            result = model.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="cls_token"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 160000), aggregation="cls_token")
 
             assert isinstance(result, torch.Tensor)
             assert result.shape == (2, 1280)
@@ -227,14 +185,10 @@ class TestSurfPerchModel:
     ) -> None:
         """Test extract_embeddings with dictionary input."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -248,22 +202,16 @@ class TestSurfPerchModel:
     def test_extract_embeddings_invalid_aggregation(self, mock_load_tf: Mock) -> None:
         """Test extract_embeddings with invalid aggregation method."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=10, device="cpu")
 
             with pytest.raises(ValueError, match="Unsupported aggregation method"):
-                model.extract_embeddings(
-                    x=torch.randn(2, 160000), aggregation="invalid_method"
-                )
+                model.extract_embeddings(x=torch.randn(2, 160000), aggregation="invalid_method")
 
     @patch("representation_learning.models.surfperch._load_tf_model")
     def test_extract_embeddings_sequence_probe_compatibility(
@@ -271,22 +219,16 @@ class TestSurfPerchModel:
     ) -> None:
         """Test that embeddings are compatible with sequence probes."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
 
             # Test with aggregation="none" for sequence probes
-            result = model.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="none"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 160000), aggregation="none")
 
             # Should return list of 3D tensors
             assert isinstance(result, list)
@@ -300,34 +242,24 @@ class TestSurfPerchModel:
             assert torch.allclose(embedding_tensor.squeeze(1), mock_embeddings)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_extract_embeddings_device_consistency(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_device_consistency(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test that embeddings are returned on the correct device."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             # Test on CPU
             model_cpu = PerchModel(num_classes=10, device="cpu")
-            result_cpu = model_cpu.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="mean"
-            )
+            result_cpu = model_cpu.extract_embeddings(x=torch.randn(2, 160000), aggregation="mean")
             assert result_cpu.device.type == "cpu"
 
             # Test on CUDA if available
             if torch.cuda.is_available():
                 model_cuda = PerchModel(num_classes=10, device="cuda")
-                result_cuda = model_cuda.extract_embeddings(
-                    x=torch.randn(2, 160000), aggregation="mean"
-                )
+                result_cuda = model_cuda.extract_embeddings(x=torch.randn(2, 160000), aggregation="mean")
                 assert result_cuda.device.type == "cuda"
 
     @patch("representation_learning.models.surfperch._load_tf_model")
@@ -339,14 +271,10 @@ class TestSurfPerchModel:
     ) -> None:
         """Test that padding_mask is handled correctly (even though unused)."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -356,27 +284,19 @@ class TestSurfPerchModel:
                 x=torch.randn(2, 160000), aggregation="mean", padding_mask=padding_mask
             )
 
-            result_without_mask = model.extract_embeddings(
-                x=torch.randn(2, 160000), aggregation="mean"
-            )
+            result_without_mask = model.extract_embeddings(x=torch.randn(2, 160000), aggregation="mean")
 
             # Results should be identical since padding_mask is unused
             assert torch.allclose(result_with_mask, result_without_mask)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_extract_embeddings_consistency(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_consistency(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test that extract_embeddings produces consistent results."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -392,19 +312,13 @@ class TestSurfPerchModel:
             assert torch.allclose(result1, result2)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_forward_method(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_forward_method(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test the forward method with classifier."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -416,19 +330,13 @@ class TestSurfPerchModel:
             assert result.shape == (2, 10)  # (batch_size, num_classes)
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_forward_method_no_classifier(
-        self, mock_load_tf: Mock, mock_embeddings: torch.Tensor
-    ) -> None:
+    def test_forward_method_no_classifier(self, mock_load_tf: Mock, mock_embeddings: torch.Tensor) -> None:
         """Test the forward method without classifier."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = mock_embeddings
 
             model = PerchModel(num_classes=0, device="cpu")
@@ -443,14 +351,10 @@ class TestSurfPerchModel:
     def test_model_attributes(self, mock_load_tf: Mock) -> None:
         """Test that model attributes are correctly set."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -467,14 +371,10 @@ class TestSurfPerchModel:
     def test_model_methods(self, mock_load_tf: Mock) -> None:
         """Test that model methods exist and are callable."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -489,14 +389,10 @@ class TestSurfPerchModel:
     def test_model_device_handling(self, mock_load_tf: Mock) -> None:
         """Test model device handling methods."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -507,9 +403,7 @@ class TestSurfPerchModel:
                 # The device attribute remains the same, but parameters are moved
                 assert model_cuda.device == "cpu"  # String attribute doesn't change
                 if model_cuda.classifier is not None:
-                    assert (
-                        next(model_cuda.classifier.parameters()).device.type == "cuda"
-                    )
+                    assert next(model_cuda.classifier.parameters()).device.type == "cuda"
 
             model_cpu = model.cpu()
             assert model_cpu.device == "cpu"  # String attribute doesn't change
@@ -520,14 +414,10 @@ class TestSurfPerchModel:
     def test_model_initialization_edge_cases(self, mock_load_tf: Mock) -> None:
         """Test model initialization with edge cases."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             # Test with very large num_classes
@@ -537,19 +427,13 @@ class TestSurfPerchModel:
             assert model_large.classifier.out_features == 1000
 
     @patch("representation_learning.models.surfperch._load_tf_model")
-    def test_model_embedding_consistency_across_batches(
-        self, mock_load_tf: Mock
-    ) -> None:
+    def test_model_embedding_consistency_across_batches(self, mock_load_tf: Mock) -> None:
         """Test that embeddings are consistent across different batch sizes."""
         mock_tf_model = Mock()
-        mock_tf_model.signatures = {
-            "serving_default": Mock(return_value={"output_1": Mock()})
-        }
+        mock_tf_model.signatures = {"serving_default": Mock(return_value={"output_1": Mock()})}
         mock_load_tf.return_value = mock_tf_model
 
-        with patch(
-            "representation_learning.models.surfperch.torch.from_numpy"
-        ) as mock_from_numpy:
+        with patch("representation_learning.models.surfperch.torch.from_numpy") as mock_from_numpy:
             mock_from_numpy.return_value = torch.randn(1, 1280)
 
             model = PerchModel(num_classes=10, device="cpu")
@@ -562,9 +446,7 @@ class TestSurfPerchModel:
                     mock_extract.return_value = torch.randn(batch_size, 1280)
 
                     input_tensor = torch.randn(batch_size, 160000)
-                    result = model.extract_embeddings(
-                        x=input_tensor, aggregation="mean"
-                    )
+                    result = model.extract_embeddings(x=input_tensor, aggregation="mean")
 
                     assert isinstance(result, torch.Tensor)
                     assert result.shape == (batch_size, 1280)

@@ -65,9 +65,7 @@ def universal_torch_load(
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
-                    "Force downloading"
-                    if cache_mode == "force"
-                    else "Cache file does not exist, downloading"
+                    "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,8 +138,7 @@ def _process_state_dict(state_dict: dict, keep_classifier: bool = False) -> dict
 
         # Conditionally skip classifier layers based on keep_classifier parameter
         if not keep_classifier and any(
-            term in processed_key.lower()
-            for term in ["classifier", "head", "classification", "classification_head"]
+            term in processed_key.lower() for term in ["classifier", "head", "classification", "classification_head"]
         ):
             continue
 

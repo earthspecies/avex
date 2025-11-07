@@ -73,9 +73,7 @@ checkpoint_path: "gs://bucket/model.pt"
 class TestImportlibResources:
     """Test importlib.resources.files() usage for packaged YAMLs."""
 
-    def test_registry_uses_resources_files(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_registry_uses_resources_files(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Test that registry uses resources.files() for packaged YAMLs.
 
         This simulates how the registry works when the package is installed.
@@ -171,9 +169,7 @@ model_spec:
 class TestCheckpointPathReading:
     """Test checkpoint path reading from packaged resources."""
 
-    def test_get_checkpoint_path_from_resources(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_get_checkpoint_path_from_resources(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Test get_checkpoint_path uses resources.files() correctly."""
         # Use a unique package name to avoid module caching conflicts
         import importlib
@@ -220,9 +216,7 @@ checkpoint_path: "gs://my-bucket/checkpoint.pt"
 
             # Force materialization and verify registration
             models = registry.list_models()
-            assert "test_model" in models, (
-                f"Expected 'test_model' in {list(models.keys())}"
-            )
+            assert "test_model" in models, f"Expected 'test_model' in {list(models.keys())}"
 
             # Verify checkpoint path is read correctly
             checkpoint = registry.get_checkpoint_path("test_model")

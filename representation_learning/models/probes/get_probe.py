@@ -65,8 +65,7 @@ def get_probe(
 
     # Log probe creation details
     logger.info(
-        f"Creating {probe_type} probe: layers={layers}, "
-        f"aggregation={aggregation}, input_processing={input_processing}"
+        f"Creating {probe_type} probe: layers={layers}, aggregation={aggregation}, input_processing={input_processing}"
     )
 
     # Validate input processing compatibility
@@ -75,9 +74,7 @@ def get_probe(
         "attention",
         "transformer",
     ]:
-        raise ValueError(
-            f"Sequence input processing is not compatible with {probe_type} probe"
-        )
+        raise ValueError(f"Sequence input processing is not compatible with {probe_type} probe")
 
     if not frozen and base_model is not None:
         # Enable training mode
@@ -95,9 +92,7 @@ def get_probe(
         layers = base_model.register_hooks_for_layers(layers)
 
     # Use provided target_length if available, otherwise use probe_config.target_length
-    final_target_length = (
-        target_length if target_length is not None else probe_config.target_length
-    )
+    final_target_length = target_length if target_length is not None else probe_config.target_length
 
     if probe_type == "linear":
         return LinearProbe(
@@ -137,9 +132,7 @@ def get_probe(
         lstm_hidden_size = probe_config.lstm_hidden_size
         num_layers = probe_config.num_layers
         if lstm_hidden_size is None or num_layers is None:
-            raise ValueError(
-                "LSTM probe requires lstm_hidden_size and num_layers to be specified"
-            )
+            raise ValueError("LSTM probe requires lstm_hidden_size and num_layers to be specified")
 
         return LSTMProbe(
             base_model=base_model,
@@ -165,10 +158,7 @@ def get_probe(
         attention_dim = probe_config.attention_dim
         num_layers = probe_config.num_layers
         if num_heads is None or attention_dim is None or num_layers is None:
-            raise ValueError(
-                "Attention probe requires num_heads, attention_dim, and "
-                "num_layers to be specified"
-            )
+            raise ValueError("Attention probe requires num_heads, attention_dim, and num_layers to be specified")
 
         return AttentionProbe(
             base_model=base_model,
@@ -194,10 +184,7 @@ def get_probe(
         attention_dim = probe_config.attention_dim
         num_layers = probe_config.num_layers
         if num_heads is None or attention_dim is None or num_layers is None:
-            raise ValueError(
-                "Transformer probe requires num_heads, attention_dim, and "
-                "num_layers to be specified"
-            )
+            raise ValueError("Transformer probe requires num_heads, attention_dim, and num_layers to be specified")
 
         return TransformerProbe(
             base_model=base_model,
@@ -219,7 +206,4 @@ def get_probe(
 
     else:
         supported = "'linear', 'mlp', 'lstm', 'attention', transformer'"
-        raise NotImplementedError(
-            f"Probe type '{probe_type}' is not implemented. "
-            f"Supported types: {supported}"
-        )
+        raise NotImplementedError(f"Probe type '{probe_type}' is not implemented. Supported types: {supported}")

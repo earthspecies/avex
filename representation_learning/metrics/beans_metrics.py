@@ -37,9 +37,7 @@ class Accuracy:
         dict[str, float]
             Dictionary with key ``"acc"`` holding the running accuracy.
         """
-        return {
-            "acc": (0.0 if self.num_total == 0 else self.num_correct / self.num_total)
-        }
+        return {"acc": (0.0 if self.num_total == 0 else self.num_correct / self.num_total)}
 
     def get_primary_metric(self) -> float:  # noqa: ANN001 (keep interface)
         """Primary scalar value (accuracy).
@@ -135,15 +133,9 @@ class AveragePrecision:
 
     def reset(self) -> None:
         """Resets the meter with empty member variables"""
-        self.scores = torch.tensor(
-            torch.FloatStorage(), dtype=torch.float32, requires_grad=False
-        )
-        self.targets = torch.tensor(
-            torch.LongStorage(), dtype=torch.int64, requires_grad=False
-        )
-        self.weights = torch.tensor(
-            torch.FloatStorage(), dtype=torch.float32, requires_grad=False
-        )
+        self.scores = torch.tensor(torch.FloatStorage(), dtype=torch.float32, requires_grad=False)
+        self.targets = torch.tensor(torch.LongStorage(), dtype=torch.int64, requires_grad=False)
+        self.weights = torch.tensor(torch.FloatStorage(), dtype=torch.float32, requires_grad=False)
 
     def update(
         self,
@@ -191,9 +183,7 @@ class AveragePrecision:
             )
         if weight is not None:
             assert weight.dim() == 1, "Weight dimension should be 1"
-            assert weight.numel() == target.size(0), (
-                "Weight dimension 1 should be the same as that of target"
-            )
+            assert weight.numel() == target.size(0), "Weight dimension 1 should be the same as that of target"
             assert torch.min(weight) >= 0, "Weight should be non-negative only"
         assert torch.equal(target**2, target), "targets should be binary (0 or 1)"
         if self.scores.numel() > 0:

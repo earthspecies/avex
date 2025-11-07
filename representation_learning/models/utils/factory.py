@@ -54,9 +54,7 @@ def _add_model_spec_params(init_kwargs: dict, model_spec: object) -> None:
                 init_kwargs[param_name] = value
 
 
-def build_model(
-    model_name: str, device: str, num_classes: Optional[int] = None, **kwargs: object
-) -> ModelBase:
+def build_model(model_name: str, device: str, num_classes: Optional[int] = None, **kwargs: object) -> ModelBase:
     """
     Build a model instance from a registered model class and ModelSpec.
 
@@ -79,10 +77,7 @@ def build_model(
         from .registry import list_models
 
         available_models = list(list_models().keys())
-        raise ValueError(
-            f"No ModelSpec found for '{model_name}'. "
-            f"Available models: {available_models}"
-        )
+        raise ValueError(f"No ModelSpec found for '{model_name}'. Available models: {available_models}")
 
     # Get the model class using the model type from ModelSpec
     model_type = model_spec.name  # e.g., 'beats', 'efficientnet', etc.
@@ -93,16 +88,13 @@ def build_model(
 
         available_classes = list_model_classes()
         raise KeyError(
-            f"Model class '{model_type}' is not registered. "
-            f"Available classes: {available_classes}"
+            f"Model class '{model_type}' is not registered. Available classes: {available_classes}"
         ) from None
 
     # Prepare initialization arguments
     init_kwargs = {
         "device": device,
-        "audio_config": model_spec.audio_config.model_dump()
-        if model_spec.audio_config
-        else None,
+        "audio_config": model_spec.audio_config.model_dump() if model_spec.audio_config else None,
         **kwargs,
     }
 
@@ -153,8 +145,7 @@ def build_model_from_spec(
 
         available_classes = list_model_classes()
         raise KeyError(
-            f"Model class '{model_type}' is not registered. "
-            f"Available classes: {available_classes}"
+            f"Model class '{model_type}' is not registered. Available classes: {available_classes}"
         ) from None
 
     # Prepare initialization arguments (same logic as build_model)

@@ -74,8 +74,7 @@ class AttentionProbe(BaseProbe3D):
             pe = torch.zeros(self.max_sequence_length or 1000, inferred_dim)
             position = torch.arange(0, pe.shape[0], dtype=torch.float).unsqueeze(1)
             div_term = torch.exp(
-                torch.arange(0, inferred_dim, 2).float()
-                * (-torch.log(torch.tensor(10000.0)) / inferred_dim)
+                torch.arange(0, inferred_dim, 2).float() * (-torch.log(torch.tensor(10000.0)) / inferred_dim)
             )
             pe[:, 0::2] = torch.sin(position * div_term)
             pe[:, 1::2] = torch.cos(position * div_term)
@@ -93,9 +92,7 @@ class AttentionProbe(BaseProbe3D):
         except Exception:
             pass
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass matching original attention probe behavior.
 
         Returns:
@@ -111,9 +108,7 @@ class AttentionProbe(BaseProbe3D):
             padding_mask = None
 
         for i, attn in enumerate(self.attention_layers):
-            attn_out, _ = attn(
-                embeddings, embeddings, embeddings, key_padding_mask=padding_mask
-            )
+            attn_out, _ = attn(embeddings, embeddings, embeddings, key_padding_mask=padding_mask)
             embeddings = self.layer_norms[i](embeddings + attn_out)
             if self.dropout is not None:
                 embeddings = self.dropout(embeddings)

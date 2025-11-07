@@ -80,9 +80,7 @@ class MLPProbe(BaseProbe2D):
         except Exception:
             pass
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass matching original MLP probe behavior.
 
         Returns:

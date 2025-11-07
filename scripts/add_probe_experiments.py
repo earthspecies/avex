@@ -125,9 +125,7 @@ def save_yaml(data: Dict[str, Any], file_path: str) -> None:
             f.write(f"  #     freeze_backbone: {str(freeze_backbone).lower()}\n")
             f.write("  #     online_training: true\n")
             f.write("  #   pretrained: false\n")
-            f.write(
-                "  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt\n"
-            )
+            f.write("  #   checkpoint_path: gs://representation-learning/models/sl_beats_all.pt\n")
 
         f.write("\n")
 
@@ -136,10 +134,7 @@ def save_yaml(data: Dict[str, Any], file_path: str) -> None:
         f.write("save_dir: " + str(data.get("save_dir", "")) + "\n\n")
 
         # Write results_csv_path
-        f.write(
-            "# Optional: Append results to a global CSV file for "
-            "cross-model comparison\n"
-        )
+        f.write("# Optional: Append results to a global CSV file for cross-model comparison\n")
         f.write("results_csv_path: " + str(data.get("results_csv_path", "")) + "\n\n")
 
         # Write device
@@ -150,9 +145,7 @@ def save_yaml(data: Dict[str, Any], file_path: str) -> None:
 
         # Write num_workers
         f.write(
-            "num_workers: "
-            + str(data.get("num_workers", ""))
-            + "  # Enable workers for better memory management\n\n"
+            "num_workers: " + str(data.get("num_workers", "")) + "  # Enable workers for better memory management\n\n"
         )
 
         # Write eval_modes
@@ -164,11 +157,7 @@ def save_yaml(data: Dict[str, Any], file_path: str) -> None:
         f.write("\n")
 
         # Write overwrite_embeddings
-        f.write(
-            "overwrite_embeddings: "
-            + str(data.get("overwrite_embeddings", "")).lower()
-            + "\n\n"
-        )
+        f.write("overwrite_embeddings: " + str(data.get("overwrite_embeddings", "")).lower() + "\n\n")
 
         # Write disable_tqdm
         f.write("# Control tqdm progress bar verbosity during fine-tuning\n")
@@ -306,9 +295,7 @@ def add_probe_experiments_to_file(config_path: str, dry_run: bool = False) -> No
     original_run_name = template_experiment["run_name"]
     new_experiments = []
     for probe_config in probe_configs:
-        new_experiment = create_probe_experiment(
-            original_run_name, probe_config, template_experiment
-        )
+        new_experiment = create_probe_experiment(original_run_name, probe_config, template_experiment)
         if new_experiment:
             new_experiments.append(new_experiment)
 
@@ -321,33 +308,23 @@ def add_probe_experiments_to_file(config_path: str, dry_run: bool = False) -> No
 
     # Add the new experiments to the existing list
     existing_run_names = {exp.get("run_name") for exp in original_experiments}
-    deduped_new_experiments = [
-        exp for exp in new_experiments if exp.get("run_name") not in existing_run_names
-    ]
+    deduped_new_experiments = [exp for exp in new_experiments if exp.get("run_name") not in existing_run_names]
     all_experiments = original_experiments + deduped_new_experiments
     data["experiments"] = all_experiments
 
     if not dry_run:
         # Save the updated config
         save_yaml(data, config_path)
-        print(
-            f"  Added {len(deduped_new_experiments)} probe experiments "
-            f"(total: {len(all_experiments)})"
-        )
+        print(f"  Added {len(deduped_new_experiments)} probe experiments (total: {len(all_experiments)})")
     else:
-        print(
-            f"  Would add {len(deduped_new_experiments)} probe experiments "
-            f"(total: {len(all_experiments)}):"
-        )
+        print(f"  Would add {len(deduped_new_experiments)} probe experiments (total: {len(all_experiments)}):")
         for exp in deduped_new_experiments:
             print(f"    - {exp['run_name']}")
 
 
 def main() -> None:
     """Main function to add probe experiments to all config files."""
-    parser = argparse.ArgumentParser(
-        description="Add probe experiments to icassp config files"
-    )
+    parser = argparse.ArgumentParser(description="Add probe experiments to icassp config files")
     parser.add_argument(
         "--dry-run",
         action="store_true",

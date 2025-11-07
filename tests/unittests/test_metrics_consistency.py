@@ -51,9 +51,7 @@ def create_mock_results() -> List[Dict]:
             "experiment_name": "test_exp_1",
             "train_metrics": {"loss": 0.3, "acc": 0.75},
             "val_metrics": {"loss": 0.35, "acc": 0.72},
-            "probe_test_metrics": {
-                "multiclass_f1": 0.73
-            },  # Only multiclass_f1, no accuracy
+            "probe_test_metrics": {"multiclass_f1": 0.73},  # Only multiclass_f1, no accuracy
             "retrieval_metrics": {
                 "retrieval_roc_auc": 0.76,
                 "retrieval_precision_at_1": 0.73,
@@ -97,9 +95,7 @@ def test_metrics_consistency() -> None:
     # Add standard metrics that should always be present
     all_possible_metrics.update(["loss", "acc"])
     all_possible_val_metrics.update(["loss", "acc"])
-    all_possible_retrieval_metrics.update(
-        ["retrieval_roc_auc", "retrieval_precision_at_1"]
-    )
+    all_possible_retrieval_metrics.update(["retrieval_roc_auc", "retrieval_precision_at_1"])
 
     print("All possible metrics found:")
     print(f"  Train metrics: {sorted(all_possible_metrics)}")
@@ -133,9 +129,7 @@ def test_metrics_consistency() -> None:
             # Remove the "retrieval_" prefix if it's already there to avoid
             # double-prefixing
             metric_name = metric.replace("retrieval_", "")
-            summary_entry[f"retrieval_{metric_name}"] = r["retrieval_metrics"].get(
-                metric, None
-            )
+            summary_entry[f"retrieval_{metric_name}"] = r["retrieval_metrics"].get(metric, None)
 
         summary_data.append(summary_entry)
 

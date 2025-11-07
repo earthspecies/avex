@@ -102,8 +102,6 @@ def get_optimizer(
 
         optimiser_cls = bnb.optim.PagedAdamW8bit  # type: ignore[assignment]
     else:
-        raise ValueError(
-            f"Unsupported optimizer '{opt_name}'. Available: adamw, adam, adamw8bit."
-        )
+        raise ValueError(f"Unsupported optimizer '{opt_name}'. Available: adamw, adam, adamw8bit.")
 
     return optimiser_cls(param_groups)

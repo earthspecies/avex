@@ -23,9 +23,7 @@ class SimpleTestModel(ModelBase):
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.1)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # Simple forward pass through all layers
         x = self.linear1(x)
         x = self.relu(x)

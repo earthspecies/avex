@@ -55,9 +55,7 @@ class TestBEATsEmbeddingExtractionIntegration:
         # Check that all embeddings have the same batch size
         assert all(emb.shape[0] == 2 for emb in result)
 
-    def test_embedding_extraction_with_dict_input(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_with_dict_input(self, beats_model: BEATsModel) -> None:
         """Test embedding extraction with dictionary input format."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])
@@ -77,9 +75,7 @@ class TestBEATsEmbeddingExtractionIntegration:
         # Check that all embeddings have the same batch size
         assert all(emb.shape[0] == 2 for emb in result)
 
-    def test_embedding_extraction_with_padding_mask(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_with_padding_mask(self, beats_model: BEATsModel) -> None:
         """Test embedding extraction with padding mask."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])
@@ -111,9 +107,7 @@ class TestBEATsEmbeddingExtractionIntegration:
         assert len(beats_model._hooks) > 0
         assert len(beats_model._layer_names) > 0
 
-    def test_embedding_extraction_all_layers_fallback(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_all_layers_fallback(self, beats_model: BEATsModel) -> None:
         """Test fallback behavior when no MLP layers are found."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])
@@ -144,14 +138,9 @@ class TestBEATsEmbeddingExtractionIntegration:
         assert isinstance(result1, list)
         assert isinstance(result2, list)
         assert len(result1) == len(result2)
-        assert all(
-            emb1.shape == emb2.shape
-            for emb1, emb2 in zip(result1, result2, strict=False)
-        )
+        assert all(emb1.shape == emb2.shape for emb1, emb2 in zip(result1, result2, strict=False))
 
-    def test_embedding_extraction_different_batch_sizes(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_different_batch_sizes(self, beats_model: BEATsModel) -> None:
         """Test embedding extraction with different batch sizes."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])
@@ -169,9 +158,7 @@ class TestBEATsEmbeddingExtractionIntegration:
             assert len(result) > 0
             assert all(emb.shape[0] == batch_size for emb in result)
 
-    def test_embedding_extraction_device_handling(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_device_handling(self, beats_model: BEATsModel) -> None:
         """Test that embedding extraction works on different devices."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])
@@ -188,9 +175,7 @@ class TestBEATsEmbeddingExtractionIntegration:
         assert all(emb.device == torch.device("cpu") for emb in result_cpu)
         assert all(emb.shape[0] == 2 for emb in result_cpu)
 
-    def test_embedding_extraction_gradient_handling(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_gradient_handling(self, beats_model: BEATsModel) -> None:
         """Test that embedding extraction properly handles gradients."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])
@@ -224,9 +209,7 @@ class TestBEATsEmbeddingExtractionIntegration:
             with torch.no_grad():
                 beats_model.extract_embeddings(None)
 
-    def test_embedding_extraction_with_realistic_audio(
-        self, beats_model: BEATsModel
-    ) -> None:
+    def test_embedding_extraction_with_realistic_audio(self, beats_model: BEATsModel) -> None:
         """Test embedding extraction with realistic audio data."""
         # Register hooks for all layers
         beats_model.register_hooks_for_layers(["all"])

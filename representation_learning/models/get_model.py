@@ -86,9 +86,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         )
 
         # ATST requires model path
-        atst_model_path = getattr(
-            model_config, "atst_model_path", "pretrained/atst_as2M.pt"
-        )
+        atst_model_path = getattr(model_config, "atst_model_path", "pretrained/atst_as2M.pt")
         # atst_model_path = "pretrained/atst_frame_base.pt"
 
         return ATSTModel(
@@ -220,6 +218,4 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', "
             "'birdnet', 'birdmae', 'biolingual', "
         )
-        raise NotImplementedError(
-            f"Model '{model_name}' is not implemented. Supported models: {supported}"
-        )
+        raise NotImplementedError(f"Model '{model_name}' is not implemented. Supported models: {supported}")

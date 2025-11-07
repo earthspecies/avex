@@ -286,9 +286,7 @@ class TestProbeSystem:
             def __init__(self) -> None:
                 self.audio_processor = MockAudioProcessor()
 
-            def extract_embeddings(
-                self, x: torch.Tensor, **kwargs: dict
-            ) -> torch.Tensor:
+            def extract_embeddings(self, x: torch.Tensor, **kwargs: dict) -> torch.Tensor:
                 return torch.randn(2, 10, 256)  # 3D tensor
 
             def register_hooks_for_layers(self, layers: List[str]) -> None:
@@ -698,9 +696,7 @@ class TestProbeSystem:
         # Remove hidden_dims to test the get_probe function
         probe_config.hidden_dims = None
 
-        with pytest.raises(
-            ValueError, match="MLP probe requires hidden_dims to be specified"
-        ):
+        with pytest.raises(ValueError, match="MLP probe requires hidden_dims to be specified"):
             get_probe(
                 probe_config=probe_config,
                 base_model=None,
@@ -717,9 +713,7 @@ class TestProbeSystem:
         # Create a mock base model that returns requires_grad=True embeddings
         class MockBaseModel:
             def __init__(self) -> None:
-                self.audio_processor = type(
-                    "MockAudioProcessor", (), {"target_length": 1000, "sr": 16000}
-                )()
+                self.audio_processor = type("MockAudioProcessor", (), {"target_length": 1000, "sr": 16000})()
 
             def extract_embeddings(
                 self,

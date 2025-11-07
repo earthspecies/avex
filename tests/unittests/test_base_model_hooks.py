@@ -26,9 +26,7 @@ class TestModel(ModelBase):
         # Register hooks for the discovered layers
         self.register_hooks_for_layers(self._hook_layers)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         x = self.layer1(x)
         x = self.relu1(x)
         x = self.layer2(x)

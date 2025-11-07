@@ -92,14 +92,11 @@ def check_docstrings(base_folder: str = ".", check_folders: list = None) -> bool
                         check = False
                         if first_line:
                             print(
-                                "\tERROR: The library %s must start with a docstring. "
-                                % (libpath)
-                                + "Please write it."
+                                "\tERROR: The library %s must start with a docstring. " % (libpath) + "Please write it."
                             )
                         else:
                             print(
-                                "\tERROR: The function %s in %s has no docstring. "
-                                % (fun_name, libpath)
+                                "\tERROR: The function %s in %s has no docstring. " % (fun_name, libpath)
                                 + "Please write it."
                             )
                     if line[0] != '"' and is_class:
@@ -109,8 +106,7 @@ def check_docstrings(base_folder: str = ".", check_folders: list = None) -> bool
 
                         check = False
                         print(
-                            "\tERROR: The class %s in %s has no docstring. "
-                            % (class_name, libpath)
+                            "\tERROR: The class %s in %s has no docstring. " % (class_name, libpath)
                             + "Please write it."
                         )
 
@@ -237,12 +233,7 @@ def get_all_files(
                         break
 
             # If needed, append the current file to the output list
-            if (
-                match_and_entry
-                and match_or_entry
-                and not (exclude_and_entry)
-                and not (exclude_or_entry)
-            ):
+            if match_and_entry and match_or_entry and not (exclude_and_entry) and not (exclude_or_entry):
                 allFiles.append(fullPath)
 
     return allFiles

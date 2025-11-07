@@ -64,17 +64,13 @@ def _patched_load(self: "AnimalSpeak") -> None:  # type: ignore[override] – mo
     # Defensive: keep intersection only
     available_cols = [c for c in _KEEP_COLUMNS if c in self._data.columns]
     if not available_cols:
-        logger.warning(
-            "AnimalSpeak column-patch: none of the expected columns present! "
-            "Skipping pruning."
-        )
+        logger.warning("AnimalSpeak column-patch: none of the expected columns present! Skipping pruning.")
         return
 
     missing_cols = set(_KEEP_COLUMNS) - set(available_cols)
     if missing_cols:
         logger.info(
-            "AnimalSpeak column-patch: missing expected columns %s – "
-            "continuing with %s",
+            "AnimalSpeak column-patch: missing expected columns %s – continuing with %s",
             sorted(missing_cols),
             available_cols,
         )
@@ -92,9 +88,7 @@ def _patched_load(self: "AnimalSpeak") -> None:  # type: ignore[override] – mo
         self._data["labels"] = self._data["canonical_name"].apply(
             lambda x: [x] if isinstance(x, str) and x.strip() else []
         )
-        logger.info(
-            "AnimalSpeak column-patch: created 'labels' column from 'canonical_name'"
-        )
+        logger.info("AnimalSpeak column-patch: created 'labels' column from 'canonical_name'")
     logger.info(
         "AnimalSpeak column-patch applied ⇒ kept %d columns: %s",
         len(available_cols),

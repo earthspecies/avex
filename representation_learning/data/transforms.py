@@ -26,12 +26,8 @@ class TrainValSplitConfig(BaseModel):
         le=1.0,
         description="Proportion of the dataset to include in the train split",
     )
-    random_state: Optional[int] = Field(
-        default=42, description="Random state for reproducible splits"
-    )
-    stratify_column: Optional[str] = Field(
-        default=None, description="Column name to use for stratified splitting"
-    )
+    random_state: Optional[int] = Field(default=42, description="Random state for reproducible splits")
+    stratify_column: Optional[str] = Field(default=None, description="Column name to use for stratified splitting")
 
 
 class TrainValSplitTransform:

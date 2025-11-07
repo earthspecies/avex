@@ -74,10 +74,7 @@ class SupervisedStrategy(TrainingStrategy):
         # DEBUG: Check for NaN in model outputs
         if torch.isnan(outputs).any():
             logger.warning(f"NaN detected in model outputs! Shape: {outputs.shape}")
-            logger.warning(
-                f"Output stats: min={outputs.min():.6f}, max={outputs.max():.6f}, "
-                f"mean={outputs.mean():.6f}"
-            )
+            logger.warning(f"Output stats: min={outputs.min():.6f}, max={outputs.max():.6f}, mean={outputs.mean():.6f}")
             nan_count = torch.isnan(outputs).sum().item()
             logger.warning(f"Number of NaN values in outputs: {nan_count}")
 
@@ -91,9 +88,7 @@ class SupervisedStrategy(TrainingStrategy):
         if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
             # BCE expects float multi-hot targets (shape [B, C])
             if target.dim() == 1:
-                target = torch.nn.functional.one_hot(
-                    target.long(), num_classes=outputs.size(1)
-                ).float()
+                target = torch.nn.functional.one_hot(target.long(), num_classes=outputs.size(1)).float()
         elif isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             # Cross-entropy expects class indices (shape [B])
             if target.dim() > 1:
@@ -107,10 +102,7 @@ class SupervisedStrategy(TrainingStrategy):
                 f"NaN loss detected! outputs stats: min={outputs.min():.6f}, "
                 f"max={outputs.max():.6f}, mean={outputs.mean():.6f}"
             )
-            logger.warning(
-                f"Target stats: min={target.min():.6f}, max={target.max():.6f}, "
-                f"mean={target.mean():.6f}"
-            )
+            logger.warning(f"Target stats: min={target.min():.6f}, max={target.max():.6f}, mean={target.mean():.6f}")
             logger.warning(f"Loss value: {loss.item()}")
 
         # Return predictions and targets for metric computation
@@ -124,13 +116,7 @@ class SupervisedStrategy(TrainingStrategy):
                 predictions = outputs.detach()
                 if target.dim() == 1:
                     # Convert indices to one-hot for metric computation
-                    targets = (
-                        torch.nn.functional.one_hot(
-                            target.long(), num_classes=outputs.size(1)
-                        )
-                        .float()
-                        .detach()
-                    )
+                    targets = torch.nn.functional.one_hot(target.long(), num_classes=outputs.size(1)).float().detach()
                 else:
                     targets = target.detach()
 
@@ -160,9 +146,7 @@ class CLIPStrategy(TrainingStrategy):
         padding_mask = batch.get("padding_mask")
 
         # Forward pass through CLIPModel
-        audio_emb, text_emb, logit_scale = model(
-            audio, text=text, padding_mask=padding_mask
-        )
+        audio_emb, text_emb, logit_scale = model(audio, text=text, padding_mask=padding_mask)
 
         # Debug: Log before loss computation
         if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
@@ -172,9 +156,7 @@ class CLIPStrategy(TrainingStrategy):
 
         # Get loss and logits from criterion
         if isinstance(self.criterion, ClipLoss):
-            loss, logits = self.criterion(
-                audio_emb, text_emb, logit_scale, output_logits=True
-            )
+            loss, logits = self.criterion(audio_emb, text_emb, logit_scale, output_logits=True)
         else:
             loss = self.criterion(audio_emb, text_emb, logit_scale)
             with torch.no_grad():
@@ -182,9 +164,7 @@ class CLIPStrategy(TrainingStrategy):
 
         # Debug: Log after loss computation
         if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
-            if hasattr(self, "_debug_first_loss") and not hasattr(
-                self, "_debug_first_loss_done"
-            ):
+            if hasattr(self, "_debug_first_loss") and not hasattr(self, "_debug_first_loss_done"):
                 logger.info("[DEBUG] First CLIP loss computation completed")
                 self._debug_first_loss_done = True
 
@@ -220,9 +200,7 @@ class CLIPStrategy(TrainingStrategy):
             if hasattr(model, "logit_scale"):
                 self.additional_metrics["logit_scale"] = model.logit_scale.exp().item()
             elif hasattr(model, "module") and hasattr(model.module, "logit_scale"):
-                self.additional_metrics["logit_scale"] = (
-                    model.module.logit_scale.exp().item()
-                )
+                self.additional_metrics["logit_scale"] = model.module.logit_scale.exp().item()
 
         return TrainingResult(
             loss=loss,
@@ -257,15 +235,11 @@ class EATSSLStrategy(TrainingStrategy):
         out = model(audio, padding_mask=padding_mask)
 
         if not isinstance(out, dict) or "losses" not in out:
-            raise RuntimeError(
-                "EAT model did not return expected loss dict in SSL mode"
-            )
+            raise RuntimeError("EAT model did not return expected loss dict in SSL mode")
 
         # Per-component averages for logging
         sample_size = out["sample_size"].clamp(min=1).item()
-        component_metrics = {
-            k: v.sum().item() / sample_size for k, v in out["losses"].items()
-        }
+        component_metrics = {k: v.sum().item() / sample_size for k, v in out["losses"].items()}
 
         # Add additional EAT metrics
         if "masked_pct" in out:
@@ -304,9 +278,7 @@ class StrategyFactory:
     """Factory for creating training strategies."""
 
     @staticmethod
-    def create_strategy(
-        mode: str, criterion: nn.Module, device: torch.device
-    ) -> TrainingStrategy:
+    def create_strategy(mode: str, criterion: nn.Module, device: torch.device) -> TrainingStrategy:
         """Create appropriate training strategy based on mode.
 
         Returns

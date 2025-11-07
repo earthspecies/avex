@@ -58,17 +58,13 @@ class MockModel:
             Mock embeddings tensor, list of tensors, or dictionary with
             layer names as keys.
         """
-        batch_size = (
-            x.shape[0] if isinstance(x, torch.Tensor) else x["raw_wav"].shape[0]
-        )
+        batch_size = x.shape[0] if isinstance(x, torch.Tensor) else x["raw_wav"].shape[0]
 
         if aggregation == "none" and len(self.layer_names) > 1:
             # Return dictionary with layer names as keys for multiple layers
             return {
                 layer_name: torch.randn(batch_size, dim)
-                for layer_name, dim in zip(
-                    self.layer_names, self.embedding_dims, strict=False
-                )
+                for layer_name, dim in zip(self.layer_names, self.embedding_dims, strict=False)
             }
         elif aggregation == "mean" and len(self.layer_names) > 1:
             # Return single tensor (concatenated) for mean aggregation
@@ -149,9 +145,7 @@ def dataloader(sample_data: tuple[torch.Tensor, torch.Tensor]) -> DataLoader:
 class TestEmbeddingExtraction:
     """Test embedding extraction functionality."""
 
-    def test_extract_embeddings_single_layer(
-        self, mock_model_single_layer: MockModel, dataloader: DataLoader
-    ) -> None:
+    def test_extract_embeddings_single_layer(self, mock_model_single_layer: MockModel, dataloader: DataLoader) -> None:
         """Test embedding extraction with single layer."""
         device = torch.device("cpu")
 
@@ -170,9 +164,7 @@ class TestEmbeddingExtraction:
         assert embeddings[key].shape == (10, 128)  # 10 samples, 128 dims
         assert labels.shape == (10,)
 
-    def test_extract_embeddings_multi_layer(
-        self, mock_model_multi_layer: MockModel, dataloader: DataLoader
-    ) -> None:
+    def test_extract_embeddings_multi_layer(self, mock_model_multi_layer: MockModel, dataloader: DataLoader) -> None:
         """Test embedding extraction with multiple layers."""
         device = torch.device("cpu")
 
@@ -286,9 +278,7 @@ class TestSaveLoadEmbeddings:
             save_embeddings_arrays(embeddings, labels, save_path, num_labels)
 
             # Load embeddings
-            loaded_embeddings, loaded_labels, loaded_num_labels = (
-                load_embeddings_arrays(save_path)
-            )
+            loaded_embeddings, loaded_labels, loaded_num_labels = load_embeddings_arrays(save_path)
 
             # Should return dictionary in current API
             assert isinstance(loaded_embeddings, dict)
@@ -313,18 +303,14 @@ class TestSaveLoadEmbeddings:
             save_embeddings_arrays(embeddings, labels, save_path, num_labels)
 
             # Load embeddings
-            loaded_embeddings, loaded_labels, loaded_num_labels = (
-                load_embeddings_arrays(save_path)
-            )
+            loaded_embeddings, loaded_labels, loaded_num_labels = load_embeddings_arrays(save_path)
 
             # Should return dictionary
             assert isinstance(loaded_embeddings, dict)
             assert set(loaded_embeddings.keys()) == set(embeddings.keys())
 
             for layer_name in embeddings:
-                assert torch.allclose(
-                    embeddings[layer_name], loaded_embeddings[layer_name]
-                )
+                assert torch.allclose(embeddings[layer_name], loaded_embeddings[layer_name])
 
             assert torch.allclose(labels, loaded_labels)
             assert loaded_num_labels == num_labels
@@ -342,9 +328,7 @@ class TestSaveLoadEmbeddings:
             save_embeddings_arrays(embeddings, labels, save_path, num_labels)
 
             # Load should work and return dict
-            loaded_embeddings, loaded_labels, loaded_num_labels = (
-                load_embeddings_arrays(save_path)
-            )
+            loaded_embeddings, loaded_labels, loaded_num_labels = load_embeddings_arrays(save_path)
 
             assert isinstance(loaded_embeddings, dict)
             assert torch.allclose(embeddings["embed"], loaded_embeddings["embed"])
@@ -392,9 +376,7 @@ class TestStreamingExtraction:
             # File should exist
             assert save_path.exists()
 
-    def test_streaming_extraction_multi_layer(
-        self, mock_model_multi_layer: MockModel, dataloader: DataLoader
-    ) -> None:
+    def test_streaming_extraction_multi_layer(self, mock_model_multi_layer: MockModel, dataloader: DataLoader) -> None:
         """Test streaming extraction with multiple layers."""
         device = torch.device("cpu")
 
@@ -497,9 +479,7 @@ class TestEdgeCases:
         assert embeddings["layer1"].shape == (1, 128)
         assert labels.shape == (1,)
 
-    def test_different_aggregation_methods(
-        self, mock_model_multi_layer: MockModel, dataloader: DataLoader
-    ) -> None:
+    def test_different_aggregation_methods(self, mock_model_multi_layer: MockModel, dataloader: DataLoader) -> None:
         """Test different aggregation methods."""
         device = torch.device("cpu")
 
@@ -540,9 +520,7 @@ class TestEdgeCases:
             save_embeddings_arrays(embeddings, labels, save_path, num_labels)
 
             # Load embeddings
-            loaded_embeddings, loaded_labels, loaded_num_labels = (
-                load_embeddings_arrays(save_path)
-            )
+            loaded_embeddings, loaded_labels, loaded_num_labels = load_embeddings_arrays(save_path)
 
             # Check that all layers are correctly reshaped
             for layer_name, original_emb in embeddings.items():
@@ -550,14 +528,11 @@ class TestEdgeCases:
 
                 # Check shapes match exactly
                 assert loaded_emb.shape == original_emb.shape, (
-                    f"Shape mismatch for {layer_name}: "
-                    f"{loaded_emb.shape} != {original_emb.shape}"
+                    f"Shape mismatch for {layer_name}: {loaded_emb.shape} != {original_emb.shape}"
                 )
 
                 # Check data is preserved (within floating point precision)
-                assert torch.allclose(loaded_emb, original_emb, rtol=1e-6), (
-                    f"Data not preserved for {layer_name}"
-                )
+                assert torch.allclose(loaded_emb, original_emb, rtol=1e-6), f"Data not preserved for {layer_name}"
 
             assert loaded_labels.shape == labels.shape
             assert loaded_num_labels == num_labels
@@ -569,9 +544,7 @@ class TestEdgeCases:
         batch_size = 3
 
         # Create 2D embedding with sequential values for easy verification
-        layer1_2d = torch.arange(batch_size * 128, dtype=torch.float32).reshape(
-            batch_size, 128
-        )
+        layer1_2d = torch.arange(batch_size * 128, dtype=torch.float32).reshape(batch_size, 128)
 
         # Create 3D embedding with a specific pattern
         layer2_3d = torch.zeros(batch_size, 4, 8, dtype=torch.float32)
@@ -603,23 +576,17 @@ class TestEdgeCases:
             save_embeddings_arrays(embeddings, labels, save_path, num_labels)
 
             # Load embeddings
-            loaded_embeddings, loaded_labels, loaded_num_labels = (
-                load_embeddings_arrays(save_path)
-            )
+            loaded_embeddings, loaded_labels, loaded_num_labels = load_embeddings_arrays(save_path)
 
             # Verify exact order preservation for each layer
             for layer_name, original_emb in embeddings.items():
                 loaded_emb = loaded_embeddings[layer_name]
 
                 # Check shapes match exactly
-                assert loaded_emb.shape == original_emb.shape, (
-                    f"Shape mismatch for {layer_name}"
-                )
+                assert loaded_emb.shape == original_emb.shape, f"Shape mismatch for {layer_name}"
 
                 # Check that values are EXACTLY the same (no tolerance)
-                assert torch.equal(loaded_emb, original_emb), (
-                    f"Exact data order not preserved for {layer_name}"
-                )
+                assert torch.equal(loaded_emb, original_emb), f"Exact data order not preserved for {layer_name}"
 
                 # Additional verification: check specific known values
                 if layer_name == "layer1_2d":
@@ -681,23 +648,17 @@ class TestEdgeCases:
             reshaped = flattened.reshape(batch_size, *embedding_dim)
 
             # Verify exact equality
-            assert torch.equal(original, reshaped), (
-                f"Flattening/reshaping failed for shape {shape}"
-            )
+            assert torch.equal(original, reshaped), f"Flattening/reshaping failed for shape {shape}"
 
             # Verify the flattening size matches np.prod calculation
             expected_flattened_size = np.prod(embedding_dim)
-            assert flattened.shape[1] == expected_flattened_size, (
-                f"Flattened size mismatch for {shape}"
-            )
+            assert flattened.shape[1] == expected_flattened_size, f"Flattened size mismatch for {shape}"
 
             # Verify specific values are in the right positions
             for i in range(batch_size):
                 for j in range(min(5, expected_flattened_size)):  # Check first 5 values
                     expected_val = i * 1000 + j
-                    assert flattened[i, j] == expected_val, (
-                        f"Value mismatch at [{i}, {j}] for shape {shape}"
-                    )
+                    assert flattened[i, j] == expected_val, f"Value mismatch at [{i}, {j}] for shape {shape}"
                     assert reshaped.view(batch_size, -1)[i, j] == expected_val, (
                         f"Reshaped value mismatch at [{i}, {j}] for shape {shape}"
                     )

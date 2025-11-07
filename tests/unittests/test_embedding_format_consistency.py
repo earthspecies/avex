@@ -58,9 +58,7 @@ class _FakeModel:
 
         # Produce deterministic embeddings per layer
         def _make(batch: int, offset: int) -> torch.Tensor:
-            base = torch.arange(
-                batch * self.seq_len * self.feat_dim, dtype=torch.float32
-            )
+            base = torch.arange(batch * self.seq_len * self.feat_dim, dtype=torch.float32)
             base = base.reshape(batch, self.seq_len, self.feat_dim)
             return base + float(offset)
 
@@ -88,9 +86,7 @@ def test_streaming_and_inmemory_write_identical(tmp_path: torch.Tensor) -> None:
     aggregation = "none"
 
     # Build tiny dataloader
-    ds = _TinyRawDataset(
-        num_samples=num_samples, wav_len=wav_len, num_classes=num_classes
-    )
+    ds = _TinyRawDataset(num_samples=num_samples, wav_len=wav_len, num_classes=num_classes)
     dl = DataLoader(ds, batch_size=4, shuffle=False)
 
     model = _FakeModel(seq_len=4, feat_dim=6)
@@ -129,11 +125,7 @@ def test_streaming_and_inmemory_write_identical(tmp_path: torch.Tensor) -> None:
         disable_layerdrop=None,
     )
 
-    num_labels = int(
-        torch.unique(
-            labels if labels.dim() == 1 else torch.argmax(labels, dim=-1)
-        ).numel()
-    )
+    num_labels = int(torch.unique(labels if labels.dim() == 1 else torch.argmax(labels, dim=-1)).numel())
     save_embeddings_arrays(
         embeds_dict,
         labels,
@@ -174,9 +166,7 @@ def test_loading_matches_original_values(tmp_path: torch.Tensor) -> None:
     layer_names = ["layer_a", "layer_b"]
     aggregation = "none"
 
-    ds = _TinyRawDataset(
-        num_samples=num_samples, wav_len=wav_len, num_classes=num_classes
-    )
+    ds = _TinyRawDataset(num_samples=num_samples, wav_len=wav_len, num_classes=num_classes)
     dl = DataLoader(ds, batch_size=3, shuffle=False)
     model = _FakeModel(seq_len=3, feat_dim=5)
 
@@ -211,11 +201,7 @@ def test_loading_matches_original_values(tmp_path: torch.Tensor) -> None:
         disable_tqdm=True,
         disable_layerdrop=None,
     )
-    num_labels = int(
-        torch.unique(
-            labels if labels.dim() == 1 else torch.argmax(labels, dim=-1)
-        ).numel()
-    )
+    num_labels = int(torch.unique(labels if labels.dim() == 1 else torch.argmax(labels, dim=-1)).numel())
     save_embeddings_arrays(
         embeds_dict,
         labels,

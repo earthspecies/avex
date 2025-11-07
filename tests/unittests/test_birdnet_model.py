@@ -38,12 +38,8 @@ class TestBirdNetModel:
             Mock: A mock TFLite interpreter with output details and tensor methods.
         """
         mock_interpreter = Mock()
-        mock_interpreter.get_output_details.return_value = [
-            {"name": "embedding_output", "shape": [1, 1024]}
-        ]
-        mock_interpreter.get_tensor.return_value = np.random.randn(3, 1024).astype(
-            np.float32
-        )
+        mock_interpreter.get_output_details.return_value = [{"name": "embedding_output", "shape": [1, 1024]}]
+        mock_interpreter.get_tensor.return_value = np.random.randn(3, 1024).astype(np.float32)
         return mock_interpreter
 
     @pytest.fixture
@@ -83,9 +79,7 @@ class TestBirdNetModel:
         return torch.ones(2, 144000, dtype=torch.bool)
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_birdnet_model_initialization(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock
-    ) -> None:
+    def test_birdnet_model_initialization(self, mock_analyzer_class: Mock, mock_analyzer: Mock) -> None:
         """Test BirdNET model initialization."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = Mock()
@@ -100,9 +94,7 @@ class TestBirdNetModel:
         assert model.device == "cpu"
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_birdnet_model_no_classifier(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock
-    ) -> None:
+    def test_birdnet_model_no_classifier(self, mock_analyzer_class: Mock, mock_analyzer: Mock) -> None:
         """Test BirdNET model without classifier."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = Mock()
@@ -113,9 +105,7 @@ class TestBirdNetModel:
         assert model.classifier is None
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_birdnet_model_matching_classes(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock
-    ) -> None:
+    def test_birdnet_model_matching_classes(self, mock_analyzer_class: Mock, mock_analyzer: Mock) -> None:
         """Test BirdNET model when num_classes matches num_species."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = Mock()
@@ -139,9 +129,7 @@ class TestBirdNetModel:
         with patch.object(model, "_embedding_for_clip") as mock_embed:
             mock_embed.return_value = np.random.randn(3, 1024).astype(np.float32)
 
-            result = model.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="mean"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 144000), aggregation="mean")
 
             assert isinstance(result, torch.Tensor)
             assert result.shape == (2, 1024)
@@ -160,9 +148,7 @@ class TestBirdNetModel:
         with patch.object(model, "_embedding_for_clip") as mock_embed:
             mock_embed.return_value = np.random.randn(3, 1024).astype(np.float32)
 
-            result = model.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="none"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 144000), aggregation="none")
 
             assert isinstance(result, list)
             assert len(result) == 2  # One per batch item
@@ -189,9 +175,7 @@ class TestBirdNetModel:
         with patch.object(model, "_embedding_for_clip") as mock_embed:
             mock_embed.return_value = np.random.randn(3, 1024).astype(np.float32)
 
-            result = model.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="max"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 144000), aggregation="max")
 
             assert isinstance(result, torch.Tensor)
             assert result.shape == (2, 1024)
@@ -210,9 +194,7 @@ class TestBirdNetModel:
         with patch.object(model, "_embedding_for_clip") as mock_embed:
             mock_embed.return_value = np.random.randn(3, 1024).astype(np.float32)
 
-            result = model.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="cls_token"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 144000), aggregation="cls_token")
 
             assert isinstance(result, torch.Tensor)
             assert result.shape == (2, 1024)
@@ -255,9 +237,7 @@ class TestBirdNetModel:
             mock_embed.return_value = np.random.randn(3, 1024).astype(np.float32)
 
             with pytest.raises(ValueError, match="Unsupported aggregation method"):
-                model.extract_embeddings(
-                    x=torch.randn(2, 144000), aggregation="invalid_method"
-                )
+                model.extract_embeddings(x=torch.randn(2, 144000), aggregation="invalid_method")
 
     @patch("representation_learning.models.birdnet.Analyzer")
     def test_extract_embeddings_sequence_probe_compatibility(
@@ -274,9 +254,7 @@ class TestBirdNetModel:
             mock_embed.return_value = np.random.randn(3, 1024).astype(np.float32)
 
             # Test with aggregation="none" for sequence probes
-            result = model.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="none"
-            )
+            result = model.extract_embeddings(x=torch.randn(2, 144000), aggregation="none")
 
             # Should return list of 3D tensors
             assert isinstance(result, list)
@@ -304,17 +282,13 @@ class TestBirdNetModel:
 
             # Test on CPU
             model_cpu = BirdNetModel(num_classes=10, device="cpu")
-            result_cpu = model_cpu.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="mean"
-            )
+            result_cpu = model_cpu.extract_embeddings(x=torch.randn(2, 144000), aggregation="mean")
             assert result_cpu.device.type == "cpu"
 
             # Test on CUDA if available
             if torch.cuda.is_available():
                 model_cuda = BirdNetModel(num_classes=10, device="cuda")
-                result_cuda = model_cuda.extract_embeddings(
-                    x=torch.randn(2, 144000), aggregation="mean"
-                )
+                result_cuda = model_cuda.extract_embeddings(x=torch.randn(2, 144000), aggregation="mean")
                 assert result_cuda.device.type == "cuda"
 
     @patch("representation_learning.models.birdnet.Analyzer")
@@ -340,9 +314,7 @@ class TestBirdNetModel:
                 x=torch.randn(2, 144000), aggregation="mean", padding_mask=padding_mask
             )
 
-            result_without_mask = model.extract_embeddings(
-                x=torch.randn(2, 144000), aggregation="mean"
-            )
+            result_without_mask = model.extract_embeddings(x=torch.randn(2, 144000), aggregation="mean")
 
             # Results should be identical since padding_mask is unused
             assert torch.allclose(result_with_mask, result_without_mask)
@@ -372,9 +344,7 @@ class TestBirdNetModel:
             assert torch.allclose(result1, result2)
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_forward_method(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock
-    ) -> None:
+    def test_forward_method(self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock) -> None:
         """Test the forward method with classifier."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = mock_interpreter
@@ -410,9 +380,7 @@ class TestBirdNetModel:
             assert result.shape == (2, 3)  # (batch_size, num_species)
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_device_movement(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock
-    ) -> None:
+    def test_device_movement(self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock) -> None:
         """Test device movement methods."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = mock_interpreter
@@ -433,9 +401,7 @@ class TestBirdNetModel:
             assert next(model_cpu.classifier.parameters()).device.type == "cpu"
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_species_mapping(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock
-    ) -> None:
+    def test_species_mapping(self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock) -> None:
         """Test species index mapping methods."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = mock_interpreter
@@ -467,18 +433,12 @@ class TestBirdNetModel:
         model = BirdNetModel(num_classes=10, device="cpu")
 
         # Test that gradient checkpointing logs a warning
-        with patch(
-            "representation_learning.models.birdnet.logger.warning"
-        ) as mock_warning:
+        with patch("representation_learning.models.birdnet.logger.warning") as mock_warning:
             model.enable_gradient_checkpointing()
-            mock_warning.assert_called_once_with(
-                "Gradient checkpointing is not supported for BirdNET."
-            )
+            mock_warning.assert_called_once_with("Gradient checkpointing is not supported for BirdNET.")
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_model_attributes(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock
-    ) -> None:
+    def test_model_attributes(self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock) -> None:
         """Test that model attributes are correctly set."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = mock_interpreter
@@ -492,9 +452,7 @@ class TestBirdNetModel:
         assert hasattr(model, "device")
 
     @patch("representation_learning.models.birdnet.Analyzer")
-    def test_model_methods(
-        self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock
-    ) -> None:
+    def test_model_methods(self, mock_analyzer_class: Mock, mock_analyzer: Mock, mock_interpreter: Mock) -> None:
         """Test that model methods exist and are callable."""
         mock_analyzer_class.return_value = mock_analyzer
         mock_analyzer.interpreter = mock_interpreter

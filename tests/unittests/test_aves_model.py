@@ -32,9 +32,7 @@ class TestAVESModel:
         x = torch.randn(2, 16000)  # 2 seconds of audio at 16kHz
 
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
             result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -54,9 +52,7 @@ class TestAVESModel:
         }
 
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
             result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -74,14 +70,10 @@ class TestAVESModel:
         padding_mask = torch.zeros(2, 16000, dtype=torch.bool)
 
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
-            result = aves_model.extract_embeddings(
-                x, padding_mask=padding_mask, aggregation="mean"
-            )
+            result = aves_model.extract_embeddings(x, padding_mask=padding_mask, aggregation="mean")
 
         # Clean up
         aves_model.deregister_all_hooks()
@@ -133,9 +125,7 @@ class TestAVESModel:
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -150,9 +140,7 @@ class TestAVESModel:
         """Test embedding extraction when no specified layers are found."""
         layers = ["nonexistent.layer"]
 
-        with pytest.raises(
-            ValueError, match="Layer 'nonexistent.layer' not found in model"
-        ):
+        with pytest.raises(ValueError, match="Layer 'nonexistent.layer' not found in model"):
             aves_model.register_hooks_for_layers(layers)
 
     def test_extract_embeddings_aggregation_none(self, aves_model: AVESModel) -> None:
@@ -180,9 +168,7 @@ class TestAVESModel:
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result = aves_model.extract_embeddings(x, aggregation="none")
@@ -223,9 +209,7 @@ class TestAVESModel:
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -263,9 +247,7 @@ class TestAVESModel:
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -301,9 +283,7 @@ class TestAVESModel:
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result1 = aves_model.extract_embeddings(x, aggregation="mean")
@@ -316,9 +296,7 @@ class TestAVESModel:
             assert torch.is_tensor(result1)
             assert torch.is_tensor(result2)
 
-    def test_extract_embeddings_all_layers_fallback(
-        self, aves_model: AVESModel
-    ) -> None:
+    def test_extract_embeddings_all_layers_fallback(self, aves_model: AVESModel) -> None:
         """Test fallback behavior when no MLP layers are found with 'all'."""
         # Temporarily clear MLP layers to simulate no discovery
         aves_model._discover_linear_layers()
@@ -329,9 +307,7 @@ class TestAVESModel:
             x = torch.randn(2, 16000)
 
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result1 = aves_model.extract_embeddings(x, aggregation="mean")
@@ -351,9 +327,7 @@ class TestAVESModel:
             # Restore original MLP layers
             aves_model._layer_names = original_layer_names
 
-    def test_extract_embeddings_mixed_layers_and_all(
-        self, aves_model: AVESModel
-    ) -> None:
+    def test_extract_embeddings_mixed_layers_and_all(self, aves_model: AVESModel) -> None:
         """Test embedding extraction with both specific layers and 'all'."""
         x = torch.randn(2, 16000)
 
@@ -377,9 +351,7 @@ class TestAVESModel:
         else:
             # If no MLP layers found, test with empty layers
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -395,9 +367,7 @@ class TestAVESModel:
         x = torch.randn(2, 16000)
 
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
             result1 = aves_model.extract_embeddings(x, aggregation="mean")
@@ -411,9 +381,7 @@ class TestAVESModel:
         assert result1.shape[0] == 2  # batch size
         assert result1.shape[1] > 0  # features
 
-    def test_extract_embeddings_different_batch_sizes(
-        self, aves_model: AVESModel
-    ) -> None:
+    def test_extract_embeddings_different_batch_sizes(self, aves_model: AVESModel) -> None:
         """Test embedding extraction with different batch sizes."""
         batch_sizes = [1, 2, 4]
 
@@ -421,9 +389,7 @@ class TestAVESModel:
             x = torch.randn(batch_size, 16000)
 
             # Register hooks for specific layers that we know exist
-            aves_model.register_hooks_for_layers(
-                ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-            )
+            aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
             with torch.no_grad():
                 result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -440,9 +406,7 @@ class TestAVESModel:
 
         # Test on CPU (default)
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
             result_cpu = aves_model.extract_embeddings(x, aggregation="mean")
@@ -460,9 +424,7 @@ class TestAVESModel:
 
         # Should work without gradients
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
             result = aves_model.extract_embeddings(x, aggregation="mean")
@@ -474,9 +436,7 @@ class TestAVESModel:
         assert result.shape[1] > 0  # features
         assert not result.requires_grad
 
-    def test_extract_embeddings_with_realistic_audio(
-        self, aves_model: AVESModel
-    ) -> None:
+    def test_extract_embeddings_with_realistic_audio(self, aves_model: AVESModel) -> None:
         """Test embedding extraction with realistic audio data."""
         # Create realistic audio data (sine wave)
         sample_rate = 16000
@@ -488,9 +448,7 @@ class TestAVESModel:
         x = audio.unsqueeze(0)  # (1, time)
 
         # Register hooks for specific layers that we know exist
-        aves_model.register_hooks_for_layers(
-            ["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"]
-        )
+        aves_model.register_hooks_for_layers(["model.encoder.transformer.layers.0.feed_forward.intermediate_dense"])
 
         with torch.no_grad():
             result = aves_model.extract_embeddings(x, aggregation="mean")

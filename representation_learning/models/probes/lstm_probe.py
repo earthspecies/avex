@@ -57,9 +57,7 @@ class LSTMProbe(BaseProbe3D):
     def build_head(self, inferred_dim: int) -> None:  # noqa: D401
         """Build LSTM and classifier."""
         # Heuristic to select stable hidden size with short sequences
-        lstm_true_hidden_size = int(
-            np.maximum(int((self.max_sequence_length or 4) / 4), self.lstm_hidden_size)
-        )
+        lstm_true_hidden_size = int(np.maximum(int((self.max_sequence_length or 4) / 4), self.lstm_hidden_size))
         self.lstm = nn.LSTM(
             input_size=inferred_dim,
             hidden_size=lstm_true_hidden_size,
@@ -72,9 +70,7 @@ class LSTMProbe(BaseProbe3D):
         self.classifier = nn.Linear(classifier_input_dim, self.num_classes)
 
         if self.use_positional_encoding:
-            self.pos_encoding = nn.Parameter(
-                torch.randn(1, self.max_sequence_length or 1000, inferred_dim)
-            )
+            self.pos_encoding = nn.Parameter(torch.randn(1, self.max_sequence_length or 1000, inferred_dim))
         else:
             self.pos_encoding = None  # type: ignore[assignment]
 
@@ -88,9 +84,7 @@ class LSTMProbe(BaseProbe3D):
         except Exception:
             pass
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass matching original LSTM probe behavior.
 
         Returns:

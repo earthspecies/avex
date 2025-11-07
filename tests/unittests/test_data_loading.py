@@ -212,8 +212,7 @@ def test_build_dataloaders(tmp_path: Path) -> None:
     assert "label" in batch
     assert batch["raw_wav"].shape[0] <= run_config.training_params.batch_size
     target_len = (
-        run_config.model_spec.audio_config.target_length_seconds
-        * run_config.model_spec.audio_config.sample_rate
+        run_config.model_spec.audio_config.target_length_seconds * run_config.model_spec.audio_config.sample_rate
     )
     assert batch["raw_wav"].shape[1] == target_len
 

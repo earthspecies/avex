@@ -47,9 +47,7 @@ class TestClusteringIntegration:
             cluster_center = torch.zeros(embed_dim)
             cluster_center[class_id * 3] = 10.0  # More separation between clusters
 
-            class_embeds = (
-                torch.randn(n_samples // n_classes, embed_dim) * 0.5 + cluster_center
-            )  # Tighter clusters
+            class_embeds = torch.randn(n_samples // n_classes, embed_dim) * 0.5 + cluster_center  # Tighter clusters
             class_labels = torch.full(
                 (n_samples // n_classes,),
                 class_id,
@@ -106,9 +104,7 @@ class TestClusteringIntegration:
 
         # Test that embedding recomputation logic includes clustering
         need_recompute_embeddings_test = need_retrieval or need_probe or need_clustering
-        expected_recompute = any(
-            mode in eval_modes for mode in ["retrieval", "linear_probe", "clustering"]
-        )
+        expected_recompute = any(mode in eval_modes for mode in ["retrieval", "linear_probe", "clustering"])
         assert need_recompute_embeddings_test == expected_recompute
 
     def test_clustering_metrics_serialization(self) -> None:
@@ -193,9 +189,7 @@ class TestClusteringIntegration:
 
         # Test that the metrics are properly handled
         expected_clustering_metrics = ["clustering_ari", "clustering_nmi"]
-        dataset_clustering_metrics = [
-            m for m in mock_dataset_config["metrics"] if m.startswith("clustering_")
-        ]
+        dataset_clustering_metrics = [m for m in mock_dataset_config["metrics"] if m.startswith("clustering_")]
         assert set(dataset_clustering_metrics) == set(expected_clustering_metrics)
 
     def test_empty_clustering_metrics_handling(self) -> None:
@@ -268,12 +262,8 @@ class TestClusteringIntegration:
 
         for individual_id in range(n_individuals):
             # Create embeddings for this individual (should cluster together)
-            individual_center = (
-                torch.randn(embed_dim) * 2
-            )  # Random but fixed center for this individual
-            individual_embeds = (
-                torch.randn(samples_per_individual, embed_dim) * 0.5 + individual_center
-            )
+            individual_center = torch.randn(embed_dim) * 2  # Random but fixed center for this individual
+            individual_embeds = torch.randn(samples_per_individual, embed_dim) * 0.5 + individual_center
             individual_labels = torch.full(
                 (samples_per_individual,),
                 individual_id,

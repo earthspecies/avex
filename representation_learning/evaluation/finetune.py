@@ -84,10 +84,7 @@ class FineTuneTrainer:
         }
 
         # Add gradient clipping parameter if specified
-        if (
-            hasattr(cfg.training_params, "gradient_clip_val")
-            and cfg.training_params.gradient_clip_val is not None
-        ):
+        if hasattr(cfg.training_params, "gradient_clip_val") and cfg.training_params.gradient_clip_val is not None:
             log_params["gradient_clip_val"] = cfg.training_params.gradient_clip_val
 
         # Add scheduler parameters
@@ -157,9 +154,7 @@ class FineTuneTrainer:
                 gamma=0.5,
             )
         else:
-            logger.warning(
-                f"Unknown scheduler type: {self.scheduler_type}. Using no scheduler."
-            )
+            logger.warning(f"Unknown scheduler type: {self.scheduler_type}. Using no scheduler.")
             return None
 
     def _get_warmup_lr(self, epoch: int) -> float:
@@ -282,9 +277,7 @@ class FineTuneTrainer:
         total_samples = 0
 
         try:
-            metric_calculator = get_metric_class(
-                self.primary_metric_name, self.num_labels
-            )
+            metric_calculator = get_metric_class(self.primary_metric_name, self.num_labels)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to initialize metric '{self.primary_metric_name}' "
@@ -318,11 +311,7 @@ class FineTuneTrainer:
                     mask = mask.to(self.device)
                 y = batch["label"].to(self.device)
 
-                logits = (
-                    self.model(x, padding_mask=mask)
-                    if mask is not None
-                    else self.model(x)
-                )
+                logits = self.model(x, padding_mask=mask) if mask is not None else self.model(x)
             else:
                 # Dictionary embeddings case (no raw_wav key)
                 embed_keys = [k for k in batch.keys() if k != "label"]
@@ -417,9 +406,7 @@ class FineTuneTrainer:
         ckpt_path = ckpt_dir / "best.pt"
 
         if not ckpt_path.exists():
-            logger.warning(
-                f"Best checkpoint not found at {ckpt_path}. Using current model state."
-            )
+            logger.warning(f"Best checkpoint not found at {ckpt_path}. Using current model state.")
             return
 
         # Load the checkpoint
@@ -438,9 +425,7 @@ class FineTuneTrainer:
                     and isinstance(base_model._hooks, dict)
                     and len(base_model._hooks) == 0
                 ):
-                    logging.getLogger("run_finetune").info(
-                        "Re-registering hooks on base_model for layers: %s", layers
-                    )
+                    logging.getLogger("run_finetune").info("Re-registering hooks on base_model for layers: %s", layers)
                     layers = base_model.register_hooks_for_layers(layers)
         except Exception as hook_err:
             logging.getLogger("run_finetune").warning(
@@ -448,8 +433,7 @@ class FineTuneTrainer:
                 hook_err,
             )
         logger.info(
-            f"Restored best model from {ckpt_path} "
-            f"(val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
+            f"Restored best model from {ckpt_path} (val_{self.primary_metric_name}: {self.best_val_metric:.4f})"
         )
 
 
@@ -507,8 +491,7 @@ def train_and_eval_offline(
         )
 
     logger.info(
-        f"Creating offline probe: type={probe_config.probe_type}, "
-        f"input_dim={input_dim}, target_length={target_length}"
+        f"Creating offline probe: type={probe_config.probe_type}, input_dim={input_dim}, target_length={target_length}"
     )
 
     probe = get_probe(
@@ -575,9 +558,7 @@ def train_and_eval_offline(
         # from config
     )
 
-    train_metrics, val_metrics = trainer.train(
-        num_epochs=eval_cfg.training_params.train_epochs
-    )
+    train_metrics, val_metrics = trainer.train(num_epochs=eval_cfg.training_params.train_epochs)
 
     # ---------- probe evaluation on cached test embeddings ----------
     test_loader = torch.utils.data.DataLoader(
@@ -593,9 +574,7 @@ def train_and_eval_offline(
     if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
-        raise ValueError(
-            "Expected metrics to be specified in the evaluation configuration. "
-        )
+        raise ValueError("Expected metrics to be specified in the evaluation configuration. ")
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
@@ -629,10 +608,7 @@ def train_and_eval_offline(
             for met in metrics:
                 met.update(logits, y)
 
-    probe_test_metrics = {
-        name: met.get_primary_metric()
-        for name, met in zip(metric_names, metrics, strict=False)
-    }
+    probe_test_metrics = {name: met.get_primary_metric() for name, met in zip(metric_names, metrics, strict=False)}
     return train_metrics, val_metrics, probe_test_metrics
 
 
@@ -738,8 +714,7 @@ def train_and_eval_online(
         if hasattr(sft_model, "base_model") and sft_model.base_model is not None:
             # Check if this parameter belongs to the base model
             is_base_param = any(
-                name.startswith(f"base_model.{base_name}")
-                for base_name, _ in sft_model.base_model.named_parameters()
+                name.startswith(f"base_model.{base_name}") for base_name, _ in sft_model.base_model.named_parameters()
             )
             if is_base_param:
                 base_total += param.numel()
@@ -765,14 +740,10 @@ def train_and_eval_online(
         else:
             return f"{count} trainable / {total} total"
 
-    logger.info(
-        f"Online training model → {format_params(trainable_params, total_params)}"
-    )
+    logger.info(f"Online training model → {format_params(trainable_params, total_params)}")
     logger.info(f"  Probe parameters: {format_params(probe_trainable, probe_total)}")
     if base_total > 0:
-        logger.info(
-            f"  Base model parameters: {format_params(base_trainable, base_total)}"
-        )
+        logger.info(f"  Base model parameters: {format_params(base_trainable, base_total)}")
     sft_model.train()
 
     # Create optimizer
@@ -799,9 +770,7 @@ def train_and_eval_online(
     )
 
     # Train
-    train_metrics, val_metrics = trainer.train(
-        num_epochs=eval_cfg.training_params.train_epochs
-    )
+    train_metrics, val_metrics = trainer.train(num_epochs=eval_cfg.training_params.train_epochs)
 
     # Evaluate on test set
     sft_model.eval()  # Use the trained fine-tuned model, not the base model
@@ -811,9 +780,7 @@ def train_and_eval_online(
     if dataset_metrics is not None and len(dataset_metrics) > 0:
         metric_names = dataset_metrics
     else:
-        raise ValueError(
-            "Expected metrics to be specified in the evaluation configuration. "
-        )
+        raise ValueError("Expected metrics to be specified in the evaluation configuration. ")
 
     metrics = [get_metric_class(m, num_labels) for m in metric_names]
 
@@ -825,15 +792,10 @@ def train_and_eval_online(
                 mask = mask.to(device)
             y = batch["label"].to(device)
 
-            logits = sft_model(
-                wav, padding_mask=mask
-            )  # Use sft_model instead of base_model
+            logits = sft_model(wav, padding_mask=mask)  # Use sft_model instead of base_model
             for met in metrics:
                 met.update(logits, y)
 
-    test_metrics = {
-        name: met.get_primary_metric()
-        for name, met in zip(metric_names, metrics, strict=False)
-    }
+    test_metrics = {name: met.get_primary_metric() for name, met in zip(metric_names, metrics, strict=False)}
 
     return train_metrics, val_metrics, test_metrics

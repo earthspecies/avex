@@ -63,9 +63,7 @@ class TestEATHFExtractEmbeddings:
 
         return {"raw_wav": audio_input, "padding_mask": padding_mask}
 
-    def test_extract_embeddings_default_behavior(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_default_behavior(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings returns main features by default."""
         # Register hooks for specific layers that we know exist
         model.register_hooks_for_layers(["backbone.model.blocks.0.mlp.fc1"])
@@ -80,9 +78,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 3072)  # fc1 output dimension
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_all_layers(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_all_layers(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that 'all' extracts from all MLP layers (fc1 and fc2)."""
         # Register hooks for all discoverable layers using the 'all' special case
         model.register_hooks_for_layers(["all"])
@@ -100,9 +96,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_specific_layer(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_specific_layer(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extracting from a specific MLP layer."""
         # Register hooks for the specific layer
         model.register_hooks_for_layers(["backbone.model.blocks.0.mlp.fc2"])
@@ -119,9 +113,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 768)  # fc2 output dimension
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_multiple_layers(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_multiple_layers(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extracting from multiple specific MLP layers."""
         # Register hooks for the specified layers
         model.register_hooks_for_layers(
@@ -144,9 +136,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 3840)  # 3072 + 768
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_dict_input(
-        self, model: EATHFModel, dict_input: Dict[str, torch.Tensor]
-    ) -> None:
+    def test_extract_embeddings_dict_input(self, model: EATHFModel, dict_input: Dict[str, torch.Tensor]) -> None:
         """Test extract_embeddings with dictionary input format."""
         # Register hooks for all discoverable layers using the 'all' special case
         model.register_hooks_for_layers(["all"])
@@ -161,9 +151,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_aggregation_none(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_none(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings when aggregation='none' (returns tensor for single
         embedding)."""
         # Register hooks for the specific layer
@@ -185,18 +173,12 @@ class TestEATHFExtractEmbeddings:
             768,
         )  # (batch, seq_len, features)
 
-    def test_extract_embeddings_invalid_layer(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_invalid_layer(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that invalid layer names raise appropriate errors."""
-        with pytest.raises(
-            ValueError, match="Layer 'nonexistent_layer' not found in model"
-        ):
+        with pytest.raises(ValueError, match="Layer 'nonexistent_layer' not found in model"):
             model.register_hooks_for_layers(["nonexistent_layer"])
 
-    def test_extract_embeddings_features_only_mode(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_features_only_mode(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings when model is in features_only mode."""
         # Create a model in features_only mode
         audio_config = AudioConfig(
@@ -221,9 +203,7 @@ class TestEATHFExtractEmbeddings:
         # Register hooks for all discoverable layers using the 'all' special case
         features_model.register_hooks_for_layers(["all"])
 
-        embeddings = features_model.extract_embeddings(
-            x=audio_input, aggregation="mean"
-        )
+        embeddings = features_model.extract_embeddings(x=audio_input, aggregation="mean")
 
         # Clean up
         features_model.deregister_all_hooks()
@@ -233,9 +213,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_custom_num_classes(
-        self, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_custom_num_classes(self, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings with custom number of classes."""
         audio_config = AudioConfig(
             sample_rate=16000,
@@ -271,9 +249,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 5)  # num_classes
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_consistency(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_consistency(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings produces consistent results."""
         # Set deterministic seed for consistent results
         torch.manual_seed(42)
@@ -291,9 +267,7 @@ class TestEATHFExtractEmbeddings:
         # Results should be identical
         assert torch.allclose(embeddings1, embeddings2, atol=1e-6)
 
-    def test_extract_embeddings_device_consistency(
-        self, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_device_consistency(self, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings works on different devices."""
         if torch.cuda.is_available():
             # Set deterministic seed for consistent model initialization
@@ -339,9 +313,7 @@ class TestEATHFExtractEmbeddings:
             # 'all' special case
             model_cpu.register_hooks_for_layers(["all"])
 
-            embeddings1 = model_cpu.extract_embeddings(
-                x=audio_input, aggregation="mean"
-            )
+            embeddings1 = model_cpu.extract_embeddings(x=audio_input, aggregation="mean")
 
             # Clean up CPU model
             model_cpu.deregister_all_hooks()
@@ -350,9 +322,7 @@ class TestEATHFExtractEmbeddings:
             # 'all' special case
             model_gpu.register_hooks_for_layers(["all"])
 
-            embeddings2 = model_gpu.extract_embeddings(
-                x=audio_input_gpu, aggregation="mean"
-            )
+            embeddings2 = model_gpu.extract_embeddings(x=audio_input_gpu, aggregation="mean")
 
             # Clean up GPU model
             model_gpu.deregister_all_hooks()
@@ -379,9 +349,7 @@ class TestEATHFExtractEmbeddings:
             assert embeddings1.abs().max() < 1000
             assert embeddings2.abs().max() < 1000
 
-    def test_extract_embeddings_padding_mask_handling(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_padding_mask_handling(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that padding_mask is properly handled."""
         batch_size = audio_input.shape[0]
         time_steps = audio_input.shape[1]
@@ -407,9 +375,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_empty_layers_list(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_empty_layers_list(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that empty layers list returns main features."""
         # Register hooks for specific layers that we know exist
         model.register_hooks_for_layers(["backbone.model.blocks.0.mlp.fc1"])
@@ -423,9 +389,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 3072)  # fc1 output dimension
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_mixed_layers(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_mixed_layers(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extracting from a mix of specific layers and 'all'."""
         # Register hooks for all discoverable layers using the 'all' special case
         model.register_hooks_for_layers(["all"])
@@ -444,9 +408,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_3d_embeddings(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_3d_embeddings(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test handling of 3D embeddings (if any layers produce them)."""
         # This test is more theoretical since EAT typically produces 2D embeddings
         # when aggregation!="none", but we can test the 3D case
@@ -469,9 +431,7 @@ class TestEATHFExtractEmbeddings:
             768,
         )  # (batch, seq_len, features)
 
-    def test_extract_embeddings_invalid_dimension(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_invalid_dimension(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that invalid embedding dimensions raise appropriate errors."""
         # This test would require mocking to create 4D embeddings
         # For now, we just test that normal 2D embeddings work
@@ -488,9 +448,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_specific_layers_no_all(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_specific_layers_no_all(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extracting from specific layers when 'all' is not in the list."""
         # Register hooks for the specified layers
         model.register_hooks_for_layers(
@@ -513,9 +471,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 3840)  # 3072 + 768
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_classifier_only(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_classifier_only(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extracting from classifier layer only."""
         # Register hooks for the classifier layer
         model.register_hooks_for_layers(["classifier"])
@@ -532,9 +488,7 @@ class TestEATHFExtractEmbeddings:
         assert embeddings.shape == (2, 10)  # num_classes
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_mixed_specific_layers(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_mixed_specific_layers(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test extracting from a mix of MLP and classifier layers."""
         # Register hooks for the specified layers
         model.register_hooks_for_layers(
@@ -577,9 +531,7 @@ class TestEATHFExtractEmbeddings:
         # Should return valid embeddings
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_last_layer(
-        self, model: EATHFModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_last_layer(self, model: EATHFModel, audio_input: torch.Tensor) -> None:
         """Test that 'last_layer' extracts from the last non-classification layer."""
         # Register hooks for the last non-classification layer using the
         # 'last_layer' special case
@@ -597,9 +549,7 @@ class TestEATHFExtractEmbeddings:
 
         # Verify that only one layer was registered
         assert len(model._hook_layers) == 1
-        assert (
-            "last_layer" not in model._hook_layers
-        )  # Should be replaced with actual layer name
+        assert "last_layer" not in model._hook_layers  # Should be replaced with actual layer name
 
 
 if __name__ == "__main__":

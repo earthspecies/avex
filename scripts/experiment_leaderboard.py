@@ -15,9 +15,7 @@ def parse_arguments() -> argparse.Namespace:
     Returns:
         argparse.Namespace: Parsed command line arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Gradio leaderboard for experiment results from CSV file"
-    )
+    parser = argparse.ArgumentParser(description="Gradio leaderboard for experiment results from CSV file")
     parser.add_argument(
         "--csv_file",
         type=str,
@@ -26,26 +24,17 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--training_params",
         type=str,
-        help=(
-            "Comma-delimited list of training parameter field names "
-            "to extract from JSONL files"
-        ),
+        help=("Comma-delimited list of training parameter field names to extract from JSONL files"),
     )
     parser.add_argument(
         "--eval_config",
         type=str,
-        help=(
-            "Comma-delimited list of evaluation config field names "
-            "to extract from JSONL files"
-        ),
+        help=("Comma-delimited list of evaluation config field names to extract from JSONL files"),
     )
     parser.add_argument(
         "--run_config_params",
         type=str,
-        help=(
-            "Comma-delimited list of run config parameter field names "
-            "to extract from JSONL files"
-        ),
+        help=("Comma-delimited list of run config parameter field names to extract from JSONL files"),
     )
     parser.add_argument(
         "--host",
@@ -142,17 +131,12 @@ def load_data(
                         quoting=1,
                         usecols=required_columns,
                     )  # QUOTE_ALL
-                    print(
-                        f"Successfully loaded CSV with quotechar='{quotechar}' "
-                        f"and QUOTE_ALL"
-                    )
+                    print(f"Successfully loaded CSV with quotechar='{quotechar}' and QUOTE_ALL")
                     break
                 except pd.errors.ParserError as e:
                     parsing_errors.append(f"Quotechar '{quotechar}' failed: {e}")
                 except ValueError as e:
-                    parsing_errors.append(
-                        f"Column selection with quotechar '{quotechar}' failed: {e}"
-                    )
+                    parsing_errors.append(f"Column selection with quotechar '{quotechar}' failed: {e}")
 
         # Strategy 3: Try with error handling for bad lines and column selection
         if df is None:
@@ -167,40 +151,26 @@ def load_data(
             except pd.errors.ParserError as e:
                 parsing_errors.append(f"Error handling parsing failed: {e}")
             except ValueError as e:
-                parsing_errors.append(
-                    f"Column selection with error handling failed: {e}"
-                )
+                parsing_errors.append(f"Column selection with error handling failed: {e}")
 
         # Strategy 4: Try reading all columns first, then select
         if df is None:
             try:
                 # Read all columns first
-                all_df = pd.read_csv(
-                    csv_file_path, on_bad_lines="skip", engine="python"
-                )
+                all_df = pd.read_csv(csv_file_path, on_bad_lines="skip", engine="python")
                 # Then select only the columns we want
-                available_columns = [
-                    col for col in required_columns if col in all_df.columns
-                ]
+                available_columns = [col for col in required_columns if col in all_df.columns]
                 if available_columns:
                     df = all_df[available_columns]
-                    print(
-                        f"Successfully loaded CSV by reading all columns first, "
-                        f"then selecting: {available_columns}"
-                    )
+                    print(f"Successfully loaded CSV by reading all columns first, then selecting: {available_columns}")
                 else:
-                    raise ValueError(
-                        "None of the required columns found in the CSV file"
-                    )
+                    raise ValueError("None of the required columns found in the CSV file")
             except Exception as e:
                 parsing_errors.append(f"Read all columns then select failed: {e}")
 
         # If all strategies failed
         if df is None:
-            error_msg = (
-                f"Failed to parse CSV file {csv_file_path}. Parsing errors:\n"
-                + "\n".join(parsing_errors)
-            )
+            error_msg = f"Failed to parse CSV file {csv_file_path}. Parsing errors:\n" + "\n".join(parsing_errors)
             raise pd.errors.ParserError(error_msg)
 
         # Check which columns we actually have
@@ -212,10 +182,7 @@ def load_data(
             print(f"Available columns: {available_columns}")
 
         if not available_columns:
-            raise ValueError(
-                f"No required columns found in CSV file. "
-                f"Available columns: {list(df.columns)}"
-            )
+            raise ValueError(f"No required columns found in CSV file. Available columns: {list(df.columns)}")
 
         # Convert timestamp to datetime and sort
         if "timestamp" in df.columns:
@@ -233,25 +200,17 @@ def load_data(
             if eval_config_fields:
                 for field in eval_config_fields:
                     df[f"eval_{field}"] = None
-                print(
-                    f"Added {len(eval_config_fields)} eval_config fields "
-                    f"as empty columns"
-                )
+                print(f"Added {len(eval_config_fields)} eval_config fields as empty columns")
 
             if training_param_fields:
                 for field in training_param_fields:
                     df[f"training_{field}"] = None
-                print(
-                    f"Added {len(training_param_fields)} training_param fields "
-                    f"as empty columns"
-                )
+                print(f"Added {len(training_param_fields)} training_param fields as empty columns")
 
             if run_config_fields:
                 for field in run_config_fields:
                     df[f"run_{field}"] = None
-                print(
-                    f"Added {len(run_config_fields)} run_config fields as empty columns"
-                )
+                print(f"Added {len(run_config_fields)} run_config fields as empty columns")
 
             # Now extract and populate the parameters
             df = extract_config_parameters(
@@ -260,9 +219,7 @@ def load_data(
                 training_param_fields=training_param_fields,
                 run_config_fields=run_config_fields,
             )
-            print(
-                f"Populated configuration parameters. Total columns: {len(df.columns)}"
-            )
+            print(f"Populated configuration parameters. Total columns: {len(df.columns)}")
 
         return df
 
@@ -309,17 +266,13 @@ def prepare_data_for_leaderboard(df: pd.DataFrame) -> pd.DataFrame:
         try:
             # Check if timestamp is already datetime
             if pd.api.types.is_datetime64_any_dtype(df_copy["timestamp"]):
-                df_copy["timestamp"] = df_copy["timestamp"].dt.strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                df_copy["timestamp"] = df_copy["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
             else:
                 # If it's a string, try to convert and format
                 datetime_series = pd.to_datetime(df_copy["timestamp"], errors="coerce")
                 # Only format valid timestamps, keep others as strings
                 mask = datetime_series.notna()
-                df_copy.loc[mask, "timestamp"] = datetime_series[mask].dt.strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                df_copy.loc[mask, "timestamp"] = datetime_series[mask].dt.strftime("%Y-%m-%d %H:%M:%S")
                 # For invalid timestamps, keep the original string value
         except Exception as e:
             print(f"Warning: Could not format timestamp column: {e}")
@@ -496,21 +449,13 @@ def main() -> None:
     run_config_fields = None
 
     if args.eval_config:
-        eval_config_fields = [
-            field.strip() for field in args.eval_config.split(",") if field.strip()
-        ]
+        eval_config_fields = [field.strip() for field in args.eval_config.split(",") if field.strip()]
 
     if args.training_params:
-        training_param_fields = [
-            field.strip() for field in args.training_params.split(",") if field.strip()
-        ]
+        training_param_fields = [field.strip() for field in args.training_params.split(",") if field.strip()]
 
     if args.run_config_params:
-        run_config_fields = [
-            field.strip()
-            for field in args.run_config_params.split(",")
-            if field.strip()
-        ]
+        run_config_fields = [field.strip() for field in args.run_config_params.split(",") if field.strip()]
 
     # Load data from CSV
     df = load_data(
@@ -558,9 +503,7 @@ def main() -> None:
         "test_multiclass_f1": "Test F1 Score",
         "test_map": "Test mAP",
     }
-    display_metric_columns = [
-        metric_column_mapping.get(col, col) for col in metric_columns
-    ]
+    display_metric_columns = [metric_column_mapping.get(col, col) for col in metric_columns]
 
     # Create Gradio interface
     with gr.Blocks(title="Experiment Leaderboard") as demo:
@@ -569,17 +512,11 @@ def main() -> None:
         gr.Markdown("Track and compare model performance across different experiments")
 
         with gr.Row():
-            dataset_filter = gr.Dropdown(
-                choices=datasets, value="All", label="Filter by Dataset"
-            )
-            experiment_filter = gr.Dropdown(
-                choices=experiments, value="All", label="Filter by Experiment"
-            )
+            dataset_filter = gr.Dropdown(choices=datasets, value="All", label="Filter by Dataset")
+            experiment_filter = gr.Dropdown(choices=experiments, value="All", label="Filter by Experiment")
             metric_sort = gr.Dropdown(
                 choices=display_metric_columns,
-                value=(
-                    display_metric_columns[0] if display_metric_columns else "timestamp"
-                ),
+                value=(display_metric_columns[0] if display_metric_columns else "timestamp"),
                 label="Sort by Metric",
             )
             refresh_btn = gr.Button("Refresh Data")
@@ -593,9 +530,7 @@ def main() -> None:
         ]
 
         # Get display columns (exclude hidden ones)
-        display_columns = [
-            col for col in leaderboard_data.columns if col not in columns_to_hide
-        ]
+        display_columns = [col for col in leaderboard_data.columns if col not in columns_to_hide]
 
         leaderboard = Leaderboard(
             value=leaderboard_data,
@@ -608,9 +543,7 @@ def main() -> None:
             height=600,
         )
 
-        def update_leaderboard(
-            dataset_filter: str, experiment_filter: str, metric_sort: str
-        ) -> pd.DataFrame:
+        def update_leaderboard(dataset_filter: str, experiment_filter: str, metric_sort: str) -> pd.DataFrame:
             """Update the leaderboard based on filters and sorting.
 
             Args:
@@ -627,18 +560,14 @@ def main() -> None:
             if dataset_filter != "All" and "dataset_name" in filtered_df.columns:
                 filtered_df = filtered_df[filtered_df["dataset_name"] == dataset_filter]
             if experiment_filter != "All" and "experiment_name" in filtered_df.columns:
-                filtered_df = filtered_df[
-                    filtered_df["experiment_name"] == experiment_filter
-                ]
+                filtered_df = filtered_df[filtered_df["experiment_name"] == experiment_filter]
 
             # Sort by selected metric (convert display name back to original
             # column name)
             reverse_mapping = {v: k for k, v in metric_column_mapping.items()}
             original_metric_col = reverse_mapping.get(metric_sort, metric_sort)
             if original_metric_col in filtered_df.columns:
-                filtered_df = filtered_df.sort_values(
-                    original_metric_col, ascending=False
-                )
+                filtered_df = filtered_df.sort_values(original_metric_col, ascending=False)
 
             # Prepare filtered data for display
             display_df = prepare_data_for_leaderboard(filtered_df)

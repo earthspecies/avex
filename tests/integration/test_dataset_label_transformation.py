@@ -94,9 +94,7 @@ class TestDatasetLabelTransformation:
 
         return _create_config
 
-    def test_dataloader_creation_success(
-        self, config_path: Path, minimal_run_config: Callable[..., RunConfig]
-    ) -> None:
+    def test_dataloader_creation_success(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that dataloaders can be created without errors."""
         # Load evaluation config
         eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
@@ -122,9 +120,7 @@ class TestDatasetLabelTransformation:
         # Create run config
         sample_rate = getattr(test_ds_cfg, "sample_rate", 16000)
         audio_max_length_seconds = getattr(test_ds_cfg, "audio_max_length_seconds", 10)
-        run_cfg = minimal_run_config(
-            sample_rate, audio_max_length_seconds, data_collection_cfg
-        )
+        run_cfg = minimal_run_config(sample_rate, audio_max_length_seconds, data_collection_cfg)
 
         # Build dataloaders - this should not raise any errors
         train_dl, val_dl, test_dl = build_dataloaders(
@@ -139,9 +135,7 @@ class TestDatasetLabelTransformation:
         assert val_dl is not None, "Validation dataloader should not be None"
         assert test_dl is not None, "Test dataloader should not be None"
 
-    def test_label_map_propagation(
-        self, config_path: Path, minimal_run_config: Callable[..., RunConfig]
-    ) -> None:
+    def test_label_map_propagation(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that label maps are correctly propagated to all splits."""
         # Load evaluation config
         eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
@@ -181,12 +175,8 @@ class TestDatasetLabelTransformation:
         assert test_label_map, "Test dataset should have non-empty label_map"
 
         # Label maps should be consistent across splits
-        assert train_label_map == val_label_map, (
-            "Train and val label maps should be identical"
-        )
-        assert train_label_map == test_label_map, (
-            "Train and test label maps should be identical"
-        )
+        assert train_label_map == val_label_map, "Train and val label maps should be identical"
+        assert train_label_map == test_label_map, "Train and test label maps should be identical"
 
         # Check num_labels consistency
         train_num_labels = train_dl.dataset.metadata.get("num_labels", 0)
@@ -194,13 +184,9 @@ class TestDatasetLabelTransformation:
         test_num_labels = test_dl.dataset.metadata.get("num_labels", 0)
 
         assert train_num_labels > 1, "Should have multiple labels for classification"
-        assert train_num_labels == val_num_labels == test_num_labels, (
-            "num_labels should be consistent"
-        )
+        assert train_num_labels == val_num_labels == test_num_labels, "num_labels should be consistent"
 
-    def test_label_format_consistency(
-        self, config_path: Path, minimal_run_config: Callable[..., RunConfig]
-    ) -> None:
+    def test_label_format_consistency(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that labels are in the correct format across all splits."""
         # Load evaluation config and build dataloaders
         eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
@@ -235,22 +221,15 @@ class TestDatasetLabelTransformation:
 
                 # Labels should be integers (for single-label classification)
                 assert isinstance(label, int), (
-                    f"{split_name} sample label should be integer, "
-                    f"got {type(label)}: {label}"
+                    f"{split_name} sample label should be integer, got {type(label)}: {label}"
                 )
-                assert label >= 0, (
-                    f"{split_name} label should be non-negative, got {label}"
-                )
+                assert label >= 0, f"{split_name} label should be non-negative, got {label}"
 
                 # Check that label is within expected range
                 num_labels = dataloader.dataset.metadata.get("num_labels", 0)
-                assert 0 <= label < num_labels, (
-                    f"{split_name} label {label} out of range [0, {num_labels})"
-                )
+                assert 0 <= label < num_labels, f"{split_name} label {label} out of range [0, {num_labels})"
 
-    def test_batch_creation_no_overflow(
-        self, config_path: Path, minimal_run_config: Callable[..., RunConfig]
-    ) -> None:
+    def test_batch_creation_no_overflow(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that batches can be created without overflow errors."""
         # Load evaluation config and build dataloaders
         eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
@@ -285,26 +264,16 @@ class TestDatasetLabelTransformation:
                 # Check batch structure
                 assert "raw_wav" in batch, f"{split_name} batch missing 'raw_wav'"
                 assert "label" in batch, f"{split_name} batch missing 'label'"
-                assert "padding_mask" in batch, (
-                    f"{split_name} batch missing 'padding_mask'"
-                )
+                assert "padding_mask" in batch, f"{split_name} batch missing 'padding_mask'"
 
                 # Check label tensor properties
                 label_tensor = batch["label"]
-                assert isinstance(label_tensor, torch.Tensor), (
-                    f"{split_name} labels should be tensor"
-                )
-                assert label_tensor.dtype == torch.float32, (
-                    f"{split_name} labels should be float32"
-                )
-                assert len(label_tensor.shape) == 2, (
-                    f"{split_name} labels should be 2D (batch_size, num_classes)"
-                )
+                assert isinstance(label_tensor, torch.Tensor), f"{split_name} labels should be tensor"
+                assert label_tensor.dtype == torch.float32, f"{split_name} labels should be float32"
+                assert len(label_tensor.shape) == 2, f"{split_name} labels should be 2D (batch_size, num_classes)"
 
                 # Check that labels are one-hot encoded
-                assert torch.all((label_tensor == 0) | (label_tensor == 1)), (
-                    f"{split_name} labels should be one-hot"
-                )
+                assert torch.all((label_tensor == 0) | (label_tensor == 1)), f"{split_name} labels should be one-hot"
                 assert torch.all(label_tensor.sum(dim=1) == 1), (
                     f"{split_name} each sample should have exactly one label"
                 )
@@ -313,15 +282,11 @@ class TestDatasetLabelTransformation:
 
             except RuntimeError as e:
                 if "overflow" in str(e).lower():
-                    pytest.fail(
-                        f"{split_name} batch creation failed with overflow error: {e}"
-                    )
+                    pytest.fail(f"{split_name} batch creation failed with overflow error: {e}")
                 else:
                     raise e
 
-    def test_no_nan_labels(
-        self, config_path: Path, minimal_run_config: Callable[..., RunConfig]
-    ) -> None:
+    def test_no_nan_labels(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that no labels are NaN after transformation."""
         # Load evaluation config and build dataloaders
         eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
@@ -361,9 +326,7 @@ class TestDatasetLabelTransformation:
                 # Check for NaN
                 if isinstance(label, float) and math.isnan(label):
                     pytest.fail(f"{split_name} sample {i} has NaN label")
-                elif isinstance(label, list) and any(
-                    math.isnan(x) for x in label if isinstance(x, float)
-                ):
+                elif isinstance(label, list) and any(math.isnan(x) for x in label if isinstance(x, float)):
                     pytest.fail(f"{split_name} sample {i} has NaN in label list")
 
                 # Ensure label is not None

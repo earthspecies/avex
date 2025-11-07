@@ -56,16 +56,11 @@ class AttentionAudioModel(ModelBase):
 
         # Multi-head attention layers
         self.attention_layers = nn.ModuleList(
-            [
-                nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
-                for _ in range(num_layers)
-            ]
+            [nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True) for _ in range(num_layers)]
         )
 
         # Layer normalization
-        self.layer_norms = nn.ModuleList(
-            [nn.LayerNorm(d_model) for _ in range(num_layers)]
-        )
+        self.layer_norms = nn.ModuleList([nn.LayerNorm(d_model) for _ in range(num_layers)])
 
         # Feed-forward networks
         self.ffns = nn.ModuleList(
@@ -81,9 +76,7 @@ class AttentionAudioModel(ModelBase):
         )
 
         # Global attention pooling
-        self.global_attention = nn.MultiheadAttention(
-            d_model, nhead, dropout=dropout, batch_first=True
-        )
+        self.global_attention = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
 
         # Classifier
         self.classifier = nn.Sequential(
@@ -95,9 +88,7 @@ class AttentionAudioModel(ModelBase):
 
         self.to(device)
 
-    def _create_positional_encoding(
-        self, max_len: int, d_model: int
-    ) -> torch.nn.Parameter:
+    def _create_positional_encoding(self, max_len: int, d_model: int) -> torch.nn.Parameter:
         """Create sinusoidal positional encoding.
 
         Returns:
@@ -105,16 +96,12 @@ class AttentionAudioModel(ModelBase):
         """
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model)
-        )
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         return nn.Parameter(pe.unsqueeze(0), requires_grad=False)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
         """Forward pass with attention mechanism.
 
         Returns:
@@ -131,17 +118,13 @@ class AttentionAudioModel(ModelBase):
             pos_enc = self.pos_encoding[:, :seq_len, :]
         else:
             # Extend positional encoding if needed
-            pos_enc = self.pos_encoding.repeat(
-                1, (seq_len // self.pos_encoding.size(1)) + 1, 1
-            )
+            pos_enc = self.pos_encoding.repeat(1, (seq_len // self.pos_encoding.size(1)) + 1, 1)
             pos_enc = pos_enc[:, :seq_len, :]
 
         x = x + pos_enc.to(x.device)
 
         # Apply attention layers
-        for attention, layer_norm, ffn in zip(
-            self.attention_layers, self.layer_norms, self.ffns, strict=False
-        ):
+        for attention, layer_norm, ffn in zip(self.attention_layers, self.layer_norms, self.ffns, strict=False):
             # Self-attention
             attn_output, _ = attention(x, x, x, key_padding_mask=padding_mask)
             x = layer_norm(x + attn_output)
@@ -153,9 +136,7 @@ class AttentionAudioModel(ModelBase):
         # Global attention pooling
         # Create a learnable query for global pooling
         global_query = torch.zeros(batch_size, 1, self.d_model, device=x.device)
-        pooled_output, _ = self.global_attention(
-            global_query, x, x, key_padding_mask=padding_mask
-        )
+        pooled_output, _ = self.global_attention(global_query, x, x, key_padding_mask=padding_mask)
         pooled_output = pooled_output.squeeze(1)
 
         # Classify
@@ -214,9 +195,7 @@ class ResidualAudioModel(ModelBase):
 
         self.to(device)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(1)
 
@@ -244,18 +223,12 @@ class ResidualAudioModel(ModelBase):
 class ResidualBlock(nn.Module):
     """Residual block for audio processing."""
 
-    def __init__(
-        self, in_channels: int, out_channels: int, kernel_size: int = 3
-    ) -> None:
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3) -> None:
         super().__init__()
 
-        self.conv1 = nn.Conv1d(
-            in_channels, out_channels, kernel_size, padding=kernel_size // 2
-        )
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size, padding=kernel_size // 2)
         self.bn1 = nn.BatchNorm1d(out_channels)
-        self.conv2 = nn.Conv1d(
-            out_channels, out_channels, kernel_size, padding=kernel_size // 2
-        )
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size, padding=kernel_size // 2)
         self.bn2 = nn.BatchNorm1d(out_channels)
 
         # Skip connection
@@ -384,9 +357,7 @@ def main() -> None:
 
         for model_name, config in model_configs:
             try:
-                model = create_model(
-                    model_name, num_classes=10, device=device, **config
-                )
+                model = create_model(model_name, num_classes=10, device=device, **config)
                 param_count = sum(p.numel() for p in model.parameters())
 
                 # Time inference
@@ -478,10 +449,7 @@ def main() -> None:
             with torch.no_grad():
                 chunk_output = model(chunk)
             outputs.append(chunk_output)
-            print(
-                f"     Processed chunk {i // chunk_size + 1}: "
-                f"{chunk.shape} -> {chunk_output.shape}"
-            )
+            print(f"     Processed chunk {i // chunk_size + 1}: {chunk.shape} -> {chunk_output.shape}")
 
         # Combine outputs
         final_output = torch.cat(outputs, dim=0)

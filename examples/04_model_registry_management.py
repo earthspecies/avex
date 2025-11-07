@@ -91,9 +91,7 @@ def main() -> None:
             name="beats",
             pretrained=False,
             device="cpu",
-            audio_config=AudioConfig(
-                sample_rate=16000, representation="raw", target_length_seconds=5
-            ),
+            audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=5),
             use_naturelm=True,
             fine_tuned=True,
         )

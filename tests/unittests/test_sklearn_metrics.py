@@ -47,9 +47,7 @@ def test_binary_f1_score() -> None:
     # Test partial F1 with new metric instance
     metric = BinaryF1Score()  # Reset metric
     logits = torch.tensor([[0.0, 1.0], [0.0, 1.0], [1.0, 0.0]])
-    y = torch.tensor(
-        [1, 0, 0]
-    )  # One true positive, one false positive, one true negative
+    y = torch.tensor([1, 0, 0])  # One true positive, one false positive, one true negative
     metric.update(logits, y)
     metrics = metric.get_metric()
     # Expected: 1 TP, 1 FP, 0 TN, 0 FN

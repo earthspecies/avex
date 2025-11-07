@@ -61,9 +61,7 @@ def test_filter_transform_methods_equivalence() -> None:
         mode: Literal["include", "exclude"],
     ) -> list[pd.DataFrame]:
         manual = Filter(property=property, values=values, mode=mode)
-        config = FilterConfig(
-            type="filter", property=property, values=values, mode=mode
-        )
+        config = FilterConfig(type="filter", property=property, values=values, mode=mode)
         from_config_transform = Filter.from_config(config)
         from_registry_transform = transform_from_config(config)
         return [

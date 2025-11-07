@@ -29,9 +29,7 @@ class TrainingExampleModel(ModelBase):
 
     name = "training_example"
 
-    def __init__(
-        self, device: str, num_classes: int, audio_config: dict = None, **kwargs: object
-    ) -> None:
+    def __init__(self, device: str, num_classes: int, audio_config: dict = None, **kwargs: object) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
         # Simple architecture
@@ -57,9 +55,7 @@ class TrainingExampleModel(ModelBase):
 
         self.to(device)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
         if x.dim() == 2:
             x = x.unsqueeze(1)
 
@@ -76,9 +72,7 @@ class TrainingExampleModel(ModelBase):
         return 256
 
 
-def create_dummy_dataset(
-    num_samples: int = 1000, num_classes: int = 10, audio_length: int = 16000
-) -> TensorDataset:
+def create_dummy_dataset(num_samples: int = 1000, num_classes: int = 10, audio_length: int = 16000) -> TensorDataset:
     """Create a dummy dataset for training.
 
     Returns:
@@ -125,10 +119,7 @@ def train_epoch(
         total += target.size(0)
 
         if batch_idx % 10 == 0:
-            print(
-                f"Batch {batch_idx}, Loss: {loss.item():.4f}, "
-                f"Acc: {100.0 * correct / total:.2f}%"
-            )
+            print(f"Batch {batch_idx}, Loss: {loss.item():.4f}, Acc: {100.0 * correct / total:.2f}%")
 
     return total_loss / len(dataloader), 100.0 * correct / total
 
@@ -203,9 +194,7 @@ def main() -> None:
 
         for epoch in range(num_epochs):
             print(f"\n   Epoch {epoch + 1}/{num_epochs}:")
-            train_loss, train_acc = train_epoch(
-                model, train_loader, optimizer, criterion, device
-            )
+            train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
             val_loss, val_acc = evaluate(model, val_loader, criterion, device)
 
             print(f"   Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
@@ -234,28 +223,19 @@ def main() -> None:
 
             # Setup for fine-tuning (lower learning rate)
             criterion = nn.CrossEntropyLoss()
-            optimizer = optim.Adam(
-                model.parameters(), lr=0.0001
-            )  # Lower LR for fine-tuning
+            optimizer = optim.Adam(model.parameters(), lr=0.0001)  # Lower LR for fine-tuning
 
             # Create smaller dataset for fine-tuning
             fine_tune_data, fine_tune_labels = create_dummy_dataset(200, 5)
             fine_tune_dataset = TensorDataset(fine_tune_data, fine_tune_labels)
-            fine_tune_loader = DataLoader(
-                fine_tune_dataset, batch_size=16, shuffle=True
-            )
+            fine_tune_loader = DataLoader(fine_tune_dataset, batch_size=16, shuffle=True)
 
             # Fine-tuning loop (fewer epochs)
             print("   Fine-tuning for 2 epochs...")
             for epoch in range(2):
                 print(f"\n   Fine-tuning Epoch {epoch + 1}/2:")
-                train_loss, train_acc = train_epoch(
-                    model, fine_tune_loader, optimizer, criterion, device
-                )
-                print(
-                    f"   Fine-tune Loss: {train_loss:.4f}, "
-                    f"Fine-tune Acc: {train_acc:.2f}%"
-                )
+                train_loss, train_acc = train_epoch(model, fine_tune_loader, optimizer, criterion, device)
+                print(f"   Fine-tune Loss: {train_loss:.4f}, Fine-tune Acc: {train_acc:.2f}%")
 
             print("✅ Fine-tuning completed!")
         else:
@@ -322,9 +302,7 @@ def main() -> None:
         train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
         # Train for 1 epoch
-        train_loss, train_acc = train_epoch(
-            model, train_loader, optimizer, criterion, device
-        )
+        train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
         print(f"   Trained model - Loss: {train_loss:.4f}, Acc: {train_acc:.2f}%")
 
         # Save checkpoint
@@ -347,9 +325,7 @@ def main() -> None:
         print(f"✅ Saved checkpoint to: {checkpoint_path}")
 
         # Load model from checkpoint (pass checkpoint_path directly)
-        loaded_model = load_model(
-            "training_example", checkpoint_path=str(checkpoint_path), device=device
-        )
+        loaded_model = load_model("training_example", checkpoint_path=str(checkpoint_path), device=device)
         print("✅ Loaded model from checkpoint")
         print(f"✅ Loaded model from checkpoint: {type(loaded_model).__name__}")
 

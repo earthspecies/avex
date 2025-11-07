@@ -117,9 +117,7 @@ def main() -> None:
             if weights_different or bias_different:
                 print("   ✅ SUCCESS: Classifier weights are randomly initialized")
             else:
-                print(
-                    "   ❌ FAIL: Classifier weights match checkpoint (should be random)"
-                )
+                print("   ❌ FAIL: Classifier weights match checkpoint (should be random)")
 
             # Test 3: Load with different num_classes
             print("\n📋 Test 3: Loading with different num_classes")
@@ -134,14 +132,10 @@ def main() -> None:
 
             if loaded_model_3.classifier.weight.shape[0] == new_num_classes:
                 print(f"   ✅ SUCCESS: Classifier has {new_num_classes} classes")
-                print(
-                    f"      Classifier weight shape: "
-                    f"{loaded_model_3.classifier.weight.shape}"
-                )
+                print(f"      Classifier weight shape: {loaded_model_3.classifier.weight.shape}")
             else:
                 print(
-                    f"   ❌ FAIL: Expected {new_num_classes} classes, "
-                    f"got {loaded_model_3.classifier.weight.shape[0]}"
+                    f"   ❌ FAIL: Expected {new_num_classes} classes, got {loaded_model_3.classifier.weight.shape[0]}"
                 )
 
         finally:

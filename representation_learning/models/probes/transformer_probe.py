@@ -69,14 +69,10 @@ class TransformerProbe(BaseProbe3D):
             dropout=self.dropout_rate,
             batch_first=True,
         )
-        self.transformer = nn.TransformerEncoder(
-            encoder_layer, num_layers=self.num_layers
-        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers)
 
         if self.use_positional_encoding:
-            self.pos_encoding = nn.Parameter(
-                torch.randn(1, self.max_sequence_length or 1000, inferred_dim)
-            )
+            self.pos_encoding = nn.Parameter(torch.randn(1, self.max_sequence_length or 1000, inferred_dim))
         else:
             self.pos_encoding = None  # type: ignore[assignment]
 
@@ -91,9 +87,7 @@ class TransformerProbe(BaseProbe3D):
         except Exception:
             pass
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass matching original transformer probe behavior.
 
         Returns:
@@ -108,9 +102,7 @@ class TransformerProbe(BaseProbe3D):
         if padding_mask is not None and padding_mask.shape[1] != embeddings.shape[1]:
             padding_mask = None
 
-        transformer_out = self.transformer(
-            embeddings, src_key_padding_mask=padding_mask
-        )
+        transformer_out = self.transformer(embeddings, src_key_padding_mask=padding_mask)
         pooled = transformer_out.mean(dim=1)
         if self.dropout is not None:
             pooled = self.dropout(pooled)

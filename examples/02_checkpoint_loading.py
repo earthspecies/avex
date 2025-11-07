@@ -27,10 +27,7 @@ def main() -> None:
 
     # Example 1: View default checkpoints from YAML
     print("\n📋 Default checkpoints from YAML configurations:")
-    print(
-        "   Note: Checkpoint paths are defined in YAML files in "
-        "configs/official_models/"
-    )
+    print("   Note: Checkpoint paths are defined in YAML files in configs/official_models/")
 
     try:
         # List registered models and their default checkpoint paths
@@ -86,9 +83,7 @@ def main() -> None:
         torch.save(dummy_state_dict, dummy_checkpoint_path)
 
         # Load with custom checkpoint
-        model = load_model(
-            "beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device="cpu"
-        )
+        model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device="cpu")
         print(f"✅ Loaded model with custom checkpoint: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 

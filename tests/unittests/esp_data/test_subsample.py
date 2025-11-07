@@ -39,9 +39,7 @@ def test_subsample() -> None:
     subsampled_df, _ = subsample_transform(df)
 
     # Check that 'other' class (mammals + amphibians) is subsampled correctly
-    other_count = len(
-        subsampled_df[subsampled_df["class"].isin(["mammals", "amphibians"])]
-    )
+    other_count = len(subsampled_df[subsampled_df["class"].isin(["mammals", "amphibians"])])
     assert abs(other_count / 200 - 0.2) < 0.1
 
 
@@ -64,11 +62,7 @@ def test_subsample_manual_vs_config() -> None:
     config_result, _ = config_transform(df)
 
     # Sort and reset index for comparison
-    manual_sorted = manual_result.sort_values(by=["class", "value"]).reset_index(
-        drop=True
-    )
-    config_sorted = config_result.sort_values(by=["class", "value"]).reset_index(
-        drop=True
-    )
+    manual_sorted = manual_result.sort_values(by=["class", "value"]).reset_index(drop=True)
+    config_sorted = config_result.sort_values(by=["class", "value"]).reset_index(drop=True)
 
     pd.testing.assert_frame_equal(manual_sorted, config_sorted)

@@ -200,10 +200,7 @@ class TestRunEvaluateEndToEnd:
         Path
             Path to the created configuration file.
         """
-        config_path = (
-            temp_output_dir
-            / f"test_config_{probe_type}_{freeze_backbone}_{layers}_{training_mode}.yml"
-        )
+        config_path = temp_output_dir / f"test_config_{probe_type}_{freeze_backbone}_{layers}_{training_mode}.yml"
 
         data_config_path = temp_output_dir / "test_data_config.yml"
         self._create_test_data_config(data_config_path)
@@ -255,9 +252,7 @@ class TestRunEvaluateEndToEnd:
         }
 
         if probe_type == "linear":
-            experiment["probe_config"].update(
-                {"hidden_dims": [256, 128], "dropout_rate": 0.1, "activation": "relu"}
-            )
+            experiment["probe_config"].update({"hidden_dims": [256, 128], "dropout_rate": 0.1, "activation": "relu"})
         elif probe_type == "attention":
             experiment["probe_config"].update(
                 {
@@ -295,9 +290,7 @@ class TestRunEvaluateEndToEnd:
     ) -> None:
         from representation_learning.configs import EvaluateConfig
 
-        config_path = self._create_test_config(
-            temp_output_dir, probe_type, freeze_backbone, layers, training_mode
-        )
+        config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 
         eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=[])
 
@@ -338,13 +331,9 @@ class TestRunEvaluateEndToEnd:
     ) -> None:
         from representation_learning.run_evaluate import main
 
-        config_path = self._create_test_config(
-            temp_output_dir, probe_type, freeze_backbone, layers, training_mode
-        )
+        config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 
-        test_output_dir = (
-            temp_output_dir / f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}"
-        )
+        test_output_dir = temp_output_dir / f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}"
         test_output_dir.mkdir(exist_ok=True)
 
         patches = (

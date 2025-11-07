@@ -311,6 +311,4 @@ class TestEvalClusteringMultipleK:
 
         # Should handle gracefully and not try impossible K values
         assert "clustering_best_k" in metrics
-        assert (
-            metrics["clustering_best_k"] < MIN_SAMPLES_LARGE
-        )  # Should be less than number of samples
+        assert metrics["clustering_best_k"] < MIN_SAMPLES_LARGE  # Should be less than number of samples

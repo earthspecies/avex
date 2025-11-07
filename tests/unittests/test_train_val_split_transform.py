@@ -116,9 +116,7 @@ class TestTrainValSplitTransform:
         """Test handling of empty dataset."""
         data = pd.DataFrame(columns=["path", "label", "text"])
 
-        config = TrainValSplitConfig(
-            type="train_val_split", subset="train", train_size=0.8
-        )
+        config = TrainValSplitConfig(type="train_val_split", subset="train", train_size=0.8)
 
         transform = TrainValSplitTransform.from_config(config)
         result_data, metadata = transform(data)
@@ -201,9 +199,7 @@ class TestTrainValSplitTransform:
 
         transform = TrainValSplitTransform.from_config(config)
 
-        with pytest.raises(
-            ValueError, match="Stratify column 'nonexistent_column' not found"
-        ):
+        with pytest.raises(ValueError, match="Stratify column 'nonexistent_column' not found"):
             transform(data)
 
     def test_validation_subset_complement(self) -> None:

@@ -65,8 +65,7 @@ def test_clip_mini_inference() -> None:
     cfg_path = next((p for p in cfg_candidates if p.exists()), None)
     if cfg_path is None:
         raise AssertionError(
-            "No CLIP run-config found; expected clip_base.yml or "
-            "aaai_train/clap_efficientnet_captions.yml"
+            "No CLIP run-config found; expected clip_base.yml or aaai_train/clap_efficientnet_captions.yml"
         )
     run_cfg = RunConfig.from_sources(yaml_file=cfg_path, cli_args=())
 
@@ -91,9 +90,7 @@ def test_clip_mini_inference() -> None:
                 model.load_state_dict(state["model_state_dict"])
                 print(f"Loaded checkpoint weights from {ckpt_file}")
         else:
-            print(
-                f"Warning: checkpoint path {ckpt_file} not found – using base weights"
-            )
+            print(f"Warning: checkpoint path {ckpt_file} not found – using base weights")
 
     # ------------------------------------------------------------------
     # Choose between mock data (default) and real data via env toggle
@@ -160,8 +157,7 @@ def test_clip_mini_inference() -> None:
 
             def __getitem__(self, idx: int) -> dict[str, Any]:
                 audio_len = int(
-                    run_cfg.model_spec.audio_config.target_length_seconds
-                    * run_cfg.model_spec.audio_config.sample_rate
+                    run_cfg.model_spec.audio_config.target_length_seconds * run_cfg.model_spec.audio_config.sample_rate
                 )
                 wav = torch.randn(audio_len)
                 return {
@@ -172,8 +168,7 @@ def test_clip_mini_inference() -> None:
         ds = _MockDataset(5)
         waves, masks, texts = [], [], []
         target_len = int(
-            run_cfg.model_spec.audio_config.target_length_seconds
-            * run_cfg.model_spec.audio_config.sample_rate
+            run_cfg.model_spec.audio_config.target_length_seconds * run_cfg.model_spec.audio_config.sample_rate
         )
         for i in range(len(ds)):
             item = ds[i]
@@ -186,8 +181,7 @@ def test_clip_mini_inference() -> None:
 
     # Ensure correct target length if not already collated
     target_len = int(
-        run_cfg.model_spec.audio_config.target_length_seconds
-        * run_cfg.model_spec.audio_config.sample_rate
+        run_cfg.model_spec.audio_config.target_length_seconds * run_cfg.model_spec.audio_config.sample_rate
     )
     if wav_batch.shape[1] != target_len:
         fixed = []

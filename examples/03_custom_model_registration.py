@@ -30,9 +30,7 @@ class SimpleAudioCNN(ModelBase):
 
     name = "simple_audio_cnn"
 
-    def __init__(
-        self, device: str, num_classes: int, audio_config: dict = None, **kwargs: object
-    ) -> None:
+    def __init__(self, device: str, num_classes: int, audio_config: dict = None, **kwargs: object) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
         # Simple CNN architecture
@@ -58,9 +56,7 @@ class SimpleAudioCNN(ModelBase):
 
         self.to(device)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
         """Forward pass through the model.
 
         Returns:
@@ -129,9 +125,7 @@ class SimpleAudioTransformer(ModelBase):
 
         self.to(device)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
         """Forward pass through the model.
 
         Returns:
@@ -209,9 +203,7 @@ class SimpleAudioMLP(ModelBase):
         input_dim = 16000  # Assume fixed input size for simplicity
 
         for _i, hidden_dim in enumerate(hidden_dims):
-            layers.extend(
-                [nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout(dropout)]
-            )
+            layers.extend([nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout(dropout)])
             input_dim = hidden_dim
 
         # Final classifier
@@ -220,9 +212,7 @@ class SimpleAudioMLP(ModelBase):
         self.mlp = nn.Sequential(*layers)
         self.to(device)
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
         """Forward pass through the model.
 
         Returns:

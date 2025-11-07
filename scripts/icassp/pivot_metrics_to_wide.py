@@ -33,9 +33,7 @@ def _detect_benchmark(df: pd.DataFrame) -> str:
     if len(unique_benchmarks) == 0:
         raise ValueError("No benchmark values found in input CSV")
     if len(unique_benchmarks) > 1:
-        raise ValueError(
-            f"Multiple benchmarks found: {unique_benchmarks}. Please filter first."
-        )
+        raise ValueError(f"Multiple benchmarks found: {unique_benchmarks}. Please filter first.")
     bench = str(unique_benchmarks[0]).strip()
     if bench not in {"beans", "birdset"}:
         raise ValueError(f"Unsupported benchmark '{bench}'")
@@ -389,9 +387,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
     filled = wide.copy()
 
     # Only interpolate metric columns (exclude probe_type and layers)
-    metric_cols = [
-        c for c in filled.columns if c not in ["probe_type", "layers", "ssl"]
-    ]
+    metric_cols = [c for c in filled.columns if c not in ["probe_type", "layers", "ssl"]]
     metric_df = filled[metric_cols]
 
     # Quick exit
@@ -403,9 +399,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
 
     # Build helper structures once
     base_models = list(filled.index)
-    probe_type_array = (
-        (filled["probe_type"] == "weighted_attention").astype(int).to_numpy()
-    )
+    probe_type_array = (filled["probe_type"] == "weighted_attention").astype(int).to_numpy()
     layers_array = (filled["layers"] == "all").astype(int).to_numpy()
     ssl_array = filled["ssl"].astype(int).to_numpy()
 
@@ -416,13 +410,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
             1 if "beats" in name_low else 0,
             1 if "eat" in name_low else 0,
             1 if "bird" in name_low else 0,
-            1
-            if (
-                "beats" not in name_low
-                and "eat" not in name_low
-                and "bird" not in name_low
-            )
-            else 0,
+            1 if ("beats" not in name_low and "eat" not in name_low and "bird" not in name_low) else 0,
         ]
         train = [
             1 if "pretrained" in name_low else 0,
@@ -530,9 +518,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
     return filled
 
 
-def _interpolate_by_similarity(
-    wide: pd.DataFrame, metric_cols: List[str]
-) -> pd.DataFrame:
+def _interpolate_by_similarity(wide: pd.DataFrame, metric_cols: List[str]) -> pd.DataFrame:
     """
     Interpolate missing values by finding similar models and probe types.
 
@@ -697,10 +683,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "input_csv",
         type=str,
-        help=(
-            "Path to extracted metrics CSV (e.g., "
-            "evaluation_results/extracted_metrics_beans.csv)"
-        ),
+        help=("Path to extracted metrics CSV (e.g., evaluation_results/extracted_metrics_beans.csv)"),
     )
     parser.add_argument(
         "--output",
@@ -734,43 +717,28 @@ def _split_beans_by_task(wide: pd.DataFrame, output_dir: str) -> None:
         Directory to save the split CSV files.
     """
     # Identify classification and detection columns
-    classification_cols = [
-        col for col in wide.columns if col.endswith("_classification")
-    ]
+    classification_cols = [col for col in wide.columns if col.endswith("_classification")]
     detection_cols = [col for col in wide.columns if col.endswith("_detection")]
 
     # Metadata columns (probe_type, layers, ssl)
     metadata_cols = ["probe_type", "layers", "ssl"]
 
-    print(
-        f"Found {len(classification_cols)} classification datasets: "
-        f"{classification_cols}"
-    )
+    print(f"Found {len(classification_cols)} classification datasets: {classification_cols}")
     print(f"Found {len(detection_cols)} detection datasets: {detection_cols}")
 
     # Create classification table
     if classification_cols:
         classification_df = wide[metadata_cols + classification_cols].copy()
-        classification_output = os.path.join(
-            output_dir, "extracted_metrics_beans_classification.csv"
-        )
+        classification_output = os.path.join(output_dir, "extracted_metrics_beans_classification.csv")
         classification_df.to_csv(classification_output)
-        print(
-            f"Saved classification table with shape {classification_df.shape} "
-            f"to {classification_output}"
-        )
+        print(f"Saved classification table with shape {classification_df.shape} to {classification_output}")
 
     # Create detection table
     if detection_cols:
         detection_df = wide[metadata_cols + detection_cols].copy()
-        detection_output = os.path.join(
-            output_dir, "extracted_metrics_beans_detection.csv"
-        )
+        detection_output = os.path.join(output_dir, "extracted_metrics_beans_detection.csv")
         detection_df.to_csv(detection_output)
-        print(
-            f"Saved detection table with shape {detection_df.shape} "
-            f"to {detection_output}"
-        )
+        print(f"Saved detection table with shape {detection_df.shape} to {detection_output}")
 
 
 def export_benchmark_to_html(
@@ -794,9 +762,7 @@ def export_benchmark_to_html(
 
     if benchmark == "beans":
         # Split beans data into classification and detection
-        classification_cols = [
-            col for col in wide_df.columns if col.endswith("_classification")
-        ]
+        classification_cols = [col for col in wide_df.columns if col.endswith("_classification")]
         detection_cols = [col for col in wide_df.columns if col.endswith("_detection")]
 
         # Create classification table
@@ -894,12 +860,8 @@ def export_benchmark_to_html(
     <div class="container">
         <h1>Beans Probing Results - Full Dataset Comparison</h1>
         <div class="summary">
-            <p><strong>Generated:</strong> {
-            pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        }</p>
-            <p><strong>Interpolation:</strong> {
-            "Enabled" if interpolate else "Disabled"
-        }</p>
+            <p><strong>Generated:</strong> {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+            <p><strong>Interpolation:</strong> {"Enabled" if interpolate else "Disabled"}</p>
             <p><strong>Note:</strong> This page shows the complete results for all
         models and probe configurations across Beans datasets.</p>
         </div>
@@ -1039,12 +1001,8 @@ def export_benchmark_to_html(
     <div class="container">
         <h1>BirdSet Probing Results - Full Dataset Comparison</h1>
         <div class="summary">
-            <p><strong>Generated:</strong> {
-            pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        }</p>
-            <p><strong>Interpolation:</strong> {
-            "Enabled" if interpolate else "Disabled"
-        }</p>
+            <p><strong>Generated:</strong> {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+            <p><strong>Interpolation:</strong> {"Enabled" if interpolate else "Disabled"}</p>
             <p><strong>Note:</strong> This page shows the complete results for all
         models and probe configurations across BirdSet datasets.</p>
         </div>

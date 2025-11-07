@@ -293,9 +293,7 @@ class TestAudioProcessor:
         processor = AudioProcessor(audio_config)
         output = processor(waveforms)
         # Calculate time bins based on torch.stft formula
-        expected_time_bins = (
-            16000 + audio_config.hop_length - 1
-        ) // audio_config.hop_length
+        expected_time_bins = (16000 + audio_config.hop_length - 1) // audio_config.hop_length
         assert output.shape == (
             batch_size,
             audio_config.n_mels,
@@ -310,7 +308,5 @@ class TestAudioProcessor:
         waveform_tensor = torch.from_numpy(waveform).float()
         output = processor(waveform_tensor)
         # Calculate time bins based on torch.stft formula
-        expected_time_bins = (
-            16000 + audio_config.hop_length - 1
-        ) // audio_config.hop_length
+        expected_time_bins = (16000 + audio_config.hop_length - 1) // audio_config.hop_length
         assert output.shape == (1, audio_config.n_mels, expected_time_bins)

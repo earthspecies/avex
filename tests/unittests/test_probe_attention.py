@@ -210,9 +210,7 @@ class TestAttentionProbe:
         assert probe.layer_weights.shape == (3,)
 
     def test_feature_mode_without_input_dim_raises_error(self) -> None:
-        with pytest.raises(
-            ValueError, match="input_dim must be provided when feature_mode=True"
-        ):
+        with pytest.raises(ValueError, match="input_dim must be provided when feature_mode=True"):
             AttentionProbe(
                 base_model=None,
                 layers=[],
