@@ -43,7 +43,7 @@ def main() -> None:
         from representation_learning.models.beats_model import Model as BEATsModel
 
         model = BEATsModel(
-            num_classes=1,  # Dummy value (not used when return_features_only=True)
+            num_classes=None,  # Optional when return_features_only=True
             pretrained=beats_spec.pretrained,
             device="cpu",
             audio_config=beats_spec.audio_config,
@@ -55,9 +55,7 @@ def main() -> None:
 
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-        print(
-            f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}"
-        )
+        print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
         # Test forward pass - should return embeddings, not logits
         dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
@@ -98,7 +96,7 @@ def main() -> None:
 
         model = EATHFModel(
             model_name="worstchan/EAT-base_epoch30_pretrain",  # From eat_base.yml
-            num_classes=1,  # Dummy value (not used when return_features_only=True)
+            num_classes=None,  # Optional when return_features_only=True
             device="cpu",
             audio_config=eat_spec.audio_config,
             return_features_only=True,
@@ -111,9 +109,7 @@ def main() -> None:
 
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-        print(
-            f"   Return features only: {getattr(model, 'return_features_only', 'N/A')}"
-        )
+        print(f"   Return features only: {getattr(model, 'return_features_only', 'N/A')}")
 
         # Test forward pass
         dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
@@ -148,7 +144,7 @@ def main() -> None:
         from representation_learning.models.efficientnet import Model as EfficientNet
 
         embedding_model = EfficientNet(
-            num_classes=1,  # Dummy value (not used when return_features_only=True)
+            num_classes=None,  # Optional when return_features_only=True
             pretrained=spec.pretrained,
             device="cpu",
             audio_config=spec.audio_config,

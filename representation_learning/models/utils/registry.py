@@ -26,7 +26,7 @@ _MODEL_REGISTRY: Dict[str, ModelSpec] = {}
 _MODEL_CLASSES: Dict[str, Type] = {}
 
 # Package containing official model YAML configurations
-_OFFICIAL_MODELS_PKG = "representation_learning.configs.official_models"
+_OFFICIAL_MODELS_PKG = "representation_learning.api.configs.official_models"
 
 
 def _auto_register_from_yaml() -> None:
@@ -53,17 +53,10 @@ def _auto_register_from_yaml() -> None:
                 registered_count += 1
                 logger.debug(f"Registered model: {name}")
             except Exception as e:  # pragma: no cover - defensive
-                logger.exception(
-                    f"Failed to register model config from {entry.name}: {e}"
-                )
-        logger.info(
-            f"Auto-registered {registered_count} models from package "
-            f"{_OFFICIAL_MODELS_PKG}"
-        )
+                logger.exception(f"Failed to register model config from {entry.name}: {e}")
+        logger.info(f"Auto-registered {registered_count} models from package {_OFFICIAL_MODELS_PKG}")
     except Exception as e:  # pragma: no cover - defensive
-        logger.warning(
-            f"Failed to load models from package {_OFFICIAL_MODELS_PKG}: {e}"
-        )
+        logger.warning(f"Failed to load models from package {_OFFICIAL_MODELS_PKG}: {e}")
 
 
 def initialize_registry() -> None:
@@ -75,10 +68,7 @@ def initialize_registry() -> None:
     logger.info(f"Initializing model registry from package: {_OFFICIAL_MODELS_PKG}")
     _auto_register_from_yaml()
 
-    logger.info(
-        f"Model registry initialized with {len(_MODEL_REGISTRY)} models: "
-        f"{list(_MODEL_REGISTRY.keys())}"
-    )
+    logger.info(f"Model registry initialized with {len(_MODEL_REGISTRY)} models: {list(_MODEL_REGISTRY.keys())}")
 
 
 def load_model_spec_from_yaml(yaml_path: Union[str, Path]) -> ModelSpec:
@@ -133,9 +123,7 @@ def register_model(name: str, model_spec: ModelSpec) -> None:
     ensure_initialized()
 
     if name in _MODEL_REGISTRY:
-        raise ValueError(
-            f"Model '{name}' is already registered. Use update_model() to overwrite."
-        )
+        raise ValueError(f"Model '{name}' is already registered. Use update_model() to overwrite.")
 
     _MODEL_REGISTRY[name] = model_spec
     logger.info(f"Registered custom model: {name}")

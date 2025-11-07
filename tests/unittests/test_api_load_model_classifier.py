@@ -39,6 +39,7 @@ class TestLoadModelClassifierHead:
         try:
             register_model_class(BeatsModel)
             # Register the model spec for sl_beats_animalspeak
+            # Note: This model may already be registered from YAML files, so use update_model
             model_spec = ModelSpec(
                 name="beats",
                 pretrained=False,
@@ -52,7 +53,12 @@ class TestLoadModelClassifierHead:
                     window_selection="random",
                 ),
             )
-            register_model("sl_beats_animalspeak", model_spec)
+            from representation_learning import is_registered, update_model
+
+            if is_registered("sl_beats_animalspeak"):
+                update_model("sl_beats_animalspeak", model_spec)
+            else:
+                register_model("sl_beats_animalspeak", model_spec)
             yield
         finally:
             # Cleanup: unregister and restore original name
@@ -89,9 +95,7 @@ class TestLoadModelClassifierHead:
         # Verify num_classes was extracted correctly
         # (actual checkpoint has 12279 classes)
         actual_num_classes = loaded_model.classifier.weight.shape[0]
-        assert actual_num_classes == 12279, (
-            f"Expected 12279 classes from checkpoint, got {actual_num_classes}"
-        )
+        assert actual_num_classes == 12279, f"Expected 12279 classes from checkpoint, got {actual_num_classes}"
 
         # Load the checkpoint directly to compare weights
         from esp_data.io import anypath
@@ -129,10 +133,7 @@ class TestLoadModelClassifierHead:
                     loaded_model.classifier.weight,
                     checkpoint_classifier_weight,
                     atol=1e-6,
-                ), (
-                    "BEATs classifier weights should match checkpoint "
-                    "when num_classes=None"
-                )
+                ), "BEATs classifier weights should match checkpoint when num_classes=None"
 
             if checkpoint_classifier_bias is not None:
                 assert torch.allclose(
@@ -194,14 +195,10 @@ class TestLoadModelClassifierHead:
             # Verify classifier weights are DIFFERENT from checkpoint
             # (different shape confirms different initialization)
             assert checkpoint_classifier_weight is not None
-            assert (
-                loaded_model.classifier.weight.shape
-                != checkpoint_classifier_weight.shape
+            assert loaded_model.classifier.weight.shape != checkpoint_classifier_weight.shape
+            assert loaded_model.classifier.weight.shape[1] == checkpoint_classifier_weight.shape[1], (
+                "Embedding dimension should match"
             )
-            assert (
-                loaded_model.classifier.weight.shape[1]
-                == checkpoint_classifier_weight.shape[1]
-            ), "Embedding dimension should match"
 
     def test_beats_classifier_weights_not_loaded_same_num_classes_explicit(
         self,
@@ -271,6 +268,5 @@ class TestLoadModelClassifierHead:
 
             # At least one should be different (weights or bias)
             assert weights_different or bias_different, (
-                "BEATs classifier weights should be randomly initialized "
-                "when num_classes is explicit"
+                "BEATs classifier weights should be randomly initialized when num_classes is explicit"
             )

@@ -23,7 +23,7 @@ class Model(ModelBase):
 
     def __init__(
         self,
-        num_classes: int = 1000,
+        num_classes: Optional[int] = None,
         pretrained: bool = True,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
@@ -32,6 +32,11 @@ class Model(ModelBase):
     ) -> None:
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
+
+        # Validate num_classes: required when return_features_only=False
+        if not return_features_only and num_classes is None:
+            # Use default from BirdMAE (1000 classes)
+            num_classes = 1000
 
         # Store configuration
         self.return_features_only = return_features_only
@@ -44,18 +49,13 @@ class Model(ModelBase):
             from transformers import AutoFeatureExtractor, AutoModel
         except ImportError as e:
             raise ImportError(
-                "transformers library is required for BirdMAE. "
-                "Install with: pip install transformers"
+                "transformers library is required for BirdMAE. Install with: pip install transformers"
             ) from e
 
         # Load the model and feature extractor
         if pretrained:
-            self.model = AutoModel.from_pretrained(
-                self.model_id, trust_remote_code=True
-            )
-            self.feature_extractor = AutoFeatureExtractor.from_pretrained(
-                self.model_id, trust_remote_code=True
-            )
+            self.model = AutoModel.from_pretrained(self.model_id, trust_remote_code=True)
+            self.feature_extractor = AutoFeatureExtractor.from_pretrained(self.model_id, trust_remote_code=True)
         else:
             raise ValueError("BirdMAE currently only supports pretrained models")
 
@@ -106,9 +106,7 @@ class Model(ModelBase):
                 )
             except TypeError:
                 # Fallback: call without sampling_rate if not supported
-                mel_spectrogram = self.feature_extractor(
-                    audio_sample, return_tensors="pt"
-                )
+                mel_spectrogram = self.feature_extractor(audio_sample, return_tensors="pt")
 
             # Extract the actual tensor from the feature extractor output
             if isinstance(mel_spectrogram, dict):
@@ -125,9 +123,7 @@ class Model(ModelBase):
 
             # Ensure correct shape - BirdMAE expects [batch, 1, height, width]
             if mel_tensor.dim() == 3:  # [batch, height, width]
-                mel_tensor = mel_tensor.unsqueeze(
-                    1
-                )  # Add channel dim -> [batch, 1, height, width]
+                mel_tensor = mel_tensor.unsqueeze(1)  # Add channel dim -> [batch, 1, height, width]
             elif mel_tensor.dim() == 4 and mel_tensor.shape[1] != 1:
                 # If we have multiple channels, take the first one or convert
                 if mel_tensor.shape[1] > 1:
@@ -145,9 +141,7 @@ class Model(ModelBase):
         if hasattr(self.model, "gradient_checkpointing_enable"):
             self.model.gradient_checkpointing_enable()
 
-    def forward(
-        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass through the model.
 
         Parameters
@@ -202,8 +196,7 @@ class Model(ModelBase):
                 # Debug: print available attributes
                 attrs = [attr for attr in dir(outputs) if not attr.startswith("_")]
                 raise ValueError(
-                    f"Unexpected output format from BirdMAE. "
-                    f"Type: {type(outputs)}, Available attributes: {attrs}"
+                    f"Unexpected output format from BirdMAE. Type: {type(outputs)}, Available attributes: {attrs}"
                 )
 
         # Ensure embeddings are 2D [batch_size, embedding_dim]

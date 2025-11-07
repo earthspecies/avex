@@ -2993,7 +2993,7 @@ wheels = [
 
 [[package]]
 name = "representation-learning"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "birdnetlib" },
@@ -3076,7 +3076,7 @@ requires-dist = [
     { name = "torchaudio", specifier = ">=2.2.0" },
     { name = "torchvision", specifier = ">=0.17.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "transformers" },
+    { name = "transformers", specifier = ">=4.0.0" },
     { name = "wandb", specifier = ">=0.21.0" },
 ]
 

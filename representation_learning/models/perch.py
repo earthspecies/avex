@@ -72,7 +72,7 @@ class PerchModel(ModelBase):
     # --------------------------------------------------------------------- #
     def __init__(
         self,
-        num_classes: int,
+        num_classes: Optional[int] = None,
         device: str = "cpu",
         audio_config: Optional[Dict[str, Any]] = None,
         target_sample_rate: int = 32_000,
@@ -82,7 +82,7 @@ class PerchModel(ModelBase):
         """Initialize PerchModel.
 
         Args:
-            num_classes: Number of output classes for classification head
+            num_classes: Number of output classes for classification head (None or 0 for feature extraction only)
             device: PyTorch device to use
             audio_config: Optional audio configuration (kept for API compatibility)
             target_sample_rate: Expected sample rate in Hz
@@ -90,6 +90,10 @@ class PerchModel(ModelBase):
             freeze_backbone: Whether to freeze the backbone (currently unused)
         """
         super().__init__(device, audio_config)
+
+        # Treat None as 0 (feature extraction only)
+        if num_classes is None:
+            num_classes = 0
 
         self.num_classes = num_classes
         self.target_sr = target_sample_rate
@@ -102,9 +106,7 @@ class PerchModel(ModelBase):
         self.embedding_dim = emb_dim
 
         # Optional classification head (learnable in PyTorch)
-        self.classifier: Optional[nn.Linear] = (
-            nn.Linear(self.embedding_dim, num_classes) if num_classes > 0 else None
-        )
+        self.classifier: Optional[nn.Linear] = nn.Linear(self.embedding_dim, num_classes) if num_classes > 0 else None
 
         self.to(device)
 
@@ -125,10 +127,7 @@ class PerchModel(ModelBase):
                 if isinstance(module, torch.nn.Linear):
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} layers in Perch model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} layers in Perch model: {self._layer_names}")
             if len(self._layer_names) == 0:
                 logger.info(
                     "Perch is a TensorFlow Hub model with no accessible "
@@ -153,10 +152,7 @@ class PerchModel(ModelBase):
                 if isinstance(module, torch.nn.Linear):
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} layers in Perch model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} layers in Perch model: {self._layer_names}")
             if len(self._layer_names) == 0:
                 logger.info(
                     "Perch is a TensorFlow Hub model with no accessible "

@@ -124,7 +124,7 @@ class EATHFModel(ModelBase):
         self,
         *,
         model_name: str = "worstchan/EAT-base_epoch30_pretrain",
-        num_classes: int = 0,
+        num_classes: Optional[int] = None,
         device: str = "cuda",
         audio_config: Optional[Dict[str, Any]] = None,
         target_length: int = 1024,
@@ -138,7 +138,7 @@ class EATHFModel(ModelBase):
 
         Args:
             model_name: HuggingFace repository ID or local path
-            num_classes: Number of output classes (0 for feature extraction only)
+            num_classes: Number of output classes (None or 0 for feature extraction only)
             device: PyTorch device string
             audio_config: Audio configuration (ignored, kept for API compatibility)
             target_length: Required spectrogram length in time frames
@@ -146,8 +146,19 @@ class EATHFModel(ModelBase):
             fairseq_weights_path: Optional path to fairseq checkpoint
             norm_mean: Normalization mean for mel spectrograms
             norm_std: Normalization std for mel spectrograms
+
+        Raises:
+            ValueError: If num_classes is 0 or None when return_features_only=False
         """
         super().__init__(device=device, audio_config=audio_config)
+
+        # Treat None the same as 0 (feature extraction only)
+        if num_classes is None:
+            num_classes = 0
+
+        # Validate num_classes: required when return_features_only=False
+        if not return_features_only and num_classes == 0:
+            raise ValueError("num_classes must be > 0 when return_features_only=False")
 
         self.pooling = pooling
         self.num_classes = num_classes
@@ -169,9 +180,7 @@ class EATHFModel(ModelBase):
         #  Backbone: HuggingFace Data2Vec-multi                        #
         # -------------------------------------------------------------- #
         logger.info("Loading EAT backbone from '%s' …", model_name)
-        self.backbone = AutoModel.from_pretrained(
-            model_name, trust_remote_code=True
-        ).to(self.device)
+        self.backbone = AutoModel.from_pretrained(model_name, trust_remote_code=True).to(self.device)
 
         # Conditionally load fairseq weights if path is provided
         if fairseq_weights_path is not None:
@@ -207,10 +216,7 @@ class EATHFModel(ModelBase):
                     if name not in self._layer_names:
                         self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding layers in EAT model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers in EAT model: {self._layer_names}")
 
     def _discover_embedding_layers(self) -> None:
         """
@@ -232,10 +238,7 @@ class EATHFModel(ModelBase):
                 if name.endswith("attn.proj") and "backbone.model.blocks." in name:
                     if name not in self._layer_names:
                         self._layer_names.append(name)
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding layers in EAT model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers in EAT model: {self._layer_names}")
 
     # ------------------------------------------------------------------ #
     #  Forward pass                                                    #
@@ -363,28 +366,20 @@ class EATHFModel(ModelBase):
             # Restore original pooling method
             self.pooling = prev_pooling
 
-            logger.debug(
-                f"Forward pass completed. Hook outputs: "
-                f"{list(self._hook_outputs.keys())}"
-            )
+            logger.debug(f"Forward pass completed. Hook outputs: {list(self._hook_outputs.keys())}")
 
             # Collect embeddings from hook outputs
             embeddings = []
 
             for layer_name in self._hook_outputs.keys():
                 embeddings.append(self._hook_outputs[layer_name])
-                logger.debug(
-                    f"Found embedding for {layer_name}: "
-                    f"{self._hook_outputs[layer_name].shape}"
-                )
+                logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(
-                    f"No layers found matching: {self._hook_outputs.keys()}"
-                )
+                raise ValueError(f"No layers found matching: {self._hook_outputs.keys()}")
 
             # First, ensure all embeddings are in batch-first format
             for i in range(len(embeddings)):
@@ -407,20 +402,13 @@ class EATHFModel(ModelBase):
                         if aggregation == "mean":
                             embeddings[i] = torch.mean(embeddings[i], dim=1)
                         elif aggregation == "max":
-                            embeddings[i] = torch.max(embeddings[i], dim=1)[
-                                0
-                            ]  # max returns (values, indices)
+                            embeddings[i] = torch.max(embeddings[i], dim=1)[0]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:
-                            raise ValueError(
-                                f"Unsupported aggregation method: {aggregation}"
-                            )
+                            raise ValueError(f"Unsupported aggregation method: {aggregation}")
                     else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
-                            f"Expected 2 or 3."
-                        )
+                        raise ValueError(f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2 or 3.")
 
                 # Concatenate all embeddings
                 if len(embeddings) == 1:

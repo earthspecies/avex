@@ -17,14 +17,12 @@ from representation_learning.utils import universal_torch_load
 
 logger = logging.getLogger(__name__)
 
-BEATS_PRETRAINED_PATH_FT = (
-    "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
-)
-BEATS_PRETRAINED_PATH_SSL = (
-    "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
-)
+BEATS_PRETRAINED_PATH_FT = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
+BEATS_PRETRAINED_PATH_SSL = "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
 
-BEATS_PRETRAINED_PATH_NATURELM = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
+BEATS_PRETRAINED_PATH_NATURELM = (
+    "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
+)
 
 
 class Model(ModelBase):
@@ -53,7 +51,7 @@ class Model(ModelBase):
     def __init__(
         self,
         *,
-        num_classes: int,
+        num_classes: Optional[int] = None,
         pretrained: bool = False,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
@@ -63,6 +61,10 @@ class Model(ModelBase):
         disable_layerdrop: bool = False,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
+
+        # Validate num_classes: required when return_features_only=False
+        if not return_features_only and num_classes is None:
+            raise ValueError("num_classes must be provided when return_features_only=False")
 
         # Store disable_layerdrop parameter
         self.disable_layerdrop = disable_layerdrop
@@ -76,17 +78,13 @@ class Model(ModelBase):
         else:
             beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
 
-        beats_ckpt = universal_torch_load(
-            beats_checkpoint_path, cache_mode="use", map_location="cpu"
-        )
+        beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
         self.use_naturelm = use_naturelm
         self.fine_tuned = fine_tuned
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
         print(beats_cfg)
         if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
-            beats_ckpt_naturelm = universal_torch_load(
-                BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu"
-            )
+            beats_ckpt_naturelm = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
         else:
             beats_ckpt_naturelm = beats_ckpt["model"]
         # beats_ckpt_naturelm = beats_ckpt
@@ -129,10 +127,7 @@ class Model(ModelBase):
                 elif name.endswith(".fc2") and "backbone.encoder.layers." in name:
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding layers in BEATs: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}")
 
     def _discover_embedding_layers(self) -> None:
         """
@@ -160,10 +155,7 @@ class Model(ModelBase):
                     if name not in self._layer_names:
                         self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding layers in BEATs: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}")
 
     # ----------------------------------------------------------------------
     #  Public API
@@ -194,9 +186,7 @@ class Model(ModelBase):
         # Optional audio pre-processing
         x = self.process_audio(x)
 
-        features, frame_padding = self.backbone(
-            x, padding_mask, disable_layerdrop=self.disable_layerdrop
-        )
+        features, frame_padding = self.backbone(x, padding_mask, disable_layerdrop=self.disable_layerdrop)
 
         # features: (B, T', D)
         # frame_padding: (B, T') or None
@@ -312,10 +302,7 @@ class Model(ModelBase):
             else:
                 self.forward(wav, mask)
 
-            logger.debug(
-                f"Forward pass completed. Hook outputs: "
-                f"{list(self._hook_outputs.keys())}"
-            )
+            logger.debug(f"Forward pass completed. Hook outputs: {list(self._hook_outputs.keys())}")
 
             # Collect embeddings from hook outputs
             embeddings = []
@@ -328,9 +315,7 @@ class Model(ModelBase):
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(
-                    f"No layers found matching: {self._hook_outputs.keys()}"
-                )
+                raise ValueError(f"No layers found matching: {self._hook_outputs.keys()}")
 
             # First, ensure all embeddings are in batch-first format
             for i in range(len(embeddings)):
@@ -353,20 +338,13 @@ class Model(ModelBase):
                         if aggregation == "mean":
                             embeddings[i] = torch.mean(embeddings[i], dim=1)
                         elif aggregation == "max":
-                            embeddings[i] = torch.max(embeddings[i], dim=1)[
-                                0
-                            ]  # max returns (values, indices)
+                            embeddings[i] = torch.max(embeddings[i], dim=1)[0]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:
-                            raise ValueError(
-                                f"Unsupported aggregation method: {aggregation}"
-                            )
+                            raise ValueError(f"Unsupported aggregation method: {aggregation}")
                     else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
-                            f"Expected 2 or 3."
-                        )
+                        raise ValueError(f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2 or 3.")
 
                 # Concatenate all embeddings
                 if len(embeddings) == 1:

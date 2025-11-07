@@ -27,7 +27,7 @@ class Model(ModelBase):
 
     def __init__(
         self,
-        num_classes: int = 1000,
+        num_classes: Optional[int] = None,
         pretrained: bool = True,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
@@ -36,6 +36,13 @@ class Model(ModelBase):
     ) -> None:
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
+
+        # Validate num_classes: required when return_features_only=False
+        # (though EfficientNet uses torchvision's classifier which has fixed classes)
+        # When return_features_only=True, num_classes is not used
+        if not return_features_only and num_classes is None:
+            # Use default from torchvision EfficientNet
+            num_classes = 1000
 
         # Store the flag and config
         self.return_features_only = return_features_only
@@ -48,9 +55,7 @@ class Model(ModelBase):
         elif efficientnet_variant == "b1":
             self.model = efficientnet_b1(pretrained=pretrained)
         else:
-            raise ValueError(
-                f"Unsupported EfficientNet variant: {efficientnet_variant}"
-            )
+            raise ValueError(f"Unsupported EfficientNet variant: {efficientnet_variant}")
 
         # Move model to device
         self.model = self.model.to(self.device)
@@ -167,9 +172,7 @@ class Model(ModelBase):
         torch.Tensor
             Features extracted with gradient checkpointing
         """
-        return torch.utils.checkpoint.checkpoint(
-            self.model.features, x, use_reentrant=False
-        )
+        return torch.utils.checkpoint.checkpoint(self.model.features, x, use_reentrant=False)
 
     def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         """Forward pass through the model.
@@ -266,10 +269,7 @@ class Model(ModelBase):
             for layer_name in self._hook_outputs:
                 if layer_name in self._hook_outputs:
                     embeddings.append(self._hook_outputs[layer_name])
-                    logger.debug(
-                        f"Found embedding for {layer_name}: "
-                        f"{self._hook_outputs[layer_name].shape}"
-                    )
+                    logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
                 else:
                     logger.warning(f"No output captured for layer: {layer_name}")
 
@@ -296,22 +296,17 @@ class Model(ModelBase):
                         if aggregation == "mean":
                             embeddings[i] = embeddings[i].mean(dim=-1)
                         elif aggregation == "max":
-                            embeddings[i] = embeddings[i].max(dim=-1)[
-                                0
-                            ]  # max returns (values, indices)
+                            embeddings[i] = embeddings[i].max(dim=-1)[0]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:
-                            raise ValueError(
-                                f"Unsupported aggregation method: {aggregation}"
-                            )
+                            raise ValueError(f"Unsupported aggregation method: {aggregation}")
                         if embeddings[i].dim() == 3:
                             batch_size, channels, width = embeddings[i].shape
                             embeddings[i] = embeddings[i].view(batch_size, -1)
                         else:
                             raise ValueError(
-                                f"Unexpected embedding dimension: "
-                                f"{embeddings[i].dim()}. Expected 2, 3, or 4."
+                                f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2, 3, or 4."
                             )
                 # Concatenate all embeddings
                 embeddings = torch.cat(embeddings, dim=1)

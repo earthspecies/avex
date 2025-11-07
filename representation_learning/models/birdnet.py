@@ -65,7 +65,7 @@ class Model(ModelBase):
 
     def __init__(
         self,
-        num_classes: int = 0,
+        num_classes: Optional[int] = None,
         device: str = "cpu",
         audio_config: Optional[Dict[str, Any]] = None,
         *,
@@ -75,6 +75,10 @@ class Model(ModelBase):
         **kwargs,  # Accept additional config parameters  # noqa: ANN003
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
+
+        # Treat None as 0 (feature extraction only)
+        if num_classes is None:
+            num_classes = 0
 
         self._analyzer = Analyzer()  # classification helper
         self._interpreter = self._analyzer.interpreter  # TFLite interpreter
@@ -95,8 +99,7 @@ class Model(ModelBase):
             self.classifier = None
 
         logger.info(
-            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • "
-            "num_classes = %d • device = %s",
+            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • num_classes = %d • device = %s",
             self.num_species,
             num_classes,
             device,
@@ -119,10 +122,7 @@ class Model(ModelBase):
                 if isinstance(module, torch.nn.Linear):
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} layers in BirdNET model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} layers in BirdNET model: {self._layer_names}")
             if len(self._layer_names) == 0:
                 logger.info(
                     "BirdNET is a TensorFlow Lite model with no accessible "
@@ -147,10 +147,7 @@ class Model(ModelBase):
                 if isinstance(module, torch.nn.Linear):
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} layers in BirdNET model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} layers in BirdNET model: {self._layer_names}")
             if len(self._layer_names) == 0:
                 logger.info(
                     "BirdNET is a TensorFlow Lite model with no accessible "
@@ -308,9 +305,7 @@ class Model(ModelBase):
                 sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
                 # Try using the built-in embedding extraction
                 try:
-                    embeddings = self._analyzer.extract_embeddings_for_recording(
-                        tmp.name
-                    )
+                    embeddings = self._analyzer.extract_embeddings_for_recording(tmp.name)
                     return embeddings.astype(np.float32)
                 except Exception:
                     # Fall back to manual extraction
@@ -362,9 +357,7 @@ class Model(ModelBase):
             Self for method chaining.
         """
         # Update internal device tracking
-        self.device = (
-            device if isinstance(device, torch.device) else torch.device(device)
-        )
+        self.device = device if isinstance(device, torch.device) else torch.device(device)
 
         # Move PyTorch components (classifier) to the device
         if self.classifier is not None:

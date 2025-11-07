@@ -1,6 +1,6 @@
 [project]
 name = "representation-learning"
-version = "1.0.0"
+version = "0.1.0"
 description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -42,7 +42,7 @@ dependencies = [
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
-  "transformers",
+  "transformers>=4.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
   "tensorflow==2.17.0",
@@ -100,11 +100,12 @@ Documentation = "https://github.com/earthspecies/representation-learning#readme"
 "Bug Tracker" = "https://github.com/earthspecies/representation-learning/issues"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["representation_learning"]
+[tool.uv.build-backend]
+module-name = "representation_learning"
+module-root = ""
 
 [tool.pytest.ini_options]
 python_files = [
@@ -113,7 +114,7 @@ python_files = [
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 indent-width = 4
 exclude = [
     "fix_paths.py",

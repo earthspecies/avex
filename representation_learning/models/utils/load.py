@@ -148,14 +148,10 @@ def load_model(
 
     elif isinstance(model, ModelSpec):
         logger.info("Loading model from ModelSpec object")
-        return _load_from_modelspec(
-            model, num_classes, device, checkpoint_path, **kwargs
-        )
+        return _load_from_modelspec(model, num_classes, device, checkpoint_path, **kwargs)
 
     else:
-        raise TypeError(
-            f"Unsupported model type: {type(model)}. Expected str, Path, or ModelSpec."
-        )
+        raise TypeError(f"Unsupported model type: {type(model)}. Expected str, Path, or ModelSpec.")
 
 
 def _load_from_modelspec(
@@ -192,11 +188,7 @@ def _load_from_modelspec(
             # Optimized lookup: Filter by model_spec.name first, then compare
             # This avoids comparing against all models when we can filter by name
             all_models = list_models()
-            candidates = {
-                key: spec
-                for key, spec in all_models.items()
-                if spec.name == model_spec.name
-            }
+            candidates = {key: spec for key, spec in all_models.items() if spec.name == model_spec.name}
 
             # Compare only the filtered candidates (much faster than comparing all)
             reg_key = None
@@ -209,9 +201,7 @@ def _load_from_modelspec(
             default_checkpoint = get_checkpoint_path(reg_key)
             if default_checkpoint:
                 checkpoint_path = default_checkpoint
-                logger.info(
-                    f"Using default checkpoint path from YAML config: {checkpoint_path}"
-                )
+                logger.info(f"Using default checkpoint path from YAML config: {checkpoint_path}")
 
     # Handle checkpoint loading
     # Note: If a checkpoint_path is provided (either explicitly or from YAML),
@@ -232,9 +222,7 @@ def _load_from_modelspec(
     if num_classes is None and checkpoint_path:
         num_classes = _extract_num_classes_from_checkpoint(checkpoint_path, device)
         if num_classes is None:
-            raise ValueError(
-                f"Could not determine num_classes from checkpoint: {checkpoint_path}"
-            )
+            raise ValueError(f"Could not determine num_classes from checkpoint: {checkpoint_path}")
         logger.info(f"Extracted num_classes={num_classes} from checkpoint")
     elif num_classes is None:
         # Try to build model without num_classes for embedding extraction
@@ -253,16 +241,13 @@ def _load_from_modelspec(
 
         if supports_return_features_only:
             # Model explicitly supports embedding extraction without classifier
-            # Set return_features_only=True and use dummy num_classes
+            # Set return_features_only=True and pass None for num_classes
             kwargs["return_features_only"] = True
-            # Dummy value (not used when return_features_only=True)
-            # This is because some models require num_classes in their signature
-            # but it won't be used when return_features_only=True
-            # It also doesn't affect models that don't have classifiers (EAT)
-            num_classes = 1
+            # num_classes=None is now supported when return_features_only=True
+            # Models will validate that num_classes is provided when needed
+            num_classes = None
             logger.info(
-                f"Building {model_type} model without classifier "
-                f"(return_features_only=True) for embedding extraction"
+                f"Building {model_type} model without classifier (return_features_only=True) for embedding extraction"
             )
 
     # Create model using factory
@@ -273,9 +258,7 @@ def _load_from_modelspec(
     # (extracted from checkpoint)
     if checkpoint_path:
         keep_classifier = num_classes_was_none
-        _load_checkpoint(
-            backbone, checkpoint_path, device, keep_classifier=keep_classifier
-        )
+        _load_checkpoint(backbone, checkpoint_path, device, keep_classifier=keep_classifier)
 
     return backbone.to(device)
 
@@ -365,14 +348,10 @@ def create_model(
         return build_model_from_spec(model, device, num_classes, **kwargs)
 
     else:
-        raise TypeError(
-            f"Unsupported model type: {type(model)}. Expected str, Path, or ModelSpec."
-        )
+        raise TypeError(f"Unsupported model type: {type(model)}. Expected str, Path, or ModelSpec.")
 
 
-def _extract_num_classes_from_checkpoint(
-    checkpoint_path: str, device: str
-) -> Optional[int]:
+def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> Optional[int]:
     """Extract num_classes from checkpoint file.
 
     Args:
@@ -446,10 +425,7 @@ def _extract_num_classes_from_checkpoint(
             # Look for metadata in original checkpoint
             if "num_classes" in checkpoint:
                 return checkpoint["num_classes"]
-            if (
-                "model_config" in checkpoint
-                and "num_classes" in checkpoint["model_config"]
-            ):
+            if "model_config" in checkpoint and "num_classes" in checkpoint["model_config"]:
                 return checkpoint["model_config"]["num_classes"]
 
         logger.warning("Could not determine num_classes from checkpoint")
@@ -460,9 +436,7 @@ def _extract_num_classes_from_checkpoint(
         return None
 
 
-def _load_checkpoint(
-    model: object, checkpoint_path: str, device: str, keep_classifier: bool = False
-) -> None:
+def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_classifier: bool = False) -> None:
     """Load checkpoint weights into model.
 
     Args:

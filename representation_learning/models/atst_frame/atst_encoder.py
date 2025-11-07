@@ -21,7 +21,7 @@ class Model(ModelBase):
     def __init__(
         self,
         atst_model_path: str,
-        num_classes: int = 1000,
+        num_classes: Optional[int] = None,
         pretrained: bool = True,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
@@ -33,8 +33,8 @@ class Model(ModelBase):
         ----------
         atst_model_path : str
             Path to the pretrained ATST model
-        num_classes : int, optional
-            Number of output classes (ignored when return_features_only=True)
+        num_classes : Optional[int], optional
+            Number of output classes (None or ignored when return_features_only=True)
         pretrained : bool, optional
             Whether to use pretrained weights (always True for ATST)
         device : str, optional
@@ -47,24 +47,25 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
+        # Validate num_classes: required when return_features_only=False
+        if not return_features_only and num_classes is None:
+            # Use default (1000 classes)
+            num_classes = 1000
+
         # Store configuration
         self.atst_model_path = atst_model_path
         self.return_features_only = return_features_only
         self.num_classes = num_classes
 
         # Load the ATST model
-        target_device = (
-            "cuda" if torch.cuda.is_available() and device == "cuda" else "cpu"
-        )
+        target_device = "cuda" if torch.cuda.is_available() and device == "cuda" else "cpu"
         self.atst = load_model(atst_model_path, device=target_device)
 
         # Add classification head if needed
         if not return_features_only:
             # Get the feature dimension from ATST output
             # We'll determine this dynamically or use a reasonable default
-            self.classifier = nn.Linear(
-                4608, num_classes
-            )  # 768 is common ATST dimension
+            self.classifier = nn.Linear(4608, num_classes)  # 768 is common ATST dimension
 
     def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         """Forward pass through ATST encoder.
