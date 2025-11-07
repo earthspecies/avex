@@ -7,6 +7,7 @@ minimal configuration, supporting both registered models and external files.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from pathlib import Path
 from typing import Optional, Union
@@ -18,13 +19,9 @@ from representation_learning.utils.utils import _process_state_dict
 
 from .factory import build_model_from_spec
 from .registry import (
-    ensure_initialized,
     get_checkpoint_path,
-    get_model,
     get_model_class,
-    is_model_class_registered,
-    is_registered,
-    list_model_names,
+    get_model_spec,
     list_models,
     load_model_spec_from_yaml,
     register_model,
@@ -102,12 +99,9 @@ def load_model(
         >>> # model = load_model("efficientnet_animalspeak", num_classes=50)
     """
     if isinstance(model, str):
-        # Ensure registry is initialized
-        ensure_initialized()
-
         # Case 1: Registered model
-        if is_registered(model):
-            model_spec = get_model(model)
+        model_spec = get_model_spec(model)
+        if model_spec is not None:
             logger.info(f"Loading registered model: {model}")
             return _load_from_modelspec(
                 model_spec,
@@ -135,7 +129,7 @@ def load_model(
             )
 
         # Case 3: Unknown model identifier
-        available_models = list_model_names()
+        available_models = list(list_models().keys())
         raise ValueError(
             f"Unknown model identifier: '{model}'. "
             f"Available models: {available_models}. "
@@ -227,17 +221,15 @@ def _load_from_modelspec(
     elif num_classes is None:
         # Try to build model without num_classes for embedding extraction
         # Check if model supports return_features_only to optimize the build
-        import inspect
-
-        from .factory import get_model_class
-
         model_type = model_spec.name
-        # Try to check if model supports return_features_only
-        # If model class not registered, get_model_class will raise KeyError
-        # which will propagate - build_model_from_spec will handle it
+        # Check if model supports return_features_only
         model_class = get_model_class(model_type)
-        sig = inspect.signature(model_class.__init__)
-        supports_return_features_only = "return_features_only" in sig.parameters
+        if model_class is None:
+            # Model class not registered, skip return_features_only optimization
+            supports_return_features_only = False
+        else:
+            sig = inspect.signature(model_class.__init__)
+            supports_return_features_only = "return_features_only" in sig.parameters
 
         if supports_return_features_only:
             # Model explicitly supports embedding extraction without classifier
@@ -307,18 +299,15 @@ def create_model(
         >>> # model = create_model("experiments/my_model.yml", num_classes=10)
     """
     if isinstance(model, str):
-        # Ensure registry is initialized
-        ensure_initialized()
-
         # Case 1: Registered model class (plugin architecture)
-        if is_model_class_registered(model):
+        model_class = get_model_class(model)
+        if model_class is not None:
             logger.info(f"Creating model using plugin architecture: {model}")
-            model_class = get_model_class(model)
             return model_class(device=device, num_classes=num_classes, **kwargs)
 
         # Case 2: Registered model spec
-        if is_registered(model):
-            model_spec = get_model(model)
+        model_spec = get_model_spec(model)
+        if model_spec is not None:
             logger.info(f"Creating registered model: {model}")
             return build_model_from_spec(model_spec, device, num_classes, **kwargs)
 
@@ -332,7 +321,7 @@ def create_model(
             return build_model_from_spec(spec, device, num_classes, **kwargs)
 
         # Case 4: Unknown model identifier
-        available_models = list_model_names()
+        available_models = list(list_models().keys())
         raise ValueError(
             f"Unknown model identifier: '{model}'. "
             f"Available models: {available_models}. "

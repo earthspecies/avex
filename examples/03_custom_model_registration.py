@@ -15,10 +15,8 @@ from representation_learning import (
     build_model,
     create_model,
     get_model_class,
-    is_model_class_registered,
     list_model_classes,
     register_model_class,
-    unregister_model_class,
 )
 from representation_learning.models.base_model import ModelBase
 
@@ -321,12 +319,13 @@ def main() -> None:
     print("\n📊 Model Class Management:")
     try:
         # Check if a model class is registered
-        is_registered = is_model_class_registered("simple_audio_cnn")
+        model_class = get_model_class("simple_audio_cnn")
+        is_registered = model_class is not None
         print(f"simple_audio_cnn registered: {is_registered}")
 
         # Get a specific model class
-        model_class = get_model_class("simple_audio_cnn")
-        print(f"Model class: {model_class.__name__}")
+        if model_class is not None:
+            print(f"Model class: {model_class.__name__}")
 
         # Create model using build_model (alternative to create_model)
         model = build_model("simple_audio_cnn", device="cpu", num_classes=5)
@@ -338,12 +337,14 @@ def main() -> None:
     # Example 6: Unregister a model class
     print("\n🗑️ Unregistering Model Class:")
     try:
-        # Unregister the MLP model
-        unregister_model_class("simple_audio_mlp")
-        print("✅ Unregistered simple_audio_mlp")
+        # Note: Model classes remain registered for the session
+        # To use different configurations, register with unique names
+        print("✅ Model classes remain registered for the session")
+        print("   To use different configurations, register with unique names")
 
-        # Check if it's gone
-        is_registered = is_model_class_registered("simple_audio_mlp")
+        # Check if it's still registered
+        model_class = get_model_class("simple_audio_mlp")
+        is_registered = model_class is not None
         print(f"simple_audio_mlp still registered: {is_registered}")
 
         # Try to create it (should fail)

@@ -188,8 +188,7 @@ model = build_model("my_custom_model", device="cpu", num_classes=10)
 #### Registry Management
 ```python
 from representation_learning import (
-    register_model, update_model, unregister_model,
-    get_model, list_models, list_model_names, is_registered, describe_model
+    register_model, get_model_spec, list_models, describe_model
 )
 
 # Register a new model configuration
@@ -211,15 +210,17 @@ model_info = describe_model("efficientnet")
 print(f"Model type: {model_info['_metadata']['model_type']}")
 
 # Check if model is registered
-if is_registered("efficientnet"):
+model_spec = get_model_spec("efficientnet")
+if model_spec is not None:
     print("Model is available")
+else:
+    print("Model is not available")
 ```
 
 #### Model Class Management (Plugin Architecture)
 ```python
 from representation_learning import (
-    register_model_class, get_model_class, list_model_classes,
-    is_model_class_registered, unregister_model_class
+    register_model_class, get_model_class, list_model_classes
 )
 
 # Register a custom model class

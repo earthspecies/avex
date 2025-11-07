@@ -9,18 +9,12 @@ from .load import create_model, load_model
 from .registry import (
     describe_model,
     get_checkpoint_path,
-    get_model,
     get_model_class,
-    is_model_class_registered,
-    is_registered,
+    get_model_spec,
     list_model_classes,
-    list_model_names,
     list_models,
     register_model,
     register_model_class,
-    unregister_model,
-    unregister_model_class,
-    update_model,
 )
 
 __all__ = [
@@ -32,12 +26,8 @@ __all__ = [
     "create_model",
     # Registry management
     "register_model",
-    "update_model",
-    "unregister_model",
-    "get_model",
+    "get_model_spec",
     "list_models",
-    "list_model_names",
-    "is_registered",
     "describe_model",
     # Checkpoint management
     "get_checkpoint_path",
@@ -45,6 +35,4 @@ __all__ = [
     "register_model_class",
     "get_model_class",
     "list_model_classes",
-    "is_model_class_registered",
-    "unregister_model_class",
 ]

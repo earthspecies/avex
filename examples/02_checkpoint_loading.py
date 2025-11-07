@@ -45,8 +45,8 @@ def main() -> None:
     # Example 2: Load model with default checkpoint
     print("\n🔧 Loading model with default checkpoint:")
     try:
-        # Use get_model directly to avoid plugin architecture issues
-        from representation_learning import get_model as get_model_spec
+        # Use get_model_spec directly to avoid plugin architecture issues
+        from representation_learning import get_model_spec
         from representation_learning.models.get_model import get_model
 
         model_spec = get_model_spec("efficientnet_animalspeak")

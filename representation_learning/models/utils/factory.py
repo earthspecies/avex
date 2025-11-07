@@ -12,8 +12,7 @@ from typing import Optional
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
 
-from .registry import get_model as get_model_spec
-from .registry import get_model_class
+from .registry import get_model_class, get_model_spec, list_model_classes, list_models
 
 logger = logging.getLogger(__name__)
 
@@ -74,22 +73,15 @@ def build_model(model_name: str, device: str, num_classes: Optional[int] = None,
     # Get the ModelSpec for this model
     model_spec = get_model_spec(model_name)
     if model_spec is None:
-        from .registry import list_models
-
         available_models = list(list_models().keys())
         raise ValueError(f"No ModelSpec found for '{model_name}'. Available models: {available_models}")
 
     # Get the model class using the model type from ModelSpec
     model_type = model_spec.name  # e.g., 'beats', 'efficientnet', etc.
-    try:
-        model_class = get_model_class(model_type)
-    except KeyError:
-        from .registry import list_model_classes
-
+    model_class = get_model_class(model_type)
+    if model_class is None:
         available_classes = list_model_classes()
-        raise KeyError(
-            f"Model class '{model_type}' is not registered. Available classes: {available_classes}"
-        ) from None
+        raise KeyError(f"Model class '{model_type}' is not registered. Available classes: {available_classes}")
 
     # Prepare initialization arguments
     init_kwargs = {
@@ -138,15 +130,10 @@ def build_model_from_spec(
     """
     # Get the model class using the model type from ModelSpec
     model_type = model_spec.name
-    try:
-        model_class = get_model_class(model_type)
-    except KeyError:
-        from .registry import list_model_classes
-
+    model_class = get_model_class(model_type)
+    if model_class is None:
         available_classes = list_model_classes()
-        raise KeyError(
-            f"Model class '{model_type}' is not registered. Available classes: {available_classes}"
-        ) from None
+        raise KeyError(f"Model class '{model_type}' is not registered. Available classes: {available_classes}")
 
     # Prepare initialization arguments (same logic as build_model)
     # Convert audio_config dict to AudioConfig object if needed

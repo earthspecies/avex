@@ -15,13 +15,9 @@ import yaml
 
 from representation_learning import (
     describe_model,
-    get_model,
-    is_registered,
-    list_model_names,
+    get_model_spec,
     list_models,
     register_model,
-    unregister_model,
-    update_model,
 )
 from representation_learning.configs import AudioConfig, ModelSpec
 
@@ -112,24 +108,25 @@ def main() -> None:
     print("\n🔧 Working with Registered Models:")
     try:
         # Get a specific model
-        model_spec = get_model("custom_efficientnet")
-        if model_spec:
+        model_spec = get_model_spec("custom_efficientnet")
+        if model_spec is not None:
             print("✅ Retrieved custom_efficientnet:")
             print(f"   Model type: {model_spec.name}")
             print(f"   Sample rate: {model_spec.audio_config.sample_rate}")
             print(f"   Variant: {model_spec.efficientnet_variant}")
 
         # Check if a model is registered
-        is_reg = is_registered("custom_beats")
-        print(f"custom_beats is registered: {is_reg}")
+        model_spec = get_model_spec("custom_beats")
+        print(f"custom_beats is registered: {model_spec is not None}")
 
         # Create a model from registered spec using get_model
         from representation_learning.models.get_model import get_model as create_model
 
-        model = create_model(model_spec, num_classes=25)
-        model = model.cpu()  # Ensure on CPU
-        print(f"✅ Created model from registered spec: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+        if model_spec is not None:
+            model = create_model(model_spec, num_classes=25)
+            model = model.cpu()  # Ensure on CPU
+            print(f"✅ Created model from registered spec: {type(model).__name__}")
+            print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     except Exception as e:
         print(f"❌ Error working with registered models: {e}")
@@ -160,14 +157,15 @@ def main() -> None:
             efficientnet_variant="b0",  # Changed variant
         )
 
-        update_model("custom_efficientnet", updated_efficientnet)
+        register_model("custom_efficientnet", updated_efficientnet)
         print("✅ Updated custom_efficientnet configuration")
 
         # Verify the update
-        model_spec = get_model("custom_efficientnet")
-        print(f"   New sample rate: {model_spec.audio_config.sample_rate}")
-        print(f"   New variant: {model_spec.efficientnet_variant}")
-        print(f"   New pretrained: {model_spec.pretrained}")
+        model_spec = get_model_spec("custom_efficientnet")
+        if model_spec is not None:
+            print(f"   New sample rate: {model_spec.audio_config.sample_rate}")
+            print(f"   New variant: {model_spec.efficientnet_variant}")
+            print(f"   New pretrained: {model_spec.pretrained}")
 
     except Exception as e:
         print(f"❌ Error updating model: {e}")
@@ -198,8 +196,8 @@ def main() -> None:
 
         # The YAML model should be auto-registered
         yaml_model_name = Path(yaml_path).stem
-        is_reg = is_registered(yaml_model_name)
-        print(f"YAML model auto-registered: {is_reg}")
+        model_spec = get_model_spec(yaml_model_name)
+        print(f"YAML model auto-registered: {model_spec is not None}")
 
         # Clean up
         Path(yaml_path).unlink()
@@ -207,37 +205,32 @@ def main() -> None:
     except Exception as e:
         print(f"❌ Error loading from YAML: {e}")
 
-    # Example 6: Unregister models
-    print("\n🗑️ Unregistering Models:")
+    # Example 6: Note on model registration
+    print("\n📝 Note on Model Registration:")
+    print("   Custom models remain registered for the session.")
+    print("   To use different configurations, register with unique names.")
+    print("   Example: register_model('custom_efficientnet_v2', new_spec)")
+
+    # Check registration status
+    models = list_models()
+    is_reg1 = "custom_efficientnet" in models
+    is_reg2 = "custom_beats" in models
+    print(f"   custom_efficientnet still registered: {is_reg1}")
+    print(f"   custom_beats still registered: {is_reg2}")
+
+    # Models remain registered and can be used
     try:
-        # Unregister the custom models
-        unregister_model("custom_efficientnet")
-        print("✅ Unregistered custom_efficientnet")
-
-        unregister_model("custom_beats")
-        print("✅ Unregistered custom_beats")
-
-        # Check if they're gone
-        is_reg1 = is_registered("custom_efficientnet")
-        is_reg2 = is_registered("custom_beats")
-        print(f"custom_efficientnet still registered: {is_reg1}")
-        print(f"custom_beats still registered: {is_reg2}")
-
-        # Try to create unregistered model (should fail)
-        try:
-            model = create_model("custom_efficientnet", num_classes=10, device="cpu")
-            print("❌ Unexpected: Model creation succeeded after unregistering")
-        except Exception as e:
-            print(f"✅ Expected error after unregistering: {e}")
-
+        model = create_model("custom_efficientnet", num_classes=10, device="cpu")
+        print(f"✅ Model creation succeeded: {type(model).__name__}")
+        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
     except Exception as e:
-        print(f"❌ Error unregistering models: {e}")
+        print(f"❌ Error creating model: {e}")
 
     # Example 7: Registry statistics
     print("\n📈 Registry Statistics:")
     try:
         models = list_models()
-        model_names = list_model_names()
+        model_names = list(models.keys())
 
         print(f"Total registered models: {len(models)}")
         print(f"Model names: {model_names}")

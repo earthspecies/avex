@@ -5,12 +5,15 @@ This module provides a centralized registry for model configurations,
 automatically loading official models and allowing custom model registration.
 """
 
+import importlib
+import inspect
 import logging
 from importlib import resources
 from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
 from representation_learning.configs import ModelSpec
+from representation_learning.models.base_model import ModelBase
 
 try:
     import yaml
@@ -59,14 +62,144 @@ def _auto_register_from_yaml() -> None:
         logger.warning(f"Failed to load models from package {_OFFICIAL_MODELS_PKG}: {e}")
 
 
+def _discover_model_classes() -> Dict[str, Type[ModelBase]]:
+    """Discover all ModelBase subclasses in the models package.
+
+    Dynamically scans the models package directory to find all model classes,
+    avoiding the need to manually list each model.
+
+    Returns:
+        Dictionary mapping model names to their classes
+    """
+    discovered = {}
+
+    # Mapping from module path to model name(s)
+    # This handles special cases where model name doesn't match module/class name
+    MODEL_NAME_MAPPING: Dict[str, list[str]] = {
+        "representation_learning.models.beats_model": ["beats"],
+        "representation_learning.models.atst_frame.atst_encoder": ["atst"],
+        "representation_learning.models.resnet": ["resnet18", "resnet50", "resnet152"],
+        "representation_learning.models.aves_model": ["aves_bio"],
+    }
+
+    # Directories to exclude from scanning
+    EXCLUDED_DIRS = {"utils", "probes", "beats"}  # beats is a subdirectory with implementation details
+
+    # Get the models package path
+    try:
+        models_pkg = importlib.import_module("representation_learning.models")
+        models_path = Path(models_pkg.__file__).parent if models_pkg.__file__ else None
+    except ImportError:
+        logger.warning("Could not import representation_learning.models package")
+        return discovered
+
+    if not models_path or not models_path.exists():
+        logger.warning(f"Models package path not found: {models_path}")
+        return discovered
+
+    # Scan Python files in the models directory and subdirectories
+    for py_file in models_path.rglob("*.py"):
+        # Skip excluded directories
+        if any(excluded in py_file.parts for excluded in EXCLUDED_DIRS):
+            continue
+
+        # Skip __init__.py, get_model.py, and base_model.py
+        if py_file.name in ("__init__.py", "get_model.py", "base_model.py"):
+            continue
+
+        # Convert file path to module name
+        # models_path is representation_learning/models, so parent is representation_learning
+        # We need the full module path starting from representation_learning
+        try:
+            # Get path relative to representation_learning package
+            rel_path = py_file.relative_to(models_path.parent)
+            # Convert to module name: models/clip.py -> representation_learning.models.clip
+            module_name = (
+                f"representation_learning.{str(rel_path.with_suffix('')).replace('/', '.').replace('\\\\', '.')}"
+            )
+        except ValueError:
+            # File is not under models_path.parent, skip it
+            continue
+
+        try:
+            module = importlib.import_module(module_name)
+
+            # Find all ModelBase subclasses in the module
+            for name, obj in inspect.getmembers(module, inspect.isclass):
+                # Skip if not a ModelBase subclass, or if it's ModelBase itself
+                if not issubclass(obj, ModelBase) or obj is ModelBase:
+                    continue
+
+                # Skip if it's imported from another module (not defined here)
+                if obj.__module__ != module_name:
+                    continue
+
+                # Get model name(s) for this module
+                model_names = MODEL_NAME_MAPPING.get(module_name, [])
+
+                if not model_names:
+                    # Infer model name from class or module name
+                    if name.lower() == "model":
+                        # Class is "Model", infer from module name
+                        module_base = module_name.split(".")[-1]
+                        if module_base.endswith("_model"):
+                            model_name = module_base[:-6]  # Remove "_model"
+                        elif module_base == "atst_encoder":
+                            model_name = "atst"  # Special case for atst_frame/atst_encoder.py
+                        else:
+                            model_name = module_base
+                        model_names = [model_name]
+                    elif name.lower().endswith("model"):
+                        # Class name like "CLIPModel" -> "clip"
+                        model_name = name.lower()[:-5]  # Remove "model"
+                        model_names = [model_name]
+                    else:
+                        model_names = [name.lower()]
+
+                # Register all model names for this class
+                for model_name in model_names:
+                    discovered[model_name] = obj
+                    logger.debug(f"Discovered model class: {model_name} -> {obj.__name__} from {module_name}")
+
+        except ImportError as e:
+            # Some modules may have optional dependencies
+            logger.debug(f"Could not import {module_name}: {e}")
+        except Exception as e:
+            logger.warning(f"Error discovering models in {module_name}: {e}")
+
+    return discovered
+
+
+def _auto_register_model_classes() -> None:
+    """Automatically register built-in model classes from the models/ directory.
+
+    This registers all standard model classes so they can be used via the registry
+    without manual registration. Model classes are discovered dynamically by scanning
+    the models package for ModelBase subclasses.
+    """
+    try:
+        discovered = _discover_model_classes()
+
+        for model_name, model_class in discovered.items():
+            _MODEL_CLASSES[model_name] = model_class
+
+        logger.info(f"Auto-registered {len(discovered)} model classes: {sorted(discovered.keys())}")
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning(f"Failed to auto-register model classes: {e}")
+
+
 def initialize_registry() -> None:
     """Initialize built-in registry from packaged configs.
 
     Checkpoint paths are automatically registered from ModelSpec.checkpoint_path
-    in the YAML files.
+    in the YAML files. Model classes are also automatically registered.
     """
+    if _MODEL_REGISTRY:  # Already initialized
+        return
+
     logger.info(f"Initializing model registry from package: {_OFFICIAL_MODELS_PKG}")
     _auto_register_from_yaml()
+    _auto_register_model_classes()
 
     logger.info(f"Model registry initialized with {len(_MODEL_REGISTRY)} models: {list(_MODEL_REGISTRY.keys())}")
 
@@ -113,70 +246,29 @@ def register_model(name: str, model_spec: ModelSpec) -> None:
     """Register a new model spec dynamically.
 
     Args:
-        name: Unique name for the model
+        name: Name for the model (will overwrite if already registered)
         model_spec: ModelSpec configuration object
-
-    Raises:
-        ValueError: If name is already registered
     """
-    # Initialize first (without lock to avoid deadlock)
-    ensure_initialized()
-
     if name in _MODEL_REGISTRY:
-        raise ValueError(f"Model '{name}' is already registered. Use update_model() to overwrite.")
+        logger.warning(f"Model '{name}' is already registered. Overwriting with new configuration.")
+    else:
+        logger.info(f"Registered custom model: {name}")
 
     _MODEL_REGISTRY[name] = model_spec
-    logger.info(f"Registered custom model: {name}")
 
 
-def update_model(name: str, model_spec: ModelSpec) -> None:
-    """Update an existing model spec.
-
-    Args:
-        name: Name of the model to update
-        model_spec: New ModelSpec configuration object
-    """
-    # Initialize first (without lock to avoid deadlock)
-    ensure_initialized()
-
-    _MODEL_REGISTRY[name] = model_spec
-    logger.info(f"Updated model: {name}")
-
-
-def unregister_model(name: str) -> None:
-    """Remove a model from the registry.
-
-    Args:
-        name: Name of the model to remove
-
-    Raises:
-        KeyError: If model is not registered
-    """
-    # Initialize first (without lock to avoid deadlock)
-    ensure_initialized()
-
-    if name not in _MODEL_REGISTRY:
-        raise KeyError(f"Model '{name}' is not registered")
-
-    del _MODEL_REGISTRY[name]
-    logger.info(f"Unregistered model: {name}")
-
-
-def get_model(name: str) -> ModelSpec:
+def get_model_spec(name: str) -> Optional[ModelSpec]:
     """Get a model spec by name.
 
     Args:
         name: Name of the model
 
     Returns:
-        ModelSpec if found
-
-    Raises:
-        KeyError: If model is not registered
+        ModelSpec if found, None otherwise
     """
-    ensure_initialized()
     if name not in _MODEL_REGISTRY:
-        raise KeyError(f"Model '{name}' is not registered")
+        logger.info(f"Model '{name}' is not registered")
+        return None
     return _MODEL_REGISTRY[name]
 
 
@@ -186,31 +278,7 @@ def list_models() -> Dict[str, ModelSpec]:
     Returns:
         Copy of the model registry
     """
-    ensure_initialized()
     return _MODEL_REGISTRY.copy()
-
-
-def list_model_names() -> list[str]:
-    """Return list of registered model names.
-
-    Returns:
-        List of model names
-    """
-    ensure_initialized()
-    return list(_MODEL_REGISTRY.keys())
-
-
-def is_registered(name: str) -> bool:
-    """Check if a model is registered.
-
-    Args:
-        name: Name of the model to check
-
-    Returns:
-        True if registered, False otherwise
-    """
-    ensure_initialized()
-    return name in _MODEL_REGISTRY
 
 
 def get_checkpoint_path(name: str) -> Optional[str]:
@@ -228,8 +296,6 @@ def get_checkpoint_path(name: str) -> Optional[str]:
     Raises:
         KeyError: If model is not registered
     """
-    ensure_initialized()
-
     if name not in _MODEL_REGISTRY:
         raise KeyError(f"Model '{name}' is not registered")
 
@@ -269,12 +335,9 @@ def describe_model(name: str, verbose: bool = False) -> dict:
     Raises:
         KeyError: If model is not found in registry
     """
-    ensure_initialized()
-    # get_model() raises KeyError if model is not found, so no need to check for None
-    try:
-        spec = get_model(name)
-    except KeyError:
-        raise  # Re-raise to satisfy DOC502 - KeyError is raised by get_model()
+    spec = get_model_spec(name)
+    if spec is None:
+        raise KeyError(f"Model '{name}' is not registered")
 
     # Get the full model dump with all fields
     model_info = spec.model_dump()
@@ -327,21 +390,18 @@ def register_model_class(cls: Type) -> Type:
     return cls
 
 
-def get_model_class(name: str) -> Type:
-    """
-    Get a registered model class by name.
+def get_model_class(name: str) -> Optional[Type[ModelBase]]:
+    """Get a registered model class by name.
 
     Args:
         name: Name of the model class
 
     Returns:
-        The registered model class
-
-    Raises:
-        KeyError: If the model class is not registered
+        The registered model class if found, None otherwise
     """
     if name not in _MODEL_CLASSES:
-        raise KeyError(f"Model class '{name}' is not registered.")
+        logger.info(f"Model class '{name}' is not registered")
+        return None
     return _MODEL_CLASSES[name]
 
 
@@ -354,35 +414,5 @@ def list_model_classes() -> list[str]:
     return list(_MODEL_CLASSES.keys())
 
 
-def is_model_class_registered(name: str) -> bool:
-    """Check if a model class is registered.
-
-    Args:
-        name: Name of the model class to check
-
-    Returns:
-        True if registered, False otherwise
-    """
-    return name in _MODEL_CLASSES
-
-
-def unregister_model_class(name: str) -> None:
-    """Remove a model class from the registry.
-
-    Args:
-        name: Name of the model class to remove
-
-    Raises:
-        KeyError: If model class is not registered
-    """
-    if name not in _MODEL_CLASSES:
-        raise KeyError(f"Model class '{name}' is not registered")
-
-    del _MODEL_CLASSES[name]
-    logger.info(f"Unregistered model class: {name}")
-
-
-def ensure_initialized() -> None:
-    """Ensure the registry is initialized before use."""
-    if not _MODEL_REGISTRY:
-        initialize_registry()
+# Initialize registry at module import time (after all functions are defined)
+initialize_registry()
