@@ -36,6 +36,9 @@ def main() -> None:
         print("❌ Error: sl_beats_animalspeak model not found in registry")
         return
 
+    # Force CPU device for this example
+    model_spec.device = "cpu"
+
     original_num_classes = 15
     model = get_model(model_spec, num_classes=original_num_classes)
     model = model.to("cpu")
@@ -135,6 +138,112 @@ def main() -> None:
         #     print("🧹 Cleaned up checkpoint file")
 
     print("\n✅ Example completed successfully")
+
+    # Example: beats_naturelm (self-supervised model without checkpoint/classifier)
+    print("\n" + "=" * 60)
+    print("📋 Example: beats_naturelm - Self-Supervised Model Use Cases")
+    print("=" * 60)
+    print("\n   beats_naturelm is a self-supervised model (no checkpoint, no classifier)")
+    print("   This demonstrates three different use cases:\n")
+
+    # Use case 1: Try to load with original classification head (should not have one)
+    print("📋 Use Case 1: Trying to load with original classification head")
+    print("   Expected: Cannot load original classifier (none exists - model loads in embedding mode)")
+    print("-" * 60)
+    try:
+        # beats_naturelm has no checkpoint and no classifier, so loading with num_classes=None
+        # will automatically use return_features_only=True (embedding extraction mode)
+        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model.eval()
+
+        # Check if classifier exists and is not None (BEATs sets classifier=None when return_features_only=True)
+        has_classifier = hasattr(model, "classifier") and model.classifier is not None
+        if has_classifier:
+            print("   ❌ UNEXPECTED: Model has a classifier (should not exist)")
+            print("   (beats_naturelm has no checkpoint, so no original classifier exists)")
+        else:
+            print("   ✅ EXPECTED: Model has no classifier (no checkpoint/classifier exists)")
+            print("   ✅ Model automatically loaded in embedding extraction mode")
+            print(f"      Return features only: {getattr(model, '_return_features_only', 'N/A')}")
+
+            # Test forward pass - should return embeddings, not logits
+            dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+            with torch.no_grad():
+                output = model(dummy_input, padding_mask=None)
+            print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
+            print("      ✅ Model returns embeddings (not classification logits)")
+            print("   💡 Note: You cannot load the 'original' classification head")
+            print("      because beats_naturelm is self-supervised (no classifier trained)")
+
+    except Exception as e:
+        print(f"   ❌ UNEXPECTED ERROR: {type(e).__name__}: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Use case 2: Add a new classification head through num_classes
+    print("\n📋 Use Case 2: Adding a new classification head through num_classes")
+    print("   Expected: Should create a new randomly initialized classifier")
+    print("-" * 60)
+    try:
+        num_classes = 10
+        model = load_model("beats_naturelm", num_classes=num_classes, device="cpu")
+        model.eval()
+
+        if hasattr(model, "classifier"):
+            print(f"   ✅ SUCCESS: Model has a classifier with {num_classes} classes")
+            print(f"      Classifier weight shape: {model.classifier.weight.shape}")
+            print(f"      Classifier bias shape: {model.classifier.bias.shape}")
+
+            # Test forward pass
+            dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+            with torch.no_grad():
+                output = model(dummy_input, padding_mask=None)
+            print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
+            print("      ✅ Model outputs classification logits")
+        else:
+            print("   ❌ FAIL: Model does not have a classifier")
+    except Exception as e:
+        print(f"   ❌ ERROR: {type(e).__name__}: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    # Use case 3: Use for feature/embedding extraction
+    print("\n📋 Use Case 3: Using for feature/embedding extraction")
+    print("   Expected: Should return embeddings (no classifier)")
+    print("-" * 60)
+    try:
+        # Load without num_classes - should automatically use return_features_only=True
+        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model.eval()
+
+        # Check if classifier exists and is not None (BEATs sets classifier=None when return_features_only=True)
+        has_classifier = hasattr(model, "classifier") and model.classifier is not None
+        if has_classifier:
+            print("   ❌ UNEXPECTED: Model has a classifier (should be in embedding mode)")
+        else:
+            print("   ✅ SUCCESS: Model is in embedding extraction mode")
+            print(f"      Return features only: {getattr(model, '_return_features_only', 'N/A')}")
+
+            # Test forward pass - should return embeddings
+            dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+            with torch.no_grad():
+                output = model(dummy_input, padding_mask=None)
+            print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
+            print("      ✅ Model returns embeddings (not classification logits)")
+
+    except Exception as e:
+        print(f"   ❌ ERROR: {type(e).__name__}: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    print("\n💡 Key Takeaways for beats_naturelm:")
+    print("   - Cannot load with original classification head (no checkpoint exists)")
+    print("   - Can add a new classification head by specifying num_classes")
+    print("   - Automatically uses embedding extraction mode when num_classes=None")
+    print("   - Useful for transfer learning and representation learning tasks")
 
 
 if __name__ == "__main__":
