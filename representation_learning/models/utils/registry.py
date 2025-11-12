@@ -114,9 +114,10 @@ def _discover_model_classes() -> Dict[str, Type[ModelBase]]:
             # Get path relative to representation_learning package
             rel_path = py_file.relative_to(models_path.parent)
             # Convert to module name: models/clip.py -> representation_learning.models.clip
-            module_name = (
-                f"representation_learning.{str(rel_path.with_suffix('')).replace('/', '.').replace('\\\\', '.')}"
-            )
+            path_str = str(rel_path.with_suffix(""))
+            # Replace both forward and backslashes with dots
+            path_str = path_str.replace("/", ".").replace("\\", ".")
+            module_name = f"representation_learning.{path_str}"
         except ValueError:
             # File is not under models_path.parent, skip it
             continue

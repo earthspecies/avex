@@ -17,6 +17,7 @@ import torch
 from representation_learning import (
     get_checkpoint_path,
     list_models,
+    load_class_mapping,
     load_model,
 )
 
@@ -149,6 +150,78 @@ def main() -> None:
 
     except Exception as e:
         print(f"❌ Error getting checkpoint info: {e}")
+
+    # Example 7: Class mapping for models with classifier heads
+    print("\n🏷️  Class Mapping for Models with Classifier Heads:")
+    print("   Note: Some models have classifier heads where logits correspond to specific class labels")
+    print("   The class mapping is defined in YAML files (class_mapping_path)")
+    try:
+        # Show which models have class mappings by trying to load them
+        models_with_mapping = []
+        for model_name in list_models().keys():
+            class_mapping = load_class_mapping(model_name)
+            if class_mapping:
+                models_with_mapping.append(model_name)
+
+        if models_with_mapping:
+            print(f"\n   Models with class mappings ({len(models_with_mapping)}):")
+            for model_name in models_with_mapping:
+                print(f"     - {model_name}")
+        else:
+            print("   No models with class mappings found")
+
+        # Example: Load a model with class mapping
+        print("\n   Example: Loading model with class mapping:")
+        model_name = "sl_beats_animalspeak"
+        print(f"   Loading class mapping for model: {model_name}")
+        class_mapping = load_class_mapping(model_name)
+        if class_mapping:
+            label_to_index = class_mapping["label_to_index"]
+            index_to_label = class_mapping["index_to_label"]
+            print(f"   ✅ Loaded class mapping with {len(label_to_index)} classes")
+            print("   Example labels (first 5):")
+            for _i, (label, idx) in enumerate(list(label_to_index.items())[:5]):
+                print(f"     - {label}: index {idx}")
+            print("   Example reverse mapping (indices 0-4):")
+            for idx in range(min(5, len(index_to_label))):
+                if idx in index_to_label:
+                    print(f"     - index {idx}: {index_to_label[idx]}")
+
+            # Demonstrate loading model with automatic class mapping attachment
+            print(f"\n   Loading model '{model_name}' (class mapping will be attached automatically):")
+            try:
+                model = load_model(model_name, device="cpu")
+                if hasattr(model, "class_mapping"):
+                    print("   ✅ Model loaded with class mapping attached")
+                    print(
+                        "   Access via: model.class_mapping['label_to_index'] or model.class_mapping['index_to_label']"
+                    )
+
+                    # Example: Use class mapping for predictions
+                    print("\n   Example: Using class mapping for predictions:")
+                    dummy_input = torch.randn(1, 16000 * 5)
+                    with torch.no_grad():
+                        logits = model(dummy_input)
+                    # Get top-3 predictions
+                    probs = torch.softmax(logits, dim=-1)
+                    top_probs, top_indices = torch.topk(probs, k=min(3, logits.shape[-1]), dim=-1)
+                    print("   Top-3 predicted classes:")
+                    for i, (prob, idx) in enumerate(zip(top_probs[0], top_indices[0], strict=False)):
+                        idx_int = idx.item()
+                        label = index_to_label.get(idx_int, f"Unknown (index {idx_int})")
+                        print(f"     {i + 1}. {label}: {prob.item():.4f}")
+                else:
+                    print("   ⚠️  Model loaded but class mapping not attached (checkpoint may not exist)")
+            except Exception as e:
+                print(f"   ⚠️  Could not load model (checkpoint may not exist): {e}")
+        else:
+            print("   ⚠️  Could not load class mapping (file may not exist or model has no mapping defined)")
+
+    except Exception as e:
+        print(f"❌ Error working with class mappings: {e}")
+        import traceback
+
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

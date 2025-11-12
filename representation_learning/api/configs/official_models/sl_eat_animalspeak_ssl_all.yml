@@ -2,6 +2,9 @@
 # EAT model fine-tuned on AnimalSpeak dataset with SSL
 # Default checkpoint path for this model (can be overridden when loading)
 checkpoint_path: gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt
+# Temporary class mapping path, in the future this should be read from
+# the checkpoint directory
+class_mapping_path: gs://representation-learning/runs/aaai/sl_beats_animalspeak_audioset/2025-08-11_09-30-49/label_map.json
 
 model_spec:
   name: eat_hf
@@ -16,21 +19,3 @@ model_spec:
     normalize: false
     target_length_seconds: 10
     window_selection: random
-
-# Dataset configuration (placeholder - not used for model loading)
-dataset_config:
-  train_datasets:
-    - dataset_name: placeholder
-  val_datasets:
-    - dataset_name: placeholder
-
-# Minimal required fields for RunConfig validation (not used for training)
-training_params:
-  train_epochs: 1
-  lr: 0.001
-  batch_size: 1
-  optimizer: adamw
-  weight_decay: 0.0
-
-output_dir: "./runs/placeholder"
-loss_function: cross_entropy

@@ -27,6 +27,14 @@ class TestLoadModelClassifierHead:
         Yields:
             None: Fixture yields nothing, just sets up the model registry.
         """
+        from representation_learning.models.utils import registry
+
+        # Clear registry to ensure clean state
+        registry._MODEL_REGISTRY.clear()
+        # Don't clear _MODEL_CLASSES - we need the beats model class to be auto-discovered
+        # Initialize registry to auto-discover model classes
+        registry.initialize_registry()
+
         # Register the model spec for sl_beats_animalspeak
         # Note: The BEATs model class is now auto-registered at startup
         # Note: register_model now overwrites if already registered
@@ -45,6 +53,9 @@ class TestLoadModelClassifierHead:
         )
         register_model("sl_beats_animalspeak", model_spec)
         yield
+
+        # Clean up
+        registry._MODEL_REGISTRY.clear()
 
     def test_beats_classifier_weights_loaded_when_num_classes_none(self) -> None:
         """Test that BEATs classifier weights are loaded when num_classes=None.
