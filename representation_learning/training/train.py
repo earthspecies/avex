@@ -118,9 +118,7 @@ class Trainer:
 
         # AMP setup
         self.amp_enabled = config.training_params.amp
-        self.amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}[
-            config.training_params.amp_dtype
-        ]
+        self.amp_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16}[config.training_params.amp_dtype]
 
         # Training state
         self.best_val_acc = 0.0
@@ -131,31 +129,19 @@ class Trainer:
         self._debug_first_forward = False
 
         # --------------------------- two-stage fine-tuning ----------------------- #
-        self.freeze_backbone_epochs: int = (
-            getattr(config.training_params, "freeze_backbone_epochs", 0) or 0
-        )
-        self.second_stage_lr: float | None = getattr(
-            config.training_params, "second_stage_lr", None
-        )
-        self.second_stage_warmup_steps: int | None = getattr(
-            config.training_params, "second_stage_warmup_steps", None
-        )
+        self.freeze_backbone_epochs: int = getattr(config.training_params, "freeze_backbone_epochs", 0) or 0
+        self.second_stage_lr: float | None = getattr(config.training_params, "second_stage_lr", None)
+        self.second_stage_warmup_steps: int | None = getattr(config.training_params, "second_stage_warmup_steps", None)
         self._second_stage_active = self.freeze_backbone_epochs == 0  # Already unfrozen
 
         # Initialize clustering evaluator if enabled
         self.clustering_evaluator = None
-        if (
-            hasattr(config, "clustering_eval")
-            and config.clustering_eval
-            and config.clustering_eval.enabled
-        ):
+        if hasattr(config, "clustering_eval") and config.clustering_eval and config.clustering_eval.enabled:
             from representation_learning.training.clustering_evaluator import (
                 ClusteringEvaluator,
             )
 
-            self.clustering_evaluator = ClusteringEvaluator(
-                config.clustering_eval, device
-            )
+            self.clustering_evaluator = ClusteringEvaluator(config.clustering_eval, device)
             logger.info("Clustering evaluation enabled")
 
         # Load checkpoint if specified
@@ -177,9 +163,7 @@ class Trainer:
             if self._should_run_clustering_eval_before_training():
                 self._run_clustering_evaluation(epoch=0, is_pre_training=True)
 
-            for epoch in range(
-                self.start_epoch, self.config.training_params.train_epochs + 1
-            ):
+            for epoch in range(self.start_epoch, self.config.training_params.train_epochs + 1):
                 # Set epoch for distributed samplers
                 self._set_epoch_for_samplers(epoch)
 
@@ -197,10 +181,7 @@ class Trainer:
                 # Skip validation if configured
                 if self.config.training_params.skip_validation:
                     val_loss, val_metrics = 0.0, {}
-                    logger.info(
-                        f"[Epoch {epoch:03d}] Skipping validation "
-                        f"(skip_validation=True)"
-                    )
+                    logger.info(f"[Epoch {epoch:03d}] Skipping validation (skip_validation=True)")
                 else:
                     val_loss, val_metrics = self._run_epoch(train=False, epoch=epoch)
 
@@ -225,11 +206,7 @@ class Trainer:
                         clustering_metrics,
                     )
                     # Use train_acc for checkpointing when validation is skipped
-                    checkpoint_acc = (
-                        val_acc
-                        if not self.config.training_params.skip_validation
-                        else train_acc
-                    )
+                    checkpoint_acc = val_acc if not self.config.training_params.skip_validation else train_acc
                     self._handle_checkpointing(epoch, checkpoint_acc)
 
             # Save final checkpoint
@@ -307,9 +284,7 @@ class Trainer:
                     self._backward_step(result.loss)
 
                 # Periodic logging
-                if (i + 1) % self.config.training_params.log_steps == 0 or (
-                    i + 1
-                ) == len(loader):
+                if (i + 1) % self.config.training_params.log_steps == 0 or (i + 1) == len(loader):
                     self._log_batch_progress(i + 1, len(loader))
 
         # Get final epoch metrics
@@ -324,17 +299,10 @@ class Trainer:
             The result of the forward pass including loss and metrics.
         """
         # Move batch to device
-        batch = {
-            k: v.to(self.device) if isinstance(v, torch.Tensor) else v
-            for k, v in batch.items()
-        }
+        batch = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
 
         # Debug: Log before forward pass
-        if (
-            is_main_process()
-            and hasattr(self, "_debug_first_forward")
-            and not self._debug_first_forward
-        ):
+        if is_main_process() and hasattr(self, "_debug_first_forward") and not self._debug_first_forward:
             logger.info("[DEBUG] Starting first forward pass")
             self._debug_first_forward = True
 
@@ -380,14 +348,9 @@ class Trainer:
         # Build log message
         comp_str = ""
         if component_metrics:
-            comp_str = "  " + "  ".join(
-                f"{k}={v:.2f}" for k, v in component_metrics.items()
-            )
+            comp_str = "  " + "  ".join(f"{k}={v:.2f}" for k, v in component_metrics.items())
 
-        logger.info(
-            f"[LOG] Step {step}/{total_steps}: "
-            f"avg_loss={avg_loss:.4f}, avg_acc={avg_acc:.4f}{comp_str}"
-        )
+        logger.info(f"[LOG] Step {step}/{total_steps}: avg_loss={avg_loss:.4f}, avg_acc={avg_acc:.4f}{comp_str}")
 
         # Log to experiment tracker
         if self.exp_logger:
@@ -436,9 +399,7 @@ class Trainer:
 
         # Add clustering metrics if available
         if clustering_metrics:
-            clustering_str = " | " + " ".join(
-                f"{k}={v:.4f}" for k, v in clustering_metrics.items()
-            )
+            clustering_str = " | " + " ".join(f"{k}={v:.4f}" for k, v in clustering_metrics.items())
             log_msg += clustering_str
 
         # Add CLIP-specific metrics if available
@@ -468,37 +429,27 @@ class Trainer:
 
             # Log clustering metrics separately if available
             if clustering_metrics:
-                self.exp_logger.log_metrics(
-                    clustering_metrics, step=epoch, split="clustering"
-                )
+                self.exp_logger.log_metrics(clustering_metrics, step=epoch, split="clustering")
 
     def _handle_checkpointing(self, epoch: int, val_acc: float) -> None:
         """Handle checkpoint saving logic."""
         # When validation is skipped, we use training accuracy for "best" model tracking
         if self.config.training_params.skip_validation:
             metric_name = "training accuracy"
-            metric_for_comparison = (
-                val_acc  # This is actually train_acc when validation is skipped
-            )
+            metric_for_comparison = val_acc  # This is actually train_acc when validation is skipped
         else:
             metric_name = "validation accuracy"
             metric_for_comparison = val_acc
 
         # Save best model
         if metric_for_comparison > self.best_val_acc:
-            logger.info(
-                f"New best {metric_name}: {metric_for_comparison:.4f} "
-                f"(prev: {self.best_val_acc:.4f})"
-            )
+            logger.info(f"New best {metric_name}: {metric_for_comparison:.4f} (prev: {self.best_val_acc:.4f})")
             self.best_val_acc = metric_for_comparison
             self._save_checkpoint(epoch, is_best=True)
 
         # Save periodic checkpoint
         checkpoint_freq = getattr(self.config, "checkpoint_freq", 1)
-        if (
-            epoch % checkpoint_freq == 0
-            and epoch != self.config.training_params.train_epochs
-        ):
+        if epoch % checkpoint_freq == 0 and epoch != self.config.training_params.train_epochs:
             self._save_checkpoint(epoch)
 
     def _save_checkpoint(self, epoch: int, is_best: bool = False) -> None:
@@ -547,10 +498,7 @@ class Trainer:
 
                 with label_map_path.open("w") as f:
                     json.dump(label_map, f, indent=2)
-                logger.info(
-                    f"Saved final label_map with {len(label_map)} classes to "
-                    f"{label_map_path}"
-                )
+                logger.info(f"Saved final label_map with {len(label_map)} classes to {label_map_path}")
             else:
                 logger.warning("No label_map found in dataset metadata to save")
         except Exception as e:
@@ -618,9 +566,7 @@ class Trainer:
                 "amp_dtype": self.config.training_params.amp_dtype,
                 "distributed": self.is_distributed,
                 "world_size": self.world_size,
-                "gradient_checkpointing": (
-                    self.config.training_params.gradient_checkpointing
-                ),
+                "gradient_checkpointing": (self.config.training_params.gradient_checkpointing),
                 "scheduler": getattr(self.config.scheduler, "name", "none"),
                 "warmup_steps": getattr(self.config.scheduler, "warmup_steps", 0),
                 "min_lr": getattr(self.config.scheduler, "min_lr", 0),
@@ -660,9 +606,7 @@ class Trainer:
                 model,
                 broadcast_buffers=False,
                 # Don't use find_unused_parameters when using _set_static_graph
-                find_unused_parameters=(
-                    not self.config.training_params.gradient_checkpointing
-                ),
+                find_unused_parameters=(not self.config.training_params.gradient_checkpointing),
             )
 
         if self.config.training_params.gradient_checkpointing:
@@ -718,9 +662,7 @@ class Trainer:
             return False
         return epoch % self.clustering_evaluator.config.frequency == 0
 
-    def _run_clustering_evaluation(
-        self, epoch: int, is_pre_training: bool = False
-    ) -> Dict[str, float]:
+    def _run_clustering_evaluation(self, epoch: int, is_pre_training: bool = False) -> Dict[str, float]:
         """Run clustering evaluation.
 
         Returns
@@ -738,18 +680,14 @@ class Trainer:
 
         # Choose dataloader based on config
         dataloader = (
-            self.eval_dataloader
-            if self.clustering_evaluator.config.use_validation_set
-            else self.train_dataloader
+            self.eval_dataloader if self.clustering_evaluator.config.use_validation_set else self.train_dataloader
         )
 
         # Get unwrapped model for evaluation
         model = self._get_unwrapped_model()
 
         try:
-            clustering_metrics = self.clustering_evaluator.evaluate(
-                model, dataloader, epoch
-            )
+            clustering_metrics = self.clustering_evaluator.evaluate(model, dataloader, epoch)
 
             # Log clustering metrics to experiment logger
             if clustering_metrics and self.exp_logger:
@@ -784,17 +722,13 @@ class Trainer:
         # Re-initialise optimiser with full parameter set
         # ------------------------------------------------------------------
         new_lr = (
-            self.second_stage_lr
-            if self.second_stage_lr is not None
-            else float(self.config.training_params.lr) * 0.1
+            self.second_stage_lr if self.second_stage_lr is not None else float(self.config.training_params.lr) * 0.1
         )
         # Mutate config in-place so downstream logging & saves reflect change
         self.config.training_params.lr = new_lr
 
         # Build fresh optimiser
-        self.optimizer = get_optimizer(
-            self.model.parameters(), self.config.training_params
-        )
+        self.optimizer = get_optimizer(self.model.parameters(), self.config.training_params)
 
         # ------------------------------------------------------------------
         # Re-create LR scheduler with (optional) new warm-up

@@ -77,9 +77,7 @@ def save_experiment_metadata(
             run_id = _generate_run_id()
         metadata["id"] = run_id
     else:
-        metadata["id"] = config_dict.get("run_name", None) or config_dict.get(
-            "run_id", _generate_run_id()
-        )
+        metadata["id"] = config_dict.get("run_name", None) or config_dict.get("run_id", _generate_run_id())
 
     # Convert to DataFrame
     df = pd.DataFrame([metadata])
@@ -223,9 +221,7 @@ def save_evaluation_metadata(
     for metric in all_possible_clustering_metrics:
         metadata[f"test_{dataset_name}_{metric}"] = clustering_metrics.get(metric, None)
 
-    metadata["eval_config"] = json.dumps(
-        eval_config
-    )  # Store eval config as JSON string
+    metadata["eval_config"] = json.dumps(eval_config)  # Store eval config as JSON string
 
     # Add training metadata if available
     latest_training = None
@@ -340,9 +336,7 @@ def create_experiment_summary_csvs(
 
     # Add standard retrieval metrics that are always computed when retrieval is enabled
     if "retrieval" in eval_cfg.eval_modes:
-        all_possible_retrieval_metrics.update(
-            ["retrieval_roc_auc", "retrieval_precision_at_1"]
-        )
+        all_possible_retrieval_metrics.update(["retrieval_roc_auc", "retrieval_precision_at_1"])
 
     # Add standard clustering metrics that are always computed when clustering
     # is enabled
@@ -401,18 +395,14 @@ def create_experiment_summary_csvs(
             # Remove the "retrieval_" prefix if it's already there to avoid
             # double-prefixing
             metric_name = metric.replace("retrieval_", "")
-            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(
-                metric, None
-            )
+            summary_entry[f"retrieval_{metric_name}"] = r.retrieval_metrics.get(metric, None)
 
         # Add clustering metrics with None for missing ones
         for metric in all_possible_clustering_metrics:
             # Remove the "clustering_" prefix if it's already there to avoid
             # double-prefixing
             metric_name = metric.replace("clustering_", "")
-            summary_entry[f"clustering_{metric_name}"] = r.clustering_metrics.get(
-                metric, None
-            )
+            summary_entry[f"clustering_{metric_name}"] = r.clustering_metrics.get(metric, None)
 
         # Add training metadata if available
         if not training_metadata.empty:
@@ -454,9 +444,7 @@ def create_experiment_summary_csvs(
         # Check if the file exists right before writing to minimize race conditions
         file_exists = False
         try:
-            file_exists = (
-                results_csv_path.exists() and results_csv_path.stat().st_size > 0
-            )
+            file_exists = results_csv_path.exists() and results_csv_path.stat().st_size > 0
         except (OSError, FileNotFoundError):
             # If we can't stat the file, treat it as non-existent
             file_exists = False
@@ -496,14 +484,10 @@ def create_experiment_summary_csvs(
     if eval_cfg.results_csv_path:
         # Derive simple CSV name from all_results CSV name
         results_path = Path(eval_cfg.results_csv_path).expanduser()
-        simple_csv_path = results_path.parent / (
-            results_path.stem + "_simple" + results_path.suffix
-        )
+        simple_csv_path = results_path.parent / (results_path.stem + "_simple" + results_path.suffix)
     else:
         # Use a default name in the save_dir
-        simple_csv_path = (
-            save_dir / f"simple_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        )
+        simple_csv_path = save_dir / f"simple_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
     # Create simple summary data
     simple_summary_data = []
@@ -530,9 +514,7 @@ def create_experiment_summary_csvs(
     # Check if the simple file exists right before writing to minimize race conditions
     simple_file_exists = False
     try:
-        simple_file_exists = (
-            simple_csv_path.exists() and simple_csv_path.stat().st_size > 0
-        )
+        simple_file_exists = simple_csv_path.exists() and simple_csv_path.stat().st_size > 0
     except (OSError, FileNotFoundError):
         # If we can't stat the file, treat it as non-existent
         simple_file_exists = False
@@ -628,9 +610,7 @@ def parse_run_config_params_string(
         return {}
 
 
-def get_config_from_metadata(
-    metadata_df: pd.DataFrame, config_column: str = "config"
-) -> Optional[Dict[str, Any]]:
+def get_config_from_metadata(metadata_df: pd.DataFrame, config_column: str = "config") -> Optional[Dict[str, Any]]:
     """Extract config from metadata DataFrame.
 
     Parameters
@@ -732,9 +712,7 @@ def create_initial_experiment_metadata(
         "checkpoint_name": checkpoint_name,
         "is_best": True,
         "is_final": True,
-        "config": json.dumps(
-            config.model_dump(mode="json")
-        ),  # Store config as JSON string
+        "config": json.dumps(config.model_dump(mode="json")),  # Store config as JSON string
     }
 
     # Convert to DataFrame

@@ -57,10 +57,7 @@ def eval_clustering(
         return _get_empty_clustering_metrics()
 
     if embeds.shape[0] != labels.shape[0]:
-        raise ValueError(
-            f"Embeddings and labels must have same length: "
-            f"{embeds.shape[0]} vs {labels.shape[0]}"
-        )
+        raise ValueError(f"Embeddings and labels must have same length: {embeds.shape[0]} vs {labels.shape[0]}")
 
     # Convert to numpy for sklearn compatibility
     embeds_np = embeds.cpu().numpy()
@@ -82,17 +79,11 @@ def eval_clustering(
         n_clusters = len(unique_labels)
 
     if n_clusters < 2:
-        logger.warning(
-            f"Need at least 2 clusters for meaningful clustering evaluation, "
-            f"got {n_clusters}"
-        )
+        logger.warning(f"Need at least 2 clusters for meaningful clustering evaluation, got {n_clusters}")
         return _get_empty_clustering_metrics()
 
     if n_clusters > embeds_np.shape[0]:
-        logger.warning(
-            f"Number of clusters ({n_clusters}) cannot exceed number of samples "
-            f"({embeds_np.shape[0]})"
-        )
+        logger.warning(f"Number of clusters ({n_clusters}) cannot exceed number of samples ({embeds_np.shape[0]})")
         n_clusters = min(n_clusters, embeds_np.shape[0])
 
     try:
@@ -109,15 +100,9 @@ def eval_clustering(
         metrics = {}
 
         # Metrics comparing clustering to ground truth
-        metrics["clustering_ari"] = float(
-            adjusted_rand_score(labels_np, cluster_labels)
-        )
-        metrics["clustering_nmi"] = float(
-            normalized_mutual_info_score(labels_np, cluster_labels)
-        )
-        metrics["clustering_v_measure"] = float(
-            v_measure_score(labels_np, cluster_labels)
-        )
+        metrics["clustering_ari"] = float(adjusted_rand_score(labels_np, cluster_labels))
+        metrics["clustering_nmi"] = float(normalized_mutual_info_score(labels_np, cluster_labels))
+        metrics["clustering_v_measure"] = float(v_measure_score(labels_np, cluster_labels))
 
         return metrics
 
@@ -190,9 +175,7 @@ def eval_clustering_multiple_k(
         if k >= embeds_np.shape[0]:
             break
 
-        metrics = eval_clustering(
-            embeds, labels, n_clusters=k, random_state=random_state
-        )
+        metrics = eval_clustering(embeds, labels, n_clusters=k, random_state=random_state)
 
         if metrics["clustering_ari"] > best_score:
             best_score = metrics["clustering_ari"]

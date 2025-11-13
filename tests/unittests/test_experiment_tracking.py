@@ -221,9 +221,7 @@ def test_create_initial_experiment_metadata(
     assert config["model_spec"]["audio_config"]["sample_rate"] == 16000
 
 
-def test_append_to_existing_metadata(
-    temp_dir: Path, mock_config: RunConfig, mock_metrics: Dict[str, float]
-) -> None:
+def test_append_to_existing_metadata(temp_dir: Path, mock_config: RunConfig, mock_metrics: Dict[str, float]) -> None:
     """Test appending to existing metadata."""
     # Create initial metadata
     save_experiment_metadata(

@@ -15,22 +15,22 @@ training_params:
 
 # Which experiments to evaluate
 experiments:
-  - run_name: beats_pretrained_attention_last
-    run_config: configs/run_configs/pretrained/beats_pretrained.yml
-    probe_config:
-      probe_type: attention
-      aggregation: none
-      input_processing: sequence
-      target_layers: ["last_layer"]
-      num_heads: 8
-      attention_dim: 64
-      num_layers: 1
-      max_sequence_length: 800
-      use_positional_encoding: false
-      dropout_rate: 0.3
-      freeze_backbone: true
-      online_training: true
-    pretrained: true
+  # - run_name: beats_pretrained_attention_last
+  #   run_config: configs/run_configs/pretrained/beats_pretrained.yml
+  #   probe_config:
+  #     probe_type: attention
+  #     aggregation: none
+  #     input_processing: sequence
+  #     target_layers: ["last_layer"]
+  #     num_heads: 8
+  #     attention_dim: 64
+  #     num_layers: 1
+  #     max_sequence_length: 800
+  #     use_positional_encoding: false
+  #     dropout_rate: 0.3
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: true
 
   - run_name: beats_pretrained_attention_all
     run_config: configs/run_configs/pretrained/beats_pretrained.yml
@@ -49,27 +49,27 @@ experiments:
       online_training: true
     pretrained: true
 
-  - run_name: beats_pretrained_linear_last
-    run_config: configs/run_configs/pretrained/beats_pretrained.yml
-    probe_config:
-      probe_type: linear
-      aggregation: mean
-      input_processing: pooled
-      target_layers: ["last_layer"]
-      freeze_backbone: true
-      online_training: true
-    pretrained: true
+  # - run_name: beats_pretrained_linear_last
+  #   run_config: configs/run_configs/pretrained/beats_pretrained.yml
+  #   probe_config:
+  #     probe_type: linear
+  #     aggregation: mean
+  #     input_processing: pooled
+  #     target_layers: ["last_layer"]
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: true
 
-  - run_name: beats_pretrained_linear_all
-    run_config: configs/run_configs/pretrained/beats_pretrained.yml
-    probe_config:
-      probe_type: linear
-      target_layers: ["all"]
-      aggregation: mean
-      input_processing: pooled
-      freeze_backbone: true
-      online_training: true
-    pretrained: true
+  # - run_name: beats_pretrained_linear_all
+  #   run_config: configs/run_configs/pretrained/beats_pretrained.yml
+  #   probe_config:
+  #     probe_type: linear
+  #     target_layers: ["all"]
+  #     aggregation: mean
+  #     input_processing: pooled
+  #     freeze_backbone: true
+  #     online_training: true
+  #   pretrained: true
 
   # - run_name: beats_lstm_all
   #   run_config: configs/run_configs/pretrained/beats_ft.yml

@@ -58,10 +58,7 @@ def get_local_device_index() -> int:
         if local_rank < visible_devices:
             return local_rank
         else:
-            logger.warning(
-                f"SLURM_LOCALID={local_rank} >= visible devices {visible_devices}. "
-                f"Using device 0."
-            )
+            logger.warning(f"SLURM_LOCALID={local_rank} >= visible devices {visible_devices}. Using device 0.")
             return 0
 
     # Fallback: use LOCAL_RANK from torchrun if available
@@ -100,18 +97,14 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
     # Check for backend override from environment variable
     env_backend = os.environ.get("PYTORCH_DISTRIBUTED_BACKEND", backend)
     if env_backend != backend:
-        logger.info(
-            f"Using backend '{env_backend}' from PYTORCH_DISTRIBUTED_BACKEND "
-            f"environment variable"
-        )
+        logger.info(f"Using backend '{env_backend}' from PYTORCH_DISTRIBUTED_BACKEND environment variable")
         backend = env_backend
 
     # Check if SLURM environment variables are set
     if "SLURM_PROCID" in os.environ and "SLURM_NTASKS" in os.environ:
         node_id, local_rank, global_rank, world_size, master_addr = get_slurm_env()
         logger.info(
-            "SLURM env variables: node_id=%s, local_rank=%s, global_rank=%s, "
-            "world_size=%s, master_addr=%s",
+            "SLURM env variables: node_id=%s, local_rank=%s, global_rank=%s, world_size=%s, master_addr=%s",
             node_id,
             local_rank,
             global_rank,
@@ -165,10 +158,7 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
             logger.info("Distributed training initialized successfully.")
 
         else:
-            logger.info(
-                "Single GPU/task detected (world_size=1). "
-                "Skipping distributed initialization."
-            )
+            logger.info("Single GPU/task detected (world_size=1). Skipping distributed initialization.")
 
     elif dist.is_available() and not dist.is_initialized():
         # Fallback for non-SLURM environments if needed, e.g. torchrun
@@ -190,15 +180,9 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
 
                 dist.init_process_group(backend=backend, init_method="env://")
                 is_distributed = True
-                logger.info(
-                    f"Initialized torch.distributed via env:// "
-                    f"(rank {rank}, world_size {world_size})"
-                )
+                logger.info(f"Initialized torch.distributed via env:// (rank {rank}, world_size {world_size})")
         else:
-            logger.info(
-                "Neither SLURM nor standard torch.distributed env vars found. "
-                "Running in non-distributed mode."
-            )
+            logger.info("Neither SLURM nor standard torch.distributed env vars found. Running in non-distributed mode.")
 
     elif dist.is_initialized():
         rank = dist.get_rank()
@@ -318,11 +302,7 @@ def gather_metrics_from_all_ranks(
     """
     if not dist.is_available() or not dist.is_initialized():
         if is_clip_mode:
-            avg_acc = (
-                (total_correct_a2t + total_correct_t2a) / 2.0 / total_samples
-                if total_samples > 0
-                else 0.0
-            )
+            avg_acc = (total_correct_a2t + total_correct_t2a) / 2.0 / total_samples if total_samples > 0 else 0.0
         else:
             avg_acc = total_correct / total_samples if total_samples > 0 else 0.0
         return (total_loss / total_samples if total_samples > 0 else 0.0), avg_acc
@@ -341,9 +321,7 @@ def gather_metrics_from_all_ranks(
         )
     else:
         total_correct_sync = synchronize_scalar(total_correct, device)
-        avg_acc = (
-            total_correct_sync / total_samples_sync if total_samples_sync > 0 else 0.0
-        )
+        avg_acc = total_correct_sync / total_samples_sync if total_samples_sync > 0 else 0.0
 
     avg_loss = total_loss_sync / total_samples_sync if total_samples_sync > 0 else 0.0
 

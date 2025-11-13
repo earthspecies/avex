@@ -26,9 +26,7 @@ def test_flexible_probing_integration() -> None:
         print(f"📁 Using temporary output directory: {temp_output_dir}")
 
         # Path to our test configuration
-        config_path = Path(
-            "configs/evaluation_configs/flexible_probing_minimal_test.yml"
-        )
+        config_path = Path("configs/evaluation_configs/flexible_probing_minimal_test.yml")
 
         if not config_path.exists():
             print(f"❌ Test configuration not found: {config_path}")

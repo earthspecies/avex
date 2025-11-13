@@ -105,12 +105,8 @@ class AugmentationProcessor:
 
         self.device = torch.device(device)
         self.sr = sample_rate
-        self.noise_aug_configs = [
-            spec for spec in augmentation_specs if isinstance(spec, NoiseAugment)
-        ]
-        self.mixup_aug_configs = [
-            spec for spec in augmentation_specs if isinstance(spec, MixupAugment)
-        ]
+        self.noise_aug_configs = [spec for spec in augmentation_specs if isinstance(spec, NoiseAugment)]
+        self.mixup_aug_configs = [spec for spec in augmentation_specs if isinstance(spec, MixupAugment)]
 
         # Pre-collect noise file lists to avoid repeated directory scanning
         self._noise_pools: dict[int, list[Path]] = {}
@@ -118,9 +114,7 @@ class AugmentationProcessor:
             try:
                 self._noise_pools[id(cfg)] = self._list_noise_files(cfg.noise_dirs)
             except Exception as exc:
-                msg = (
-                    f"Failed to build noise file list for dirs {cfg.noise_dirs}: {exc}"
-                )
+                msg = f"Failed to build noise file list for dirs {cfg.noise_dirs}: {exc}"
                 raise RuntimeError(msg) from exc
 
         # Track recently used files for cache optimization
@@ -184,10 +178,7 @@ class AugmentationProcessor:
         """
         # Skip noise augmentation if audio has zero length
         if wav.numel() == 0 or wav.shape[-1] == 0:
-            logger.warning(
-                f"Skipping noise augmentation for audio with zero length: "
-                f"shape={wav.shape}"
-            )
+            logger.warning(f"Skipping noise augmentation for audio with zero length: shape={wav.shape}")
             return wav
 
         for cfg in self.noise_aug_configs:
@@ -260,10 +251,7 @@ class AugmentationProcessor:
 
         # If still invalid, skip this noise file
         if num_frames <= 0:
-            logger.error(
-                f"Noise file {noise_path} has no frames (info.frames={info.frames}). "
-                f"Returning empty tensor."
-            )
+            logger.error(f"Noise file {noise_path} has no frames (info.frames={info.frames}). Returning empty tensor.")
             return torch.zeros((1, 1), dtype=torch.float32)
 
         try:

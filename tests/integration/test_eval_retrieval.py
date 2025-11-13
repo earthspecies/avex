@@ -47,9 +47,7 @@ class _TinyDataset(Dataset[dict[str, torch.Tensor]]):
 # --------------------------------------------------------------------- #
 #  Mocks
 # --------------------------------------------------------------------- #
-def _mock_build_dataloaders(
-    *_: object, **__: object
-) -> Tuple[DataLoader, DataLoader, DataLoader]:  # noqa: D401
+def _mock_build_dataloaders(*_: object, **__: object) -> Tuple[DataLoader, DataLoader, DataLoader]:  # noqa: D401
     """Return train/val/test loaders over the same tiny dataset.
 
     Returns
@@ -85,9 +83,7 @@ def test_run_experiment_small(
     # Mock the retrieval evaluation to handle None labels issue
     from representation_learning.evaluation import retrieval as retrieval_mod
 
-    def _mock_eval_retrieval_cross_set(
-        *args: object, **kwargs: object
-    ) -> dict[str, float]:
+    def _mock_eval_retrieval_cross_set(*args: object, **kwargs: object) -> dict[str, float]:
         """Mock retrieval evaluation that returns dummy metrics.
 
         Returns
@@ -97,12 +93,8 @@ def test_run_experiment_small(
         """
         return {"retrieval_precision_at_1": 0.5, "retrieval_precision_at_5": 0.6}
 
-    monkeypatch.setattr(
-        retrieval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set
-    )
-    monkeypatch.setattr(
-        reval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set
-    )
+    monkeypatch.setattr(retrieval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
+    monkeypatch.setattr(reval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
     # Minimal training params --------------------------------------------------
     train_params: TrainingParams = TrainingParams(
         train_epochs=1,
@@ -150,9 +142,7 @@ def test_run_experiment_small(
 
     data_collection_cfg = DatasetCollectionConfig(
         train_datasets=[DatasetConfig(dataset_name="dummy_train")],
-        val_datasets=[
-            DatasetConfig(dataset_name="dummy_val")
-        ],  # Add validation dataset
+        val_datasets=[DatasetConfig(dataset_name="dummy_val")],  # Add validation dataset
         test_datasets=[DatasetConfig(dataset_name="dummy_test")],  # Add test dataset
     )
 

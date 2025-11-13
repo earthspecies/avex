@@ -85,8 +85,7 @@ class Model(ModelBase):
 
         self.model = wav2vec2_model(**self.config.to_dict(), aux_num_out=None)
         state_dict = torch.hub.load_state_dict_from_url(
-            "https://storage.googleapis.com/esp-public-files/"
-            "birdaves/birdaves-biox-base.torchaudio.pt",
+            "https://storage.googleapis.com/esp-public-files/birdaves/birdaves-biox-base.torchaudio.pt",
             map_location=device,
         )
         self.model.load_state_dict(state_dict)
@@ -113,16 +112,10 @@ class Model(ModelBase):
                 # Keep only the output_dense layers from transformer blocks
                 # Pattern: model.encoder.transformer.layers.{i}
                 # .feed_forward.output_dense
-                if (
-                    name.endswith(".feed_forward.output_dense")
-                    and "model.encoder.transformer.layers." in name
-                ):
+                if name.endswith(".feed_forward.output_dense") and "model.encoder.transformer.layers." in name:
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding layers in AVES model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers in AVES model: {self._layer_names}")
 
     def _discover_embedding_layers(self) -> None:
         """
@@ -138,16 +131,10 @@ class Model(ModelBase):
                 # Keep only the output_dense layers from transformer blocks
                 # Pattern: model.encoder.transformer.layers.{i}
                 # .feed_forward.output_dense
-                if (
-                    name.endswith(".feed_forward.output_dense")
-                    and "model.encoder.transformer.layers." in name
-                ):
+                if name.endswith(".feed_forward.output_dense") and "model.encoder.transformer.layers." in name:
                     self._layer_names.append(name)
 
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding layers in AVES model: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers in AVES model: {self._layer_names}")
 
     def _prep_input(self, inputs: torch.Tensor) -> torch.Tensor:
         if inputs.ndim == 1:
@@ -233,28 +220,20 @@ class Model(ModelBase):
             else:
                 self.forward(wav, mask)
 
-            logger.debug(
-                f"Forward pass completed. Hook outputs: "
-                f"{list(self._hook_outputs.keys())}"
-            )
+            logger.debug(f"Forward pass completed. Hook outputs: {list(self._hook_outputs.keys())}")
 
             # Collect embeddings from hook outputs
             embeddings = []
 
             for layer_name in self._hook_outputs.keys():
                 embeddings.append(self._hook_outputs[layer_name])
-                logger.debug(
-                    f"Found embedding for {layer_name}: "
-                    f"{self._hook_outputs[layer_name].shape}"
-                )
+                logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(
-                    f"No layers found matching: {self._hook_outputs.keys()}"
-                )
+                raise ValueError(f"No layers found matching: {self._hook_outputs.keys()}")
 
             # Process embeddings based on aggregation parameter
             if aggregation == "none":
@@ -278,26 +257,17 @@ class Model(ModelBase):
                         # (time, batch, features)
                         if embeddings[i].shape[0] != expected_batch_size:
                             # Transpose to batch-first format
-                            embeddings[i] = embeddings[i].view(
-                                embeddings[i].shape[0], -1
-                            )
+                            embeddings[i] = embeddings[i].view(embeddings[i].shape[0], -1)
                         if aggregation == "mean":
                             embeddings[i] = embeddings[i].mean(dim=1)
                         elif aggregation == "max":
-                            embeddings[i] = embeddings[i].max(dim=1)[
-                                0
-                            ]  # max returns (values, indices)
+                            embeddings[i] = embeddings[i].max(dim=1)[0]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:
-                            raise ValueError(
-                                f"Unsupported aggregation method: {aggregation}"
-                            )
+                            raise ValueError(f"Unsupported aggregation method: {aggregation}")
                     else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
-                            f"Expected 2 or 3."
-                        )
+                        raise ValueError(f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2 or 3.")
 
                 # Concatenate all embeddings
                 if len(embeddings) == 1:

@@ -325,9 +325,7 @@ class div(CustomAudioTransform):
         return input
 
 
-def drop_path(
-    x: torch.Tensor, drop_prob: float = 0.0, training: bool = False
-) -> torch.Tensor:
+def drop_path(x: torch.Tensor, drop_prob: float = 0.0, training: bool = False) -> torch.Tensor:
     """Drop paths (Stochastic Depth) per sample for residual blocks.
 
     Args:
@@ -341,9 +339,7 @@ def drop_path(
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (
-        x.ndim - 1
-    )  # work with diff dim tensors, not just 2D ConvNets
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
     random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
     random_tensor.floor_()  # binarize
     output = x.div(keep_prob) * random_tensor
@@ -454,9 +450,7 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(
-        self, x: torch.Tensor, mask: Optional[torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through attention module.
 
         Args:
@@ -467,11 +461,7 @@ class Attention(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: Output tensor and attention weights
         """
         B, N, C = x.shape
-        qkv = (
-            self.qkv(x)
-            .reshape(B, N, 3, self.num_heads, C // self.num_heads)
-            .permute(2, 0, 3, 1, 4)
-        )
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
         attn = (q @ k.transpose(-2, -1)) * self.scale
         if mask is not None:
@@ -579,19 +569,14 @@ def get_attention_mask(x: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
     """
     batch_size, max_len, _ = x.shape
     # create mask for padded elements and zero-out them
-    mask = (
-        torch.arange(max_len, device=length.device).expand(batch_size, max_len)
-        >= length[:, None]
-    )
+    mask = torch.arange(max_len, device=length.device).expand(batch_size, max_len) >= length[:, None]
     # extend the mask to attention shape and set weight
     mask = -10000.0 * mask[:, None, None, :]
     mask = mask.expand(batch_size, 1, max_len, max_len).to(x.device)
     return mask
 
 
-def _no_grad_trunc_normal_(
-    tensor: torch.Tensor, mean: float, std: float, a: float, b: float
-) -> torch.Tensor:
+def _no_grad_trunc_normal_(tensor: torch.Tensor, mean: float, std: float, a: float, b: float) -> torch.Tensor:
     """Fill tensor with truncated normal distribution (no gradient tracking).
 
     Cut & paste from PyTorch official master until it's in a few official releases - RW
@@ -708,9 +693,7 @@ class PatchEmbed(nn.Module):
         patch_embed = self.proj(melspec).squeeze(2).permute(0, 2, 1)
 
         if length is not None:
-            patch_length = (height // self.patch_height) * (
-                (length - length % self.patch_width) // self.patch_width
-            )
+            patch_length = (height // self.patch_height) * ((length - length % self.patch_width) // self.patch_width)
         else:
             patch_length = None
 
@@ -764,9 +747,7 @@ class PatchEmbed_v2(nn.Module):
         patch_embed = self.patch_embed(patch)
 
         if length is not None:
-            patch_length = (height // self.patch_height) * (
-                (length - length % self.patch_width) // self.patch_width
-            )
+            patch_length = (height // self.patch_height) * ((length - length % self.patch_width) // self.patch_width)
         else:
             patch_length = None
 
@@ -841,18 +822,14 @@ class FrameAST(nn.Module):
         elif patch_embed == "CNN":
             self.patch_embed = PatchEmbed(patch_h, patch_w, embed_dim)
         else:
-            raise NotImplementedError(
-                "patch_embed={} not implemented".format(patch_embed)
-            )
+            raise NotImplementedError("patch_embed={} not implemented".format(patch_embed))
 
         self.mask_embed = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
 
         # hack
         self.nprompt = nprompt
         if self.nprompt > 0:
-            self.prompt_embed = nn.Parameter(
-                torch.zeros(1, self.nprompt, self.embed_dim)
-            )
+            self.prompt_embed = nn.Parameter(torch.zeros(1, self.nprompt, self.embed_dim))
             trunc_normal_(self.prompt_embed, std=0.02)
 
         num_patches = get_num_patches(spec_h, spec_w, patch_h, patch_w)
@@ -861,9 +838,7 @@ class FrameAST(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
-        dpr = [
-            x.item() for x in torch.linspace(0, drop_path_rate, depth)
-        ]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList(
             [
                 Block(
@@ -926,18 +901,12 @@ class FrameAST(nn.Module):
             Tuple containing processed tokens and related tensors
         """
         B, nc, h, w = x.shape
-        mel_patches, x, patch_length = self.patch_embed(
-            x, length
-        )  # patch linear embedding
+        mel_patches, x, patch_length = self.patch_embed(x, length)  # patch linear embedding
         B, T, C = x.shape
 
         if (mask_index is not None) and mask:
-            mask_index_expand = (
-                mask_index.unsqueeze(2).expand(B, T, self.embed_dim).float()
-            )
-            x = (
-                1 - mask_index_expand
-            ) * x + mask_index_expand * self.mask_embed.expand(B, T, C)
+            mask_index_expand = mask_index.unsqueeze(2).expand(B, T, self.embed_dim).float()
+            x = (1 - mask_index_expand) * x + mask_index_expand * self.mask_embed.expand(B, T, C)
 
         # add positional encoding to each token
         if self.pos_type == "cut":
@@ -980,9 +949,7 @@ class FrameAST(nn.Module):
         Returns:
             torch.Tensor: Output features
         """
-        x, pos, mel_patches, h, w, patch_length = self.prepare_tokens(
-            x, mask_index, length, mask_input
-        )
+        x, pos, mel_patches, h, w, patch_length = self.prepare_tokens(x, mask_index, length, mask_input)
 
         length_mask = torch.arange(x.shape[1]).to(x.device) < patch_length.unsqueeze(1)
         length_mask = length_mask.to(x.device)
@@ -1006,9 +973,7 @@ class FrameAST(nn.Module):
 
         return frame_repr[:, self.nprompt :][mask_index]
 
-    def get_cls(
-        self, x: torch.Tensor, length: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def get_cls(self, x: torch.Tensor, length: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Get CLS token representation.
 
         Args:
@@ -1018,9 +983,7 @@ class FrameAST(nn.Module):
         Returns:
             torch.Tensor: CLS token features
         """
-        x, pos, mel_patches, h, w, patch_length = self.prepare_tokens(
-            x, None, length, False
-        )
+        x, pos, mel_patches, h, w, patch_length = self.prepare_tokens(x, None, length, False)
 
         if self.nprompt > 0:
             x = torch.cat([self.prompt_embed.expand(x.shape[0], -1, -1), x], dim=1)
@@ -1068,10 +1031,7 @@ class FrameAST(nn.Module):
             ),
             mode="bicubic",
         )
-        assert (
-            int(h0) == patch_pos_embed.shape[-2]
-            and int(w0) == patch_pos_embed.shape[-1]
-        )
+        assert int(h0) == patch_pos_embed.shape[-2] and int(w0) == patch_pos_embed.shape[-1]
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
         return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
@@ -1084,9 +1044,7 @@ class FrameAST(nn.Module):
         Returns:
             torch.Tensor: Self-attention weights
         """
-        x, _, _, _, _, _ = self.prepare_tokens(
-            x, mask_index=None, length=None, mask=False
-        )
+        x, _, _, _, _, _ = self.prepare_tokens(x, mask_index=None, length=None, mask=False)
         atts = []
         for i, blk in enumerate(self.blocks):
             if i < len(self.blocks) - 1:
@@ -1116,9 +1074,7 @@ class FrameAST(nn.Module):
         Returns:
             List[torch.Tensor]: Intermediate representations
         """
-        x, _, _, _, _, patch_length = self.prepare_tokens(
-            x, mask_index=None, length=length, mask=False
-        )
+        x, _, _, _, _, patch_length = self.prepare_tokens(x, mask_index=None, length=length, mask=False)
         # we return the output tokens from the `n` last blocks
         output = []
         if self.nprompt > 0:
@@ -1129,9 +1085,7 @@ class FrameAST(nn.Module):
             if len(self.blocks) - i <= n:
                 norm_x = self.norm_frame(x)
                 if scene:
-                    length_mask = torch.arange(x.shape[1] - self.nprompt).to(
-                        x.device
-                    ) < patch_length.unsqueeze(1)
+                    length_mask = torch.arange(x.shape[1] - self.nprompt).to(x.device) < patch_length.unsqueeze(1)
                     avg = torch.sum(
                         norm_x[:, self.nprompt :] * length_mask.unsqueeze(-1),
                         dim=1,
@@ -1182,9 +1136,7 @@ def build_mlp(
     return nn.Sequential(*mlp)
 
 
-def byol_loss_func(
-    p: torch.Tensor, z: torch.Tensor, simplified: bool = True
-) -> torch.Tensor:
+def byol_loss_func(p: torch.Tensor, z: torch.Tensor, simplified: bool = True) -> torch.Tensor:
     """Compute BYOL loss.
 
     Args:
@@ -1427,27 +1379,13 @@ class FrameATST(nn.Module):
             p.requires_grad = False
 
         if avg_blocks == 0:  # atst-frame
-            self.teacher.load_state_dict(
-                {
-                    k: v
-                    for k, v in self.student.state_dict().items()
-                    if "predictor" not in k
-                }
-            )
+            self.teacher.load_state_dict({k: v for k, v in self.student.state_dict().items() if "predictor" not in k})
         else:  # data2vec
-            self.teacher.load_state_dict(
-                {
-                    k: v
-                    for k, v in self.student.state_dict().items()
-                    if "projector" not in k
-                }
-            )
+            self.teacher.load_state_dict({k: v for k, v in self.student.state_dict().items() if "projector" not in k})
 
         self.loss_fn = ByolLoss(symmetric=symmetric)
 
-    def forward(
-        self, x: torch.Tensor, length: torch.Tensor, mask: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, length: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Forward pass through FrameATST.
 
         Args:
@@ -1489,9 +1427,7 @@ class FrameATST(nn.Module):
 
     def _init_teacher(self) -> None:
         """Initialize teacher network with student weights."""
-        self.teacher.load_state_dict(
-            {k: v for k, v in self.student.state_dict().items() if "predictor" not in k}
-        )
+        self.teacher.load_state_dict({k: v for k, v in self.student.state_dict().items() if "predictor" not in k})
 
 
 def cosine_scheduler_step(
@@ -1518,9 +1454,7 @@ def cosine_scheduler_step(
         warmup_schedule = np.linspace(start_warmup_value, base_value, warmup_steps)
 
     iters = np.arange(max_steps - warmup_steps)
-    schedule = final_value + 0.5 * (base_value - final_value) * (
-        1 + np.cos(np.pi * iters / len(iters))
-    )
+    schedule = final_value + 0.5 * (base_value - final_value) * (1 + np.cos(np.pi * iters / len(iters)))
 
     schedule = np.concatenate((warmup_schedule, schedule))
     assert len(schedule) == max_steps
@@ -1619,9 +1553,7 @@ class FrameATSTLightningModule(LightningModule):
         self.symmetric = symmetric
         self.ema_scheduler = cosine_scheduler_step(ema, 1, max_steps, 0)
         self.wd_scheduler = cosine_scheduler_step(0.04, 0.4, max_steps, 0)
-        self.mylr_scheduler = cosine_scheduler_step(
-            learning_rate, 1e-6, max_steps, warmup_steps
-        )
+        self.mylr_scheduler = cosine_scheduler_step(learning_rate, 1e-6, max_steps, warmup_steps)
         self.save_hyperparameters()
 
     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:  # noqa: ANN401
@@ -1767,9 +1699,7 @@ class FrameATSTLightningModule(LightningModule):
         return parent_parser
 
 
-def FrameAST_small(
-    patch_h: int = 64, patch_w: int = 4, **kwargs: Dict[str, Any]
-) -> FrameAST:
+def FrameAST_small(patch_h: int = 64, patch_w: int = 4, **kwargs: Dict[str, Any]) -> FrameAST:
     """Create small FrameAST model.
 
     Args:
@@ -1792,9 +1722,7 @@ def FrameAST_small(
     )
 
 
-def FrameAST_base(
-    patch_h: int = 64, patch_w: int = 4, **kwargs: Dict[str, Any]
-) -> FrameAST:
+def FrameAST_base(patch_h: int = 64, patch_w: int = 4, **kwargs: Dict[str, Any]) -> FrameAST:
     """Create base FrameAST model.
 
     Args:
@@ -1876,12 +1804,8 @@ def load_model(model_path: str, device: str, ssl_model: bool = False) -> nn.Modu
         pretrained_encoder.hyper_param = s["hyper_parameters"]
 
     pretrained_encoder.sample_rate = 16000
-    pretrained_encoder.scene_embedding_size = (
-        pretrained_encoder.embed_dim * 2 * N_BLOCKS
-    )
-    pretrained_encoder.timestamp_embedding_size = (
-        pretrained_encoder.embed_dim * N_BLOCKS
-    )
+    pretrained_encoder.scene_embedding_size = pretrained_encoder.embed_dim * 2 * N_BLOCKS
+    pretrained_encoder.timestamp_embedding_size = pretrained_encoder.embed_dim * N_BLOCKS
 
     pretrained_encoder.train()
     pretrained_encoder.transform = transforms.Compose([melspec_t, to_db, normalize])
@@ -1919,9 +1843,7 @@ def get_scene_embedding(audio: torch.Tensor, model: nn.Module) -> torch.Tensor:
             end = total_len
         if end > start:  # and (length +chunk_len//2  > end):
             mel_chunk = mel[:, :, :, start:end]
-            len_chunk = mel_chunk.shape[
-                -1
-            ]  # if length>end+chunk_len else (length - end)
+            len_chunk = mel_chunk.shape[-1]  # if length>end+chunk_len else (length - end)
             len_chunk = torch.tensor([len_chunk]).expand(mel.shape[0]).to(audio.device)
             output_chunk = model.get_intermediate_layers(mel_chunk, len_chunk, n=12)
 
@@ -1968,15 +1890,9 @@ def get_timestamp_embedding(
             end = total_len
         if end > start:
             mel_chunk = mel[:, :, :, start:end]
-            len_chunk = (
-                torch.tensor([mel_chunk.shape[-1]])
-                .expand(mel.shape[0])
-                .to(audio.device)
-            )
+            len_chunk = torch.tensor([mel_chunk.shape[-1]]).expand(mel.shape[0]).to(audio.device)
 
-            output_chunk = model.get_intermediate_layers(
-                mel_chunk, len_chunk, n=N_BLOCKS, scene=False
-            )
+            output_chunk = model.get_intermediate_layers(mel_chunk, len_chunk, n=N_BLOCKS, scene=False)
 
             output.append(output_chunk)
     output = torch.cat(output, dim=1)

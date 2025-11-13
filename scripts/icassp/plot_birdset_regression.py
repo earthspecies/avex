@@ -53,9 +53,7 @@ def _dataset_columns(columns: Iterable[str]) -> list[str]:
 
     cols = list(columns)
     if len(cols) < 5:
-        raise ValueError(
-            "Expected at least 5 columns: base_model, probe_type, layers, ssl, <metric>"
-        )
+        raise ValueError("Expected at least 5 columns: base_model, probe_type, layers, ssl, <metric>")
     return cols[4:]
 
 
@@ -120,11 +118,7 @@ def create_probing_comparison_plot(
             if base_model in {"eat_hf_pretrained", "eat_hf_finetuned"}:
                 continue
 
-            probe_type = (
-                "Attention"
-                if "attention" in str(row["probe_type"]).lower()
-                else "Linear"
-            )
+            probe_type = "Attention" if "attention" in str(row["probe_type"]).lower() else "Linear"
             layers = "All" if str(row["layers"]) == "all" else "Last"
             ssl = "SSL" if int(row["ssl"]) == 1 else "SL"
 
@@ -309,16 +303,12 @@ def create_summary_table(csv_file_path: str | Path) -> pd.DataFrame:
     df = df.copy()
     df["avg_performance"] = df[dataset_cols].mean(axis=1)
 
-    df["base_model_clean"] = df["base_model"].str.replace(
-        r"_(attention|linear)_(all|last_layer)$", "", regex=True
-    )
+    df["base_model_clean"] = df["base_model"].str.replace(r"_(attention|linear)_(all|last_layer)$", "", regex=True)
 
     idx = df.groupby("base_model_clean")["avg_performance"].idxmax()
     best_configs = df.loc[idx]
 
-    summary = best_configs[
-        ["base_model_clean", "probe_type", "layers", "ssl", "avg_performance"]
-    ].copy()
+    summary = best_configs[["base_model_clean", "probe_type", "layers", "ssl", "avg_performance"]].copy()
     summary["ssl_label"] = summary["ssl"].map({0: "Supervised", 1: "Self-supervised"})
     summary = summary.sort_values("avg_performance", ascending=False)
 
@@ -374,11 +364,7 @@ def create_probing_heatmap(
             base_model_raw: str = row["base_model"]
             base_model = _clean_base_model_name(base_model_raw)
 
-            probe_type = (
-                "Attention"
-                if "attention" in str(row["probe_type"]).lower()
-                else "Linear"
-            )
+            probe_type = "Attention" if "attention" in str(row["probe_type"]).lower() else "Linear"
             layers = "All" if str(row["layers"]) == "all" else "Last"
             # Default SSL/SL from CSV, then override for specific models
             ssl_tag = "SSL" if int(row["ssl"]) == 1 else "SL"
@@ -454,9 +440,7 @@ def create_probing_heatmap(
         cols_in_ds = [c for c in within_order if c in pv.columns]
         pv_ordered = pv[cols_in_ds]
         new_cols = [(name, c[0], c[1]) for c in pv_ordered.columns]
-        pv_ordered.columns = pd.MultiIndex.from_tuples(
-            new_cols, names=["dataset", "probe_type", "layers"]
-        )
+        pv_ordered.columns = pd.MultiIndex.from_tuples(new_cols, names=["dataset", "probe_type", "layers"])
         parts.append(pv_ordered)
     combined = pd.concat(parts, axis=1)
     combined = combined.sort_index()
@@ -586,8 +570,7 @@ def _build_argparser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Plot BirdSet regression-wide probing metrics and summarize the best "
-            "configuration per base model."
+            "Plot BirdSet regression-wide probing metrics and summarize the best configuration per base model."
         )
     )
     parser.add_argument(
@@ -647,9 +630,7 @@ def main() -> None:
 
     summary = create_summary_table(args.csv)
     # Hide EAT rows in summary to match temporary heatmap filtering
-    summary = summary[
-        ~summary["base_model_clean"].isin(["eat_hf_pretrained", "eat_hf_finetuned"])
-    ]
+    summary = summary[~summary["base_model_clean"].isin(["eat_hf_pretrained", "eat_hf_finetuned"])]
     LOGGER.info("Best Configuration per Model")
     LOGGER.info("%s", "=" * 60)
     for _, row in summary.iterrows():

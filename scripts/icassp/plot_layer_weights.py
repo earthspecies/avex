@@ -154,11 +154,7 @@ def compute_error_intervals(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame with mean, std, and confidence intervals.
     """
     # Group by base_model and layer_index, compute statistics
-    stats = (
-        df.groupby(["base_model", "layer_index"])
-        .agg({"weight": ["mean", "std", "count"]})
-        .reset_index()
-    )
+    stats = df.groupby(["base_model", "layer_index"]).agg({"weight": ["mean", "std", "count"]}).reset_index()
 
     # Flatten column names
     stats.columns = ["base_model", "layer_index", "mean", "std", "count"]
@@ -200,9 +196,7 @@ def plot_layer_weights(stats_df: pd.DataFrame, output_path: str, title: str) -> 
 
     # Plot each base model
     for _, base_model in enumerate(base_models):
-        model_data = stats_df[stats_df["base_model"] == base_model].sort_values(
-            "layer_index"
-        )
+        model_data = stats_df[stats_df["base_model"] == base_model].sort_values("layer_index")
 
         if len(model_data) == 0:
             continue
@@ -245,9 +239,7 @@ def plot_layer_weights(stats_df: pd.DataFrame, output_path: str, title: str) -> 
     print(f"Saved layer weights plot to {output_path}")
 
 
-def plot_combined_layer_weights(
-    beans_stats: pd.DataFrame, birdset_stats: pd.DataFrame, output_path: str
-) -> None:
+def plot_combined_layer_weights(beans_stats: pd.DataFrame, birdset_stats: pd.DataFrame, output_path: str) -> None:
     """
     Create combined plot showing both beans and birdset layer weights side by side.
 
@@ -269,9 +261,7 @@ def plot_combined_layer_weights(
     # Plot beans data
     beans_models = beans_stats["base_model"].unique()
     for _, base_model in enumerate(beans_models):
-        model_data = beans_stats[beans_stats["base_model"] == base_model].sort_values(
-            "layer_index"
-        )
+        model_data = beans_stats[beans_stats["base_model"] == base_model].sort_values("layer_index")
         if len(model_data) == 0:
             continue
 
@@ -300,9 +290,7 @@ def plot_combined_layer_weights(
     # Plot birdset data
     birdset_models = birdset_stats["base_model"].unique()
     for _, base_model in enumerate(birdset_models):
-        model_data = birdset_stats[
-            birdset_stats["base_model"] == base_model
-        ].sort_values("layer_index")
+        model_data = birdset_stats[birdset_stats["base_model"] == base_model].sort_values("layer_index")
         if len(model_data) == 0:
             continue
 
@@ -338,9 +326,7 @@ def plot_combined_layer_weights(
     print(f"Saved combined layer weights plot to {output_path}")
 
 
-def plot_averaged_layer_weights(
-    beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str
-) -> None:
+def plot_averaged_layer_weights(beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str) -> None:
     """
     Create a single plot averaging layer weights across both beans and birdset datasets.
 
@@ -365,18 +351,11 @@ def plot_averaged_layer_weights(
 
     print(f"Combined raw data: {len(combined_data)} individual weight measurements")
     print(f"From {combined_data['base_model'].nunique()} unique base models")
-    print(
-        f"Across {combined_data['dataset'].nunique()} datasets: "
-        f"{combined_data['dataset'].unique()}"
-    )
+    print(f"Across {combined_data['dataset'].nunique()} datasets: {combined_data['dataset'].unique()}")
 
     # Compute statistics directly from combined raw data
     # This is the correct approach - no double averaging
-    stats = (
-        combined_data.groupby(["base_model", "layer_index"])
-        .agg({"weight": ["mean", "std", "count"]})
-        .reset_index()
-    )
+    stats = combined_data.groupby(["base_model", "layer_index"]).agg({"weight": ["mean", "std", "count"]}).reset_index()
 
     # Flatten column names
     stats.columns = ["base_model", "layer_index", "mean", "std", "count"]
@@ -418,26 +397,17 @@ def plot_averaged_layer_weights(
     # Use the global functions for extracting base model name and SSL/SL classification
 
     # Extract base model names and apply mapping
-    combined_data_display["base_model_clean"] = combined_data_display[
-        "base_model"
-    ].apply(extract_base_model_name)
-    combined_data_display["display_name"] = combined_data_display[
-        "base_model_clean"
-    ].map(model_name_mapping)
+    combined_data_display["base_model_clean"] = combined_data_display["base_model"].apply(extract_base_model_name)
+    combined_data_display["display_name"] = combined_data_display["base_model_clean"].map(model_name_mapping)
     # Fill any unmapped names with the cleaned base model name
-    combined_data_display["display_name"] = combined_data_display[
-        "display_name"
-    ].fillna(combined_data_display["base_model_clean"])
+    combined_data_display["display_name"] = combined_data_display["display_name"].fillna(
+        combined_data_display["base_model_clean"]
+    )
 
     # Add SSL/SL classification
-    combined_data_display["ssl_sl_class"] = combined_data_display[
-        "base_model_clean"
-    ].apply(get_ssl_sl_classification)
+    combined_data_display["ssl_sl_class"] = combined_data_display["base_model_clean"].apply(get_ssl_sl_classification)
     combined_data_display["display_name_with_class"] = (
-        combined_data_display["display_name"]
-        + " ("
-        + combined_data_display["ssl_sl_class"]
-        + ")"
+        combined_data_display["display_name"] + " (" + combined_data_display["ssl_sl_class"] + ")"
     )
 
     # Use seaborn lineplot directly on the raw combined data
@@ -471,15 +441,10 @@ def plot_averaged_layer_weights(
     plt.close()
 
     print(f"Saved averaged layer weights plot to {output_path}")
-    print(
-        f"Final plot shows {combined_data['base_model'].nunique()} models "
-        f"with statistics from combined raw data"
-    )
+    print(f"Final plot shows {combined_data['base_model'].nunique()} models with statistics from combined raw data")
 
 
-def plot_dataset_specific_layer_weights(
-    beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str
-) -> None:
+def plot_dataset_specific_layer_weights(beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str) -> None:
     """
     Create a plot showing layer weights for each individual subdataset.
     Each subdataset (e.g., dog_classification, bat_classification, etc.) is a
@@ -515,9 +480,7 @@ def plot_dataset_specific_layer_weights(
     combined_data["subdataset"] = combined_data["dataset_name"]
 
     # Exclude EfficientNet from this plot (but keep it in model comparison plots)
-    combined_data = combined_data[
-        ~combined_data["base_model"].str.contains("efficientnet", case=False, na=False)
-    ]
+    combined_data = combined_data[~combined_data["base_model"].str.contains("efficientnet", case=False, na=False)]
 
     print("After excluding EfficientNet:")
     print(f"  Remaining measurements: {len(combined_data)}")
@@ -529,9 +492,7 @@ def plot_dataset_specific_layer_weights(
 
     # Get unique subdatasets
     unique_subdatasets = combined_data["subdataset"].unique()
-    print(
-        f"  Found {len(unique_subdatasets)} subdatasets: {sorted(unique_subdatasets)}"
-    )
+    print(f"  Found {len(unique_subdatasets)} subdatasets: {sorted(unique_subdatasets)}")
 
     # Plot each subdataset as a separate line
     sns.lineplot(
@@ -564,9 +525,7 @@ def plot_dataset_specific_layer_weights(
     print("Shows layer weights for each individual subdataset across all models")
 
 
-def plot_layer_weights_heatmap(
-    beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str
-) -> None:
+def plot_layer_weights_heatmap(beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str) -> None:
     """
     Create a heatmap of average layer weights per base model (rows) across
     layers (columns). Excludes EAT HF variants as requested.
@@ -584,9 +543,9 @@ def plot_layer_weights_heatmap(
     combined = pd.concat([beans_data, birdset_data], ignore_index=True)
 
     # Exclude specified base models from the heatmap only
-    mask_exclude = combined["base_model"].str.contains(
-        "eat_hf_pretrained", case=False, na=False
-    ) | combined["base_model"].str.contains("eat_hf_finetuned", case=False, na=False)
+    mask_exclude = combined["base_model"].str.contains("eat_hf_pretrained", case=False, na=False) | combined[
+        "base_model"
+    ].str.contains("eat_hf_finetuned", case=False, na=False)
     filtered = combined[~mask_exclude].copy()
 
     if filtered.empty:
@@ -594,14 +553,10 @@ def plot_layer_weights_heatmap(
         return
 
     # Compute mean weight per base model and layer
-    summary = filtered.groupby(["base_model", "layer_index"], as_index=False)[
-        "weight"
-    ].mean()
+    summary = filtered.groupby(["base_model", "layer_index"], as_index=False)["weight"].mean()
 
     # Pivot for heatmap (rows: base_model, columns: layer_index)
-    heatmap_df = summary.pivot(
-        index="base_model", columns="layer_index", values="weight"
-    )
+    heatmap_df = summary.pivot(index="base_model", columns="layer_index", values="weight")
 
     # Order base models alphabetically for readability
     heatmap_df = heatmap_df.sort_index()
@@ -631,9 +586,7 @@ def plot_layer_weights_heatmap(
     print(f"Saved layer weights heatmap to {output_path}")
 
 
-def plot_dataset_specific_heatmap(
-    beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str
-) -> None:
+def plot_dataset_specific_heatmap(beans_data: pd.DataFrame, birdset_data: pd.DataFrame, output_path: str) -> None:
     """
     Create a heatmap showing layer weights for each individual subdataset.
     Each subdataset is a separate row, aggregated across all models.
@@ -661,26 +614,18 @@ def plot_dataset_specific_heatmap(
     combined_data["subdataset"] = combined_data["dataset_name"]
 
     # Exclude EfficientNet from this plot (same as line plot version)
-    combined_data = combined_data[
-        ~combined_data["base_model"].str.contains("efficientnet", case=False, na=False)
-    ]
+    combined_data = combined_data[~combined_data["base_model"].str.contains("efficientnet", case=False, na=False)]
 
     if combined_data.empty:
         print("No data left after excluding EfficientNet; skipping dataset heatmap.")
         return
 
     # Extract base model name and determine SSL/SL classification
-    combined_data["base_model_clean"] = combined_data["base_model"].apply(
-        extract_base_model_name
-    )
-    combined_data["ssl_sl"] = combined_data["base_model_clean"].apply(
-        get_ssl_sl_classification
-    )
+    combined_data["base_model_clean"] = combined_data["base_model"].apply(extract_base_model_name)
+    combined_data["ssl_sl"] = combined_data["base_model_clean"].apply(get_ssl_sl_classification)
 
     # Compute mean weight per subdataset, layer, and SSL/SL type
-    summary = combined_data.groupby(
-        ["subdataset", "layer_index", "ssl_sl"], as_index=False
-    )["weight"].mean()
+    summary = combined_data.groupby(["subdataset", "layer_index", "ssl_sl"], as_index=False)["weight"].mean()
 
     # Separate SSL and SL data
     ssl_data = summary[summary["ssl_sl"] == "SSL"].copy()
@@ -769,12 +714,8 @@ def plot_dataset_specific_heatmap(
 
     # Process SSL data
     if not ssl_data.empty:
-        ssl_heatmap_df = ssl_data.pivot(
-            index="subdataset", columns="layer_index", values="weight"
-        )
-        available_ssl_datasets = [
-            d for d in taxonomic_order if d in ssl_heatmap_df.index
-        ]
+        ssl_heatmap_df = ssl_data.pivot(index="subdataset", columns="layer_index", values="weight")
+        available_ssl_datasets = [d for d in taxonomic_order if d in ssl_heatmap_df.index]
         ssl_heatmap_df = ssl_heatmap_df.reindex(available_ssl_datasets)
         ssl_heatmap_df = normalize_to_10_layers(ssl_heatmap_df)
         ssl_display_names = [format_dataset_name(name) for name in ssl_heatmap_df.index]
@@ -784,9 +725,7 @@ def plot_dataset_specific_heatmap(
 
     # Process SL data
     if not sl_data.empty:
-        sl_heatmap_df = sl_data.pivot(
-            index="subdataset", columns="layer_index", values="weight"
-        )
+        sl_heatmap_df = sl_data.pivot(index="subdataset", columns="layer_index", values="weight")
         available_sl_datasets = [d for d in taxonomic_order if d in sl_heatmap_df.index]
         sl_heatmap_df = sl_heatmap_df.reindex(available_sl_datasets)
         sl_heatmap_df = normalize_to_10_layers(sl_heatmap_df)
@@ -890,18 +829,11 @@ def plot_ssl_sl_heatmap(beans_csv: str, birdset_csv: str, output_path: str) -> N
     combined_data = pd.concat([beans_df, birdset_df], ignore_index=True)
 
     # Filter out rows with missing layer weights
-    combined_data = combined_data[
-        combined_data["layer_weights"].notna()
-        & (combined_data["layer_weights"] != "nan")
-    ]
+    combined_data = combined_data[combined_data["layer_weights"].notna() & (combined_data["layer_weights"] != "nan")]
 
     # Extract base model name and determine SSL/SL classification
-    combined_data["base_model_clean"] = combined_data["base_model"].apply(
-        extract_base_model_name
-    )
-    combined_data["ssl_sl"] = combined_data["base_model_clean"].apply(
-        get_ssl_sl_classification
-    )
+    combined_data["base_model_clean"] = combined_data["base_model"].apply(extract_base_model_name)
+    combined_data["ssl_sl"] = combined_data["base_model_clean"].apply(get_ssl_sl_classification)
 
     # Parse layer weights and create long format
     layer_data = []
@@ -925,9 +857,7 @@ def plot_ssl_sl_heatmap(beans_csv: str, birdset_csv: str, output_path: str) -> N
     df = pd.DataFrame(layer_data)
 
     # Compute average weights per base model and layer
-    avg_weights = (
-        df.groupby(["base_model", "ssl_sl", "layer_idx"])["weight"].mean().reset_index()
-    )
+    avg_weights = df.groupby(["base_model", "ssl_sl", "layer_idx"])["weight"].mean().reset_index()
 
     # Pivot to wide format for heatmap
     heatmap_data = avg_weights.pivot_table(
@@ -998,9 +928,7 @@ def plot_ssl_sl_heatmap(beans_csv: str, birdset_csv: str, output_path: str) -> N
 
 def main() -> None:
     """Entry point for the script."""
-    parser = argparse.ArgumentParser(
-        description="Plot layer weights with error intervals"
-    )
+    parser = argparse.ArgumentParser(description="Plot layer weights with error intervals")
     parser.add_argument(
         "--beans-csv",
         default="evaluation_results/extracted_metrics_beans.csv",
@@ -1011,12 +939,8 @@ def main() -> None:
         default="evaluation_results/extracted_metrics_birdset.csv",
         help="Path to birdset CSV file",
     )
-    parser.add_argument(
-        "--output-dir", default="evaluation_results", help="Output directory for plots"
-    )
-    parser.add_argument(
-        "--combined", action="store_true", help="Create combined plot for both datasets"
-    )
+    parser.add_argument("--output-dir", default="evaluation_results", help="Output directory for plots")
+    parser.add_argument("--combined", action="store_true", help="Create combined plot for both datasets")
 
     args = parser.parse_args()
 
@@ -1033,10 +957,7 @@ def main() -> None:
             os.path.join(args.output_dir, "layer_weights_beans.png"),
             "Beans Dataset - Layer Weights Across Models",
         )
-        print(
-            f"Beans: Found {len(beans_stats['base_model'].unique())} models "
-            f"with layer weights"
-        )
+        print(f"Beans: Found {len(beans_stats['base_model'].unique())} models with layer weights")
     else:
         print("No layer weights found in beans data")
         beans_stats = pd.DataFrame()
@@ -1051,10 +972,7 @@ def main() -> None:
             os.path.join(args.output_dir, "layer_weights_birdset.png"),
             "Birdset Dataset - Layer Weights Across Models",
         )
-        print(
-            f"Birdset: Found {len(birdset_stats['base_model'].unique())} models "
-            f"with layer weights"
-        )
+        print(f"Birdset: Found {len(birdset_stats['base_model'].unique())} models with layer weights")
     else:
         print("No layer weights found in birdset data")
         birdset_stats = pd.DataFrame()

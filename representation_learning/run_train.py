@@ -97,9 +97,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     # Enable EAT self-supervised mode when requested
     if config.label_type == "self_supervised":
         # Pydantic models are immutable by default – use copy(update=...)
-        config.model_spec = config.model_spec.model_copy(
-            update={"pretraining_mode": True}
-        )
+        config.model_spec = config.model_spec.model_copy(update={"pretraining_mode": True})
 
     # Build the model
     model = get_model(config.model_spec, num_classes=num_labels).to(device)
@@ -136,10 +134,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     if label_map:
         with (output_dir / "label_map.json").open("w") as f:
             json.dump(label_map, f, indent=2)
-        logger.info(
-            f"Saved label_map with {len(label_map)} classes to "
-            f"{output_dir / 'label_map.json'}"
-        )
+        logger.info(f"Saved label_map with {len(label_map)} classes to {output_dir / 'label_map.json'}")
     else:
         logger.warning("No label_map found in dataset metadata")
 

@@ -147,9 +147,7 @@ class TestProbesMultiLayerEmbeddings:
             save_embeddings_arrays(embeddings, labels, save_path, num_labels)
 
             # Load embeddings
-            loaded_embeddings, loaded_labels, loaded_num_labels = (
-                load_embeddings_arrays(save_path)
-            )
+            loaded_embeddings, loaded_labels, loaded_num_labels = load_embeddings_arrays(save_path)
 
             # Verify loaded data
             assert isinstance(loaded_embeddings, dict)

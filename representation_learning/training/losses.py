@@ -63,16 +63,9 @@ def gather_features(
     Tuple[torch.Tensor, torch.Tensor]
         Tuple of (all_image_features, all_text_features) gathered from all ranks
     """
-    assert has_distributed, (
-        "torch.distributed did not import correctly, "
-        "please use a PyTorch version with support."
-    )
+    assert has_distributed, "torch.distributed did not import correctly, please use a PyTorch version with support."
     # Optional debug print – enable by setting DEBUG_CLIP_GATHER=1
-    if (
-        torch.distributed.is_initialized()
-        and os.environ.get("DEBUG_CLIP_GATHER", "0") == "1"
-        and rank == 0
-    ):
+    if torch.distributed.is_initialized() and os.environ.get("DEBUG_CLIP_GATHER", "0") == "1" and rank == 0:
         print(f"[DEBUG] rank {rank} | batch={image_features.size(0)}")
     if use_horovod:
         assert hvd is not None, "Please install horovod"
@@ -85,12 +78,8 @@ def gather_features(
                 all_text_features = hvd.allgather(text_features)
             if not local_loss:
                 # ensure grads for local rank when all_* features don't have a gradient
-                gathered_image_features = list(
-                    all_image_features.chunk(world_size, dim=0)
-                )
-                gathered_text_features = list(
-                    all_text_features.chunk(world_size, dim=0)
-                )
+                gathered_image_features = list(all_image_features.chunk(world_size, dim=0))
+                gathered_text_features = list(all_text_features.chunk(world_size, dim=0))
                 gathered_image_features[rank] = image_features
                 gathered_text_features[rank] = text_features
                 all_image_features = torch.cat(gathered_image_features, dim=0)
@@ -98,19 +87,11 @@ def gather_features(
     else:
         # We gather tensors from all gpus
         if gather_with_grad:
-            all_image_features = torch.cat(
-                torch.distributed.nn.all_gather(image_features), dim=0
-            )
-            all_text_features = torch.cat(
-                torch.distributed.nn.all_gather(text_features), dim=0
-            )
+            all_image_features = torch.cat(torch.distributed.nn.all_gather(image_features), dim=0)
+            all_text_features = torch.cat(torch.distributed.nn.all_gather(text_features), dim=0)
         else:
-            gathered_image_features = [
-                torch.zeros_like(image_features) for _ in range(world_size)
-            ]
-            gathered_text_features = [
-                torch.zeros_like(text_features) for _ in range(world_size)
-            ]
+            gathered_image_features = [torch.zeros_like(image_features) for _ in range(world_size)]
+            gathered_text_features = [torch.zeros_like(text_features) for _ in range(world_size)]
             dist.all_gather(gathered_image_features, image_features)
             dist.all_gather(gathered_text_features, text_features)
             if not local_loss:
@@ -230,9 +211,7 @@ class ClipLoss(nn.Module):
                 logits_per_image = logit_scale * image_features @ all_text_features.T
                 logits_per_text = logit_scale * text_features @ all_image_features.T
             else:
-                logits_per_image = (
-                    logit_scale * all_image_features @ all_text_features.T
-                )
+                logits_per_image = logit_scale * all_image_features @ all_text_features.T
                 logits_per_text = logits_per_image.T
         else:
             logits_per_image = logit_scale * image_features @ text_features.T
@@ -296,10 +275,7 @@ class ClipLoss(nn.Module):
 
         labels = self.get_ground_truth(device, logits_per_image.shape[0])
 
-        total_loss = (
-            F.cross_entropy(logits_per_image, labels)
-            + F.cross_entropy(logits_per_text, labels)
-        ) / 2
+        total_loss = (F.cross_entropy(logits_per_image, labels) + F.cross_entropy(logits_per_text, labels)) / 2
 
         if output_dict:
             return {"contrastive_loss": total_loss}
@@ -344,9 +320,7 @@ class FocalLoss(nn.Module):
         if targets.dtype != torch.float32:
             targets = targets.float()
 
-        bce = torch.nn.functional.binary_cross_entropy_with_logits(
-            logits, targets, reduction="none"
-        )
+        bce = torch.nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction="none")
 
         # Convert BCE loss back to probability space for focal scaling
         prob = torch.sigmoid(logits)

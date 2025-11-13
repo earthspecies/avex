@@ -59,9 +59,7 @@ class ExperimentLogger:
         return cls._build_none()
 
     @classmethod
-    def _build_mlflow(
-        cls, run_name: Optional[str], logging_uri: Optional[str]
-    ) -> "ExperimentLogger":
+    def _build_mlflow(cls, run_name: Optional[str], logging_uri: Optional[str]) -> "ExperimentLogger":
         try:
             mlflow = importlib.import_module("mlflow")
         except ModuleNotFoundError:

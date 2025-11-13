@@ -11,9 +11,7 @@ class MockModel(ModelBase):
     def __init__(self, device: str, audio_config: Dict[str, Any] = None) -> None:
         super().__init__(device, audio_config)
         # Create a proper model structure
-        self.model = torch.nn.Sequential(
-            torch.nn.Linear(10, 20), torch.nn.Linear(20, 30)
-        )
+        self.model = torch.nn.Sequential(torch.nn.Linear(10, 20), torch.nn.Linear(20, 30))
 
         # Discover layers for hook management
         self._hook_layers = ["model.0", "model.1"]

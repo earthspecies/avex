@@ -139,9 +139,7 @@ class TestEmbeddingProjector:
 
     def test_embedding_projector_with_target_dim(self) -> None:
         """Test unified projector with target feature dimension."""
-        projector = EmbeddingProjector(
-            target_feature_dim=128, force_sequence_format=True
-        )
+        projector = EmbeddingProjector(target_feature_dim=128, force_sequence_format=True)
 
         # Test 4D input
         x = torch.randn(2, 3, 4, 5)
@@ -157,9 +155,7 @@ class TestEmbeddingProjector:
 
         # Test with 1D input (should raise error)
         x = torch.randn(64)
-        with pytest.raises(
-            ValueError, match="EmbeddingProjector supports 2D, 3D, and 4D tensors"
-        ):
+        with pytest.raises(ValueError, match="EmbeddingProjector supports 2D, 3D, and 4D tensors"):
             projector(x)
 
     def test_embedding_projector_get_output_shape_info(self) -> None:
@@ -279,9 +275,7 @@ class TestProjectorWithEmbeddingLists:
             dtype=projected_embeddings[0].dtype,
         )
 
-        for _i, (emb, weight) in enumerate(
-            zip(projected_embeddings, weights, strict=False)
-        ):
+        for _i, (emb, weight) in enumerate(zip(projected_embeddings, weights, strict=False)):
             truncated_emb = emb[:, :min_seq_len, :]
             weighted_embeddings += weight * truncated_emb
 
@@ -326,9 +320,7 @@ class TestProjectorWithEmbeddingLists:
             dtype=projected_embeddings[0].dtype,
         )
 
-        for _i, (emb, weight) in enumerate(
-            zip(projected_embeddings, weights, strict=False)
-        ):
+        for _i, (emb, weight) in enumerate(zip(projected_embeddings, weights, strict=False)):
             truncated_emb = emb[:, :min_seq_len, :]
             weighted_embeddings += weight * truncated_emb
 
@@ -373,9 +365,7 @@ class TestProjectorWithEmbeddingLists:
             dtype=projected_embeddings[0].dtype,
         )
 
-        for _i, (emb, weight) in enumerate(
-            zip(projected_embeddings, weights, strict=False)
-        ):
+        for _i, (emb, weight) in enumerate(zip(projected_embeddings, weights, strict=False)):
             truncated_emb = emb[:, :min_seq_len, :]
             weighted_embeddings += weight * truncated_emb
 
@@ -420,9 +410,7 @@ class TestProjectorWithEmbeddingLists:
             dtype=projected_embeddings[0].dtype,
         )
 
-        for _i, (emb, weight) in enumerate(
-            zip(projected_embeddings, weights, strict=False)
-        ):
+        for _i, (emb, weight) in enumerate(zip(projected_embeddings, weights, strict=False)):
             truncated_emb = emb[:, :min_seq_len, :]
             weighted_embeddings += weight * truncated_emb
 
@@ -474,9 +462,7 @@ class TestProjectorWithEmbeddingLists:
             dtype=projected_embeddings[0].dtype,
         )
 
-        for _i, (emb, weight) in enumerate(
-            zip(projected_embeddings, weights, strict=False)
-        ):
+        for _i, (emb, weight) in enumerate(zip(projected_embeddings, weights, strict=False)):
             truncated_emb = emb[:, :min_seq_len, :]
             weighted_embeddings += weight * truncated_emb
 
@@ -484,13 +470,9 @@ class TestProjectorWithEmbeddingLists:
         assert weighted_embeddings.shape == (2, min_seq_len, 768)
 
         # Test that we can use this with attention
-        attention = torch.nn.MultiheadAttention(
-            embed_dim=768, num_heads=12, batch_first=True
-        )
+        attention = torch.nn.MultiheadAttention(embed_dim=768, num_heads=12, batch_first=True)
 
-        attn_out, attn_weights = attention(
-            weighted_embeddings, weighted_embeddings, weighted_embeddings
-        )
+        attn_out, attn_weights = attention(weighted_embeddings, weighted_embeddings, weighted_embeddings)
 
         print(f"  Attention output shape: {attn_out.shape}")
         assert attn_out.shape == (2, min_seq_len, 768)

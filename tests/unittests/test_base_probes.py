@@ -23,9 +23,7 @@ class _Dummy2DProbe(BaseProbe2D):
     def build_head(self, inferred_dim: int) -> None:
         self.head = nn.Identity()
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:  # noqa: D401
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:  # noqa: D401
         emb = self._get_embeddings(x, padding_mask)
         emb = self._combine_or_reshape_embeddings(emb)
         return self.head(emb)
@@ -35,9 +33,7 @@ class _Dummy3DProbe(BaseProbe3D):
     def build_head(self, inferred_dim: int) -> None:
         self.head = nn.Identity()
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:  # noqa: D401
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:  # noqa: D401
         emb = self._get_embeddings(x, padding_mask)
         emb = self._combine_or_reshape_embeddings(emb)
         return self.head(emb)

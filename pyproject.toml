@@ -1,15 +1,25 @@
-# TODO (OSS): change [project]`, `[dependency-groups]`,
-# `[project.urls]`, and `[tool.hatch.build.targets.wheel]
-# According to your needs.
-# #  "pysoundfile>=0.9.0.post1",
-
-
 [project]
 name = "representation-learning"
-version = "1.0.0"
-description = "A library for audio representation learning experiments"
+version = "0.1.0"
+description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Earth Species", email = "contact@earthspecies.org"},
+]
+keywords = ["audio", "machine-learning", "representation-learning", "self-supervised", "bioacoustics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
 
 dependencies = [
   "cloudpathlib>=0.21.0",
@@ -32,7 +42,7 @@ dependencies = [
   "torchaudio>=2.2.0",
   "torchvision>=0.17.0",
   "tqdm>=4.67.1",
-  "transformers",
+  "transformers>=4.0.0",
   "h5py>=3.13.0",
   "semver>=3.0.4",
   "tensorflow==2.17.0",
@@ -61,22 +71,18 @@ dev = [
 
 [project.scripts]
 repr-learn = "representation_learning.cli:cli"
+list-models = "representation_learning.api.list_models:main"
 
 [[tool.uv.index]]
 name = "esp-pypi"
 url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+publish-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/"
 explicit = true
 
 [tool.uv.sources]
 #esp-data = { path = "./esp_data_reference" }
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
-# esp_data package - using local reference
-# Original remote configuration (commented out):
-# [[tool.uv.index]]
-# name = "esp-pypi"
-# url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-# explicit = true
 
 [tool.uv]
 default-groups = ["dev", "gpu"]
@@ -85,13 +91,16 @@ keyring-provider = "subprocess"
 [project.urls]
 Homepage = "https://github.com/earthspecies/representation-learning"
 Repository = "https://github.com/earthspecies/representation-learning"
+Documentation = "https://github.com/earthspecies/representation-learning#readme"
+"Bug Tracker" = "https://github.com/earthspecies/representation-learning/issues"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["representation_learning", "esp_data"]
+[tool.uv.build-backend]
+module-name = "representation_learning"
+module-root = ""
 
 [tool.pytest.ini_options]
 python_files = [
@@ -100,7 +109,7 @@ python_files = [
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 indent-width = 4
 exclude = [
     "fix_paths.py",

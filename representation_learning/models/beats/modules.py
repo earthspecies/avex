@@ -51,9 +51,7 @@ class GradMultiply(torch.autograd.Function):
         return res
 
     @staticmethod
-    def backward(
-        ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor
-    ) -> Tuple[torch.Tensor, None]:
+    def backward(ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor) -> Tuple[torch.Tensor, None]:
         """Backward pass that scales gradients by stored factor.
 
         Args:
@@ -169,14 +167,9 @@ class GLU_Linear(nn.Module):
         x = self.linear(x)
 
         if self.glu_type == "bilinear":
-            x = (
-                x[:, :, 0 : self.output_dim]
-                * x[:, :, self.output_dim : self.output_dim * 2]
-            )
+            x = x[:, :, 0 : self.output_dim] * x[:, :, self.output_dim : self.output_dim * 2]
         else:
-            x = x[:, :, 0 : self.output_dim] * self.glu_act(
-                x[:, :, self.output_dim : self.output_dim * 2]
-            )
+            x = x[:, :, 0 : self.output_dim] * self.glu_act(x[:, :, self.output_dim : self.output_dim * 2])
 
         return x
 
@@ -192,9 +185,7 @@ def gelu_accurate(x: torch.Tensor) -> torch.Tensor:
     """
     if not hasattr(gelu_accurate, "_a"):
         gelu_accurate._a = math.sqrt(2 / math.pi)
-    return (
-        0.5 * x * (1 + torch.tanh(gelu_accurate._a * (x + 0.044715 * torch.pow(x, 3))))
-    )
+    return 0.5 * x * (1 + torch.tanh(gelu_accurate._a * (x + 0.044715 * torch.pow(x, 3))))
 
 
 def gelu(x: torch.Tensor) -> torch.Tensor:
@@ -287,17 +278,13 @@ def quant_noise(
 
     # 2D matrix
     if not is_conv:
-        assert module.weight.size(1) % block_size == 0, (
-            "Input features must be a multiple of block sizes"
-        )
+        assert module.weight.size(1) % block_size == 0, "Input features must be a multiple of block sizes"
 
     # 4D matrix
     else:
         # 1x1 convolutions
         if module.kernel_size == (1, 1):
-            assert module.in_channels % block_size == 0, (
-                "Input channels must be a multiple of block sizes"
-            )
+            assert module.in_channels % block_size == 0, "Input channels must be a multiple of block sizes"
         # regular convolutions
         else:
             k = module.kernel_size[0] * module.kernel_size[1]
@@ -339,22 +326,16 @@ def quant_noise(
                         device=weight.device,
                     )
                     mask.bernoulli_(p)
-                    mask = mask.repeat_interleave(block_size, -1).view(
-                        out_channels, in_channels
-                    )
+                    mask = mask.repeat_interleave(block_size, -1).view(out_channels, in_channels)
                 else:
                     mask = torch.zeros(
                         weight.size(0) * weight.size(1) * weight.size(2) // block_size,
                         device=weight.device,
                     )
                     mask.bernoulli_(p)
-                    mask = mask.repeat_interleave(block_size, -1).view(
-                        weight.size(0), weight.size(1), weight.size(2)
-                    )
+                    mask = mask.repeat_interleave(block_size, -1).view(weight.size(0), weight.size(1), weight.size(2))
             # scale weights and apply mask
-            mask = mask.to(
-                torch.bool
-            )  # x.bool() is not currently supported in TorchScript
+            mask = mask.to(torch.bool)  # x.bool() is not currently supported in TorchScript
             s = 1 / (1 - p)
             mod.weight.data = s * weight.masked_fill(mask, 0)
 

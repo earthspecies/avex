@@ -43,19 +43,23 @@ class Model(ModelBase):
         self,
         variant: str = "resnet18",
         *,
-        num_classes: int = 1000,
+        num_classes: Optional[int] = None,
         pretrained: bool = True,
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
+        return_features_only: bool = False,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
+
+        # Validate num_classes: required when return_features_only=False
+        if not return_features_only and num_classes is None:
+            # Use default from torchvision ResNet (1000 classes)
+            num_classes = 1000
 
         variant = variant.lower()
         if variant not in self._ALLOWED_VARIANTS:
             allowed = list(self._ALLOWED_VARIANTS)
-            raise ValueError(
-                f"Unsupported ResNet variant '{variant}'. Supported variants: {allowed}"
-            )
+            raise ValueError(f"Unsupported ResNet variant '{variant}'. Supported variants: {allowed}")
 
         weights = self._DEFAULT_WEIGHTS[variant] if pretrained else None
         # Instantiate the torchvision model
@@ -65,12 +69,18 @@ class Model(ModelBase):
         in_features = self.backbone.fc.in_features
         self.backbone.fc = nn.Identity()
 
-        # Linear classifier for our target dataset
-        self.classifier = nn.Linear(in_features, num_classes)
+        # Store configuration
+        self.return_features_only = return_features_only
+
+        # Linear classifier for our target dataset (only if not return_features_only)
+        if not return_features_only:
+            self.classifier = nn.Linear(in_features, num_classes)
+            self.classifier.to(self.device)
+        else:
+            self.classifier = None
 
         # Send to device
         self.backbone.to(self.device)
-        self.classifier.to(self.device)
 
     # ------------------------------------------------------------------ #
     #  Audio processing helpers
@@ -103,9 +113,7 @@ class Model(ModelBase):
     # ------------------------------------------------------------------ #
     #  Forward pass
     # ------------------------------------------------------------------ #
-    def forward(
-        self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:  # noqa: D401, N802  (keep same signature as other models)
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:  # noqa: D401, N802  (keep same signature as other models)
         """Forward pass.
 
         Parameters
@@ -118,9 +126,12 @@ class Model(ModelBase):
         Returns
         -------
         torch.Tensor
-            Class-logit tensor of shape ``(B, num_classes)``.
+            • When *return_features_only* is **False**: class-logit tensor of shape
+              ``(B, num_classes)``
+            • Otherwise: feature tensor of shape ``(B, in_features)``
         """
         x = self.process_audio(x)
         features = self.backbone(x)  # (B, in_features)
-        logits = self.classifier(features)
-        return logits
+        if self.return_features_only:
+            return features
+        return self.classifier(features)

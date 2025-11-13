@@ -89,9 +89,7 @@ class TestEmbeddingAggregation:
         # Create a mock base model that returns list of embeddings
         class MockBaseModel:
             def __init__(self) -> None:
-                self.audio_processor = type(
-                    "MockProcessor", (), {"target_length": 24000, "sr": 16000}
-                )()
+                self.audio_processor = type("MockProcessor", (), {"target_length": 24000, "sr": 16000})()
 
             def register_hooks_for_layers(self, layers: list) -> None:
                 # Mock method - no actual implementation needed for testing
@@ -146,9 +144,7 @@ class TestEmbeddingAggregation:
         # Create a mock base model that returns list of embeddings
         class MockBaseModel:
             def __init__(self) -> None:
-                self.audio_processor = type(
-                    "MockProcessor", (), {"target_length": 24000, "sr": 16000}
-                )()
+                self.audio_processor = type("MockProcessor", (), {"target_length": 24000, "sr": 16000})()
 
             def register_hooks_for_layers(self, layers: list) -> None:
                 # Mock method - no actual implementation needed for testing

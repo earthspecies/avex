@@ -23,9 +23,7 @@ class ModelBase(nn.Module):
     and audio processing that all model implementations can inherit from.
     """
 
-    def __init__(
-        self, device: str, audio_config: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def __init__(self, device: str, audio_config: Optional[Dict[str, Any]] = None) -> None:
         super(ModelBase, self).__init__()
         self.device = device
 
@@ -49,10 +47,7 @@ class ModelBase(nn.Module):
             for name, module in self.named_modules():
                 if isinstance(module, nn.Linear):
                     self._layer_names.append(name)
-            logger.info(
-                f"Discovered {len(self._layer_names)} linear layers: "
-                f"{self._layer_names}"
-            )
+            logger.info(f"Discovered {len(self._layer_names)} linear layers: {self._layer_names}")
 
     def _create_hook_fn(self, layer_name: str) -> callable:
         """Create a hook function for a specific layer.
@@ -74,10 +69,7 @@ class ModelBase(nn.Module):
                 self._hook_outputs[layer_name] = output[0]
             else:
                 self._hook_outputs[layer_name] = output
-            logger.debug(
-                f"Captured output for {layer_name}: "
-                f"{self._hook_outputs[layer_name].shape}"
-            )
+            logger.debug(f"Captured output for {layer_name}: {self._hook_outputs[layer_name].shape}")
 
         return hook_fn
 
@@ -131,12 +123,8 @@ class ModelBase(nn.Module):
 
             if last_layer:
                 # Replace 'last_layer' with the actual layer name
-                layer_names = [
-                    name if name != "last_layer" else last_layer for name in layer_names
-                ]
-                logger.info(
-                    f"Resolved 'last_layer' to actual layer name: '{last_layer}'"
-                )
+                layer_names = [name if name != "last_layer" else last_layer for name in layer_names]
+                logger.info(f"Resolved 'last_layer' to actual layer name: '{last_layer}'")
             else:
                 raise ValueError("No layers available for 'last_layer'")
 
@@ -150,9 +138,7 @@ class ModelBase(nn.Module):
         for layer_name in layer_names:
             try:
                 module = self.get_submodule(layer_name)
-                hook_handle = module.register_forward_hook(
-                    self._create_hook_fn(layer_name)
-                )
+                hook_handle = module.register_forward_hook(self._create_hook_fn(layer_name))
                 self._hooks[layer_name] = hook_handle
             except AttributeError as err:
                 raise ValueError(f"Layer '{layer_name}' not found in model") from err
@@ -202,10 +188,7 @@ class ModelBase(nn.Module):
             name = self._layer_names[i]
             # Skip classification head layers (common patterns)
             # Check for explicit classification layer patterns
-            if any(
-                skip in name.lower()
-                for skip in ["classifier", "head", "classifier_head"]
-            ):
+            if any(skip in name.lower() for skip in ["classifier", "head", "classifier_head"]):
                 continue
             # For models where all layers are internal (like BEATs),
             # return the actual last layer
@@ -214,35 +197,6 @@ class ModelBase(nn.Module):
         # If we can't find a non-classification layer, return the last layer
         # This handles cases where all layers are internal encoder layers
         return self._layer_names[-1]
-
-    # def _get_last_non_classification_layer(self) -> Optional[str]:
-    #     """Get the last non-classification layer name.
-
-    #     Returns:
-    #         Optional[str]: Name of the last non-classification layer, or None if
-    #             not found
-    #     """
-    #     if not self._layer_names:
-    #         return None
-
-    #     # Look for the last layer that's not a classification head
-    #     # Start from the second-to-last layer (assuming last is classifier)
-    #     for i in range(len(self._layer_names) - 2, -1, -1):
-    #         name = self._layer_names[i]
-    #         # Skip classification head layers (common patterns)
-    #         if not any(
-    #             skip in name.lower()
-    #             for skip in ["classifier", "head", "fc", "linear"]
-    #         ):
-    #             return name
-
-    #     # If we can't find a non-classification layer, return the second-to-last layer
-    #     # (assuming the last layer is the classifier)
-    #     if len(self._layer_names) >= 2:
-    #         return self._layer_names[-2]
-
-    #     # Fallback to the last layer if only one layer exists
-    #     return self._layer_names[-1]
 
     def _get_all_linear_layers(self) -> List[str]:
         """Get all linear layer names including the classification layer.
@@ -369,9 +323,7 @@ class ModelBase(nn.Module):
 
         # Check if hooks are registered
         if not self._hooks:
-            raise ValueError(
-                "No hooks registered. Call register_hooks_for_layers() first."
-            )
+            raise ValueError("No hooks registered. Call register_hooks_for_layers() first.")
 
         try:
             # Forward pass (no torch.no_grad to allow fine-tuning when requested)
@@ -394,18 +346,13 @@ class ModelBase(nn.Module):
 
             for layer_name in self._hook_outputs.keys():
                 embeddings.append(self._hook_outputs[layer_name])
-                logger.debug(
-                    f"Found embedding for {layer_name}: "
-                    f"{self._hook_outputs[layer_name].shape}"
-                )
+                logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(
-                    f"No layers found matching: {self._hook_outputs.keys()}"
-                )
+                raise ValueError(f"No layers found matching: {self._hook_outputs.keys()}")
 
             # First, ensure all embeddings are in batch-first format
             for i in range(len(embeddings)):
@@ -429,20 +376,13 @@ class ModelBase(nn.Module):
                         if aggregation == "mean":
                             embeddings[i] = embeddings[i].mean(dim=1)
                         elif aggregation == "max":
-                            embeddings[i] = embeddings[i].max(dim=1)[
-                                0
-                            ]  # max returns (values, indices)
+                            embeddings[i] = embeddings[i].max(dim=1)[0]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:
-                            raise ValueError(
-                                f"Unsupported aggregation method: {aggregation}"
-                            )
+                            raise ValueError(f"Unsupported aggregation method: {aggregation}")
                     else:
-                        raise ValueError(
-                            f"Unexpected embedding dimension: {embeddings[i].dim()}. "
-                            f"Expected 2 or 3."
-                        )
+                        raise ValueError(f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2 or 3.")
 
                 # Concatenate all embeddings
                 if len(embeddings) == 1:

@@ -65,9 +65,7 @@ def universal_torch_load(
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
-                    "Force downloading"
-                    if cache_mode == "force"
-                    else "Cache file does not exist, downloading"
+                    "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,21 +89,59 @@ def universal_torch_load(
 # -------------------------------------------------------------------- #
 
 
-def _process_state_dict(state_dict: dict) -> dict:
-    """Remove classifier layers when loading backbone checkpoints.
+def _process_state_dict(state_dict: dict, keep_classifier: bool = False) -> dict:
+    """Process state dict to handle common prefixes and optionally remove
+    classifier layers.
+
+    This function handles common checkpoint formats by:
+    1. Extracting model state dict if wrapped
+    2. Removing common prefixes like 'module.' and 'model.'
+    3. Optionally removing classifier layers for backbone loading
+
+    Parameters
+    ----------
+    state_dict : dict
+        The state dictionary to process
+    keep_classifier : bool, default False
+        If True, keep classifier/head layers in the output.
+        If False (default), remove classifier layers for backbone loading.
 
     Returns
     -------
     dict
-        Processed state dictionary with classifier layers removed.
+        Processed state dictionary with prefixes removed and optionally
+        classifier layers dropped.
     """
+    # Extract model state dict if wrapped
     if "model_state_dict" in state_dict:
         state_dict = state_dict["model_state_dict"]
 
-    # Safely drop common classifier parameter names (different wrappers)
-    state_dict.pop("classifier.weight", None)
-    state_dict.pop("classifier.bias", None)
-    state_dict.pop("model.classifier.1.weight", None)
-    state_dict.pop("model.classifier.1.bias", None)
+    # Conditionally drop common classifier parameter names (different wrappers)
+    # These are specific known problematic keys that should be removed when
+    # keep_classifier=False
+    if not keep_classifier:
+        state_dict.pop("classifier.weight", None)
+        state_dict.pop("classifier.bias", None)
+        state_dict.pop("model.classifier.1.weight", None)
+        state_dict.pop("model.classifier.1.bias", None)
 
-    return state_dict
+    # Create a new state dict with processed keys
+    processed_dict = {}
+
+    for key, value in state_dict.items():
+        # Remove common prefixes
+        processed_key = key
+        if processed_key.startswith("module."):
+            processed_key = processed_key[7:]  # Remove "module."
+        elif processed_key.startswith("model."):
+            processed_key = processed_key[6:]  # Remove "model."
+
+        # Conditionally skip classifier layers based on keep_classifier parameter
+        if not keep_classifier and any(
+            term in processed_key.lower() for term in ["classifier", "head", "classification", "classification_head"]
+        ):
+            continue
+
+        processed_dict[processed_key] = value
+
+    return processed_dict

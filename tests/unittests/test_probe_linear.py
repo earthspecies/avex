@@ -194,9 +194,7 @@ class TestLinearProbe:
 
     def test_feature_mode_without_input_dim_raises_error(self) -> None:
         """Test error when feature_mode=True and input_dim is None."""
-        with pytest.raises(
-            ValueError, match="input_dim must be provided when feature_mode=True"
-        ):
+        with pytest.raises(ValueError, match="input_dim must be provided when feature_mode=True"):
             LinearProbe(
                 base_model=None,
                 layers=[],

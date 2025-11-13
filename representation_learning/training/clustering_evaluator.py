@@ -128,9 +128,7 @@ class ClusteringEvaluator:
             logger.error(f"Clustering evaluation failed: {e}")
             return {}
 
-    def _extract_embeddings(
-        self, model: torch.nn.Module, dataloader: DataLoader
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _extract_embeddings(self, model: torch.nn.Module, dataloader: DataLoader) -> Tuple[torch.Tensor, torch.Tensor]:
         """Extract embeddings from dataloader.
 
         Parameters
@@ -154,18 +152,11 @@ class ClusteringEvaluator:
         layer_names = self.layer_names.copy()
         if "last_layer" in layer_names:
             # Find the actual last linear layer name
-            linear_layers = [
-                n for n, m in model.named_modules() if isinstance(m, torch.nn.Linear)
-            ]
+            linear_layers = [n for n, m in model.named_modules() if isinstance(m, torch.nn.Linear)]
             if linear_layers:
                 # Replace 'last_layer' with actual layer name
-                layer_names = [
-                    linear_layers[-1] if name == "last_layer" else name
-                    for name in layer_names
-                ]
-                logger.info(
-                    f"Resolved 'last_layer' to actual layer name: '{linear_layers[-1]}'"
-                )
+                layer_names = [linear_layers[-1] if name == "last_layer" else name for name in layer_names]
+                logger.info(f"Resolved 'last_layer' to actual layer name: '{linear_layers[-1]}'")
             else:
                 logger.warning("No linear layers found, using 'last_layer' as-is")
 
@@ -193,14 +184,10 @@ class ClusteringEvaluator:
                     aggregation_method = self._get_aggregation_method(model)
 
                     if padding_mask is None:
-                        embeddings = model.extract_embeddings(
-                            wav, aggregation=aggregation_method
-                        )
+                        embeddings = model.extract_embeddings(wav, aggregation=aggregation_method)
                     else:
                         inp = {"raw_wav": wav, "padding_mask": padding_mask}
-                        embeddings = model.extract_embeddings(
-                            inp, aggregation=aggregation_method
-                        )
+                        embeddings = model.extract_embeddings(inp, aggregation=aggregation_method)
 
                     # Move to CPU for memory efficiency
                     embeddings_list.append(embeddings.cpu())
@@ -209,10 +196,7 @@ class ClusteringEvaluator:
                     sample_count += len(labels)
 
                     # Limit samples if configured
-                    if (
-                        self.config.max_samples
-                        and sample_count >= self.config.max_samples
-                    ):
+                    if self.config.max_samples and sample_count >= self.config.max_samples:
                         # Truncate last batch if needed
                         excess = sample_count - self.config.max_samples
                         if excess > 0:
@@ -248,9 +232,7 @@ class ClusteringEvaluator:
         valid_labels = unique_labels[multi_instance_mask]
 
         if len(valid_labels) == 0:
-            logger.warning(
-                "No classes with multiple instances found for clustering evaluation"
-            )
+            logger.warning("No classes with multiple instances found for clustering evaluation")
             return torch.empty(0), torch.empty(0)
 
         # Create mask for samples belonging to classes with multiple instances
@@ -265,8 +247,5 @@ class ClusteringEvaluator:
                 f"{len(unique_labels) - len(valid_labels)} single-instance classes"
             )
 
-        logger.info(
-            f"Using {len(filtered_labels)} samples from {len(valid_labels)} classes "
-            f"for clustering evaluation"
-        )
+        logger.info(f"Using {len(filtered_labels)} samples from {len(valid_labels)} classes for clustering evaluation")
         return filtered_embeddings, filtered_labels

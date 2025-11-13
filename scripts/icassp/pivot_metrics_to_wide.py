@@ -33,9 +33,7 @@ def _detect_benchmark(df: pd.DataFrame) -> str:
     if len(unique_benchmarks) == 0:
         raise ValueError("No benchmark values found in input CSV")
     if len(unique_benchmarks) > 1:
-        raise ValueError(
-            f"Multiple benchmarks found: {unique_benchmarks}. Please filter first."
-        )
+        raise ValueError(f"Multiple benchmarks found: {unique_benchmarks}. Please filter first.")
     bench = str(unique_benchmarks[0]).strip()
     if bench not in {"beans", "birdset"}:
         raise ValueError(f"Unsupported benchmark '{bench}'")
@@ -161,9 +159,16 @@ def _create_base_model_combinations(df: pd.DataFrame) -> pd.DataFrame:
     pd.DataFrame
         Dataframe with all 4 combinations for each base model
     """
+    # Normalize probe types first (convert "linear" to "weighted_linear",
+    # "attention" to "weighted_attention")
+    df_normalized = df.copy()
+    df_normalized["probe_type"] = df_normalized["probe_type"].replace(
+        {"linear": "weighted_linear", "attention": "weighted_attention"}
+    )
+
     # Get unique base models and datasets
-    base_models = df["base_model"].unique()
-    datasets = df["dataset_name"].unique()
+    base_models = df_normalized["base_model"].unique()
+    datasets = df_normalized["dataset_name"].unique()
 
     # Expected combinations
     expected_combinations = [
@@ -195,11 +200,11 @@ def _create_base_model_combinations(df: pd.DataFrame) -> pd.DataFrame:
 
             for dataset in datasets:
                 # Check if this combination exists
-                existing = df[
-                    (df["base_model"] == base_model)
-                    & (df["dataset_name"] == dataset)
-                    & (df["probe_type"] == probe_type)
-                    & (df["layers"] == layers)
+                existing = df_normalized[
+                    (df_normalized["base_model"] == base_model)
+                    & (df_normalized["dataset_name"] == dataset)
+                    & (df_normalized["probe_type"] == probe_type)
+                    & (df_normalized["layers"] == layers)
                 ]
 
                 if len(existing) > 0:
@@ -216,8 +221,8 @@ def _create_base_model_combinations(df: pd.DataFrame) -> pd.DataFrame:
                             "layers": layers,
                             "metric": np.nan,
                             "benchmark": (
-                                df["benchmark"].iloc[0]
-                                if "benchmark" in df.columns
+                                df_normalized["benchmark"].iloc[0]
+                                if "benchmark" in df_normalized.columns
                                 else "unknown"
                             ),
                         }
@@ -382,9 +387,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
     filled = wide.copy()
 
     # Only interpolate metric columns (exclude probe_type and layers)
-    metric_cols = [
-        c for c in filled.columns if c not in ["probe_type", "layers", "ssl"]
-    ]
+    metric_cols = [c for c in filled.columns if c not in ["probe_type", "layers", "ssl"]]
     metric_df = filled[metric_cols]
 
     # Quick exit
@@ -396,9 +399,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
 
     # Build helper structures once
     base_models = list(filled.index)
-    probe_type_array = (
-        (filled["probe_type"] == "weighted_attention").astype(int).to_numpy()
-    )
+    probe_type_array = (filled["probe_type"] == "weighted_attention").astype(int).to_numpy()
     layers_array = (filled["layers"] == "all").astype(int).to_numpy()
     ssl_array = filled["ssl"].astype(int).to_numpy()
 
@@ -409,13 +410,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
             1 if "beats" in name_low else 0,
             1 if "eat" in name_low else 0,
             1 if "bird" in name_low else 0,
-            1
-            if (
-                "beats" not in name_low
-                and "eat" not in name_low
-                and "bird" not in name_low
-            )
-            else 0,
+            1 if ("beats" not in name_low and "eat" not in name_low and "bird" not in name_low) else 0,
         ]
         train = [
             1 if "pretrained" in name_low else 0,
@@ -523,9 +518,7 @@ def interpolate_missing(wide: pd.DataFrame) -> pd.DataFrame:
     return filled
 
 
-def _interpolate_by_similarity(
-    wide: pd.DataFrame, metric_cols: List[str]
-) -> pd.DataFrame:
+def _interpolate_by_similarity(wide: pd.DataFrame, metric_cols: List[str]) -> pd.DataFrame:
     """
     Interpolate missing values by finding similar models and probe types.
 
@@ -690,10 +683,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "input_csv",
         type=str,
-        help=(
-            "Path to extracted metrics CSV (e.g., "
-            "evaluation_results/extracted_metrics_beans.csv)"
-        ),
+        help=("Path to extracted metrics CSV (e.g., evaluation_results/extracted_metrics_beans.csv)"),
     )
     parser.add_argument(
         "--output",
@@ -706,6 +696,11 @@ def parse_args() -> argparse.Namespace:
         "--interpolate",
         action="store_true",
         help="Enable interpolation to fill missing dataset values",
+    )
+    parser.add_argument(
+        "--export-html",
+        action="store_true",
+        help="Export results as HTML page for this benchmark",
     )
     return parser.parse_args()
 
@@ -722,43 +717,357 @@ def _split_beans_by_task(wide: pd.DataFrame, output_dir: str) -> None:
         Directory to save the split CSV files.
     """
     # Identify classification and detection columns
-    classification_cols = [
-        col for col in wide.columns if col.endswith("_classification")
-    ]
+    classification_cols = [col for col in wide.columns if col.endswith("_classification")]
     detection_cols = [col for col in wide.columns if col.endswith("_detection")]
 
     # Metadata columns (probe_type, layers, ssl)
     metadata_cols = ["probe_type", "layers", "ssl"]
 
-    print(
-        f"Found {len(classification_cols)} classification datasets: "
-        f"{classification_cols}"
-    )
+    print(f"Found {len(classification_cols)} classification datasets: {classification_cols}")
     print(f"Found {len(detection_cols)} detection datasets: {detection_cols}")
 
     # Create classification table
     if classification_cols:
         classification_df = wide[metadata_cols + classification_cols].copy()
-        classification_output = os.path.join(
-            output_dir, "extracted_metrics_beans_classification.csv"
-        )
+        classification_output = os.path.join(output_dir, "extracted_metrics_beans_classification.csv")
         classification_df.to_csv(classification_output)
-        print(
-            f"Saved classification table with shape {classification_df.shape} "
-            f"to {classification_output}"
-        )
+        print(f"Saved classification table with shape {classification_df.shape} to {classification_output}")
 
     # Create detection table
     if detection_cols:
         detection_df = wide[metadata_cols + detection_cols].copy()
-        detection_output = os.path.join(
-            output_dir, "extracted_metrics_beans_detection.csv"
-        )
+        detection_output = os.path.join(output_dir, "extracted_metrics_beans_detection.csv")
         detection_df.to_csv(detection_output)
-        print(
-            f"Saved detection table with shape {detection_df.shape} "
-            f"to {detection_output}"
-        )
+        print(f"Saved detection table with shape {detection_df.shape} to {detection_output}")
+
+
+def export_benchmark_to_html(
+    wide_df: pd.DataFrame, benchmark: str, output_path: str, interpolate: bool = False
+) -> None:
+    """
+    Export benchmark results as an HTML page.
+
+    Parameters
+    ----------
+    wide_df : pd.DataFrame
+        Wide-form dataframe with benchmark data.
+    benchmark : str
+        Benchmark name ("beans" or "birdset").
+    output_path : str
+        Path to save the HTML file.
+    interpolate : bool
+        Whether interpolation was used (for title).
+    """
+    metadata_cols = ["probe_type", "layers", "ssl"]
+
+    if benchmark == "beans":
+        # Split beans data into classification and detection
+        classification_cols = [col for col in wide_df.columns if col.endswith("_classification")]
+        detection_cols = [col for col in wide_df.columns if col.endswith("_detection")]
+
+        # Create classification table
+        classification_df = wide_df[metadata_cols + classification_cols].copy()
+
+        # Create detection table
+        detection_df = wide_df[metadata_cols + detection_cols].copy()
+
+        # Create HTML content for beans
+        html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beans Probing Results - Full Dataset Comparison</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }}
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        h2 {{
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }}
+        .dataset-info {{
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 12px;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }}
+        th {{
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f2f2f2;
+        }}
+        tr:hover {{
+            background-color: #e8f4f8;
+        }}
+        .model-name {{
+            text-align: left;
+            font-weight: bold;
+            background-color: #ecf0f1;
+        }}
+        .ssl-ssl {{
+            background-color: #d5f4e6;
+        }}
+        .ssl-sl {{
+            background-color: #fef9e7;
+        }}
+        .metric-value {{
+            font-family: monospace;
+        }}
+        .summary {{
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Beans Probing Results - Full Dataset Comparison</h1>
+        <div class="summary">
+            <p><strong>Generated:</strong> {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+            <p><strong>Interpolation:</strong> {"Enabled" if interpolate else "Disabled"}</p>
+            <p><strong>Note:</strong> This page shows the complete results for all
+        models and probe configurations across Beans datasets.</p>
+        </div>
+"""
+
+        # Add classification table
+        if not classification_df.empty:
+            html_content += f"""
+        <h2>Beans Classification Datasets</h2>
+        <div class="dataset-info">
+            <p><strong>Shape:</strong> {classification_df.shape[0]} models ×
+            {classification_df.shape[1]} columns</p>
+            <p><strong>Datasets:</strong> {", ".join(classification_cols)}</p>
+        </div>
+        {
+                classification_df.to_html(
+                    classes="results-table",
+                    table_id="beans-classification",
+                    escape=False,
+                    index=True,
+                    float_format="%.3f",
+                )
+            }
+"""
+
+        # Add detection table
+        if not detection_df.empty:
+            html_content += f"""
+        <h2>Beans Detection Datasets</h2>
+        <div class="dataset-info">
+            <p><strong>Shape:</strong> {detection_df.shape[0]} models ×
+            {detection_df.shape[1]} columns</p>
+            <p><strong>Datasets:</strong> {", ".join(detection_cols)}</p>
+        </div>
+        {
+                detection_df.to_html(
+                    classes="results-table",
+                    table_id="beans-detection",
+                    escape=False,
+                    index=True,
+                    float_format="%.3f",
+                )
+            }
+"""
+
+    elif benchmark == "birdset":
+        # Get dataset columns for birdset (exclude metadata)
+        dataset_cols = [col for col in wide_df.columns if col not in metadata_cols]
+        birdset_df = wide_df[metadata_cols + dataset_cols].copy()
+
+        # Create HTML content for birdset
+        html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BirdSet Probing Results - Full Dataset Comparison</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }}
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        h2 {{
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }}
+        .dataset-info {{
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 12px;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }}
+        th {{
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f2f2f2;
+        }}
+        tr:hover {{
+            background-color: #e8f4f8;
+        }}
+        .model-name {{
+            text-align: left;
+            font-weight: bold;
+            background-color: #ecf0f1;
+        }}
+        .ssl-ssl {{
+            background-color: #d5f4e6;
+        }}
+        .ssl-sl {{
+            background-color: #fef9e7;
+        }}
+        .metric-value {{
+            font-family: monospace;
+        }}
+        .summary {{
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BirdSet Probing Results - Full Dataset Comparison</h1>
+        <div class="summary">
+            <p><strong>Generated:</strong> {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+            <p><strong>Interpolation:</strong> {"Enabled" if interpolate else "Disabled"}</p>
+            <p><strong>Note:</strong> This page shows the complete results for all
+        models and probe configurations across BirdSet datasets.</p>
+        </div>
+"""
+
+        # Add birdset table
+        if not birdset_df.empty:
+            html_content += f"""
+        <h2>BirdSet Datasets</h2>
+        <div class="dataset-info">
+            <p><strong>Shape:</strong> {birdset_df.shape[0]} models ×
+            {birdset_df.shape[1]} columns</p>
+            <p><strong>Datasets:</strong> {", ".join(dataset_cols)}</p>
+        </div>
+        {
+                birdset_df.to_html(
+                    classes="results-table",
+                    table_id="birdset",
+                    escape=False,
+                    index=True,
+                    float_format="%.3f",
+                )
+            }
+"""
+
+    # Add JavaScript for enhanced interactivity
+    html_content += """
+        <script>
+            // Add row highlighting based on SSL/SL classification
+            document.addEventListener('DOMContentLoaded', function() {
+                const tables = document.querySelectorAll('.results-table');
+                tables.forEach(table => {
+                    const rows = table.querySelectorAll('tbody tr');
+                    rows.forEach(row => {
+                        const sslCell = row.querySelector(
+                            'td:nth-child(4)'
+                        ); // SSL column
+                        if (sslCell) {
+                            const sslValue = sslCell.textContent.trim();
+                            if (sslValue === '1') {
+                                row.classList.add('ssl-ssl');
+                            } else if (sslValue === '0') {
+                                row.classList.add('ssl-sl');
+                            }
+                        }
+                    });
+                });
+            });
+        </script>
+    </body>
+</html>
+"""
+
+    # Write HTML file
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    if benchmark == "beans":
+        print(f"Exported Beans results to HTML: {output_path}")
+        print(f"  - Classification: {classification_df.shape}")
+        print(f"  - Detection: {detection_df.shape}")
+    else:
+        print(f"Exported BirdSet results to HTML: {output_path}")
+        print(f"  - BirdSet: {birdset_df.shape}")
 
 
 def main() -> None:
@@ -793,6 +1102,17 @@ def main() -> None:
     if bench == "beans":
         output_dir = os.path.dirname(out_path) or "."
         _split_beans_by_task(wide, output_dir)
+
+    # Export to HTML if requested
+    if args.export_html:
+        # Create HTML output path
+        html_output = os.path.join(
+            os.path.dirname(out_path) or ".",
+            f"probing_results_{bench}_full_comparison.html",
+        )
+
+        # Export to HTML
+        export_benchmark_to_html(wide, bench, html_output, args.interpolate)
 
 
 if __name__ == "__main__":

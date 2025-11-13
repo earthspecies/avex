@@ -168,9 +168,7 @@ class AudioProcessor:
     def _normalize(x: Tensor) -> Tensor:
         x = x = torch.log(x + 1e-6)
         return (x - x.amin(dim=(-2, -1), keepdim=True)) / (
-            x.amax(dim=(-2, -1), keepdim=True)
-            - x.amin(dim=(-2, -1), keepdim=True)
-            + 1e-8
+            x.amax(dim=(-2, -1), keepdim=True) - x.amin(dim=(-2, -1), keepdim=True) + 1e-8
         )
 
     @staticmethod
@@ -289,9 +287,7 @@ def sync_crop_or_pad_time(
     spec_out = torch.cat([spec, pad_spec], dim=1)
 
     if frame_mask is not None:
-        pad_mask = torch.ones(
-            bsz, pad_len, dtype=frame_mask.dtype, device=frame_mask.device
-        )
+        pad_mask = torch.ones(bsz, pad_len, dtype=frame_mask.dtype, device=frame_mask.device)
         mask_out = torch.cat([frame_mask, pad_mask], dim=1)
     else:
         mask_out = None

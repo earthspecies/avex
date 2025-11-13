@@ -105,11 +105,7 @@ class TrainerFactory:
         training_mode = TrainerFactory._get_training_mode(config)
 
         # Validate clustering config if present
-        if (
-            hasattr(config, "clustering_eval")
-            and config.clustering_eval
-            and config.clustering_eval.enabled
-        ):
+        if hasattr(config, "clustering_eval") and config.clustering_eval and config.clustering_eval.enabled:
             # Ensure the model supports extract_embeddings
             if not hasattr(model, "extract_embeddings"):
                 raise ValueError(

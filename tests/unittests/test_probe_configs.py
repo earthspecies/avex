@@ -389,9 +389,7 @@ class TestExperimentConfig:
         """Test that legacy config requires either layers or probe_config."""
         run_config = self._create_minimal_run_config()
 
-        with pytest.raises(
-            ValueError, match="Either probe_config or layers must be provided"
-        ):
+        with pytest.raises(ValueError, match="Either probe_config or layers must be provided"):
             ExperimentConfig(
                 run_name="invalid_test",
                 run_config=run_config,
@@ -461,9 +459,7 @@ class TestExperimentConfig:
         # Test invalid target_length values (should raise validation error)
         invalid_lengths = [0, -1, -100]
         for length in invalid_lengths:
-            with pytest.raises(
-                ValueError, match="Input should be greater than or equal to 1"
-            ):
+            with pytest.raises(ValueError, match="Input should be greater than or equal to 1"):
                 ProbeConfig(
                     probe_type="linear",
                     aggregation="mean",

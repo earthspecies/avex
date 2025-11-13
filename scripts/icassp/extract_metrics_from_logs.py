@@ -95,16 +95,12 @@ def parse_parameter_counts(line: str) -> Optional[Dict[str, int]]:
 
     # Pattern for base model parameters: Base model parameters: 0 trainable /
     # 90010417 total
-    base_pattern = (
-        r"Base model parameters: ([\d.]+[KMB]?) trainable / ([\d.]+[KMB]?) total"
-    )
+    base_pattern = r"Base model parameters: ([\d.]+[KMB]?) trainable / ([\d.]+[KMB]?) total"
     base_match = re.search(base_pattern, line)
 
     # Pattern for online training model: Online training model → 2.40M trainable /
     # 92.41M total
-    online_pattern = (
-        r"Online training model → ([\d.]+[KMB]?) trainable / ([\d.]+[KMB]?) total"
-    )
+    online_pattern = r"Online training model → ([\d.]+[KMB]?) trainable / ([\d.]+[KMB]?) total"
     online_match = re.search(online_pattern, line)
 
     result = {}
@@ -153,9 +149,7 @@ def parse_layer_weights(log_lines: List[str], start_idx: int) -> Optional[str]:
 
     # Extract normalized weights from the table
     weights = []
-    for i in range(
-        weights_section_start + 3, min(weights_section_start + 20, len(log_lines))
-    ):
+    for i in range(weights_section_start + 3, min(weights_section_start + 20, len(log_lines))):
         line = log_lines[i].strip()
 
         # Skip empty lines and header separators
@@ -180,9 +174,7 @@ def parse_layer_weights(log_lines: List[str], start_idx: int) -> Optional[str]:
     return ",".join(weights) if weights else None
 
 
-def parse_layer_weights_backwards(
-    log_lines: List[str], start_idx: int
-) -> Optional[str]:
+def parse_layer_weights_backwards(log_lines: List[str], start_idx: int) -> Optional[str]:
     """Parse normalized layer weights from log lines.
 
     Searching backwards from start_idx.
@@ -206,9 +198,7 @@ def parse_layer_weights_backwards(
 
     # Extract normalized weights from the table
     weights = []
-    for i in range(
-        weights_section_start + 3, min(weights_section_start + 20, len(log_lines))
-    ):
+    for i in range(weights_section_start + 3, min(weights_section_start + 20, len(log_lines))):
         line = log_lines[i].strip()
 
         # Skip empty lines and header separators
@@ -411,9 +401,7 @@ def extract_metrics_from_log(log_file_path: str) -> List[Dict[str, Any]]:
 
         i += 1
 
-    print(
-        f"Found {probe_config_count} probe configurations and {metrics_count} metrics"
-    )
+    print(f"Found {probe_config_count} probe configurations and {metrics_count} metrics")
     return results
 
 
@@ -537,9 +525,7 @@ def generate_missing_combinations(
     missing_combinations = []
 
     # Determine which benchmark this log file is testing
-    benchmark = determine_benchmark_from_datasets(
-        datasets_found, birdset_datasets, beans_datasets
-    )
+    benchmark = determine_benchmark_from_datasets(datasets_found, birdset_datasets, beans_datasets)
 
     # Only check datasets from the relevant benchmark
     if benchmark == "birdset":
@@ -570,10 +556,7 @@ def generate_missing_combinations(
                 # Map layer names to the correct format used in the logs
                 layer_mapping = {"last_layer": "last", "all": "all"}
                 mapped_layer = layer_mapping.get(layer, layer)
-                base_model = (
-                    f"sl_eat_all_ssl_all_{probe_type.replace('weighted_', '')}_"
-                    f"{mapped_layer}"
-                )
+                base_model = f"sl_eat_all_ssl_all_{probe_type.replace('weighted_', '')}_{mapped_layer}"
 
                 # Check if this combination is missing
                 if (
@@ -603,9 +586,7 @@ def generate_missing_combinations(
     return missing_combinations
 
 
-def split_csv_by_benchmark(
-    input_csv_path: str, birdset_datasets: List[str], beans_datasets: List[str]
-) -> None:
+def split_csv_by_benchmark(input_csv_path: str, birdset_datasets: List[str], beans_datasets: List[str]) -> None:
     """Split the extracted metrics CSV into separate birdset and beans files.
 
     Args:
@@ -657,9 +638,7 @@ def split_csv_by_benchmark(
     print(f"Split into {len(beans_rows)} beans rows -> {beans_output}")
 
 
-def generate_missing_datasets_csv(
-    extracted_csv_path: str, output_csv_path: str
-) -> None:
+def generate_missing_datasets_csv(extracted_csv_path: str, output_csv_path: str) -> None:
     """Generate CSV files showing missing datasets and probe types for each benchmark.
 
     Args:
@@ -670,9 +649,7 @@ def generate_missing_datasets_csv(
 
     # Extract datasets from configs
     print("Reading benchmark configurations...")
-    birdset_datasets = extract_datasets_from_config(
-        "configs/data_configs/benchmark_birdset.yml"
-    )
+    birdset_datasets = extract_datasets_from_config("configs/data_configs/benchmark_birdset.yml")
     beans_datasets = extract_datasets_from_config("configs/data_configs/beans.yml")
 
     print(f"Found {len(birdset_datasets)} birdset datasets: {birdset_datasets}")
@@ -680,24 +657,14 @@ def generate_missing_datasets_csv(
 
     # Read what was actually extracted
     print("Reading extracted metrics...")
-    datasets_found, probe_types_found, base_models_found = read_extracted_csv(
-        extracted_csv_path
-    )
+    datasets_found, probe_types_found, base_models_found = read_extracted_csv(extracted_csv_path)
 
     print(f"Found {len(datasets_found)} datasets in log: {sorted(datasets_found)}")
-    print(
-        f"Found {len(probe_types_found)} probe types in log: "
-        f"{sorted(probe_types_found)}"
-    )
-    print(
-        f"Found {len(base_models_found)} base models in log: "
-        f"{sorted(base_models_found)}"
-    )
+    print(f"Found {len(probe_types_found)} probe types in log: {sorted(probe_types_found)}")
+    print(f"Found {len(base_models_found)} base models in log: {sorted(base_models_found)}")
 
     # Determine which benchmark is being tested based on found datasets
-    benchmark_detected = determine_benchmark_from_datasets(
-        datasets_found, birdset_datasets, beans_datasets
-    )
+    benchmark_detected = determine_benchmark_from_datasets(datasets_found, birdset_datasets, beans_datasets)
     print(f"Detected benchmark: {benchmark_detected}")
 
     # Generate missing combinations only for the detected benchmark
@@ -789,10 +756,7 @@ def generate_missing_datasets_csv(
                 ]
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-        print(
-            f"Successfully wrote {len(birdset_missing)} birdset missing combinations "
-            f"to {birdset_output}"
-        )
+        print(f"Successfully wrote {len(birdset_missing)} birdset missing combinations to {birdset_output}")
 
     if benchmark_detected in ["beans", "mixed"]:
         beans_output = output_csv_path.replace(".csv", "_beans.csv")
@@ -813,10 +777,7 @@ def generate_missing_datasets_csv(
                 ]
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-        print(
-            f"Successfully wrote {len(beans_missing)} beans missing combinations "
-            f"to {beans_output}"
-        )
+        print(f"Successfully wrote {len(beans_missing)} beans missing combinations to {beans_output}")
 
     # Summary
     print("\nSummary:")
@@ -872,10 +833,7 @@ def generate_missing_combinations_for_benchmark(
                 # We need to find a base model that matches the probe_type and layer pattern  # noqa: E501
                 expected_base_model = None
                 for base_model in base_models_found:
-                    if (
-                        probe_type.replace("weighted_", "") in base_model
-                        and mapped_layer in base_model
-                    ):
+                    if probe_type.replace("weighted_", "") in base_model and mapped_layer in base_model:
                         expected_base_model = base_model
                         break
 
@@ -883,14 +841,10 @@ def generate_missing_combinations_for_benchmark(
                 if not expected_base_model:
                     if benchmark_name == "beans":
                         expected_base_model = (
-                            f"efficientnet_animalspeak_audioset_"
-                            f"{probe_type.replace('weighted_', '')}_{mapped_layer}"
+                            f"efficientnet_animalspeak_audioset_{probe_type.replace('weighted_', '')}_{mapped_layer}"
                         )
                     else:  # birdset
-                        expected_base_model = (
-                            f"sl_eat_all_ssl_all_{probe_type.replace('weighted_', '')}_"
-                            f"{mapped_layer}"
-                        )
+                        expected_base_model = f"sl_eat_all_ssl_all_{probe_type.replace('weighted_', '')}_{mapped_layer}"
 
                 # Check if this specific combination is missing
                 # A combination is missing if the dataset is not found in the log
@@ -917,9 +871,7 @@ def generate_missing_combinations_for_benchmark(
     return missing_combinations
 
 
-def is_duplicate_entry(
-    new_row: Dict[str, Any], existing_data: List[Dict[str, Any]]
-) -> bool:
+def is_duplicate_entry(new_row: Dict[str, Any], existing_data: List[Dict[str, Any]]) -> bool:
     """Check if a new row already exists in the existing data.
 
     Args:
@@ -1057,9 +1009,7 @@ def create_or_append_csv(results: List[Dict[str, Any]], csv_file_path: str) -> N
 
 def main() -> None:
     """Main function to extract metrics from log files."""
-    parser = argparse.ArgumentParser(
-        description="Extract metrics from log files and generate CSV output"
-    )
+    parser = argparse.ArgumentParser(description="Extract metrics from log files and generate CSV output")
     parser.add_argument("log_file", type=str, help="Path to the log file to process")
     parser.add_argument(
         "--output",
@@ -1074,9 +1024,7 @@ def main() -> None:
         type=str,
         help="Generate missing datasets CSV and save to specified path",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose output"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 
@@ -1111,9 +1059,7 @@ def main() -> None:
     create_or_append_csv(results, args.output)
 
     # Split extracted metrics by benchmark
-    birdset_datasets = extract_datasets_from_config(
-        "configs/data_configs/benchmark_birdset.yml"
-    )
+    birdset_datasets = extract_datasets_from_config("configs/data_configs/benchmark_birdset.yml")
     beans_datasets = extract_datasets_from_config("configs/data_configs/beans.yml")
     split_csv_by_benchmark(args.output, birdset_datasets, beans_datasets)
 

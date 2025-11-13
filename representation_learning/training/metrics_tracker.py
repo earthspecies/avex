@@ -56,9 +56,7 @@ class MetricsTracker:
         # Initialize metric calculators
         self.metric_calculators = {}
         if training_mode == "supervised":
-            self.metric_calculators = {
-                name: get_metric_class(name, num_classes) for name in metrics
-            }
+            self.metric_calculators = {name: get_metric_class(name, num_classes) for name in metrics}
 
         # State tracking
         self.reset_epoch_state()
@@ -74,9 +72,7 @@ class MetricsTracker:
 
         # Reset metric calculators
         if self.training_mode == "supervised":
-            self.metric_calculators = {
-                name: get_metric_class(name, self.num_classes) for name in self.metrics
-            }
+            self.metric_calculators = {name: get_metric_class(name, self.num_classes) for name in self.metrics}
 
     def update_batch_metrics(
         self,
@@ -112,9 +108,7 @@ class MetricsTracker:
             # Handle component losses
             if additional_metrics:
                 for k, v in additional_metrics.items():
-                    self.component_totals[k] = (
-                        self.component_totals.get(k, 0.0) + v * batch_size
-                    )
+                    self.component_totals[k] = self.component_totals.get(k, 0.0) + v * batch_size
         else:
             # Supervised mode: metrics_data is Tuple[torch.Tensor, torch.Tensor]
             if isinstance(metrics_data, tuple):
@@ -145,11 +139,7 @@ class MetricsTracker:
         # ------------------------------------------------------------------ #
         if self.training_mode == "clip":
             # Retrieval accuracies are tracked separately
-            avg_acc = (
-                (self.total_correct_a2t + self.total_correct_t2a)
-                / 2.0
-                / self.total_samples
-            )
+            avg_acc = (self.total_correct_a2t + self.total_correct_t2a) / 2.0 / self.total_samples
         elif self.training_mode == "supervised":
             # Derive running accuracy directly from the metric calculator if present
             if "accuracy" in self.metric_calculators:
@@ -203,28 +193,18 @@ class MetricsTracker:
             if torch.distributed.is_available() and torch.distributed.is_initialized():
                 total_samples_sync = synchronize_scalar(self.total_samples, self.device)
                 avg_acc_a2t = (
-                    synchronize_scalar(self.total_correct_a2t, self.device)
-                    / total_samples_sync
+                    synchronize_scalar(self.total_correct_a2t, self.device) / total_samples_sync
                     if total_samples_sync > 0
                     else 0.0
                 )
                 avg_acc_t2a = (
-                    synchronize_scalar(self.total_correct_t2a, self.device)
-                    / total_samples_sync
+                    synchronize_scalar(self.total_correct_t2a, self.device) / total_samples_sync
                     if total_samples_sync > 0
                     else 0.0
                 )
             else:
-                avg_acc_a2t = (
-                    self.total_correct_a2t / self.total_samples
-                    if self.total_samples
-                    else 0.0
-                )
-                avg_acc_t2a = (
-                    self.total_correct_t2a / self.total_samples
-                    if self.total_samples
-                    else 0.0
-                )
+                avg_acc_a2t = self.total_correct_a2t / self.total_samples if self.total_samples else 0.0
+                avg_acc_t2a = self.total_correct_t2a / self.total_samples if self.total_samples else 0.0
 
             final_metrics = {
                 self.primary_metric_name: avg_acc,

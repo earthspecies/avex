@@ -99,18 +99,10 @@ def generate_latex_table(results: Dict[str, Dict[str, Dict[str, str]]]) -> str:
             break
 
         # Get probe totals for each configuration
-        att_last = format_parameter_count(
-            model_data.get("attention_last", {}).get("probe_total", "---")
-        )
-        att_all = format_parameter_count(
-            model_data.get("attention_all", {}).get("probe_total", "---")
-        )
-        lin_last = format_parameter_count(
-            model_data.get("linear_last", {}).get("probe_total", "---")
-        )
-        lin_all = format_parameter_count(
-            model_data.get("linear_all", {}).get("probe_total", "---")
-        )
+        att_last = format_parameter_count(model_data.get("attention_last", {}).get("probe_total", "---"))
+        att_all = format_parameter_count(model_data.get("attention_all", {}).get("probe_total", "---"))
+        lin_last = format_parameter_count(model_data.get("linear_last", {}).get("probe_total", "---"))
+        lin_all = format_parameter_count(model_data.get("linear_all", {}).get("probe_total", "---"))
 
         return base_total, att_last, att_all, lin_last, lin_all
 

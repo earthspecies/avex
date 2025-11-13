@@ -84,32 +84,23 @@ def _extract_embeddings_in_memory(
 
                 # Log embedding shapes after extraction
                 if isinstance(emb, list):
-                    logger.debug(
-                        f"Extracted embeddings (list of {len(emb)} tensors) with "
-                        f"aggregation='{aggregation}':"
-                    )
+                    logger.debug(f"Extracted embeddings (list of {len(emb)} tensors) with aggregation='{aggregation}':")
                     for i, layer_emb in enumerate(emb):
                         logger.debug(f"  Layer {i} shape: {layer_emb.shape}")
                 elif isinstance(emb, dict):
                     logger.debug(
-                        f"Extracted embeddings (dict with {len(emb)} layers) with "
-                        f"aggregation='{aggregation}':"
+                        f"Extracted embeddings (dict with {len(emb)} layers) with aggregation='{aggregation}':"
                     )
                     for layer_name, layer_emb in emb.items():
                         logger.debug(f"  {layer_name} shape: {layer_emb.shape}")
                 else:
-                    logger.debug(
-                        f"Extracted embeddings (single tensor) with "
-                        f"aggregation='{aggregation}': {emb.shape}"
-                    )
+                    logger.debug(f"Extracted embeddings (single tensor) with aggregation='{aggregation}': {emb.shape}")
 
                 # Handle single tensor, list of tensors, or dictionary from model
                 if isinstance(emb, list):
                     # Multiple layers: emb is a list of tensors
                     for i, layer_emb in enumerate(emb):
-                        layer_name = (
-                            layer_names[i] if i < len(layer_names) else f"layer_{i}"
-                        )
+                        layer_name = layer_names[i] if i < len(layer_names) else f"layer_{i}"
                         if layer_name not in layer_embeds:
                             layer_embeds[layer_name] = []
                         layer_embeds[layer_name].append(layer_emb.cpu())
@@ -133,10 +124,7 @@ def _extract_embeddings_in_memory(
 
         # Check if we have any data
         if not labels:
-            raise ValueError(
-                "No data processed. Check if dataloader is empty or has "
-                "invalid batches."
-            )
+            raise ValueError("No data processed. Check if dataloader is empty or has invalid batches.")
 
         # Concatenate embeddings for each layer
         final_embeddings = {}
@@ -149,9 +137,7 @@ def _extract_embeddings_in_memory(
 
     finally:
         # Restore original disable_layerdrop if it was overridden
-        if original_disable_layerdrop is not None and hasattr(
-            model, "disable_layerdrop"
-        ):
+        if original_disable_layerdrop is not None and hasattr(model, "disable_layerdrop"):
             model.disable_layerdrop = original_disable_layerdrop
         # Always deregister hooks when done
         model.deregister_all_hooks()
@@ -197,9 +183,7 @@ def _extract_embeddings_streaming(
     # Register hooks for the specified layers outside the loop
     layer_names = model.register_hooks_for_layers(layer_names)
 
-    logger.info(
-        f"Extracting embeddings using optimized streaming approach to {save_path}"
-    )
+    logger.info(f"Extracting embeddings using optimized streaming approach to {save_path}")
     logger.info(f"Chunk size: {chunk_size}, layers: {len(layer_names)}")
 
     # Ensure directory exists
@@ -252,33 +236,21 @@ def _extract_embeddings_streaming(
             # (float32) + overhead
             # Add 1KB overhead per sample
             memory_per_sample = total_embedding_size * 4 + 1024
-            optimal_chunk_size = int(
-                available_memory * 0.95 / memory_per_sample
-            )  # Use 95% of GPU memory
+            optimal_chunk_size = int(available_memory * 0.95 / memory_per_sample)  # Use 95% of GPU memory
 
             # Apply min/max constraints
             chunk_size = max(min_chunk_size, min(max_chunk_size, optimal_chunk_size))
-            logger.info(
-                f"Auto-calculated chunk size: {chunk_size} (from {optimal_chunk_size})"
-            )
+            logger.info(f"Auto-calculated chunk size: {chunk_size} (from {optimal_chunk_size})")
         except Exception as e:
-            logger.warning(
-                f"Failed to auto-calculate chunk size: {e}, "
-                f"using provided value: {chunk_size}"
-            )
+            logger.warning(f"Failed to auto-calculate chunk size: {e}, using provided value: {chunk_size}")
 
     # Use provided batch chunk size or calculate optimal one
     if batch_chunk_size <= 0:
         # Calculate batch chunk size - process multiple batches before writing to disk
         # This reduces I/O overhead while keeping memory usage reasonable
-        avg_batch_size = (
-            total_samples // len(dataloader) if len(dataloader) > 0 else chunk_size
-        )
+        avg_batch_size = total_samples // len(dataloader) if len(dataloader) > 0 else chunk_size
         batch_chunk_size = max(5, min(20, chunk_size // max(1, avg_batch_size // 10)))
-        logger.info(
-            f"Auto-calculated batch chunk size: {batch_chunk_size} "
-            f"(avg batch size: {avg_batch_size})"
-        )
+        logger.info(f"Auto-calculated batch chunk size: {batch_chunk_size} (avg batch size: {avg_batch_size})")
     else:
         logger.info(f"Using provided batch chunk size: {batch_chunk_size}")
 
@@ -300,8 +272,7 @@ def _extract_embeddings_streaming(
         raise ValueError(f"Invalid chunk size: {chunk_size}. Must be positive.")
     if chunk_size > total_samples:
         logger.warning(
-            f"Chunk size {chunk_size} is larger than total samples "
-            f"{total_samples}. Adjusting to {total_samples}."
+            f"Chunk size {chunk_size} is larger than total samples {total_samples}. Adjusting to {total_samples}."
         )
         chunk_size = total_samples
 
@@ -348,9 +319,7 @@ def _extract_embeddings_streaming(
 
     finally:
         # Restore original disable_layerdrop if it was overridden
-        if original_disable_layerdrop is not None and hasattr(
-            model, "disable_layerdrop"
-        ):
+        if original_disable_layerdrop is not None and hasattr(model, "disable_layerdrop"):
             model.disable_layerdrop = original_disable_layerdrop
         # Always deregister hooks when done
         model.deregister_all_hooks()
@@ -393,10 +362,7 @@ def _create_and_fill_h5_datasets_hybrid(
     label_shape = sample_labels.shape[1:] if sample_labels.dim() > 1 else ()
     label_dtype = sample_labels.dtype
 
-    logger.info(
-        f"Sample labels info: shape={sample_labels.shape}, "
-        f"dims={sample_labels.dim()}, dtype={label_dtype}"
-    )
+    logger.info(f"Sample labels info: shape={sample_labels.shape}, dims={sample_labels.dim()}, dtype={label_dtype}")
 
     # Convert PyTorch dtype to numpy dtype for HDF5
     if hasattr(label_dtype, "numpy_dtype"):
@@ -416,21 +382,14 @@ def _create_and_fill_h5_datasets_hybrid(
         numpy_label_dtype = dtype_mapping.get(label_dtype)
         if numpy_label_dtype is None:
             # If we can't map the dtype, log a warning and use a safe default
-            logger.warning(
-                f"Unknown PyTorch dtype: {label_dtype}. Using np.float32 as fallback."
-            )
+            logger.warning(f"Unknown PyTorch dtype: {label_dtype}. Using np.float32 as fallback.")
             numpy_label_dtype = np.float32
 
     # Validate that we got a valid numpy dtype
     if numpy_label_dtype is None:
-        raise ValueError(
-            f"Could not convert PyTorch dtype {label_dtype} to numpy dtype"
-        )
+        raise ValueError(f"Could not convert PyTorch dtype {label_dtype} to numpy dtype")
 
-    logger.info(
-        f"Label shape: {sample_labels.shape}, dtype: {label_dtype} -> "
-        f"numpy: {numpy_label_dtype}"
-    )
+    logger.info(f"Label shape: {sample_labels.shape}, dtype: {label_dtype} -> numpy: {numpy_label_dtype}")
 
     # Create separate datasets for each layer to handle different dimensions
     embeddings_datasets = {}
@@ -493,9 +452,7 @@ def _create_and_fill_h5_datasets_hybrid(
 
     # Log dataset shapes
     embedding_shapes = {name: dset.shape for name, dset in embeddings_datasets.items()}
-    logger.info(
-        f"Dataset shapes - embeddings: {embedding_shapes}, labels: {labels_dset.shape}"
-    )
+    logger.info(f"Dataset shapes - embeddings: {embedding_shapes}, labels: {labels_dset.shape}")
     logger.info(f"Starting hybrid extraction with {total_samples} total samples")
     logger.info(
         f"Chunk size: {chunk_size}, batch chunk size: {batch_chunk_size}, "
@@ -531,8 +488,7 @@ def _create_and_fill_h5_datasets_hybrid(
         first_batch_labels = first_batch["label"]
         if first_batch_labels.shape[1:] != label_shape:
             raise ValueError(
-                f"First batch label shape {first_batch_labels.shape} doesn't match "
-                f"expected shape {label_shape}"
+                f"First batch label shape {first_batch_labels.shape} doesn't match expected shape {label_shape}"
             )
 
         # Validate batch size consistency
@@ -544,27 +500,19 @@ def _create_and_fill_h5_datasets_hybrid(
             # Handle single tensor, list of tensors, or dictionary
             if isinstance(embeddings, list):
                 # Multi-layer case: write each layer to its own dataset
-                for _i, (layer_name, layer_emb) in enumerate(
-                    zip(layer_names, embeddings, strict=False)
-                ):
+                for _i, (layer_name, layer_emb) in enumerate(zip(layer_names, embeddings, strict=False)):
                     layer_emb_np = layer_emb.cpu().numpy().astype(np.float32)
-                    embeddings_datasets[layer_name][
-                        start_idx : start_idx + batch_size
-                    ] = layer_emb_np
+                    embeddings_datasets[layer_name][start_idx : start_idx + batch_size] = layer_emb_np
             elif isinstance(embeddings, dict):
                 # Multi-layer dictionary case: write each layer to its own dataset
                 for layer_name, layer_emb in embeddings.items():
                     layer_emb_np = layer_emb.cpu().numpy().astype(np.float32)
-                    embeddings_datasets[layer_name][
-                        start_idx : start_idx + batch_size
-                    ] = layer_emb_np
+                    embeddings_datasets[layer_name][start_idx : start_idx + batch_size] = layer_emb_np
             else:
                 # Single tensor case: write to first available dataset
                 embeddings_np = embeddings.cpu().numpy().astype(np.float32)
                 first_layer_name = list(embeddings_datasets.keys())[0]
-                embeddings_datasets[first_layer_name][
-                    start_idx : start_idx + batch_size
-                ] = embeddings_np
+                embeddings_datasets[first_layer_name][start_idx : start_idx + batch_size] = embeddings_np
 
             labels_np = first_batch_labels.numpy().astype(np.int64)
             labels_dset[start_idx : start_idx + batch_size] = labels_np
@@ -573,10 +521,7 @@ def _create_and_fill_h5_datasets_hybrid(
             raise
 
         start_idx += batch_size
-        logger.info(
-            f"Processed first batch: {batch_size} samples, "
-            f"total processed: {start_idx}/{total_samples}"
-        )
+        logger.info(f"Processed first batch: {batch_size} samples, total processed: {start_idx}/{total_samples}")
 
         # Clear memory
         del embeddings
@@ -618,47 +563,30 @@ def _create_and_fill_h5_datasets_hybrid(
                 inp = {"raw_wav": wav, "padding_mask": mask}
                 embeddings = model.extract_embeddings(inp, aggregation=aggregation)
 
-            shapes_description = (
-                [e.shape for e in embeddings]
-                if isinstance(embeddings, list)
-                else embeddings.shape
-            )
-            logger.debug(
-                (
-                    f"Batch {batch_idx} embeddings type: {type(embeddings)}, "
-                    f"shape: {shapes_description}"
-                )
-            )
+            shapes_description = [e.shape for e in embeddings] if isinstance(embeddings, list) else embeddings.shape
+            logger.debug((f"Batch {batch_idx} embeddings type: {type(embeddings)}, shape: {shapes_description}"))
 
             # Determine batch size from tensor shapes, not number of layers
             if isinstance(embeddings, list):
                 if len(embeddings) == 0:
-                    raise ValueError(
-                        f"Empty embeddings list returned in batch {batch_idx}"
-                    )
+                    raise ValueError(f"Empty embeddings list returned in batch {batch_idx}")
                 batch_size = int(embeddings[0].shape[0])
             elif isinstance(embeddings, dict):
                 if len(embeddings) == 0:
-                    raise ValueError(
-                        f"Empty embeddings dictionary returned in batch {batch_idx}"
-                    )
+                    raise ValueError(f"Empty embeddings dictionary returned in batch {batch_idx}")
                 batch_size = int(next(iter(embeddings.values())).shape[0])
             else:
                 batch_size = int(embeddings.shape[0])
 
             # Validate batch size consistency
             if batch_size <= 0:
-                raise ValueError(
-                    f"Invalid batch size in batch {batch_idx}: {batch_size}. "
-                    f"Must be positive."
-                )
+                raise ValueError(f"Invalid batch size in batch {batch_idx}: {batch_size}. Must be positive.")
 
             # Validate batch label shape
             batch_labels = batch["label"]
             if batch_labels.shape[1:] != label_shape:
                 raise ValueError(
-                    f"Batch {batch_idx} label shape {batch_labels.shape} doesn't match "
-                    f"expected shape {label_shape}"
+                    f"Batch {batch_idx} label shape {batch_labels.shape} doesn't match expected shape {label_shape}"
                 )
 
             # Add to buffer - handle single tensor, list of tensors, or dictionary
@@ -667,9 +595,7 @@ def _create_and_fill_h5_datasets_hybrid(
                 batch_embeddings_buffer.append([emb.cpu() for emb in embeddings])
             elif isinstance(embeddings, dict):
                 # For multi-layer dictionary, convert to list of tensors
-                batch_embeddings_buffer.append(
-                    [emb.cpu() for emb in embeddings.values()]
-                )
+                batch_embeddings_buffer.append([emb.cpu() for emb in embeddings.values()])
             else:
                 # For other aggregation methods, embeddings is a single tensor
                 batch_embeddings_buffer.append(embeddings.cpu())
@@ -698,9 +624,7 @@ def _create_and_fill_h5_datasets_hybrid(
                     # Validate we won't exceed dataset bounds
                     remaining_samples = 0  # Initialize to 0
                     if start_idx + len(labels_np) > total_samples:
-                        logger.warning(
-                            "Buffer would exceed dataset bounds. Adjusting buffer size."
-                        )
+                        logger.warning("Buffer would exceed dataset bounds. Adjusting buffer size.")
                         remaining_samples = total_samples - start_idx
                         if remaining_samples > 0:
                             labels_np = labels_np[:remaining_samples]
@@ -712,17 +636,9 @@ def _create_and_fill_h5_datasets_hybrid(
                         # Multi-layer case: concatenate each layer separately across
                         # batches
                         num_layers = len(batch_embeddings_buffer[0])
-                        logger.debug(
-                            (
-                                f"Writing {num_layers} layers from buffer, "
-                                f"layer_names: {layer_names}"
-                            )
-                        )
+                        logger.debug((f"Writing {num_layers} layers from buffer, layer_names: {layer_names}"))
                         for layer_idx in range(num_layers):
-                            layer_embeddings = [
-                                batch_emb[layer_idx]
-                                for batch_emb in batch_embeddings_buffer
-                            ]
+                            layer_embeddings = [batch_emb[layer_idx] for batch_emb in batch_embeddings_buffer]
                             if len(layer_embeddings) == 1:
                                 concatenated_layer = layer_embeddings[0]
                             else:
@@ -742,31 +658,25 @@ def _create_and_fill_h5_datasets_hybrid(
                                     f"{embeddings_datasets[layer_name].shape}"
                                 )
                             )
-                            embeddings_datasets[layer_name][
-                                start_idx : start_idx + len(layer_emb_np)
-                            ] = layer_emb_np
+                            embeddings_datasets[layer_name][start_idx : start_idx + len(layer_emb_np)] = layer_emb_np
                     else:
                         # Single tensor case: concatenate batches and write to first
                         # available dataset
                         if len(batch_embeddings_buffer) == 1:
                             concatenated_embeddings = batch_embeddings_buffer[0]
                         else:
-                            concatenated_embeddings = torch.cat(
-                                batch_embeddings_buffer, dim=0
-                            )
+                            concatenated_embeddings = torch.cat(batch_embeddings_buffer, dim=0)
 
-                        embeddings_np = concatenated_embeddings.numpy().astype(
-                            np.float32
-                        )
+                        embeddings_np = concatenated_embeddings.numpy().astype(np.float32)
 
                         # Adjust size if needed
                         if remaining_samples > 0:
                             embeddings_np = embeddings_np[:remaining_samples]
 
                         first_layer_name = list(embeddings_datasets.keys())[0]
-                        embeddings_datasets[first_layer_name][
-                            start_idx : start_idx + len(embeddings_np)
-                        ] = embeddings_np
+                        embeddings_datasets[first_layer_name][start_idx : start_idx + len(embeddings_np)] = (
+                            embeddings_np
+                        )
 
                     # Write labels
                     labels_dset[start_idx : start_idx + len(labels_np)] = labels_np
@@ -833,26 +743,16 @@ def _create_and_fill_h5_datasets_hybrid(
 
     # Final validation
     if start_idx != total_samples:
-        logger.warning(
-            f"Expected to process {total_samples} samples, but processed {start_idx}"
-        )
+        logger.warning(f"Expected to process {total_samples} samples, but processed {start_idx}")
         if start_idx < total_samples:
-            logger.warning(
-                f"Missing {total_samples - start_idx} samples. "
-                f"This might indicate an issue."
-            )
+            logger.warning(f"Missing {total_samples - start_idx} samples. This might indicate an issue.")
 
     logger.info(f"Completed hybrid extraction. Total samples processed: {start_idx}")
     # Store metadata as HDF5 attributes (reinforce values, do not change multi_layer)
     # Don't overwrite layer_names - it was already set correctly above
 
-    final_embedding_shapes = {
-        name: dset.shape for name, dset in embeddings_datasets.items()
-    }
-    logger.info(
-        f"Final dataset shapes - embeddings: {final_embedding_shapes}, "
-        f"labels: {labels_dset.shape}"
-    )
+    final_embedding_shapes = {name: dset.shape for name, dset in embeddings_datasets.items()}
+    logger.info(f"Final dataset shapes - embeddings: {final_embedding_shapes}, labels: {labels_dset.shape}")
 
 
 class EmbeddingDataset(torch.utils.data.Dataset):
@@ -884,10 +784,7 @@ class EmbeddingDataset(torch.utils.data.Dataset):
         if isinstance(self.embeddings, dict):
             # Multi-layer embeddings: return dict with layer names as keys
             return {
-                **{
-                    layer_name: layer_emb[idx]
-                    for layer_name, layer_emb in self.embeddings.items()
-                },
+                **{layer_name: layer_emb[idx] for layer_name, layer_emb in self.embeddings.items()},
                 "label": self.labels[idx],
             }
         else:
@@ -945,10 +842,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                 detected_layers = self._detect_layer_names()
                 if detected_layers:
                     # Replace 'last_layer' with the actual last layer name
-                    self.layer_names = [
-                        name if name != "last_layer" else detected_layers[-1]
-                        for name in layer_names
-                    ]
+                    self.layer_names = [name if name != "last_layer" else detected_layers[-1] for name in layer_names]
                     logger.info(f"Resolved 'last_layer' to '{detected_layers[-1]}'")
                 else:
                     self.layer_names = layer_names
@@ -978,18 +872,12 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         # Initialize sliding window capacity if embeddings not fully cached
         if (
             self._memory_cache is None
-            or (
-                self.multi_layer
-                and not all(ln in self._memory_cache for ln in self.layer_names)
-            )
+            or (self.multi_layer and not all(ln in self._memory_cache for ln in self.layer_names))
             or (not self.multi_layer and "embed" not in (self._memory_cache or {}))
         ):
             self._initialize_window_cache()
 
-        logger.info(
-            f"Initialized HDF5EmbeddingDataset: {len(self)} samples, "
-            f"layers: {self.layer_names}"
-        )
+        logger.info(f"Initialized HDF5EmbeddingDataset: {len(self)} samples, layers: {self.layer_names}")
         logger.info(f"Embedding dimensions: {self.embedding_dims}")
         logger.info(f"Number of labels: {self.num_labels}")
         logger.info(f"In-memory cache: {self._memory_cache is not None}")
@@ -1065,16 +953,12 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                     continue
                 if layer_name in datasets:
                     slice_np = datasets[layer_name][start:end]
-                    window[layer_name] = torch.from_numpy(
-                        np.asarray(slice_np, dtype=np.float32)
-                    )
+                    window[layer_name] = torch.from_numpy(np.asarray(slice_np, dtype=np.float32))
         else:
             if self._memory_cache is None or "embed" not in self._memory_cache:
                 if "embed" in datasets:
                     slice_np = datasets["embed"][start:end]
-                    window["embed"] = torch.from_numpy(
-                        np.asarray(slice_np, dtype=np.float32)
-                    )
+                    window["embed"] = torch.from_numpy(np.asarray(slice_np, dtype=np.float32))
         # Assign window
         self._window_cache = window if window else None
         self._window_start = start
@@ -1258,23 +1142,17 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                         dataset_name = f"embeddings_{layer_name}"
                         if dataset_name in f:
                             dset = f[dataset_name]
-                            layer_sizes[layer_name] = int(
-                                np.prod(dset.shape) * dset.dtype.itemsize
-                            )
+                            layer_sizes[layer_name] = int(np.prod(dset.shape) * dset.dtype.itemsize)
                             total_bytes += layer_sizes[layer_name]
                 else:
                     if "embeddings" in f:
                         dset = f["embeddings"]
                     else:
-                        dset = next(
-                            f[k] for k in f.keys() if k.startswith("embeddings_")
-                        )
+                        dset = next(f[k] for k in f.keys() if k.startswith("embeddings_"))
                     total_bytes += np.prod(dset.shape) * dset.dtype.itemsize
 
                 # Add labels size
-                labels_bytes = int(
-                    np.prod(f["labels"].shape) * f["labels"].dtype.itemsize
-                )
+                labels_bytes = int(np.prod(f["labels"].shape) * f["labels"].dtype.itemsize)
                 total_bytes += labels_bytes
 
                 size_gb = total_bytes / (1024**3)
@@ -1284,17 +1162,12 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                 self._memory_cache = {}
 
                 # Always cache labels first
-                self._memory_cache["labels"] = torch.from_numpy(
-                    f["labels"][:].astype(np.int64)
-                )
+                self._memory_cache["labels"] = torch.from_numpy(f["labels"][:].astype(np.int64))
 
                 remaining_bytes = int(size_limit_gb * (1024**3)) - labels_bytes
 
                 if remaining_bytes <= 0:
-                    logger.info(
-                        "Memory budget exhausted after caching labels; embeddings "
-                        "will be streamed."
-                    )
+                    logger.info("Memory budget exhausted after caching labels; embeddings will be streamed.")
                     # Keep cache limited to labels
                     if not self.allow_partial_cache:
                         # If partial caching not allowed and total too big, drop cache
@@ -1304,13 +1177,8 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                 if self.multi_layer:
                     # Sort layers by size (smallest first) and cache while budget allows
                     for layer_name in sorted(layer_sizes, key=lambda k: layer_sizes[k]):
-                        if (
-                            layer_sizes[layer_name] <= remaining_bytes
-                            and f.get(f"embeddings_{layer_name}") is not None
-                        ):
-                            data_np = f[f"embeddings_{layer_name}"][:].astype(
-                                np.float32
-                            )
+                        if layer_sizes[layer_name] <= remaining_bytes and f.get(f"embeddings_{layer_name}") is not None:
+                            data_np = f[f"embeddings_{layer_name}"][:].astype(np.float32)
                             self._memory_cache[layer_name] = torch.from_numpy(data_np)
                             remaining_bytes -= layer_sizes[layer_name]
                             logger.info(
@@ -1318,10 +1186,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                                 f"(size={layer_sizes[layer_name] / (1024**2):.2f} MB)"
                             )
                         else:
-                            logger.info(
-                                f"Skipping cache for layer '{layer_name}' due to "
-                                f"memory budget"
-                            )
+                            logger.info(f"Skipping cache for layer '{layer_name}' due to memory budget")
                 else:
                     # Single dataset - try to cache if within budget
                     if "embeddings" in f:
@@ -1334,14 +1199,10 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                         data = dset[:].astype(np.float32)
                         self._memory_cache["embed"] = torch.from_numpy(data)
                         logger.info(
-                            f"Cached single embedding dataset in memory "
-                            f"(size={bytes_needed / (1024**2):.2f} MB)"
+                            f"Cached single embedding dataset in memory (size={bytes_needed / (1024**2):.2f} MB)"
                         )
                     else:
-                        logger.info(
-                            "Skipping cache for embeddings due to memory budget; "
-                            "will stream from HDF5"
-                        )
+                        logger.info("Skipping cache for embeddings due to memory budget; will stream from HDF5")
 
         except Exception as e:
             logger.warning(f"Failed to cache dataset: {e}")
@@ -1372,14 +1233,9 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                         # Try window cache first, otherwise fallback to on-demand read
                         if not (self._window_start <= idx < self._window_end):
                             self._load_window(idx)
-                        if (
-                            self._window_cache is not None
-                            and layer_name in self._window_cache
-                        ):
+                        if self._window_cache is not None and layer_name in self._window_cache:
                             local_idx = idx - self._window_start
-                            result[layer_name] = self._window_cache[layer_name][
-                                local_idx
-                            ]
+                            result[layer_name] = self._window_cache[layer_name][local_idx]
                         else:
                             datasets = self._datasets
                             if datasets is None:
@@ -1387,9 +1243,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                                 datasets = self._datasets
                             if layer_name in datasets:
                                 embedding_data = datasets[layer_name][idx]
-                                result[layer_name] = torch.from_numpy(
-                                    np.array(embedding_data, dtype=np.float32)
-                                )
+                                result[layer_name] = torch.from_numpy(np.array(embedding_data, dtype=np.float32))
                 return result
             else:
                 if "embed" in self._memory_cache:
@@ -1409,9 +1263,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                         self._get_file_handle()
                         datasets = self._datasets
                     embed_data = datasets["embed"][idx]
-                    embed_tensor = torch.from_numpy(
-                        np.array(embed_data, dtype=np.float32)
-                    )
+                    embed_tensor = torch.from_numpy(np.array(embed_data, dtype=np.float32))
                 return {
                     "embed": embed_tensor,
                     "label": self._memory_cache["labels"][idx],
@@ -1432,9 +1284,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
             for layer_name in self.layer_names:
                 if layer_name in datasets:
                     embedding_data = datasets[layer_name][idx]
-                    result[layer_name] = torch.from_numpy(
-                        np.array(embedding_data, dtype=np.float32)
-                    )
+                    result[layer_name] = torch.from_numpy(np.array(embedding_data, dtype=np.float32))
             return result
         else:
             embed_data = datasets["embed"][idx]
@@ -1545,9 +1395,7 @@ def save_embeddings_arrays(
                 embedding_dims = [emb.shape[1:] for emb in embeddings.values()]
 
                 for layer_name, layer_embeddings in embeddings.items():
-                    layer_np = (
-                        layer_embeddings.detach().cpu().numpy().astype(np.float32)
-                    )
+                    layer_np = layer_embeddings.detach().cpu().numpy().astype(np.float32)
                     h5f.create_dataset(
                         f"embeddings_{layer_name}",
                         data=layer_np,
@@ -1557,9 +1405,7 @@ def save_embeddings_arrays(
                 h5f.attrs["layer_names"] = layer_names
                 # Convert embedding_dims to a format HDF5 can store
                 # Store as a list of strings representing the dimensions
-                h5f.attrs["embedding_dims"] = [
-                    str(tuple(dim)) for dim in embedding_dims
-                ]
+                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
                 h5f.attrs["multi_layer"] = True
             else:
                 # Single tensor: save as before for backward compatibility
@@ -1575,9 +1421,7 @@ def save_embeddings_arrays(
                 layer_names = ["embeddings"]  # Default layer name for single tensor
                 embedding_dims = [embeds_np.shape[1:]]  # Exclude batch dimension
                 h5f.attrs["layer_names"] = layer_names
-                h5f.attrs["embedding_dims"] = [
-                    str(tuple(dim)) for dim in embedding_dims
-                ]
+                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
 
             h5f.create_dataset(
                 "labels",
@@ -1594,9 +1438,7 @@ def save_embeddings_arrays(
                 embedding_dims = [emb.shape[1:] for emb in embeddings.values()]
 
                 for layer_name, layer_embeddings in embeddings.items():
-                    layer_np = (
-                        layer_embeddings.detach().cpu().numpy().astype(np.float32)
-                    )
+                    layer_np = layer_embeddings.detach().cpu().numpy().astype(np.float32)
                     h5f.create_dataset(
                         f"embeddings_{layer_name}",
                         data=layer_np,
@@ -1606,9 +1448,7 @@ def save_embeddings_arrays(
                 h5f.attrs["layer_names"] = layer_names
                 # Convert embedding_dims to a format HDF5 can store
                 # Store as a list of strings representing the dimensions
-                h5f.attrs["embedding_dims"] = [
-                    str(tuple(dim)) for dim in embedding_dims
-                ]
+                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
                 h5f.attrs["multi_layer"] = True
             else:
                 # Single tensor: save as before for backward compatibility
@@ -1624,9 +1464,7 @@ def save_embeddings_arrays(
                 layer_names = ["embeddings"]  # Default layer name for single tensor
                 embedding_dims = [embeds_np.shape[1:]]  # Exclude batch dimension
                 h5f.attrs["layer_names"] = layer_names
-                h5f.attrs["embedding_dims"] = [
-                    str(tuple(dim)) for dim in embedding_dims
-                ]
+                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
 
             h5f.create_dataset(
                 "labels",
@@ -1676,45 +1514,27 @@ def load_embeddings_arrays(
             # Prefer robust detection by inspecting dataset keys.
             has_prefixed = any(k.startswith("embeddings_") for k in h5f.keys())
             has_generic = "embeddings" in h5f
-            is_multi_layer = has_prefixed or (
-                h5f.attrs.get("multi_layer", False) and not has_generic
-            )
+            is_multi_layer = has_prefixed or (h5f.attrs.get("multi_layer", False) and not has_generic)
             if is_multi_layer:
                 # Load multi-layer embeddings
                 layer_names = h5f.attrs.get("layer_names", [])
                 embeds = {}
                 for layer_name in layer_names:
-                    embeds[layer_name] = torch.from_numpy(
-                        np.asarray(h5f[f"embeddings_{layer_name}"], dtype=np.float32)
-                    )
-                    logger.info(
-                        f"Loaded embeddings for layer '{layer_name}' shape: "
-                        f"{embeds[layer_name].shape}"
-                    )
+                    embeds[layer_name] = torch.from_numpy(np.asarray(h5f[f"embeddings_{layer_name}"], dtype=np.float32))
+                    logger.info(f"Loaded embeddings for layer '{layer_name}' shape: {embeds[layer_name].shape}")
             else:
                 # Load single tensor for backward compatibility. If only a prefixed
                 # dataset exists (older streaming), fallback to it.
                 if "embeddings" in h5f:
-                    embeds = torch.from_numpy(
-                        np.asarray(h5f["embeddings"], dtype=np.float32)
-                    )
-                    logger.info(
-                        f"Loaded single tensor embeddings shape: {embeds.shape}"
-                    )
+                    embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
+                    logger.info(f"Loaded single tensor embeddings shape: {embeds.shape}")
                 else:
                     # Fallback: use the first prefixed dataset
-                    first_key = next(
-                        (k for k in h5f.keys() if k.startswith("embeddings_")), None
-                    )
+                    first_key = next((k for k in h5f.keys() if k.startswith("embeddings_")), None)
                     if first_key is None:
                         raise KeyError("No embeddings dataset found in HDF5 file")
-                    embeds = torch.from_numpy(
-                        np.asarray(h5f[first_key], dtype=np.float32)
-                    )
-                    logger.info(
-                        f"Loaded fallback embeddings from '{first_key}' shape: "
-                        f"{embeds.shape}"
-                    )
+                    embeds = torch.from_numpy(np.asarray(h5f[first_key], dtype=np.float32))
+                    logger.info(f"Loaded fallback embeddings from '{first_key}' shape: {embeds.shape}")
     else:
         with h5py.File(str(path_obj), "r") as h5f:
             labels = torch.from_numpy(np.asarray(h5f["labels"]))
@@ -1723,43 +1543,25 @@ def load_embeddings_arrays(
             # Check if this is a multi-layer file (robust detection)
             has_prefixed = any(k.startswith("embeddings_") for k in h5f.keys())
             has_generic = "embeddings" in h5f
-            is_multi_layer = has_prefixed or (
-                h5f.attrs.get("multi_layer", False) and not has_generic
-            )
+            is_multi_layer = has_prefixed or (h5f.attrs.get("multi_layer", False) and not has_generic)
             if is_multi_layer:
                 # Load multi-layer embeddings from separate datasets
                 layer_names = h5f.attrs.get("layer_names", [])
                 embeds = {}
                 for layer_name in layer_names:
-                    layer_embeds = torch.from_numpy(
-                        np.asarray(h5f[f"embeddings_{layer_name}"], dtype=np.float32)
-                    )
-                    logger.info(
-                        f"Loaded embeddings for layer '{layer_name}' shape: "
-                        f"{layer_embeds.shape}"
-                    )
+                    layer_embeds = torch.from_numpy(np.asarray(h5f[f"embeddings_{layer_name}"], dtype=np.float32))
+                    logger.info(f"Loaded embeddings for layer '{layer_name}' shape: {layer_embeds.shape}")
                     embeds[layer_name] = layer_embeds
             else:
                 # Load single tensor for backward compatibility, with fallback
                 if "embeddings" in h5f:
-                    embeds = torch.from_numpy(
-                        np.asarray(h5f["embeddings"], dtype=np.float32)
-                    )
-                    logger.info(
-                        f"Loaded single tensor embeddings shape: {embeds.shape}"
-                    )
+                    embeds = torch.from_numpy(np.asarray(h5f["embeddings"], dtype=np.float32))
+                    logger.info(f"Loaded single tensor embeddings shape: {embeds.shape}")
                 else:
-                    first_key = next(
-                        (k for k in h5f.keys() if k.startswith("embeddings_")), None
-                    )
+                    first_key = next((k for k in h5f.keys() if k.startswith("embeddings_")), None)
                     if first_key is None:
                         raise KeyError("No embeddings dataset found in HDF5 file")
-                    embeds = torch.from_numpy(
-                        np.asarray(h5f[first_key], dtype=np.float32)
-                    )
-                    logger.info(
-                        f"Loaded fallback embeddings from '{first_key}' shape: "
-                        f"{embeds.shape}"
-                    )
+                    embeds = torch.from_numpy(np.asarray(h5f[first_key], dtype=np.float32))
+                    logger.info(f"Loaded fallback embeddings from '{first_key}' shape: {embeds.shape}")
 
     return embeds, labels, num_labels

@@ -73,8 +73,7 @@ class TextLabelFromFeatures:
         # Safety checks ----------------------------------------------------
         if self.output_feature in df and not self.override:
             raise AssertionError(
-                f"Feature '{self.output_feature}' already exists in DataFrame. "
-                "Set `override=True` to replace it."
+                f"Feature '{self.output_feature}' already exists in DataFrame. Set `override=True` to replace it."
             )
 
         missing_cols = [c for c in self.features if c not in df.columns]
@@ -84,8 +83,7 @@ class TextLabelFromFeatures:
 
             logger = logging.getLogger("esp_data")
             logger.warning(
-                "TextLabelFromFeatures: columns %s not present in DataFrame – "
-                "they will be ignored.",
+                "TextLabelFromFeatures: columns %s not present in DataFrame – they will be ignored.",
                 missing_cols,
             )
 

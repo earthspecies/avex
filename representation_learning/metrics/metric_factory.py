@@ -16,9 +16,7 @@ from representation_learning.metrics.sklearn_metrics import (
 )
 
 
-def get_metric_class(
-    metric_name: str, num_classes: Optional[int] = None
-) -> Union[Type, callable]:
+def get_metric_class(metric_name: str, num_classes: Optional[int] = None) -> Union[Type, callable]:
     """Get the metric class based on the metric name.
 
     Args:

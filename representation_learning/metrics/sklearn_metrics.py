@@ -231,9 +231,7 @@ class AveragePrecision:
         for k in range(y_scores.shape[1]):
             # For each class, calculate AP using sklearn's average_precision_score
             # This handles the precision-recall curve calculation correctly
-            ap = average_precision_score(
-                y_true[:, k], y_scores[:, k], sample_weight=sample_weights
-            )
+            ap = average_precision_score(y_true[:, k], y_scores[:, k], sample_weight=sample_weights)
             ap_scores.append(ap)
 
         return np.array(ap_scores)

@@ -1,0 +1,53 @@
+"""
+Representation Learning Framework
+
+A comprehensive Python-based system for training, evaluating, and analyzing
+audio representation learning models with support for both supervised and
+self-supervised learning paradigms.
+"""
+
+from .models.utils.factory import (
+    build_model,
+    build_model_from_spec,
+)
+from .models.utils.load import create_model, load_class_mapping, load_model
+from .models.utils.registry import (
+    describe_model,
+    get_checkpoint_path,
+    get_model_class,
+    get_model_spec,
+    list_model_classes,
+    list_models,
+    register_model,
+    register_model_class,
+)
+
+try:
+    from importlib.metadata import version
+
+    __version__ = version("representation-learning")
+except Exception:
+    # Fallback for development or if package not installed
+    __version__ = "0.1.0"
+
+__all__ = [
+    # Model loading
+    "load_model",
+    "create_model",
+    # Registry management
+    "register_model",
+    "get_model_spec",
+    "list_models",
+    "describe_model",
+    # Model class management
+    "register_model_class",
+    "get_model_class",
+    "list_model_classes",
+    # Model factory
+    "build_model",
+    "build_model_from_spec",
+    # Checkpoint management
+    "get_checkpoint_path",
+    # Class mapping management
+    "load_class_mapping",
+]

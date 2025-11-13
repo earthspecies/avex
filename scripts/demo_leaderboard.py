@@ -35,10 +35,7 @@ def demo_leaderboard_usage() -> None:
     print("\n4️⃣ Extract run config parameters:")
     print("python3 scripts/experiment_leaderboard.py \\")
     print("  --csv_file evaluation_results/debug/metadata/evaluation_metadata.csv \\")
-    print(
-        "  --run_config_params "
-        "'run_name,wandb_project,logging,label_type,loss_function'"
-    )
+    print("  --run_config_params 'run_name,wandb_project,logging,label_type,loss_function'")
 
     print("\n5️⃣ Extract parameters from all config types:")
     print("python3 scripts/experiment_leaderboard.py \\")
@@ -81,9 +78,7 @@ def demo_leaderboard_usage() -> None:
     print("• Use comma-separated field names without spaces")
     print("• Fields are case-sensitive and must match the JSON structure")
     print("• Missing fields will be populated with None values")
-    print(
-        "• The leaderboard will automatically filter and sort by extracted parameters"
-    )
+    print("• The leaderboard will automatically filter and sort by extracted parameters")
 
 
 if __name__ == "__main__":

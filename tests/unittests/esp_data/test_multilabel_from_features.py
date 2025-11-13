@@ -32,9 +32,7 @@ from esp_data.transforms import MultiLabelFromFeatures
         # Single column, mix of strings and lists
         (
             ["col1"],
-            pd.DataFrame(
-                {"col1": ["banana", ["apple"], ["banana", "orange"], "orange"]}
-            ),
+            pd.DataFrame({"col1": ["banana", ["apple"], ["banana", "orange"], "orange"]}),
             [[1], [0], [1, 2], [2]],
             {"apple": 0, "banana": 1, "orange": 2},
         ),

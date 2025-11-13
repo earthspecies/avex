@@ -75,9 +75,7 @@ class CLIPModel(ModelBase):
         # Enable checkpointing for text encoder (HuggingFace transformer)
         self.text_encoder.gradient_checkpointing_enable()
 
-    def encode_audio(
-        self, audio: torch.Tensor, padding_mask: torch.Tensor
-    ) -> torch.Tensor:
+    def encode_audio(self, audio: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         """Encode audio input using EfficientNet.
 
         Parameters

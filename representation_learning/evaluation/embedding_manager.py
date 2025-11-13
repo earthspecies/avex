@@ -74,18 +74,14 @@ class EmbeddingDataSource:
         self.embedding_dims: Optional[List[Tuple[int, ...]]] = None
         self.num_labels: Optional[int] = None
 
-    def _estimate_dataset_bytes(
-        self, sample_shape: Tuple[int, ...], num_samples: int, dtype_size: int = 4
-    ) -> int:
+    def _estimate_dataset_bytes(self, sample_shape: Tuple[int, ...], num_samples: int, dtype_size: int = 4) -> int:
         # float32 is 4 bytes by default
         elements_per_sample = 1
         for dim in sample_shape:
             elements_per_sample *= int(dim)
         return elements_per_sample * dtype_size * num_samples
 
-    def _should_stream(
-        self, first_sample_shapes: List[Tuple[int, ...]], num_samples: int
-    ) -> bool:
+    def _should_stream(self, first_sample_shapes: List[Tuple[int, ...]], num_samples: int) -> bool:
         # Sum layer sizes to estimate total footprint per sample
         # Account for aggregation method that reduces dimensions
         total_per_sample = 0
@@ -138,9 +134,7 @@ class EmbeddingDataSource:
         # Check if file exists first
         file_exists = Path(save_path).exists()
 
-        if not file_exists and (
-            base_model is None or dataloader is None or device is None
-        ):
+        if not file_exists and (base_model is None or dataloader is None or device is None):
             raise ValueError(
                 f"Embedding file {save_path} does not exist and cannot be computed "
                 f"because base_model, dataloader, or device is None"
@@ -154,21 +148,14 @@ class EmbeddingDataSource:
             except Exception:
                 file_size = self.config.memory_limit_bytes + 1  # fallback to HDF5
 
-            if (
-                self.config.use_streaming_embeddings is True
-                or file_size > self.config.memory_limit_bytes
-            ):
+            if self.config.use_streaming_embeddings is True or file_size > self.config.memory_limit_bytes:
                 logger.info("Loading embeddings into HDF5-backed dataset")
                 # HDF5-backed lazy loading; allow file to define layers when 'all'
                 ds = HDF5EmbeddingDataset(
                     save_path,
-                    layer_names=(
-                        None if ("all" in self.layer_names) else self.layer_names
-                    ),
+                    layer_names=(None if ("all" in self.layer_names) else self.layer_names),
                     cache_in_memory=True,
-                    cache_size_limit_gb=max(
-                        1.0, float(self.config.cache_size_limit_gb)
-                    ),
+                    cache_size_limit_gb=max(1.0, float(self.config.cache_size_limit_gb)),
                     allow_partial_cache=True,
                 )
                 self.embedding_dims = getattr(ds, "embedding_dims", None)
@@ -181,14 +168,11 @@ class EmbeddingDataSource:
                     if ds.layer_names:
                         # Replace 'last_layer' with the actual last layer name
                         self.layer_names = [
-                            name if name != "last_layer" else ds.layer_names[-1]
-                            for name in self.layer_names
+                            name if name != "last_layer" else ds.layer_names[-1] for name in self.layer_names
                         ]
                         logger.info(f"Resolved 'last_layer' to '{ds.layer_names[-1]}'")
                     else:
-                        logger.warning(
-                            "No layer names found in dataset to resolve 'last_layer'"
-                        )
+                        logger.warning("No layer names found in dataset to resolve 'last_layer'")
                 # Read num_labels and embedding_dims from HDF5 if present
                 try:
                     with h5py.File(str(save_path), "r") as h5f:
@@ -213,16 +197,12 @@ class EmbeddingDataSource:
                                 for dim_str in embedding_dims_str:
                                     # Parse string like "(100, 768)" back to tuple
                                     dim_str = dim_str.strip()
-                                    if dim_str.startswith("(") and dim_str.endswith(
-                                        ")"
-                                    ):
+                                    if dim_str.startswith("(") and dim_str.endswith(")"):
                                         # Remove parentheses and split by comma
                                         inner = dim_str[1:-1].strip()
                                         if inner:
                                             # Split by comma and convert to int
-                                            dims = [
-                                                int(x.strip()) for x in inner.split(",")
-                                            ]
+                                            dims = [int(x.strip()) for x in inner.split(",")]
                                             self.embedding_dims.append(tuple(dims))
                                         else:
                                             # Empty tuple case
@@ -230,10 +210,7 @@ class EmbeddingDataSource:
                                     else:
                                         # Single number case
                                         self.embedding_dims.append((int(dim_str),))
-                                logger.info(
-                                    f"Loaded embedding_dims from H5 attributes: "
-                                    f"{self.embedding_dims}"
-                                )
+                                logger.info(f"Loaded embedding_dims from H5 attributes: {self.embedding_dims}")
                 except Exception as e:
                     raise ValueError("Failed to read metadata from HDF5 file") from e
                 return ds
@@ -250,29 +227,20 @@ class EmbeddingDataSource:
                             # Replace 'last_layer' with the actual last layer name
                             last_layer_name = list(embeds.keys())[-1]
                             self.layer_names = [
-                                name if name != "last_layer" else last_layer_name
-                                for name in self.layer_names
+                                name if name != "last_layer" else last_layer_name for name in self.layer_names
                             ]
                             logger.info(f"Resolved 'last_layer' to '{last_layer_name}'")
                         else:
-                            logger.warning(
-                                "No embeddings found to resolve 'last_layer'"
-                            )
+                            logger.warning("No embeddings found to resolve 'last_layer'")
 
                     # If 'all' requested, use all layers; else filter to requested
                     if "all" in self.layer_names:
                         self.layer_names = list(embeds.keys())
-                        self.embedding_dims = [
-                            tuple(t.shape[1:]) for t in embeds.values()
-                        ]
+                        self.embedding_dims = [tuple(t.shape[1:]) for t in embeds.values()]
                         return EmbeddingDataset(embeds, labels)
                     else:
-                        filtered_embeds = {
-                            k: v for k, v in embeds.items() if k in self.layer_names
-                        }
-                        self.embedding_dims = [
-                            tuple(t.shape[1:]) for t in filtered_embeds.values()
-                        ]
+                        filtered_embeds = {k: v for k, v in embeds.items() if k in self.layer_names}
+                        self.embedding_dims = [tuple(t.shape[1:]) for t in filtered_embeds.values()]
                         return EmbeddingDataset(filtered_embeds, labels)
                 else:
                     self.embedding_dims = [tuple(embeds.shape[1:])]
@@ -284,9 +252,7 @@ class EmbeddingDataSource:
 
         # Ensure hooks are registered consistently for the preview extraction
         original_disable_layerdrop = None
-        if self.config.disable_layerdrop is not None and hasattr(
-            base_model, "disable_layerdrop"
-        ):
+        if self.config.disable_layerdrop is not None and hasattr(base_model, "disable_layerdrop"):
             original_disable_layerdrop = base_model.disable_layerdrop
             base_model.disable_layerdrop = self.config.disable_layerdrop
 
@@ -305,9 +271,7 @@ class EmbeddingDataSource:
                 if mask is not None:
                     mask = mask.to(device)
                 if mask is None:
-                    sample_emb = base_model.extract_embeddings(
-                        wav, aggregation=self.aggregation
-                    )
+                    sample_emb = base_model.extract_embeddings(wav, aggregation=self.aggregation)
                 else:
                     sample_emb = base_model.extract_embeddings(
                         {"raw_wav": wav, "padding_mask": mask},
@@ -320,9 +284,7 @@ class EmbeddingDataSource:
                     base_model.deregister_all_hooks()
                 except Exception:
                     pass
-            if original_disable_layerdrop is not None and hasattr(
-                base_model, "disable_layerdrop"
-            ):
+            if original_disable_layerdrop is not None and hasattr(base_model, "disable_layerdrop"):
                 base_model.disable_layerdrop = original_disable_layerdrop
 
         # Resolve 'all' layer names from preview if requested
@@ -340,24 +302,15 @@ class EmbeddingDataSource:
         if isinstance(sample_emb, list):
             first_shapes = [tuple(t.shape[1:]) for t in sample_emb]
         elif isinstance(sample_emb, dict):
-            first_shapes = [
-                tuple(v.shape[1:])
-                for k, v in sample_emb.items()
-                if k in self.layer_names
-            ]
+            first_shapes = [tuple(v.shape[1:]) for k, v in sample_emb.items() if k in self.layer_names]
         else:
             first_shapes = [tuple(sample_emb.shape[1:])]
         # Stash preliminary dims (may be refined later)
         self.embedding_dims = first_shapes
 
         num_samples = len(dataloader.dataset)
-        use_streaming = (
-            self._should_stream(first_shapes, num_samples)
-            or self.config.use_streaming_embeddings is True
-        )
-        logger.info(
-            f"Strategy decision: {'streaming' if use_streaming else 'in-memory'}"
-        )
+        use_streaming = self._should_stream(first_shapes, num_samples) or self.config.use_streaming_embeddings is True
+        logger.info(f"Strategy decision: {'streaming' if use_streaming else 'in-memory'}")
 
         if use_streaming:
             dims = _extract_embeddings_streaming(

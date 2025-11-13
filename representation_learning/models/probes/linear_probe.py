@@ -52,9 +52,7 @@ class LinearProbe(BaseProbe2D):
         except Exception:
             pass
 
-    def forward(
-        self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor | dict, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass identical to original LinearProbe.
 
         Returns:

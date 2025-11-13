@@ -64,9 +64,7 @@ class TestEfficientNetExtractEmbeddings:
 
         return {"raw_wav": audio_input, "padding_mask": padding_mask}
 
-    def test_extract_embeddings_default_behavior(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_default_behavior(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings returns main features by default."""
         # Register hooks for specific layers that we know exist
         model.register_hooks_for_layers(["model.features.0.0"])
@@ -82,9 +80,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings.shape[1] > 0  # features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_all_layers(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_all_layers(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings extracts from all registered layers."""
         # Register hooks for all discoverable layers
         model._discover_linear_layers()
@@ -97,24 +93,18 @@ class TestEfficientNetExtractEmbeddings:
 
         # Should return flattened embeddings from all registered layers
         assert embeddings.shape[0] == 2  # batch size
-        assert (
-            embeddings.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings.shape[1] > 0  # concatenated flattened features from all registered layers
         assert torch.is_tensor(embeddings)
 
         # Verify that we're getting embeddings from all registered layers
         # The dimension should be reasonable for the model size
         assert embeddings.shape[1] > 1000  # Should have substantial features
 
-    def test_extract_embeddings_specific_layer(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_specific_layer(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extracting from a specific convolutional layer."""
         # Get the first convolutional layer name for testing
         model._discover_linear_layers()
-        conv_layer_name = (
-            model._layer_names[0] if model._layer_names else "model.features.0.0"
-        )
+        conv_layer_name = model._layer_names[0] if model._layer_names else "model.features.0.0"
 
         # Register hooks for the specific layer
         model.register_hooks_for_layers([conv_layer_name])
@@ -132,9 +122,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings.shape[1] > 0  # flattened features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_multiple_layers(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_multiple_layers(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extracting from multiple specific convolutional layers."""
         # Get the first two convolutional layer names for testing
         model._discover_linear_layers()
@@ -163,9 +151,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings.shape[1] > 0  # concatenated flattened features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_dict_input(
-        self, model: EfficientNetModel, dict_input: Dict[str, torch.Tensor]
-    ) -> None:
+    def test_extract_embeddings_dict_input(self, model: EfficientNetModel, dict_input: Dict[str, torch.Tensor]) -> None:
         """Test extract_embeddings with dictionary input format."""
         # Register hooks for all discoverable layers
         model._discover_linear_layers()
@@ -178,21 +164,15 @@ class TestEfficientNetExtractEmbeddings:
 
         # Should return flattened embeddings from all registered layers
         assert embeddings.shape[0] == 2  # batch size
-        assert (
-            embeddings.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings.shape[1] > 0  # concatenated flattened features from all registered layers
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_aggregation_none(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_none(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings when aggregation='none' (returns tensor for single
         embedding)."""
         # Get the first convolutional layer name for testing
         model._discover_linear_layers()
-        conv_layer_name = (
-            model._layer_names[0] if model._layer_names else "model.features.0.0"
-        )
+        conv_layer_name = model._layer_names[0] if model._layer_names else "model.features.0.0"
 
         # Register hooks for the specific layer
         model.register_hooks_for_layers([conv_layer_name])
@@ -226,26 +206,18 @@ class TestEfficientNetExtractEmbeddings:
 
         # Should return flattened embeddings from all registered layers
         assert embeddings.shape[0] == 2  # batch size
-        assert (
-            embeddings.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings.shape[1] > 0  # concatenated flattened features from all registered layers
         assert torch.is_tensor(embeddings)
 
         # Note: extract_embeddings is designed for inference (uses torch.no_grad)
         # so we don't test gradient flow here
 
-    def test_extract_embeddings_invalid_layer(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_invalid_layer(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test that invalid layer names raise appropriate errors."""
-        with pytest.raises(
-            ValueError, match="Layer 'nonexistent_layer' not found in model"
-        ):
+        with pytest.raises(ValueError, match="Layer 'nonexistent_layer' not found in model"):
             model.register_hooks_for_layers(["nonexistent_layer"])
 
-    def test_extract_embeddings_features_only_mode(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_features_only_mode(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings when model is in features_only mode."""
         # Create a model in features_only mode
         audio_config = AudioConfig(
@@ -270,23 +242,17 @@ class TestEfficientNetExtractEmbeddings:
         features_model._discover_linear_layers()
         features_model.register_hooks_for_layers(features_model._layer_names)
 
-        embeddings = features_model.extract_embeddings(
-            x=audio_input, aggregation="mean"
-        )
+        embeddings = features_model.extract_embeddings(x=audio_input, aggregation="mean")
 
         # Clean up
         features_model.deregister_all_hooks()
 
         # Should return flattened embeddings from all registered layers
         assert embeddings.shape[0] == 2  # batch size
-        assert (
-            embeddings.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings.shape[1] > 0  # concatenated flattened features from all registered layers
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_different_variants(
-        self, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_different_variants(self, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings with different EfficientNet variants."""
         audio_config = AudioConfig(
             sample_rate=16000,
@@ -316,9 +282,7 @@ class TestEfficientNetExtractEmbeddings:
 
         # B1 should have flattened embeddings from all registered layers
         assert embeddings_b1.shape[0] == 2  # batch size
-        assert (
-            embeddings_b1.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings_b1.shape[1] > 0  # concatenated flattened features from all registered layers
         assert torch.is_tensor(embeddings_b1)
 
         # Test B0 variant for comparison
@@ -342,13 +306,9 @@ class TestEfficientNetExtractEmbeddings:
 
         # Both should have flattened embeddings from all registered layers
         assert embeddings_b0.shape[0] == 2  # batch size
-        assert (
-            embeddings_b0.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings_b0.shape[1] > 0  # concatenated flattened features from all registered layers
 
-    def test_extract_embeddings_custom_num_classes(
-        self, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_custom_num_classes(self, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings with custom number of classes."""
         audio_config = AudioConfig(
             sample_rate=16000,
@@ -369,11 +329,7 @@ class TestEfficientNetExtractEmbeddings:
 
         # Test extracting from a convolutional layer
         model_custom._discover_linear_layers()
-        conv_layer_name = (
-            model_custom._layer_names[0]
-            if model_custom._layer_names
-            else "model.features.0.0"
-        )
+        conv_layer_name = model_custom._layer_names[0] if model_custom._layer_names else "model.features.0.0"
 
         # Register hooks for the specific layer
         model_custom.register_hooks_for_layers([conv_layer_name])
@@ -391,9 +347,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings.shape[1] > 0  # flattened features
         assert torch.is_tensor(embeddings)
 
-    def test_extract_embeddings_consistency(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_consistency(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings produces consistent results."""
         # Set deterministic seed for consistent results
         torch.manual_seed(42)
@@ -424,9 +378,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings1.abs().max() < 1000
         assert embeddings2.abs().max() < 1000
 
-    def test_extract_embeddings_device_consistency(
-        self, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_device_consistency(self, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings works on different devices."""
         if torch.cuda.is_available():
             # Set deterministic seed for consistent model initialization
@@ -470,9 +422,7 @@ class TestEfficientNetExtractEmbeddings:
             model_cpu._discover_linear_layers()
             model_cpu.register_hooks_for_layers(model_cpu._layer_names)
 
-            embeddings1 = model_cpu.extract_embeddings(
-                x=audio_input, aggregation="mean"
-            )
+            embeddings1 = model_cpu.extract_embeddings(x=audio_input, aggregation="mean")
 
             # Clean up CPU model
             model_cpu.deregister_all_hooks()
@@ -481,9 +431,7 @@ class TestEfficientNetExtractEmbeddings:
             model_gpu._discover_linear_layers()
             model_gpu.register_hooks_for_layers(model_gpu._layer_names)
 
-            embeddings2 = model_gpu.extract_embeddings(
-                x=audio_input_gpu, aggregation="mean"
-            )
+            embeddings2 = model_gpu.extract_embeddings(x=audio_input_gpu, aggregation="mean")
 
             # Clean up GPU model
             model_gpu.deregister_all_hooks()
@@ -536,9 +484,7 @@ class TestEfficientNetExtractEmbeddings:
 
         # Should return valid embeddings from all registered layers
         assert embeddings.shape[0] == 2  # batch size
-        assert (
-            embeddings.shape[1] > 0
-        )  # concatenated flattened features from all registered layers
+        assert embeddings.shape[1] > 0  # concatenated flattened features from all registered layers
         assert torch.is_tensor(embeddings)
         # The dimension should be reasonable for the model size
         assert embeddings.shape[1] > 1000  # Should have substantial features
@@ -563,9 +509,7 @@ class TestEfficientNetExtractEmbeddings:
             model_gpu._discover_linear_layers()
             model_gpu.register_hooks_for_layers(model_gpu._layer_names)
 
-            embeddings_gpu = model_gpu.extract_embeddings(
-                x=dict_input_gpu, aggregation="mean"
-            )
+            embeddings_gpu = model_gpu.extract_embeddings(x=dict_input_gpu, aggregation="mean")
 
             # Clean up GPU model
             model_gpu.deregister_all_hooks()
@@ -596,9 +540,7 @@ class TestEfficientNetExtractEmbeddings:
         assert torch.is_tensor(embeddings)
         assert embeddings.shape[1] > 1000  # Should have substantial features
 
-    def test_all_layers_uses_all_registered_layers(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_all_layers_uses_all_registered_layers(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test that extract_embeddings uses all registered layers."""
         # Get the total number of registered layers
         model._discover_linear_layers()
@@ -614,11 +556,7 @@ class TestEfficientNetExtractEmbeddings:
         model.deregister_all_hooks()
 
         # Extract embeddings using only a subset of layers for comparison
-        subset_layers = (
-            model._layer_names[:3]
-            if len(model._layer_names) >= 3
-            else model._layer_names
-        )
+        subset_layers = model._layer_names[:3] if len(model._layer_names) >= 3 else model._layer_names
         model.register_hooks_for_layers(subset_layers)
 
         embeddings_subset = model.extract_embeddings(x=audio_input, aggregation="mean")
@@ -631,8 +569,7 @@ class TestEfficientNetExtractEmbeddings:
 
         # Verify dimensions are reasonable for the model size
         assert embeddings_all.shape[1] > 1000, (
-            f"Embedding dimension {embeddings_all.shape[1]} should have "
-            f"substantial features"
+            f"Embedding dimension {embeddings_all.shape[1]} should have substantial features"
         )
 
         # Log the actual dimensions for debugging
@@ -641,9 +578,7 @@ class TestEfficientNetExtractEmbeddings:
         print(f"All layers embedding dimension: {embeddings_all.shape[1]}")
         print(f"Subset embedding dimension: {embeddings_subset.shape[1]}")
 
-    def test_extract_embeddings_aggregation_mean(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_mean(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings with aggregation='mean'."""
         # Register hooks for all discoverable layers
         model._discover_linear_layers()
@@ -659,9 +594,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings.shape[0] == 2  # batch size
         assert embeddings.shape[1] > 1000  # should have substantial features
 
-    def test_extract_embeddings_aggregation_max(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_max(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings with aggregation='max'."""
         # Register hooks for all discoverable layers
         model._discover_linear_layers()
@@ -695,9 +628,7 @@ class TestEfficientNetExtractEmbeddings:
         assert embeddings.shape[0] == 2  # batch size
         assert embeddings.shape[1] > 1000  # should have substantial features
 
-    def test_extract_embeddings_aggregation_invalid(
-        self, model: EfficientNetModel, audio_input: torch.Tensor
-    ) -> None:
+    def test_extract_embeddings_aggregation_invalid(self, model: EfficientNetModel, audio_input: torch.Tensor) -> None:
         """Test extract_embeddings with invalid aggregation method."""
         # Register hooks for all discoverable layers
         model._discover_linear_layers()

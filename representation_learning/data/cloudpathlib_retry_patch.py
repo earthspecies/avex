@@ -56,8 +56,7 @@ def _apply_read_text_retry_patch() -> bool:  # noqa: D401 – simple status help
             except FileNotFoundError as exc:
                 if attempt >= max_retries - 1:
                     logger.error(
-                        "CloudPath.read_text ultimately failed for %s after %d "
-                        "attempts: %s",
+                        "CloudPath.read_text ultimately failed for %s after %d attempts: %s",
                         self,
                         max_retries,
                         exc,
@@ -65,8 +64,7 @@ def _apply_read_text_retry_patch() -> bool:  # noqa: D401 – simple status help
                     raise
 
                 logger.warning(
-                    "CloudPath.read_text FileNotFound for %s (attempt %d/%d). "
-                    "Retrying…",
+                    "CloudPath.read_text FileNotFound for %s (attempt %d/%d). Retrying…",
                     self,
                     attempt + 1,
                     max_retries,

@@ -144,10 +144,7 @@ class TestEmbeddingDimensionHandling:
         # The reshaping logic (B, H, W, F) -> (B, W, H*F) changes the feature dimension
         # which doesn't match the initialized input dimension
         # This test documents the current limitation
-        pytest.skip(
-            "4D embeddings not fully supported by sequence probes due to "
-            "dimension mismatch"
-        )
+        pytest.skip("4D embeddings not fully supported by sequence probes due to dimension mismatch")
 
     def test_sequence_probes_2d_embeddings_unsqueeze(self, test_data: dict) -> None:
         """Test sequence probes handle 2D embeddings by unsqueezing."""

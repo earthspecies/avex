@@ -60,14 +60,10 @@ def balance_by_attribute(
         target_counts = {val: max_count for val in value_counts.index}
     elif strategy == "target":
         if target_count is None:
-            raise ValueError(
-                "target_count must be specified when using 'target' strategy"
-            )
+            raise ValueError("target_count must be specified when using 'target' strategy")
         target_counts = {val: target_count for val in value_counts.index}
     else:
-        raise ValueError(
-            "Strategy must be one of: 'undersample', 'oversample', 'target'"
-        )
+        raise ValueError("Strategy must be one of: 'undersample', 'oversample', 'target'")
 
     # Create empty DataFrame to hold balanced data
     balanced_data = pd.DataFrame(columns=dataset.columns)
@@ -81,9 +77,7 @@ def balance_by_attribute(
             balanced_class = class_data.sample(n=count, random_state=random_state)
         elif len(class_data) < count:
             # Oversample with replacement
-            balanced_class = class_data.sample(
-                n=count, replace=True, random_state=random_state
-            )
+            balanced_class = class_data.sample(n=count, replace=True, random_state=random_state)
         else:
             # Already at target count
             balanced_class = class_data
@@ -91,9 +85,7 @@ def balance_by_attribute(
         balanced_data = pd.concat([balanced_data, balanced_class], ignore_index=True)
 
     # Shuffle the final dataset
-    return balanced_data.sample(frac=1, random_state=random_state).reset_index(
-        drop=True
-    )
+    return balanced_data.sample(frac=1, random_state=random_state).reset_index(drop=True)
 
 
 def resample() -> None:

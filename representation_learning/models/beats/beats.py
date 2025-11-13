@@ -51,41 +51,25 @@ class BEATsConfig:
         self.encoder_attention_heads: int = 12  # num encoder attention heads
         self.activation_fn: str = "gelu"  # activation function to use
 
-        self.layer_wise_gradient_decay_ratio: float = (
-            1.0  # ratio for layer-wise gradient decay
-        )
+        self.layer_wise_gradient_decay_ratio: float = 1.0  # ratio for layer-wise gradient decay
         self.layer_norm_first: bool = False  # apply layernorm first in the transformer
         self.deep_norm: bool = False  # apply deep_norm first in the transformer
 
         # dropouts
         self.dropout: float = 0.1  # dropout probability for the transformer
         self.attention_dropout: float = 0.1  # dropout probability for attention weights
-        self.activation_dropout: float = (
-            0.0  # dropout probability after activation in FFN
-        )
-        self.encoder_layerdrop: float = (
-            0.0  # probability of dropping a tarnsformer layer
-        )
-        self.dropout_input: float = (
-            0.0  # dropout to apply to the input (after feat extr)
-        )
+        self.activation_dropout: float = 0.0  # dropout probability after activation in FFN
+        self.encoder_layerdrop: float = 0.0  # probability of dropping a tarnsformer layer
+        self.dropout_input: float = 0.0  # dropout to apply to the input (after feat extr)
 
         # positional embeddings
-        self.conv_pos: int = (
-            128  # number of filters for convolutional positional embeddings
-        )
-        self.conv_pos_groups: int = (
-            16  # number of groups for convolutional positional embedding
-        )
+        self.conv_pos: int = 128  # number of filters for convolutional positional embeddings
+        self.conv_pos_groups: int = 16  # number of groups for convolutional positional embedding
 
         # relative position embedding
-        self.relative_position_embedding: bool = (
-            False  # apply relative position embedding
-        )
+        self.relative_position_embedding: bool = False  # apply relative position embedding
         self.num_buckets: int = 320  # number of buckets for relative position embedding
-        self.max_distance: int = (
-            1280  # maximum distance for relative position embedding
-        )
+        self.max_distance: int = 1280  # maximum distance for relative position embedding
         self.gru_rel_pos: bool = False  # apply gated relative position embedding
 
         # label predictor
@@ -132,9 +116,7 @@ class BEATs(nn.Module):
 
         self.embed = cfg.embed_dim
         self.post_extract_proj = (
-            nn.Linear(self.embed, cfg.encoder_embed_dim)
-            if self.embed != cfg.encoder_embed_dim
-            else None
+            nn.Linear(self.embed, cfg.encoder_embed_dim) if self.embed != cfg.encoder_embed_dim else None
         )
 
         self.input_patch_size = cfg.input_patch_size
@@ -233,9 +215,7 @@ class BEATs(nn.Module):
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
                 Features or tuple of (features/logits, padding_mask)
         """
-        fbank = self.preprocess(source, fbank_mean=fbank_mean, fbank_std=fbank_std).to(
-            torch.float32
-        )
+        fbank = self.preprocess(source, fbank_mean=fbank_mean, fbank_std=fbank_std).to(torch.float32)
 
         if padding_mask is not None:
             padding_mask = self.forward_padding_mask(fbank, padding_mask)
@@ -267,9 +247,7 @@ class BEATs(nn.Module):
             if padding_mask is not None and padding_mask.any():
                 logits[padding_mask] = 0
                 logits = logits.sum(dim=1)
-                logits = logits / (~padding_mask).sum(dim=1).unsqueeze(-1).expand_as(
-                    logits
-                )
+                logits = logits / (~padding_mask).sum(dim=1).unsqueeze(-1).expand_as(logits)
             else:
                 logits = logits.mean(dim=1)
 
@@ -294,6 +272,4 @@ class BEATs(nn.Module):
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
                 Model output (features or predictions)
         """
-        return self.extract_features(
-            source, padding_mask, feature_only=True, disable_layerdrop=disable_layerdrop
-        )
+        return self.extract_features(source, padding_mask, feature_only=True, disable_layerdrop=disable_layerdrop)

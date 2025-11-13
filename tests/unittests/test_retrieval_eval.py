@@ -38,12 +38,8 @@ def test_random_embeddings_performance() -> None:
     samples_per_class: Final[int] = 5
     emb_dim: Final[int] = 16
 
-    labels: NDArray[np.int64] = np.repeat(
-        np.arange(n_classes, dtype=np.int64), samples_per_class
-    )
-    embeddings: NDArray[np.float64] = rng.standard_normal(
-        (n_classes * samples_per_class, emb_dim)
-    )
+    labels: NDArray[np.int64] = np.repeat(np.arange(n_classes, dtype=np.int64), samples_per_class)
+    embeddings: NDArray[np.float64] = rng.standard_normal((n_classes * samples_per_class, emb_dim))
 
     auc: float = evaluate_auc_roc(embeddings, labels)
     assert 0.3 <= auc <= 0.7, f"Random AUC {auc} out of expected range"
@@ -77,12 +73,8 @@ def test_one_hot_equivalence() -> None:  # noqa: D401
     auc_hot = evaluate_auc_roc(embeddings, labels_one_hot)
     p_hot = evaluate_precision(embeddings, labels_one_hot, k=1)
 
-    assert np.isclose(auc_int, auc_hot), (
-        f"AUC mismatch between int and one-hot labels: {auc_int} vs {auc_hot}"
-    )
-    assert np.isclose(p_int, p_hot), (
-        f"Precision@1 mismatch between int and one-hot labels: {p_int} vs {p_hot}"
-    )
+    assert np.isclose(auc_int, auc_hot), f"AUC mismatch between int and one-hot labels: {auc_int} vs {auc_hot}"
+    assert np.isclose(p_int, p_hot), f"Precision@1 mismatch between int and one-hot labels: {p_int} vs {p_hot}"
 
 
 # ------------------------- simple multi-label case ------------------------ #
@@ -222,16 +214,13 @@ def test_none_class_impact_on_average() -> None:
     # Mean = (1.0 + 1.0 + 0.0 + 0.0 + 0.0 + 0.0) / 6 = 0.333...
 
     assert np.isclose(p_at_1, 1.0), (
-        f"Expected P@1=1.0 with proper skipping, got {p_at_1}. "
-        f"If ~0.33, None samples aren't being skipped."
+        f"Expected P@1=1.0 with proper skipping, got {p_at_1}. If ~0.33, None samples aren't being skipped."
     )
 
     # Verify None samples would indeed contribute 0.0 if not skipped
     for none_idx in [3, 4, 5]:
         relevance = _binary_relevance_matrix(labels, none_idx)
-        assert relevance.sum() == 0, (
-            f"None sample {none_idx} should have zero relevance"
-        )
+        assert relevance.sum() == 0, f"None sample {none_idx} should have zero relevance"
 
 
 def test_none_class_skipping_comparison() -> None:
@@ -272,9 +261,7 @@ def test_none_class_skipping_comparison() -> None:
             return 0.0
 
         # Cosine similarity matrix
-        normed = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True).clip(
-            1e-12
-        )
+        normed = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True).clip(1e-12)
         sim = np.matmul(normed, normed.T)
         np.fill_diagonal(sim, -np.inf)
         k = min(k, n - 1)
@@ -332,12 +319,8 @@ def test_none_class_skipping_comparison() -> None:
     # Sample 4: precision 0.0 (None relevance vector is all zeros)
     # Result: (1.0 + 1.0 + 0.0 + 0.0 + 0.0) / 5 = 0.4
 
-    assert np.isclose(precision_with_skip, 1.0), (
-        f"With skipping: expected 1.0, got {precision_with_skip}"
-    )
-    assert np.isclose(precision_no_skip, 0.4), (
-        f"Without skipping: expected 0.4, got {precision_no_skip}"
-    )
+    assert np.isclose(precision_with_skip, 1.0), f"With skipping: expected 1.0, got {precision_with_skip}"
+    assert np.isclose(precision_no_skip, 0.4), f"Without skipping: expected 0.4, got {precision_no_skip}"
 
     print(f"Precision with skipping: {precision_with_skip}")
     print(f"Precision without skipping: {precision_no_skip}")

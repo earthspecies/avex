@@ -33,10 +33,7 @@ class MockBaseModel(ModelBase):
     ) -> Union[torch.Tensor, List[torch.Tensor]]:
         batch_size = x.shape[0]
         if aggregation == "none":
-            return [
-                torch.randn(batch_size, dim, device=self.device)
-                for dim in self.embedding_dims
-            ]
+            return [torch.randn(batch_size, dim, device=self.device) for dim in self.embedding_dims]
         return torch.randn(batch_size, self.embedding_dims[0], device=self.device)
 
 
