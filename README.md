@@ -33,18 +33,32 @@ python setup.py install
 ### Basic Usage
 
 ```python
-from representation_learning import load_model, create_model, list_models
+from representation_learning import list_models, load_model, describe_model
 
 # List available models
 models = list_models()
 print(f"Available models: {list(models.keys())}")
 
-# Load a pre-trained model
-model = load_model("beats_naturelm", num_classes=10)
+# Get detailed information about a model
+describe_model("beats_naturelm", verbose=True)
 
-# Create a new model for training
-model = create_model("efficientnet", num_classes=100, device="cuda")
+# Load a pre-trained model with checkpoint (num_classes extracted automatically)
+model = load_model("sl_beats_animalspeak", num_classes=None, device="cpu")
+
+# Load a model for a new task (creates new classifier)
+model = load_model("beats_naturelm", num_classes=10, device="cpu")
+
+# Load for embedding extraction (no classifier)
+model = load_model("beats_naturelm", num_classes=None, return_features_only=True, device="cpu")
 ```
+
+For more examples, see the `examples/` directory:
+- `00_quick_start.py` - Basic model loading and testing
+- `01_basic_model_loading.py` - Loading models with different configurations
+- `02_checkpoint_loading.py` - Working with checkpoints and class mappings
+- `03_custom_model_registration.py` - Creating and registering custom models
+- `06_embedding_extraction.py` - Feature extraction mode
+- `07_classifier_head_loading.py` - Understanding classifier head behavior
 
 ## 📚 API Reference
 
@@ -75,7 +89,7 @@ model = load_model("efficientnet", num_classes=100)
 model = load_model("efficientnet", checkpoint_path="gs://my-bucket/checkpoint.pt")
 
 # Load with default checkpoint (from YAML config)
-# Checkpoint paths are defined in configs/official_models/*.yml files
+# Checkpoint paths are defined in api/configs/official_models/*.yml files
 # When num_classes=None, it's automatically extracted from the checkpoint
 model = load_model("efficientnet_animalspeak")  # Uses default checkpoint from YAML + extracts num_classes
 
@@ -242,7 +256,7 @@ model_class = get_model_class("my_model")
 from representation_learning import get_checkpoint_path
 
 # Get default checkpoint path from YAML config
-# Checkpoint paths are defined in configs/official_models/*.yml files
+# Checkpoint paths are defined in api/configs/official_models/*.yml files
 checkpoint = get_checkpoint_path("efficientnet_animalspeak")
 print(f"Default checkpoint: {checkpoint}")
 
@@ -251,57 +265,36 @@ from representation_learning import load_model
 model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
 ```
 
-## 📝 Recent Changes
+#### Class Mapping Management
+```python
+from representation_learning import load_class_mapping
 
-### Major Updates (Latest Release)
-
-#### 1. **Simplified Checkpoint Management**
-- **Removed**: `CHECKPOINT_REGISTRY` and `register_checkpoint()`/`unregister_checkpoint()` functions
-- **New**: Checkpoint paths are now read directly from YAML configuration files
-- **Benefit**: Single source of truth - checkpoint paths are defined in `configs/official_models/*.yml` files
-- **Migration**: Use `get_checkpoint_path(name)` to read checkpoint paths from YAML, or pass `checkpoint_path` directly to `load_model()`
-
-#### 2. **Enhanced `num_classes=None` Behavior**
-- **With checkpoint**: When `num_classes=None` and a checkpoint is provided, the framework automatically:
-  - Extracts `num_classes` from the checkpoint
-  - Preserves the classifier weights from the checkpoint (no random initialization)
-
-- **Without checkpoint**: When `num_classes=None` and no checkpoint is provided:
-  - If the model supports `return_features_only=True`, builds the model for embedding extraction
-  - No classifier head is added (returns embeddings instead of classification logits)
-  - Enables seamless embedding extraction workflows
-
-- **Explicit `num_classes`**: When `num_classes` is explicitly provided:
-  - Creates a new classifier head with the specified number of classes
-  - Checkpoint classifier weights are NOT loaded (randomly initialized)
-  - Use this for fine-tuning with different number of classes
-
-#### 3. **Checkpoint Path Priority**
-The framework resolves checkpoint paths in this order:
-1. User-provided `checkpoint_path` parameter (highest priority)
-2. Default checkpoint from YAML file (if `num_classes=None`)
-3. No checkpoint (for embedding extraction)
-
-#### 4. **Examples Updated**
-- All example checkpoints are now saved to `checkpoints/` directory for easy access
-- Examples demonstrate embedding extraction workflows
-- Updated to reflect new checkpoint management approach
+# Load class mappings for a model
+# Class mappings define the relationship between class labels and indices
+class_mapping = load_class_mapping("sl_beats_animalspeak")
+if class_mapping:
+    label_to_index = class_mapping["label_to_index"]
+    index_to_label = class_mapping["index_to_label"]
+    print(f"Loaded {len(label_to_index)} classes")
+    print(f"Example: {label_to_index['dog']}")  # Get index for 'dog'
+    print(f"Example: {index_to_label[0]}")  # Get label for index 0
+```
 
 ## 🏗️ Architecture
 
 ### Core Components
 
-1. **Model Registry** (`models/registry.py`)
+1. **Model Registry** (`models/utils/registry.py`)
    - Manages available model configurations
    - Thread-safe with lazy initialization
    - Supports dynamic model registration
 
-2. **Model Factory** (`models/factory.py`)
+2. **Model Factory** (`models/utils/factory.py`)
    - Links ModelSpec configurations with model classes
    - Supports plugin architecture for custom models
    - Handles parameter extraction dynamically
 
-3. **Model Loading** (`models/load.py`)
+3. **Model Loading** (`models/utils/load.py`)
    - Provides unified interface for model loading
    - Supports checkpoint loading and weight extraction
    - Handles both registered and external models
@@ -352,7 +345,7 @@ The framework includes support for various audio representation learning models:
 
 ### Model Configuration
 
-Models are configured using YAML files in the `configs/official_models/` directory:
+Models are configured using YAML files in the `api/configs/official_models/` directory:
 
 ```yaml
 # Example: efficientnet_animalspeak.yml
@@ -456,42 +449,63 @@ audio_config = AudioConfig(
 ### Training
 
 ```python
-from representation_learning import load_model
-from representation_learning.data import build_dataloaders
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from representation_learning import create_model
 
-# Load model
-model = load_model("efficientnet", num_classes=100)
+# Create a model for training
+model = create_model("efficientnet", num_classes=100, device="cpu")
 
-# Prepare data
-train_loader, val_loader = build_dataloaders(
-    dataset_config=your_dataset_config,
-    batch_size=32,
-    num_workers=4
-)
+# Define loss function and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # Training loop
+model.train()
 for epoch in range(num_epochs):
-    for batch in train_loader:
-        # Your training code
-        pass
+    for batch_audio, batch_labels in train_loader:
+        # Forward pass
+        outputs = model(batch_audio, padding_mask=None)
+        loss = criterion(outputs, batch_labels)
+
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}")
+
+# Save checkpoint
+torch.save(model.state_dict(), "checkpoints/my_model.pt")
 ```
+
+For complete training examples with data loading and evaluation, see `examples/05_training_and_evaluation.py`.
 
 ### Evaluation
 
 ```python
+import torch
 from representation_learning import load_model
 
-# Load pre-trained model
-model = load_model("beats_naturelm", checkpoint_path="path/to/checkpoint.pt")
+# Load pre-trained model with checkpoint
+model = load_model("sl_beats_animalspeak", num_classes=None, device="cpu")
 
 # Set to evaluation mode
 model.eval()
 
 # Run evaluation
+correct = 0
+total = 0
 with torch.no_grad():
-    for batch in eval_loader:
-        outputs = model(batch["audio"])
-        # Your evaluation code
+    for batch_audio, batch_labels in eval_loader:
+        outputs = model(batch_audio, padding_mask=None)
+        _, predicted = torch.max(outputs, 1)
+        total += batch_labels.size(0)
+        correct += (predicted == batch_labels).sum().item()
+
+accuracy = 100 * correct / total
+print(f"Accuracy: {accuracy:.2f}%")
 ```
 
 ## 📦 Package Structure
@@ -499,11 +513,12 @@ with torch.no_grad():
 ```
 representation_learning/
 ├── __init__.py              # Main API exports and version
-├── api/                     # CLI utilities (e.g., list_models)
+├── api/                     # Public API layer
+│   ├── configs/            # Official model configurations
+│   │   └── official_models/  # YAML configs for official models
+│   └── list_models.py      # CLI utility for listing models
 ├── cli.py                   # Command-line interface
 ├── configs.py               # Pydantic configuration models
-├── configs/                 # Official model configurations
-│   └── official_models/    # YAML configs for official models
 ├── data/                    # Data loading and processing
 ├── evaluation/              # Evaluation utilities
 ├── metrics/                 # Evaluation metrics
@@ -536,6 +551,20 @@ uv run pytest --cov=representation_learning
 ```
 
 ## 📝 Examples
+
+The `examples/` directory contains comprehensive examples demonstrating various usage patterns:
+
+| Example | Description |
+|---------|-------------|
+| `00_quick_start.py` | Basic model loading and testing |
+| `01_basic_model_loading.py` | Loading pre-trained models with checkpoints and class mappings |
+| `02_checkpoint_loading.py` | Working with default and custom checkpoints from YAML configs |
+| `03_custom_model_registration.py` | Creating and registering custom model classes |
+| `04_model_registry_management.py` | Managing model configurations and registrations |
+| `05_training_and_evaluation.py` | Full training loop and evaluation examples |
+| `06_embedding_extraction.py` | Feature extraction mode with `return_features_only=True` |
+| `07_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
+| `colab_sl_beats_demo.ipynb` | Google Colab demo for the sl-beats model |
 
 ### Custom Model Registration
 
@@ -582,12 +611,12 @@ model = create_model("my_audio_cnn", num_classes=10, device="cpu")
 
 **Checkpoint Path Management**
 
-Checkpoint paths are now managed directly in YAML configuration files (`configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
+Checkpoint paths are now managed directly in YAML configuration files (`api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
 
 ```python
 from representation_learning import load_model, get_checkpoint_path
 
-# Checkpoint paths are defined in YAML files (configs/official_models/*.yml)
+# Checkpoint paths are defined in YAML files (api/configs/official_models/*.yml)
 # Get default checkpoint path (read from YAML)
 # Returns None if the model doesn't have checkpoint_path
 checkpoint = get_checkpoint_path("efficientnet_animalspeak")
