@@ -76,18 +76,13 @@ list-models = "representation_learning.api.list_models:main"
 [[tool.uv.index]]
 name = "esp-pypi"
 url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+publish-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/"
 explicit = true
 
 [tool.uv.sources]
 #esp-data = { path = "./esp_data_reference" }
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
-# esp_data package - using local reference
-# Original remote configuration (commented out):
-# [[tool.uv.index]]
-# name = "esp-pypi"
-# url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-# explicit = true
 
 [tool.uv]
 default-groups = ["dev", "gpu"]
