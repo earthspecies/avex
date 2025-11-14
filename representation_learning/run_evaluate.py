@@ -429,59 +429,74 @@ def run_experiment(
             dataset_cfg, "metrics", None
         )
 
-        # TODO: metrics per task-group
-        classification_metrics = [
-            m for m in dataset_metrics if not m.startswith("clustering_")
-        ]
-
-        if frozen:
-            # Get multi-label setting from dataset config, with fallback based on type
-            is_multi_label = getattr(
-                dataset_cfg,
-                "multi_label",
-                getattr(dataset_cfg, "type", None) == "detection",
-            )
-            (
-                train_metrics,
-                val_metrics,
-                probe_test_metrics,
-            ) = train_and_eval_linear_probe(
-                train_ds,
-                val_ds,
-                EmbeddingDataset(test_embeds, test_labels),
-                num_labels,
-                layer_names,
-                eval_cfg,
-                device,
-                exp_logger,
-                is_multi_label,
-                dataset_metrics=classification_metrics,
+        # Check if we have any metrics at all
+        if dataset_metrics is None or len(dataset_metrics) == 0:
+            logger.warning(
+                f"No metrics specified for evaluation set '{evaluation_dataset_name}'. "
+                "Skipping linear probe evaluation."
             )
         else:
-            # For fine-tuning, use raw dataloaders
-            is_multi_label = getattr(
-                dataset_cfg,
-                "multi_label",
-                getattr(dataset_cfg, "type", None) == "detection",
-            )
+            # TODO: metrics per task-group
+            classification_metrics = [
+                m for m in dataset_metrics if not m.startswith("clustering_")
+            ]
 
-            (
-                train_metrics,
-                val_metrics,
-                probe_test_metrics,
-            ) = train_and_eval_full_fine_tune(
-                train_dl_raw,
-                val_dl_raw,
-                test_dl_raw,
-                base_model,
-                num_labels,
-                layer_names,
-                eval_cfg,
-                device,
-                exp_logger,
-                is_multi_label,
-                dataset_metrics=classification_metrics,
-            )
+            # Skip linear probe if there are no classification metrics
+            if len(classification_metrics) == 0:
+                logger.warning(
+                    f"No classification metrics found for evaluation set "
+                    f"'{evaluation_dataset_name}' (only clustering metrics). "
+                    "Skipping linear probe evaluation."
+                )
+            elif frozen:
+                # Get multi-label setting from dataset config,
+                # with fallback based on type
+                is_multi_label = getattr(
+                    dataset_cfg,
+                    "multi_label",
+                    getattr(dataset_cfg, "type", None) == "detection",
+                )
+                (
+                    train_metrics,
+                    val_metrics,
+                    probe_test_metrics,
+                ) = train_and_eval_linear_probe(
+                    train_ds,
+                    val_ds,
+                    EmbeddingDataset(test_embeds, test_labels),
+                    num_labels,
+                    layer_names,
+                    eval_cfg,
+                    device,
+                    exp_logger,
+                    is_multi_label,
+                    dataset_metrics=classification_metrics,
+                )
+            else:
+                # For fine-tuning, use raw dataloaders
+                is_multi_label = getattr(
+                    dataset_cfg,
+                    "multi_label",
+                    getattr(dataset_cfg, "type", None) == "detection",
+                )
+
+                (
+                    train_metrics,
+                    val_metrics,
+                    probe_test_metrics,
+                ) = train_and_eval_full_fine_tune(
+                    train_dl_raw,
+                    val_dl_raw,
+                    test_dl_raw,
+                    base_model,
+                    num_labels,
+                    layer_names,
+                    eval_cfg,
+                    device,
+                    exp_logger,
+                    is_multi_label,
+                    dataset_metrics=classification_metrics,
+                )
     else:
         logger.info("Linear probe not run because not in eval_modes")
 

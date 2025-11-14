@@ -30,7 +30,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 18
+num_workers: 12
 
 # Evaluation phases
 eval_modes:
