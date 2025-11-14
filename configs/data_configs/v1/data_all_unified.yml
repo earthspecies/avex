@@ -1,0 +1,113 @@
+# Unified-label data configuration for BEATs training (32 kHz)
+#
+# Design:
+# - Keep each dataset's native text label columns (e.g., canonical_name, labels)
+# - Concatenate with merge_level=soft so all columns are preserved
+# - Apply ONE global labels_from_features transform AFTER concatenation that
+#   builds a single unified label space across all datasets
+#
+---
+# Training datasets
+train_datasets:
+  # AudioSet (multi-label; uses textual 'labels' column)
+  - dataset_name: audioset
+    dataset_version: 0.2.0
+    split: train-environmental
+    balance: false
+    balance_attribute: label
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+
+  # Xeno-Canto (single-label; uses 'canonical_name')
+  - dataset_name: xeno-canto
+    dataset_version: 0.1
+    split: train
+    balance: false
+    balance_attribute: canonical_name
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+
+  # iNaturalist (single-label; uses 'canonical_name')
+  - dataset_name: inaturalist
+    dataset_version: 0.1
+    split: train
+    balance: false
+    balance_attribute: canonical_name
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+
+  # AnimalSpeak (filtered to Watkins + Animal Sound Archive; single-label 'canonical_name')
+  - dataset_name: animalspeak
+    dataset_version: 0.0
+    split: train
+    balance: false
+    balance_attribute: canonical_name
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+    transformations:
+      - type: filter
+        mode: include
+        property: source
+        values: [Watkins, "Animal Sound Archive"]
+
+# Validation datasets
+val_datasets:
+  # AudioSet (provides 'labels' list[str] for unified mapping)
+  - dataset_name: audioset
+    dataset_version: 0.2.0
+    split: validation
+    balance: false
+    balance_attribute: label
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+
+  # Keep validation modest to avoid distributed imbalance; Xeno-Canto only
+  - dataset_name: xeno-canto
+    dataset_version: 0.1
+    split: validation
+    balance: false
+    balance_attribute: canonical_name
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+
+# Concatenation settings
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft
+
+# Global transformations applied AFTER concatenation
+# Build a single unified label mapping across all datasets by drawing from the
+# union of textual label sources:
+# - 'labels' (AudioSet: list[str])
+# - 'canonical_name' (Xeno-Canto / iNaturalist / AnimalSpeak: str)
+transformations:
+  - type: labels_from_features
+    features: [labels, canonical_name]
+    output_feature: label
+    override: true
+
+

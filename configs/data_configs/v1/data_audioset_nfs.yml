@@ -1,0 +1,45 @@
+train_datasets:
+  - dataset_name: audioset
+    dataset_version: 0.2.0
+    split: train
+    balance: false
+    balance_attribute: label   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+    # data_root: ../esp-data/xeno_canto_32khz
+    # data_root: /scratch-representation-learning/
+    transformations:
+      - type: labels_from_features
+        features: [labels]
+        output_feature: label
+        override: true
+
+
+val_datasets:
+  - dataset_name: audioset
+    dataset_version: 0.2.0
+    split: validation
+    balance: false
+    balance_attribute: label   # balance data across via this attribute
+    custom_balancing: false
+    balancing_method: upsample
+    subset_percentage: 1.0              # <1 to consider a subset of data
+    audio_max_length_seconds: 5
+    audio_path_col: path
+    sample_rate: 32000
+    transformations:
+      - type: labels_from_features
+        features: [labels]
+        output_feature: label
+        override: true
+    # data_root: gs://foundation-model-data/audio_16k/
+    # data_root: ../esp-data/xeno_canto_32khz
+    # data_root: /scratch-representation-learning/
+
+# transformations:
+#   - type: deduplicate
+#     subset: ['relative_path']

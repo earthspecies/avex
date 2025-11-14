@@ -1,0 +1,112 @@
+---
+# Model configuration
+model_spec:
+  name: mga_clap
+  pretrained: true
+  audio_config:
+    sample_rate: 16000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+  text_model_name: roberta-base
+  projection_dim: 1024
+  temperature: 0.07
+  # MGA-CLAP specific parameters
+  audio_encoder_name: efficientnet  # Using EfficientNet as audio encoder
+  audio_encoder_config:
+    efficientnet_variant: b0
+    return_features_only: true
+  code_num: 4096  # Number of codes in modality-shared codebook
+  codebook_temperature: 1000.0  # Temperature for codebook attention
+  embed_regularization: true  # Whether to apply embedding regularization
+
+dataset_config: configs/data_configs/aaai_train/data_caption_animalspeak.yml
+
+label_type: text
+
+# audio preprocessing
+preprocessing: null
+
+# Target sample‑rate expected by the model
+sr: 16000
+debug_mode: false
+
+# Log training runs to MLflow
+logging: wandb
+output_dir: "./runs/aaai/mga_clap_efficientnet_captions_audioset"
+
+# Path to checkpoint to resume from (set to null or a path)
+# resume_from_checkpoint: runs/mga_clap_efficientnet_baseline/checkpoints/checkpoint_epoch_006.pt
+
+training_params:
+  train_epochs: 50
+  lr: 0.0001
+  batch_size: 512  # Larger batch size for EfficientNet
+  optimizer: adamw8bit
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  log_steps: 100
+  gradient_checkpointing: true
+  skip_validation: true
+
+# Learning rate scheduler configuration
+scheduler:
+  name: cosine
+  warmup_steps: 2000
+  min_lr: 1e-6
+
+augmentations:
+  # Add background noise at random SNRs
+  - noise:
+      noise_dirs:
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/\
+          orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
+      augmentation_prob: 0.5
+
+# Contrastive loss for MGA-CLAP training
+loss_function: contrastive
+
+device: cuda
+
+seed: 13
+
+num_workers: 12
+
+run_name: mga_clap_efficientnet_captions
+
+wandb_project: representation_learning
+
+clustering_eval:
+  enabled: false
+  frequency: 1  # Every epoch
+  layers: "last_layer"
+  use_validation_set: true
+  # max_samples: 1000  # Limit samples for performance
+  run_before_training: true  # Run before first epoch

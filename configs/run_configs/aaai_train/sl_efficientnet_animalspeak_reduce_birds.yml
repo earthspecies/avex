@@ -1,0 +1,65 @@
+# EfficientNet training on bird-reduced AnimalSpeak for better taxonomic generalization
+model_spec:
+  name: efficientnet
+  pretrained: true
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+    center: true
+  efficientnet_variant: b0
+
+# Dataset configuration with reduced bird representation
+dataset_config: configs/data_configs/aaai_train/data_animalspeak_reduce_birds.yml
+
+# Output directory for this specific experiment
+output_dir: runs/aaai/sl_efficientnet_animalspeak_reduce_birds
+run_name: sl_efficientnet_animalspeak_reduce_birds
+
+# Training parameters
+training_params:
+  train_epochs: 50
+  lr: 0.0001
+  batch_size: 64
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+# Learning rate scheduler
+scheduler:
+  name: cosine
+  warmup_steps: 500
+  min_lr: 1e-6
+
+# Audio preprocessing (handled by model audio_config)
+preprocessing: null
+sr: 16000
+
+# Logging configuration
+logging: mlflow
+logging_uri: http://127.0.0.1:5000/
+
+# Experiment settings
+label_type: supervised
+loss_function: cross_entropy
+seed: 42
+num_workers: 10
+debug_mode: false
+
+# No augmentations for consistent comparison
+augmentations: []
+
+# Weights & Biases integration
+wandb_project: representation_learning
+
+# Resume training (set to path if needed)
+resume_from_checkpoint: null

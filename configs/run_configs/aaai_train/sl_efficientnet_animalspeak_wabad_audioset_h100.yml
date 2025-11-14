@@ -1,0 +1,107 @@
+---
+# Model configuration
+model_spec:
+  name: efficientnet
+  pretrained: true
+  audio_config:
+    sample_rate: 16000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/aaai_train/data_animalspeak_wabad_audioset_nfs.yml
+
+# How to use the labels (supervised: use class indices, text: use text labels)
+label_type: supervised
+debug_mode: false
+
+# audio preprocessing (e.g. event detection)
+preprocessing: null
+
+# Target sample‑rate expected by the model
+sr: 16000
+
+# Log training runs to MLflow
+logging: wandb
+output_dir: "./runs/aaai/efficientnet_animalspeak_wabad_h100"
+
+training_params:
+  train_epochs: 50
+  lr: 0.0005
+  batch_size: 128
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+# Learning rate scheduler configuration
+scheduler:
+  name: cosine
+  warmup_steps: 4000
+  min_lr: 1e-6
+
+augmentations:
+  # Add background noise at random SNRs (H100 paths)
+  - noise:
+      noise_dirs:
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/\
+          orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+        - ../esp-data/wabad_16khz/noise/
+        # - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+        #   foundation-model-storage/foundation-model-data/audio_16k/noise/\
+        #   ssw-detection"
+      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
+      augmentation_prob: 0.5
+    # Mixup augmentation for audio samples
+  - mixup:
+      alpha: 0.4  # Controls the Beta distribution shape
+      n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+      augmentation_prob: 0.5  # Probability of applying mixup to a batch
+
+# Binary cross entropy loss for multi-label classification
+loss_function: bce
+
+device: cuda
+
+seed: 42
+
+num_workers: 16
+
+run_name: efficientnet_animalspeak_wabad_h100
+
+wandb_project: representation_learning
+multilabel: true
+metrics: ["accuracy"]
+
+clustering_eval:
+  enabled: false
+  frequency: 1  # Every epoch
+  layers: "last_layer"
+  use_validation_set: true
+  # max_samples: 1000  # Limit samples for performance
+  run_before_training: true  # Run before first epoch
