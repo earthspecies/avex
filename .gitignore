@@ -198,3 +198,20 @@ cython_debug/
 
 # Notebooks
 notebooks/*
+
+Latex/
+*.pdf
+*.tex
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+latex_arxiv/
+latex/
+analysis/
+*.png
