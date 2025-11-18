@@ -26,30 +26,30 @@ evaluation_sets:
   #     <<: *dogs_base
   #     split: dogs_test
   #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
-  - name: "esc50_classification"
-    train: &esc50_base
-      dataset_name: beans
-      split: esc50_train
-      type: classification
-      label_column: label
-      audio_path_col: path
-      multi_label: false
-      label_type: supervised
-      audio_max_length_seconds: 5
-      transformations:
-        - type: label_from_feature
-          feature: label
-          override: true
-          label_map: {'airplane': 0, 'breathing': 1, 'brushing_teeth': 2, 'can_opening': 3, 'car_horn': 4, 'cat': 5, 'chainsaw': 6, 'chirping_birds': 7, 'church_bells': 8, 'clapping': 9, 'clock_alarm': 10, 'clock_tick': 11, 'coughing': 12, 'cow': 13, 'crackling_fire': 14, 'crickets': 15, 'crow': 16, 'crying_baby': 17, 'dog': 18, 'door_wood_creaks': 19, 'door_wood_knock': 20, 'drinking_sipping': 21, 'engine': 22, 'fireworks': 23, 'footsteps': 24, 'frog': 25, 'glass_breaking': 26, 'hand_saw': 27, 'helicopter': 28, 'hen': 29, 'insects': 30, 'keyboard_typing': 31, 'laughing': 32, 'mouse_click': 33, 'pig': 34, 'pouring_water': 35, 'rain': 36, 'rooster': 37, 'sea_waves': 38, 'sheep': 39, 'siren': 40, 'sneezing': 41, 'snoring': 42, 'thunderstorm': 43, 'toilet_flush': 44, 'train': 45, 'vacuum_cleaner': 46, 'washing_machine': 47, 'water_drops': 48, 'wind': 49}
-      # sample_rate: 16000
-      # data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
-    validation:
-      <<: *esc50_base
-      split: esc50_validation
-    test:
-      <<: *esc50_base
-      split: esc50_test
-    metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
+  # - name: "esc50_classification"
+  #   train: &esc50_base
+  #     dataset_name: beans
+  #     split: esc50_train
+  #     type: classification
+  #     label_column: label
+  #     audio_path_col: path
+  #     multi_label: false
+  #     label_type: supervised
+  #     audio_max_length_seconds: 5
+  #     transformations:
+  #       - type: label_from_feature
+  #         feature: label
+  #         override: true
+  #         label_map: {'airplane': 0, 'breathing': 1, 'brushing_teeth': 2, 'can_opening': 3, 'car_horn': 4, 'cat': 5, 'chainsaw': 6, 'chirping_birds': 7, 'church_bells': 8, 'clapping': 9, 'clock_alarm': 10, 'clock_tick': 11, 'coughing': 12, 'cow': 13, 'crackling_fire': 14, 'crickets': 15, 'crow': 16, 'crying_baby': 17, 'dog': 18, 'door_wood_creaks': 19, 'door_wood_knock': 20, 'drinking_sipping': 21, 'engine': 22, 'fireworks': 23, 'footsteps': 24, 'frog': 25, 'glass_breaking': 26, 'hand_saw': 27, 'helicopter': 28, 'hen': 29, 'insects': 30, 'keyboard_typing': 31, 'laughing': 32, 'mouse_click': 33, 'pig': 34, 'pouring_water': 35, 'rain': 36, 'rooster': 37, 'sea_waves': 38, 'sheep': 39, 'siren': 40, 'sneezing': 41, 'snoring': 42, 'thunderstorm': 43, 'toilet_flush': 44, 'train': 45, 'vacuum_cleaner': 46, 'washing_machine': 47, 'water_drops': 48, 'wind': 49}
+  #     # sample_rate: 16000
+  #     # data_root: "/scratch-representation-learning/beans_16khz_v3/v0.1.0/raw/"
+  #   validation:
+  #     <<: *esc50_base
+  #     split: esc50_validation
+  #   test:
+  #     <<: *esc50_base
+  #     split: esc50_test
+  #   metrics: [accuracy, balanced_accuracy, clustering_ari, clustering_nmi]
 
   # - name: "hainan_gibbons_detection"
   #   train: &gibbons_base
@@ -77,3 +77,115 @@ evaluation_sets:
   #     <<: *gibbons_base
   #     split: hainan_gibbons_test
   #   metrics: [mAP]
+
+  - name: "vfpa_srkw_call_types"
+    train:
+      dataset_name: "vfpa_killer_whales"
+      split: "srkw_standard"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          # Actual SRKW call types from the srkw_standard dataset (27 unique types, 1,336 samples)
+          label_map: {
+            'S01': 0, 'S02i': 1, 'S02ii': 2, 'S02iii': 3, 'S03': 4, 'S04': 5, 'S05': 6, 'S06': 7, 'S07': 8, 'S08i': 9,
+            'S08ii': 10, 'S10': 11, 'S12': 12, 'S13i': 13, 'S14': 14, 'S16': 15, 'S17': 16, 'S18': 17, 'S19': 18, 'S22': 19,
+            'S32': 20, 'S36': 21, 'S37i': 22, 'S37ii': 23, 'S41': 24, 'S42': 25, 'S44': 26
+          }
+
+    validation:
+      dataset_name: "vfpa_killer_whales"
+      split: "srkw_standard"  # Use same as train - will be split internally if needed
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {
+            'S01': 0, 'S02i': 1, 'S02ii': 2, 'S02iii': 3, 'S03': 4, 'S04': 5, 'S05': 6, 'S06': 7, 'S07': 8, 'S08i': 9,
+            'S08ii': 10, 'S10': 11, 'S12': 12, 'S13i': 13, 'S14': 14, 'S16': 15, 'S17': 16, 'S18': 17, 'S19': 18, 'S22': 19,
+            'S32': 20, 'S36': 21, 'S37i': 22, 'S37ii': 23, 'S41': 24, 'S42': 25, 'S44': 26
+          }
+
+    test:
+      dataset_name: "vfpa_killer_whales"
+      split: "srkw_standard"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "call_type"
+          override: true
+          label_map: {
+            'S01': 0, 'S02i': 1, 'S02ii': 2, 'S02iii': 3, 'S03': 4, 'S04': 5, 'S05': 6, 'S06': 7, 'S07': 8, 'S08i': 9,
+            'S08ii': 10, 'S10': 11, 'S12': 12, 'S13i': 13, 'S14': 14, 'S16': 15, 'S17': 16, 'S18': 17, 'S19': 18, 'S22': 19,
+            'S32': 20, 'S36': 21, 'S37i': 22, 'S37ii': 23, 'S41': 24, 'S42': 25, 'S44': 26
+          }
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "macaques_individual_id"
+    train:
+      dataset_name: "macaques_coo_calls"
+      split: "train"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+          label_map: {'AL': 0, 'BE': 1, 'IO': 2, 'MU': 3, 'QU': 4, 'SN': 5, 'TH': 6, 'TW': 7}
+
+    validation:
+      dataset_name: "macaques_coo_calls"
+      split: "val"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+          label_map: {'AL': 0, 'BE': 1, 'IO': 2, 'MU': 3, 'QU': 4, 'SN': 5, 'TH': 6, 'TW': 7}
+
+    test:
+      dataset_name: "macaques_coo_calls"
+      split: "test"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "id"
+          override: true
+          label_map: {'AL': 0, 'BE': 1, 'IO': 2, 'MU': 3, 'QU': 4, 'SN': 5, 'TH': 6, 'TW': 7}
+
+    metrics: ["accuracy", "multiclass_f1", "clustering_ari", "clustering_nmi", "clustering_v_measure", "clustering_silhouette"]
+
+  - name: "macaques_sex_classification"
+    train:
+      dataset_name: "macaques_coo_calls"
+      split: "train"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "sex"
+          override: true
+          label_map: {'female': 0, 'male': 1}
+
+    validation:
+      dataset_name: "macaques_coo_calls"
+      split: "val"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "sex"
+          override: true
+          label_map: {'female': 0, 'male': 1}
+
+    test:
+      dataset_name: "macaques_coo_calls"
+      split: "test"
+      sample_rate: 16000
+      transformations:
+        - type: "label_from_feature"
+          feature: "sex"
+          override: true
+          label_map: {'female': 0, 'male': 1}
+
+    metrics: ["accuracy", "balanced_accuracy", "multiclass_f1"]

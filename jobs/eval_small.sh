@@ -9,4 +9,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/birdmae.yml --patch dataset_config=configs/data_configs/benchmark_id_repertoire_with_clustering.yml
+srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/birdmae.yml --patch dataset_config=configs/data_configs/benchmark_single.yml
