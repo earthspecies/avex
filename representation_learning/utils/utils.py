@@ -69,6 +69,7 @@ def universal_torch_load(
             else:
                 logger.debug(f"Found {cache_path}, using local cache.")
             f = cache_path
+            fs = filesystem_from_path(f)  # local filesystem
         else:
             f = path
     else:

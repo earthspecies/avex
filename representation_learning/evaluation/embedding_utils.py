@@ -1379,7 +1379,7 @@ def save_embeddings_arrays(
 
     # Ensure directory exists for local filesystem paths
     save_path_obj = anypath(save_path)
-    if not save_path_obj.is_cloud:
+    if not isinstance(save_path_obj, PureCloudPath):
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     # Prepare numpy arrays - use explicit types for consistency
@@ -1388,7 +1388,7 @@ def save_embeddings_arrays(
     labels_np = labels.detach().cpu().numpy().astype(np.int64)
 
     # Write file – use file-like stream for cloud storage
-    if save_path_obj.is_cloud:
+    if isinstance(save_path_obj, PureCloudPath):
         with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
             if isinstance(embeddings, dict):
                 # Multi-layer embeddings: save each layer as a separate dataset
