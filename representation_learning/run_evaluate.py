@@ -25,6 +25,8 @@ import pandas as pd
 import torch
 from esp_data import DatasetConfig
 from esp_data.io import anypath
+from esp_data.io.filesystem import filesystem_from_path
+from esp_data.io.file_utils import exists as path_exists
 
 # Import representation_learning modules
 from representation_learning.configs import (
@@ -477,9 +479,10 @@ def run_experiment(
 
             if experiment_cfg.checkpoint_path:
                 ckpt_path = anypath(experiment_cfg.checkpoint_path)
-                if not ckpt_path.exists():
+                if not path_exists(ckpt_path):
                     raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-                with ckpt_path.open("rb") as f:
+                fs = filesystem_from_path(ckpt_path)
+                with fs.open(str(ckpt_path), "rb") as f:
                     state = torch.load(f, map_location=device)
                 if "model_state_dict" in state:
                     state = _process_state_dict(state)
@@ -847,11 +850,30 @@ def run_experiment(
 
             # Extract the last layer for evaluation (most processed features)
             if isinstance(test_embeds_dict, dict):
-                last_layer_name = list(test_embeds_dict.keys())[-1]
+                # Filter out non-embedding keys (e.g., 'label' if accidentally included)
+                embedding_keys = [
+                    k for k in test_embeds_dict.keys()
+                    if k != "label" and test_embeds_dict[k] is not None
+                ]
+                if not embedding_keys:
+                    raise ValueError(
+                        f"No valid embedding layers found in {test_embeds_path}. "
+                        f"Available keys: {list(test_embeds_dict.keys())}"
+                    )
+                last_layer_name = embedding_keys[-1]
                 test_embeds = test_embeds_dict[last_layer_name]
+                if test_embeds is None:
+                    raise ValueError(
+                        f"Embeddings for layer '{last_layer_name}' are None. "
+                        f"Available keys: {list(test_embeds_dict.keys())}"
+                    )
                 logger.info(f"Using layer '{last_layer_name}' for test evaluation")
             else:
                 test_embeds = test_embeds_dict
+                if test_embeds is None:
+                    raise ValueError(
+                        f"Loaded embeddings are None from {test_embeds_path}"
+                    )
         else:
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
@@ -908,8 +930,14 @@ def run_experiment(
             # Get the first sample to determine the structure
             sample = test_ds_retrieval[0]
             if isinstance(sample, dict):
-                # Multi-layer case - use the last layer
-                last_layer_name = list(sample.keys())[-1] if sample else "embed"
+                # Multi-layer case - use the last layer, but filter out 'label' key
+                sample_keys = [k for k in sample.keys() if k != "label"]
+                if not sample_keys:
+                    raise ValueError(
+                        f"No valid embedding layers found in dataset. "
+                        f"Sample keys: {list(sample.keys())}"
+                    )
+                last_layer_name = sample_keys[-1]
                 test_embeds = torch.stack(
                     [
                         test_ds_retrieval[i][last_layer_name]
@@ -930,6 +958,11 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     retrieval_metrics: Dict[str, float] = {}
     if "retrieval" in eval_cfg.eval_modes:
+        if test_embeds is None:
+            raise ValueError(
+                "test_embeds is None. Cannot perform retrieval evaluation. "
+                "Check embedding loading/computation."
+            )
         if retrieval_mode == "train_vs_test":
             if train_embeds is None:
                 raise ValueError("train_embeds is required for train_vs_test retrieval")
@@ -944,6 +977,11 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     clustering_metrics: Dict[str, float] = {}
     if "clustering" in eval_cfg.eval_modes:
+        if test_embeds is None:
+            raise ValueError(
+                "test_embeds is None. Cannot perform clustering evaluation. "
+                "Check embedding loading/computation."
+            )
         # Only evaluate clustering at the ground-truth K (no best-K sweep)
         clustering_metrics.update(eval_clustering(test_embeds, test_labels))
         logger.info("Clustering metrics: %s", clustering_metrics)

@@ -23,7 +23,8 @@ from typing import Any, Dict, Optional
 import torch
 import torch.nn as nn
 import torch.nn.parallel as parallel
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import autocast
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -339,7 +340,7 @@ class Trainer:
             self._debug_first_forward = True
 
         # Forward pass with AMP
-        with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
+        with autocast("cuda", enabled=self.amp_enabled, dtype=self.amp_dtype):
             result = self.strategy.forward(self.model, batch)
 
         # Debug: Log after forward pass
@@ -774,8 +775,9 @@ class Trainer:
         )
 
         # Unfreeze backbone parameters
-        if hasattr(self.model, "backbone"):
-            for p in self.model.backbone.parameters():  # type: ignore[attr-defined]
+        unwrapped_model = self._get_unwrapped_model()
+        if hasattr(unwrapped_model, "backbone"):
+            for p in unwrapped_model.backbone.parameters():
                 p.requires_grad = True
         else:
             logger.warning("Model has no attribute 'backbone'; skipping unfreeze")

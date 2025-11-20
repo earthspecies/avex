@@ -6,7 +6,7 @@
 # All datasets use 32kHz sample rate for BEATs training
 
 train_datasets:
-  # AudioSet dataset  
+  # AudioSet dataset
   # - dataset_name: audioset
   #   dataset_version: "0.2.0"
   #   split: train-environmental

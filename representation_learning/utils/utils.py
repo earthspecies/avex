@@ -13,6 +13,8 @@ from typing import Any, Literal
 
 import torch
 from esp_data.io import AnyPathT, anypath
+from esp_data.io.paths import PureGSPath, PureR2Path
+from esp_data.io.filesystem import filesystem_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +55,13 @@ def universal_torch_load(
     """
     path = anypath(f)
 
-    if path.is_cloud:
-        if path.is_dir():
+    if isinstance(path, (PureGSPath, PureR2Path)):
+        # For cloud paths, use filesystem API for I/O operations
+        fs = filesystem_from_path(str(path))
+        path_str = str(path)
+        
+        # Check if it's a directory (cloud paths that end with / are directories)
+        if path_str.endswith('/'):
             raise IsADirectoryError(f"Cannot load a directory: {f}")
 
         if cache_mode in ["use", "force"]:
@@ -71,7 +78,8 @@ def universal_torch_load(
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                path.download_to(cache_path)
+                # Use filesystem API to download
+                fs.get(path_str, str(cache_path))
             else:
                 logger.debug(f"Found {cache_path}, using local cache.")
             f = cache_path

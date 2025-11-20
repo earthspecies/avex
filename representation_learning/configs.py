@@ -200,6 +200,27 @@ class AudioConfig(BaseModel):
     window_selection: Literal["random", "center"] = "random"
     center: bool = True
 
+    # Activity detection configuration
+    use_activity_detection: bool = Field(
+        False,
+        description="Whether to use activity detection for window selection",
+    )
+    activity_detection_prob: float = Field(
+        0.8,
+        ge=0.0,
+        le=1.0,
+        description="Probability of using activity detection vs random windowing",
+    )
+    activity_energy_threshold_db: float = Field(
+        -40.0,
+        description="Energy threshold in dB for activity detection",
+    )
+    activity_min_window_length_seconds: float = Field(
+        0.5,
+        gt=0,
+        description="Minimum window length when using activity detection (seconds)",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     @field_validator(
@@ -1364,6 +1385,35 @@ class DatasetCollectionConfig(BaseModel):
         ),
     )
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("transformations", mode="before")
+    @classmethod
+    def convert_none(cls, v: Any) -> Any:  # noqa: ANN401
+        """Convert string 'None' to actual None."""
+        if v in ("None", "none"):
+            return None
+        return v
+
+    @field_validator("transformations", mode="after")
+    @classmethod
+    def validate_transformations(cls, v: Any) -> Any:  # noqa: ANN401
+        """Validate transformations using esp-data's registry."""
+        if v:
+            # Import the registry here, i.e. as late as possible to make sure it
+            # includes all the user-registered transforms as well.
+            from pydantic import TypeAdapter
+            from esp_data.transforms.registry import RegisteredTransformConfigs
+
+            # RegisteredTransformConfigs is of type Annotated[...] and we can't use it
+            # as a Pydantic type/model directly. We first have to adapt it for Pydantic:
+            adapter = TypeAdapter(RegisteredTransformConfigs)
+
+            validated = []
+            for t in v:
+                validated.append(adapter.validate_python(t))
+            return validated
+        else:
+            return None
 
     @model_validator(mode="after")
     def check_nonempty_datasets(self) -> Self:

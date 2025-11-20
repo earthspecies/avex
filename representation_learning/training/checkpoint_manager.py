@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
-from esp_data.io.paths import GSPath, R2Path, anypath
+from esp_data.io.paths import PureGSPath, PureR2Path, anypath
 
 from representation_learning.configs import RunConfig
 from representation_learning.training.distributed import is_main_process
@@ -31,7 +31,7 @@ from representation_learning.utils.experiment_tracking import (
 
 logger = logging.getLogger(__name__)
 
-CloudPathT = GSPath | R2Path
+CloudPathT = PureGSPath | PureR2Path
 
 
 class CheckpointManager:

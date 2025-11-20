@@ -10,6 +10,11 @@ model_spec:
     normalize: false
     target_length_seconds: 5
     window_selection: random
+    # Activity detection for selecting windows from active regions (e.g., bird calls)
+    use_activity_detection: true
+    activity_detection_prob: 0.8  # Use activity detection 80% of the time
+    activity_energy_threshold_db: -40.0  # Energy threshold in dB for activity detection
+    activity_min_window_length_seconds: 0.5  # Minimum window length when using activity detection
 
 # Dataset configuration (path to a valid dataset config)
 dataset_config: configs/data_configs/v1/data_bio_nfs.yml
@@ -28,7 +33,7 @@ debug_mode: false
 logging: wandb
 
 # Path to checkpoint to resume from (set to null or a path)
-resume_from_checkpoint: runs/v1/sl_beats_bio/2025-11-13_01-34-04/checkpoint_epoch_017.pt
+resume_from_checkpoint: null
 # runs/aaai/sl_beats_animalspeak_audioset/2025-07-16_02-50-45/checkpoint_epoch_001.pt
 
 training_params:

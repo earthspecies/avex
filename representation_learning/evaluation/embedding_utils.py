@@ -204,7 +204,7 @@ def _extract_embeddings_streaming(
 
     # Ensure directory exists
     save_path_obj = anypath(save_path)
-    if not save_path_obj.is_cloud:
+    if not (hasattr(save_path_obj, "is_cloud") and save_path_obj.is_cloud):
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     # Get first batch to determine embedding dimensions
@@ -307,7 +307,7 @@ def _extract_embeddings_streaming(
 
     try:
         # Create HDF5 file with streaming approach
-        if save_path_obj.is_cloud:
+        if hasattr(save_path_obj, "is_cloud") and save_path_obj.is_cloud:
             with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
                 _create_and_fill_h5_datasets_hybrid(
                     h5f,
@@ -1528,7 +1528,7 @@ def save_embeddings_arrays(
 
     # Ensure directory exists for local filesystem paths
     save_path_obj = anypath(save_path)
-    if not save_path_obj.is_cloud:
+    if not (hasattr(save_path_obj, "is_cloud") and save_path_obj.is_cloud):
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     # Prepare numpy arrays - use explicit types for consistency
@@ -1537,7 +1537,7 @@ def save_embeddings_arrays(
     labels_np = labels.detach().cpu().numpy().astype(np.int64)
 
     # Write file – use file-like stream for cloud storage
-    if save_path_obj.is_cloud:
+    if hasattr(save_path_obj, "is_cloud") and save_path_obj.is_cloud:
         with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
             if isinstance(embeddings, dict):
                 # Multi-layer embeddings: save each layer as a separate dataset
@@ -1667,7 +1667,7 @@ def load_embeddings_arrays(
         raise FileNotFoundError(f"Embeddings file not found: {path}")
 
     # Handle remote (cloud) paths by streaming through a file-like object
-    if path_obj.is_cloud:
+    if hasattr(path_obj, "is_cloud") and path_obj.is_cloud:
         with path_obj.open("rb") as fh, h5py.File(fh, "r") as h5f:
             labels = torch.from_numpy(np.asarray(h5f["labels"]))
             num_labels = h5f.attrs.get("num_labels", None)
