@@ -99,6 +99,7 @@ evaluation_sets:
       dataset_name: "vfpa_killer_whales"
       split: "srkw_standard"  # Use same as train - will be split internally if needed
       sample_rate: 16000
+      data_root: "/home/david_earthspecies_org/esp-data/vfpa"
       transformations:
         - type: "label_from_feature"
           feature: "call_type"
@@ -113,6 +114,7 @@ evaluation_sets:
       dataset_name: "vfpa_killer_whales"
       split: "srkw_standard"
       sample_rate: 16000
+      data_root: "/home/david_earthspecies_org/esp-data/vfpa"
       transformations:
         - type: "label_from_feature"
           feature: "call_type"

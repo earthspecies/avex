@@ -53,6 +53,7 @@ dict_keys(['filename', 'path', 'start', 'end', 'freq_min', 'freq_max',
            'signal_type', 'confidence', 'comments', 'audio'])
 """
 
+import os
 from typing import Any, Dict, Iterator, Optional
 
 import librosa
@@ -153,6 +154,24 @@ class VFPAKillerWhales(Dataset):
         else:
             self.data_root = anypath(data_root)
 
+        # Resolve relative paths to absolute paths for consistency
+        # This ensures that relative paths like "../esp-data/vfpa" are resolved
+        # to absolute paths based on the current working directory
+        try:
+            # Try to resolve the path if it's a local path (not a cloud path)
+            if hasattr(self.data_root, "resolve") and not str(self.data_root).startswith(
+                ("gs://", "s3://", "http://", "https://")
+            ):
+                resolved = self.data_root.resolve()
+                # Only use resolved path if it exists or if original was relative
+                if resolved.exists() or (
+                    isinstance(data_root, str) and not os.path.isabs(data_root)
+                ):
+                    self.data_root = anypath(resolved)
+        except (AttributeError, ValueError, OSError):
+            # If resolution fails (e.g., for cloud paths), keep the original path
+            pass
+
         self._data: pd.DataFrame | None = None
         self._load()
 
@@ -186,6 +205,8 @@ class VFPAKillerWhales(Dataset):
         ------
         LookupError
             If the requested split is not defined in ``split_paths``.
+        FileNotFoundError
+            If the CSV file cannot be found after trying multiple path resolution strategies.
         """
         if self.split not in self.info.split_paths:
             raise LookupError(
@@ -193,8 +214,80 @@ class VFPAKillerWhales(Dataset):
                 f"Available splits: {list(self.info.split_paths.keys())}"
             )
 
-        # Load the preprocessed CSV file for this split
-        csv_path = anypath(self.info.split_paths[self.split])
+        # Get the CSV path from split_paths
+        original_path = self.info.split_paths[self.split]
+        csv_path = None
+
+        # Strategy 1: Try the path as-is
+        potential_path = anypath(original_path)
+        if potential_path.exists() and potential_path.is_file():
+            csv_path = potential_path
+
+        # Strategy 2: If path doesn't exist and is relative, try resolving relative to data_root
+        if csv_path is None:
+            # Check if path is relative (starts with ../ or ./)
+            if isinstance(original_path, str) and (
+                original_path.startswith("../") or original_path.startswith("./")
+            ):
+                # Normalize the relative path
+                normalized = original_path
+                if normalized.startswith("../"):
+                    normalized = normalized[3:]
+                elif normalized.startswith("./"):
+                    normalized = normalized[2:]
+                # Remove common prefixes that might be in the path
+                if normalized.startswith("esp-data/"):
+                    normalized = normalized.replace("esp-data/", "")
+                if normalized.startswith("dclde_2026_killer_whales/"):
+                    normalized = normalized.replace("dclde_2026_killer_whales/", "")
+                if normalized.startswith("vfpa/"):
+                    normalized = normalized.replace("vfpa/", "")
+
+                # Try relative to data_root
+                potential_path = anypath(self.data_root / normalized)
+                if potential_path.exists() and potential_path.is_file():
+                    csv_path = potential_path
+
+        # Strategy 3: Try in annotations_processed subdirectory of data_root
+        if csv_path is None:
+            # Extract just the filename from the original path
+            filename = os.path.basename(original_path)
+            potential_path = anypath(self.data_root / "annotations_processed" / filename)
+            if potential_path.exists() and potential_path.is_file():
+                csv_path = potential_path
+
+        # Strategy 4: Try parent directory of data_root (in case data_root points to vfpa/)
+        if csv_path is None:
+            # Extract filename
+            filename = os.path.basename(original_path)
+            # Try data_root parent / annotations_processed
+            potential_path = anypath(self.data_root.parent / "annotations_processed" / filename)
+            if potential_path.exists() and potential_path.is_file():
+                csv_path = potential_path
+
+        # If still not found, raise an error with helpful information
+        if csv_path is None:
+            filename = os.path.basename(original_path)
+            normalized_for_display = (
+                original_path.replace("esp-data/", "")
+                .replace("dclde_2026_killer_whales/", "")
+                .replace("vfpa/", "")
+                if isinstance(original_path, str)
+                else str(original_path)
+            )
+            raise FileNotFoundError(
+                f"CSV file not found for split '{self.split}'\n"
+                f"Original path: {original_path}\n"
+                f"Data root: {self.data_root}\n"
+                f"Tried paths:\n"
+                f"  1. {anypath(original_path)}\n"
+                f"  2. {anypath(self.data_root / normalized_for_display) if isinstance(original_path, str) else 'N/A'}\n"  # noqa: E501
+                f"  3. {anypath(self.data_root / 'annotations_processed' / filename)}\n"
+                f"  4. {anypath(self.data_root.parent / 'annotations_processed' / filename)}\n"
+                f"Please check that the CSV file exists at one of these locations."
+            )
+
+        # Load the CSV file
         self._data = pd.read_csv(csv_path, keep_default_na=False, na_values=[""])
 
         # Apply call types filter if specified
@@ -240,6 +333,8 @@ class VFPAKillerWhales(Dataset):
             If the dataset has not been loaded yet.
         IndexError
             If ``idx`` is outside the dataset bounds.
+        FileNotFoundError
+            If the audio file cannot be found after trying multiple path resolution strategies.
         """
         if self._data is None:
             raise RuntimeError("Dataset not loaded. Call _load() first.")
@@ -257,17 +352,89 @@ class VFPAKillerWhales(Dataset):
         audio_path = None
         audio_base = self.data_root / "audio"
 
-        # Check each subdirectory for the file
-        for subdir in audio_base.iterdir():
-            if subdir.is_dir():
-                potential_path = subdir / filename
-                if potential_path.exists():
-                    audio_path = potential_path
-                    break
+        # Check if audio_base exists before iterating
+        if audio_base.exists() and audio_base.is_dir():
+            # Check each subdirectory for the file
+            for subdir in audio_base.iterdir():
+                if subdir.is_dir():
+                    potential_path = subdir / filename
+                    if potential_path.exists():
+                        audio_path = potential_path
+                        break
 
-        # Fallback to original path if not found in subdirs
+        # Fallback: try multiple strategies to find the audio file
         if audio_path is None:
-            audio_path = self.data_root / "audio" / row["path"]
+            annotation_path = row.get("path", "")
+            audio_path = None  # Will be set by one of the strategies below
+
+            # Strategy 1: Try using the annotation path relative to data_root/audio
+            # Handle both relative paths (../esp-data/vfpa/audio/...) and absolute paths
+            if annotation_path:
+                # First, try resolving the path relative to data_root if it's a relative path
+                if annotation_path.startswith("../") or annotation_path.startswith("./"):
+                    # Resolve relative path: ../esp-data/vfpa/audio/file.wav
+                    # relative to data_root = /home/david_earthspecies_org/esp-data/vfpa
+                    # Should resolve to: /home/david_earthspecies_org/esp-data/vfpa/audio/file.wav
+                    try:
+                        # Create a path from data_root and resolve the relative path
+                        resolved = (self.data_root / annotation_path).resolve()
+                        if resolved.exists() and resolved.is_file():
+                            audio_path = resolved
+                    except (ValueError, RuntimeError):
+                        # If resolution fails, fall through to normalization approach
+                        pass
+
+                # If resolution didn't work, try normalization approach
+                if audio_path is None:
+                    # Remove leading ../ or ./ components and use the path relative to audio
+                    normalized_path = annotation_path
+                    if normalized_path.startswith("../"):
+                        normalized_path = normalized_path[3:]
+                    elif normalized_path.startswith("./"):
+                        normalized_path = normalized_path[2:]
+                    # Remove any esp-data/vfpa/audio prefix if present
+                    if normalized_path.startswith("esp-data/vfpa/audio/"):
+                        normalized_path = normalized_path.replace("esp-data/vfpa/audio/", "")
+                    elif normalized_path.startswith("vfpa/audio/"):
+                        normalized_path = normalized_path.replace("vfpa/audio/", "")
+                    elif normalized_path.startswith("audio/"):
+                        normalized_path = normalized_path.replace("audio/", "")
+
+                    potential_path = self.data_root / "audio" / normalized_path
+                    if potential_path.exists() and potential_path.is_file():
+                        audio_path = potential_path
+
+            # Strategy 2: If path-based approach didn't work, try just filename
+            if audio_path is None:
+                potential_path = self.data_root / "audio" / filename
+                if potential_path.exists() and potential_path.is_file():
+                    audio_path = potential_path
+
+            # Strategy 3: If still not found, recursively search for filename in audio directory
+            if audio_path is None and audio_base.exists() and audio_base.is_dir():
+                for audio_file in audio_base.rglob(filename):
+                    if audio_file.is_file():
+                        audio_path = audio_file
+                        break
+
+            # Strategy 4: Final fallback - use data_root/audio/filename even if it doesn't exist yet
+            # (will raise error below if it truly doesn't exist)
+            if audio_path is None:
+                audio_path = self.data_root / "audio" / filename
+
+        # Check if audio file exists before trying to load
+        if not audio_path.exists() or not audio_path.is_file():
+            raise FileNotFoundError(
+                f"Audio file not found: {audio_path}\n"
+                f"Expected data_root: {self.data_root}\n"
+                f"Filename from annotation: {filename}\n"
+                f"Path from annotation: {row.get('path', 'N/A')}\n"
+                f"Audio base directory exists: {audio_base.exists() if audio_base else False}\n"
+                f"Please check that:\n"
+                f"  1. The data_root path '{self.data_root}' is correct\n"
+                f"  2. The audio directory exists at '{self.data_root / 'audio'}'\n"
+                f"  3. The audio file exists at the expected location"
+            )
 
         # Load the full audio file
         audio, sr = read_audio(audio_path)
