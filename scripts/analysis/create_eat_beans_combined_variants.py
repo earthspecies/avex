@@ -118,9 +118,7 @@ def load_df(path: Path) -> pd.DataFrame:
         ds = ws.cell(row=3, column=col).value
         met = ws.cell(row=4, column=col).value
         headers.append(
-            f"{str(ds).replace(' ', '_')}_{str(met).replace(' ', '_')}"
-            if ds and met
-            else None
+            f"{str(ds).replace(' ', '_')}_{str(met).replace(' ', '_')}" if ds and met else None
         )
     rows = []
     for row in range(5, ws.max_row + 1):
@@ -260,9 +258,7 @@ def compute_benchmark_averages(df: pd.DataFrame) -> pd.DataFrame:
 
     for group_name, datasets in benchmark_groups.items():
         for metric in ["R-auc", "Probe"]:  # Core metrics
-            keys = [
-                f"{ds}_{metric}" for ds in datasets if f"{ds}_{metric}" in df.columns
-            ]
+            keys = [f"{ds}_{metric}" for ds in datasets if f"{ds}_{metric}" in df.columns]
             if not keys:
                 continue
 
@@ -290,9 +286,7 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
     benchmark_averages = compute_benchmark_averages(df)
 
     # Filter to all models that exist in our data
-    available_models = [
-        model for model in ALL_MODELS if model in benchmark_averages.index
-    ]
+    available_models = [model for model in ALL_MODELS if model in benchmark_averages.index]
     if not available_models:
         print("No models found in data!")
         return
@@ -306,14 +300,10 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
             if model in available_models:
                 model_groups[model] = group_name
 
-    beans_data["model_group"] = [
-        model_groups.get(model, "Other") for model in beans_data.index
-    ]
+    beans_data["model_group"] = [model_groups.get(model, "Other") for model in beans_data.index]
 
     # Metrics to plot - using only retrieval ROC AUC
-    x_metric = (
-        "BEANS Classification_R-auc"  # Retrieval ROC AUC for BEANS Classification
-    )
+    x_metric = "BEANS Classification_R-auc"  # Retrieval ROC AUC for BEANS Classification
     y_metric = "BEANS Detection_R-auc"  # Retrieval ROC AUC for BEANS Detection
 
     # Check if metrics exist
@@ -372,15 +362,15 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
             ha="center",
             va="bottom",
             fontweight="bold",
-            fontsize=9,
+            fontsize=14,
         )
 
-    ax1.set_ylabel("Win-Rate (%)", fontweight="bold", fontsize=12)
+    ax1.set_ylabel("Win-Rate (%)", fontweight="bold", fontsize=18)
     ax1.set_title(
         "Benefit of mixing general audio\nin pretraining",
         fontweight="bold",
         pad=15,
-        fontsize=13,
+        fontsize=20,
     )
     ax1.set_ylim(0, 105)
     ax1.grid(True, alpha=0.3, axis="y")
@@ -391,7 +381,7 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
         1.05,
         "(a)",
         transform=ax1.transAxes,
-        fontsize=16,
+        fontsize=24,
         fontweight="bold",
         va="top",
     )
@@ -400,31 +390,33 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
     # High-contrast palette for (b) to match reference:
     #   SSL -> Blue 4 (#00738B)
     #   SL  -> Cyan 1 (#1ADCCF)
+    ssl_color = "#00738B"  # Blue 4 for SSL
+    sl_color = "#1ADCCF"  # Cyan 1 for Supervised Learning
     existing_marker = "o"  # Circle
     new_marker = "X"  # Cross
     group_properties = {
         "New Supervised Models": {
-            "color": "#1ADCCF",
+            "color": sl_color,
             "marker": new_marker,
             "label": "New SL",
         },
         "Existing Supervised Models": {
-            "color": "#1ADCCF",
+            "color": sl_color,
             "marker": existing_marker,
             "label": "Existing SL",
         },
         "New SSL Models": {
-            "color": "#00738B",
+            "color": ssl_color,
             "marker": new_marker,
             "label": "New SSL",
         },
         "Existing SSL Models": {
-            "color": "#00738B",
+            "color": ssl_color,
             "marker": existing_marker,
             "label": "Existing SSL",
         },
         "Post-trained SSL Models": {
-            "color": "#F5E0B7",
+            "color": "black",
             "marker": new_marker,
             "label": "Post-trained SSL",
         },
@@ -432,6 +424,7 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
 
     # Plot each group with its factorial properties
     plotted_groups = []
+    label_to_group = {}  # Map legend labels to group names
     for group_name, props in group_properties.items():
         group_data = plot_data[plot_data["model_group"] == group_name]
         if not group_data.empty:
@@ -447,22 +440,35 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
                 marker=props["marker"],
             )
             plotted_groups.append(group_name)
+            label_to_group[props["label"]] = group_name
 
     # Add model labels with better positioning to avoid overflow
+    # Color labels to match marker colors (blue for SSL, orange for SL, black for others)
     for idx, row in plot_data.iterrows():
         if not pd.isna(row[x_metric]) and not pd.isna(row[y_metric]):
             # Shorten Bird-AVES name to avoid overflow
             label = idx
             if "Bird-AVES-biox-base" in label:
                 label = "Bird-AVES"
+
+            # Determine label color based on model group
+            model_group = row.get("model_group", "Other")
+            if model_group in ["New SSL Models", "Existing SSL Models"]:
+                label_color = ssl_color
+            elif model_group in ["New Supervised Models", "Existing Supervised Models"]:
+                label_color = sl_color
+            else:
+                label_color = "black"  # Post-trained SSL and other groups use black
+
             ax2.annotate(
                 label,
                 (row[x_metric], row[y_metric]),
-                fontsize=10,
+                fontsize=15,
                 alpha=0.8,
                 ha="center",
                 xytext=(2, 2),
                 textcoords="offset points",
+                color=label_color,
             )
 
     # Set axis limits with margins
@@ -481,9 +487,7 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
 
     corr_coef, p_value = pearsonr(plot_data[x_metric], plot_data[y_metric])
 
-    ax2.set_xlabel(
-        "Retrieval BEANS Classification R-AUC", fontweight="bold", fontsize=12
-    )
+    ax2.set_xlabel("Retrieval BEANS Classification R-AUC", fontweight="bold", fontsize=12)
     ax2.set_ylabel("Retrieval BEANS Detection R-AUC", fontweight="bold", fontsize=12)
     ax2.set_title(
         "Bioacoustic generalization separates\nby training paradigm",
@@ -493,15 +497,30 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
     )
     ax2.grid(True, alpha=0.25)
 
-    # Create factorial legend: Blue/Red = SSL/SL, Circle/X = Existing/New
+    # Create factorial legend: Blue/Orange = SSL/SL, Circle/X = Existing/New
+    # Color the legend text to match the marker colors
     legend = ax2.legend(
-        bbox_to_anchor=(1.05, 1),
         loc="upper left",
-        fontsize=10,
+        fontsize=15,
         title="Training Approach",
-        title_fontsize=11,
+        title_fontsize=17,
+        frameon=True,
+        fancybox=True,
+        shadow=True,
     )
     legend.get_title().set_fontweight("bold")
+
+    # Color legend text to match marker colors
+    for text in legend.get_texts():
+        label_text = text.get_text()
+        if label_text in label_to_group:
+            group_name = label_to_group[label_text]
+            if group_name in ["New SSL Models", "Existing SSL Models"]:
+                text.set_color(ssl_color)
+            elif group_name in ["New Supervised Models", "Existing Supervised Models"]:
+                text.set_color(sl_color)
+            else:
+                text.set_color("black")  # Post-trained SSL and other groups use black
 
     # Add panel label
     ax2.text(
@@ -521,7 +540,6 @@ def create_variant1_plot(df: pd.DataFrame, output_dir: Path) -> None:
     # )
 
     plt.tight_layout()
-    plt.subplots_adjust(right=0.85)
 
     # Save the plot
     filename = "eat_beans_variant1_by_benchmark.png"
@@ -552,9 +570,7 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
     benchmark_averages = compute_benchmark_averages(df)
 
     # Filter to all models that exist in our data
-    available_models = [
-        model for model in ALL_MODELS if model in benchmark_averages.index
-    ]
+    available_models = [model for model in ALL_MODELS if model in benchmark_averages.index]
     if not available_models:
         print("No models found in data!")
         return
@@ -568,14 +584,10 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
             if model in available_models:
                 model_groups[model] = group_name
 
-    beans_data["model_group"] = [
-        model_groups.get(model, "Other") for model in beans_data.index
-    ]
+    beans_data["model_group"] = [model_groups.get(model, "Other") for model in beans_data.index]
 
     # Metrics to plot - using only retrieval ROC AUC
-    x_metric = (
-        "BEANS Classification_R-auc"  # Retrieval ROC AUC for BEANS Classification
-    )
+    x_metric = "BEANS Classification_R-auc"  # Retrieval ROC AUC for BEANS Classification
     y_metric = "BEANS Detection_R-auc"  # Retrieval ROC AUC for BEANS Detection
 
     # Check if metrics exist
@@ -633,15 +645,15 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
             ha="center",
             va="bottom",
             fontweight="bold",
-            fontsize=10,
+            fontsize=15,
         )
 
-    ax1.set_ylabel("Win-Rate (%)", fontweight="bold", fontsize=12)
+    ax1.set_ylabel("Win-Rate (%)", fontweight="bold", fontsize=18)
     ax1.set_title(
         "Benefit of mixing general audio\nin pretraining",
         fontweight="bold",
         pad=15,
-        fontsize=13,
+        fontsize=20,
     )
     ax1.set_ylim(0, 105)
     ax1.grid(True, alpha=0.3, axis="y")
@@ -652,7 +664,7 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
         1.05,
         "(a)",
         transform=ax1.transAxes,
-        fontsize=16,
+        fontsize=24,
         fontweight="bold",
         va="top",
     )
@@ -661,31 +673,33 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
     # High-contrast palette for (b) to match reference:
     #   SSL -> Blue 4 (#00738B)
     #   SL  -> Cyan 1 (#1ADCCF)
+    ssl_color = "#00738B"  # Blue 4 for SSL
+    sl_color = "#1ADCCF"  # Cyan 1 for Supervised Learning
     existing_marker = "o"  # Circle
     new_marker = "X"  # Cross
     group_properties = {
         "New Supervised Models": {
-            "color": "#1ADCCF",
+            "color": sl_color,
             "marker": new_marker,
             "label": "New SL",
         },
         "Existing Supervised Models": {
-            "color": "#1ADCCF",
+            "color": sl_color,
             "marker": existing_marker,
             "label": "Existing SL",
         },
         "New SSL Models": {
-            "color": "#00738B",
+            "color": ssl_color,
             "marker": new_marker,
             "label": "New SSL",
         },
         "Existing SSL Models": {
-            "color": "#00738B",
+            "color": ssl_color,
             "marker": existing_marker,
             "label": "Existing SSL",
         },
         "Post-trained SSL Models": {
-            "color": "#F5E0B7",
+            "color": "black",
             "marker": new_marker,
             "label": "Post-trained SSL",
         },
@@ -693,6 +707,7 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
 
     # Plot each group with its factorial properties
     plotted_groups = []
+    label_to_group = {}  # Map legend labels to group names
     for group_name, props in group_properties.items():
         group_data = plot_data[plot_data["model_group"] == group_name]
         if not group_data.empty:
@@ -708,21 +723,34 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
                 marker=props["marker"],
             )
             plotted_groups.append(group_name)
+            label_to_group[props["label"]] = group_name
 
     # Add model labels with better positioning
+    # Color labels to match marker colors (blue for SSL, orange for SL, black for others)
     for idx, row in plot_data.iterrows():
         if not pd.isna(row[x_metric]) and not pd.isna(row[y_metric]):
             label = idx
             if "Bird-AVES-biox-base" in label:
                 label = "Bird-AVES"
+
+            # Determine label color based on model group
+            model_group = row.get("model_group", "Other")
+            if model_group in ["New SSL Models", "Existing SSL Models"]:
+                label_color = ssl_color
+            elif model_group in ["New Supervised Models", "Existing Supervised Models"]:
+                label_color = sl_color
+            else:
+                label_color = "black"  # Post-trained SSL and other groups use black
+
             ax2.annotate(
                 label,
                 (row[x_metric], row[y_metric]),
-                fontsize=10,
+                fontsize=15,
                 alpha=0.8,
                 ha="center",
                 xytext=(2, 2),
                 textcoords="offset points",
+                color=label_color,
             )
 
     # Set axis limits with margins
@@ -741,9 +769,7 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
 
     corr_coef, p_value = pearsonr(plot_data[x_metric], plot_data[y_metric])
 
-    ax2.set_xlabel(
-        "Retrieval BEANS Classification R-AUC", fontweight="bold", fontsize=12
-    )
+    ax2.set_xlabel("Retrieval BEANS Classification R-AUC", fontweight="bold", fontsize=12)
     ax2.set_ylabel("Retrieval BEANS Detection R-AUC", fontweight="bold", fontsize=12)
     ax2.set_title(
         "Bioacoustic generalization separates\nby training paradigm",
@@ -753,15 +779,30 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
     )
     ax2.grid(True, alpha=0.25)
 
-    # Create factorial legend: Blue/Red = SSL/SL, Circle/X = Existing/New
+    # Create factorial legend: Blue/Orange = SSL/SL, Circle/X = Existing/New
+    # Color the legend text to match the marker colors
     legend = ax2.legend(
-        bbox_to_anchor=(1.05, 1),
         loc="upper left",
-        fontsize=10,
+        fontsize=15,
         title="Training Approach",
-        title_fontsize=11,
+        title_fontsize=17,
+        frameon=True,
+        fancybox=True,
+        shadow=True,
     )
     legend.get_title().set_fontweight("bold")
+
+    # Color legend text to match marker colors
+    for text in legend.get_texts():
+        label_text = text.get_text()
+        if label_text in label_to_group:
+            group_name = label_to_group[label_text]
+            if group_name in ["New SSL Models", "Existing SSL Models"]:
+                text.set_color(ssl_color)
+            elif group_name in ["New Supervised Models", "Existing Supervised Models"]:
+                text.set_color(sl_color)
+            else:
+                text.set_color("black")  # Post-trained SSL and other groups use black
 
     # Add panel label
     ax2.text(
@@ -781,7 +822,6 @@ def create_variant2_plot(df: pd.DataFrame, output_dir: Path) -> None:
     # )
 
     plt.tight_layout()
-    plt.subplots_adjust(right=0.85)
 
     # Save the plot
     filename = "eat_beans_variant2_ssl_and_supervised.png"
@@ -812,9 +852,7 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
     benchmark_averages = compute_benchmark_averages(df)
 
     # Filter to all models that exist in our data
-    available_models = [
-        model for model in ALL_MODELS if model in benchmark_averages.index
-    ]
+    available_models = [model for model in ALL_MODELS if model in benchmark_averages.index]
     if not available_models:
         print("No models found in data!")
         return
@@ -828,9 +866,7 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
             if model in available_models:
                 model_groups[model] = group_name
 
-    beans_data["model_group"] = [
-        model_groups.get(model, "Other") for model in beans_data.index
-    ]
+    beans_data["model_group"] = [model_groups.get(model, "Other") for model in beans_data.index]
 
     # Metrics to plot - CBI dataset specifically vs BEANS Detection
     x_metric = "CBI_R-auc"  # CBI dataset ROC AUC specifically
@@ -899,15 +935,15 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
             ha="center",
             va="bottom",
             fontweight="bold",
-            fontsize=10,
+            fontsize=15,
         )
 
-    ax1.set_ylabel("Win-Rate (%)", fontweight="bold", fontsize=12)
+    ax1.set_ylabel("Win-Rate (%)", fontweight="bold", fontsize=18)
     ax1.set_title(
         "Benefit of mixing general audio\nin pretraining",
         fontweight="bold",
         pad=15,
-        fontsize=13,
+        fontsize=20,
     )
     ax1.set_ylim(0, 105)
     ax1.grid(True, alpha=0.3, axis="y")
@@ -918,7 +954,7 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
         1.05,
         "(a)",
         transform=ax1.transAxes,
-        fontsize=16,
+        fontsize=24,
         fontweight="bold",
         va="top",
     )
@@ -926,9 +962,9 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
     # RIGHT: CBI vs BEANS Detection scatter plot with factorial legend
     # Factorial design: Color = SSL/SL, Shape = New/Existing
 
-    # Colorblind-safe colors: Blue for SSL, Red for SL
-    ssl_color = "#0173B2"  # Blue for SSL
-    sl_color = "#D55E00"  # Red for Supervised Learning
+    # Colorblind-safe colors: Blue for SSL, Cyan for SL
+    ssl_color = "#00738B"  # Blue 4 for SSL
+    sl_color = "#1ADCCF"  # Cyan 1 for Supervised Learning
 
     # Markers: circle for existing, X for new
     existing_marker = "o"  # Circle
@@ -957,7 +993,7 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
             "label": "Existing SSL",
         },
         "Post-trained SSL Models": {
-            "color": "#F5E0B7",
+            "color": "black",
             "marker": new_marker,
             "label": "Post-trained SSL",
         },
@@ -965,6 +1001,7 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
 
     # Plot each group with its factorial properties
     plotted_groups = []
+    label_to_group = {}  # Map legend labels to group names
     for group_name, props in group_properties.items():
         group_data = plot_data[plot_data["model_group"] == group_name]
         if not group_data.empty:
@@ -980,21 +1017,34 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
                 marker=props["marker"],
             )
             plotted_groups.append(group_name)
+            label_to_group[props["label"]] = group_name
 
     # Add model labels with better positioning
+    # Color labels to match marker colors (blue for SSL, orange for SL, black for others)
     for idx, row in plot_data.iterrows():
         if not pd.isna(row[x_metric]) and not pd.isna(row[y_metric]):
             label = idx
             if "Bird-AVES-biox-base" in label:
                 label = "Bird-AVES"
+
+            # Determine label color based on model group
+            model_group = row.get("model_group", "Other")
+            if model_group in ["New SSL Models", "Existing SSL Models"]:
+                label_color = ssl_color
+            elif model_group in ["New Supervised Models", "Existing Supervised Models"]:
+                label_color = sl_color
+            else:
+                label_color = "black"  # Post-trained SSL and other groups use black
+
             ax2.annotate(
                 label,
                 (row[x_metric], row[y_metric]),
-                fontsize=10,
+                fontsize=15,
                 alpha=0.8,
                 ha="center",
                 xytext=(2, 2),
                 textcoords="offset points",
+                color=label_color,
             )
 
     # Set axis limits with margins
@@ -1023,15 +1073,30 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
     )
     ax2.grid(True, alpha=0.25)
 
-    # Create factorial legend: Blue/Red = SSL/SL, Circle/X = Existing/New
+    # Create factorial legend: Blue/Orange = SSL/SL, Circle/X = Existing/New
+    # Color the legend text to match the marker colors
     legend = ax2.legend(
-        bbox_to_anchor=(1.05, 1),
         loc="upper left",
-        fontsize=10,
+        fontsize=15,
         title="Training Approach",
-        title_fontsize=11,
+        title_fontsize=17,
+        frameon=True,
+        fancybox=True,
+        shadow=True,
     )
     legend.get_title().set_fontweight("bold")
+
+    # Color legend text to match marker colors
+    for text in legend.get_texts():
+        label_text = text.get_text()
+        if label_text in label_to_group:
+            group_name = label_to_group[label_text]
+            if group_name in ["New SSL Models", "Existing SSL Models"]:
+                text.set_color(ssl_color)
+            elif group_name in ["New Supervised Models", "Existing Supervised Models"]:
+                text.set_color(sl_color)
+            else:
+                text.set_color("black")  # Post-trained SSL and other groups use black
 
     # Add panel label
     ax2.text(
@@ -1045,7 +1110,6 @@ def create_variant3_plot(df: pd.DataFrame, output_dir: Path) -> None:
     )
 
     plt.tight_layout()
-    plt.subplots_adjust(right=0.85)
 
     # Save the plot
     filename = "eat_beans_variant3_cbi_specific.png"
