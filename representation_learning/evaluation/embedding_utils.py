@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import h5py
 import numpy as np
 import torch
-from esp_data.io import anypath
+from esp_data.io.paths import PureCloudPath, anypath, exists, filesystem_from_path
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -188,7 +188,7 @@ def _extract_embeddings_streaming(
 
     # Ensure directory exists
     save_path_obj = anypath(save_path)
-    if not save_path_obj.is_cloud:
+    if not isinstance(save_path_obj, PureCloudPath):
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     # Get first batch to determine embedding dimensions
@@ -278,7 +278,7 @@ def _extract_embeddings_streaming(
 
     try:
         # Create HDF5 file with streaming approach
-        if save_path_obj.is_cloud:
+        if not isinstance(save_path_obj, PureCloudPath):
             with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
                 _create_and_fill_h5_datasets_hybrid(
                     h5f,
@@ -1501,12 +1501,13 @@ def load_embeddings_arrays(
 
     # anypath handles both local and cloud paths
     path_obj = anypath(path)
-    if not path_obj.exists():
+    if not exists(path_obj):
         raise FileNotFoundError(f"Embeddings file not found: {path}")
 
     # Handle remote (cloud) paths by streaming through a file-like object
-    if path_obj.is_cloud:
-        with path_obj.open("rb") as fh, h5py.File(fh, "r") as h5f:
+    if isinstance(path_obj, PureCloudPath):
+        fs = filesystem_from_path(path_obj)
+        with fs.open(str(path_obj), "rb") as fh, h5py.File(fh, "r") as h5f:
             labels = torch.from_numpy(np.asarray(h5f["labels"]))
             num_labels = h5f.attrs.get("num_labels", None)
 
