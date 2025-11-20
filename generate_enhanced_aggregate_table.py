@@ -36,6 +36,7 @@ EXCEL_PATH = "~/Downloads/results_with_birdmae.xlsx"
 # Output LaTeX file
 OUTPUT_FILE = "latex_arxiv/aggregate_v0.tex"
 OUTPUT_FILE_NOESC50 = "latex_arxiv/aggregate_v0_noesc50.tex"
+OUTPUT_FILE_HIGHLIGHTED = "latex_arxiv/aggregate_v0_highlighted.tex"
 
 # Define which metrics to include for each benchmark group
 # Keep internal metric keys as in the data (R-auc, C-nmi),
@@ -127,9 +128,7 @@ SUB_TABLES = {
             # Separator after our models
         ],
         "output_file": "latex/ssl_models_analysis.tex",
-        "caption": (
-            "SSL model analysis: our trained models vs. pretrained SSL baselines."
-        ),
+        "caption": ("SSL model analysis: our trained models vs. pretrained SSL baselines."),
         "label": "tab:ssl-analysis",
     },
 }
@@ -168,11 +167,9 @@ def extract_groups_and_metrics() -> tuple[dict, list]:
             and the metrics list.
     """
     code = Path("scripts/analysis/visualize_excel.py").read_text()
-    main = [
-        n
-        for n in ast.parse(code).body
-        if isinstance(n, ast.FunctionDef) and n.name == "main"
-    ][0]
+    main = [n for n in ast.parse(code).body if isinstance(n, ast.FunctionDef) and n.name == "main"][
+        0
+    ]
 
     metrics = None
 
@@ -199,9 +196,7 @@ def get_group_datasets_noesc50() -> dict:
     return noesc50_datasets
 
 
-def validate_dataset_coverage(
-    df: pd.DataFrame, group_datasets: dict, metrics: list
-) -> None:
+def validate_dataset_coverage(df: pd.DataFrame, group_datasets: dict, metrics: list) -> None:
     """Validate that all expected datasets exist in the data and report missing ones.
 
     Parameters
@@ -290,9 +285,7 @@ def compute_group_averages_with_prioritization(
         print(f"\nProcessing {group_name} with datasets: {datasets}")
 
         # Get metrics for this specific group
-        group_metrics = (
-            metrics.get(group_name, []) if isinstance(metrics, dict) else metrics
-        )
+        group_metrics = metrics.get(group_name, []) if isinstance(metrics, dict) else metrics
 
         for metric in group_metrics:
             if group_name == "Individual ID" and metric == "R-auc":
@@ -332,29 +325,17 @@ def compute_group_averages_with_prioritization(
 
                     avg = combined_df.mean(axis=1, skipna=True)
                     result[f"{group_name}_{metric}"] = avg
-                    print(
-                        f"  Individual ID R-auc: Combined "
-                        f"{len(prioritized_values)} datasets"
-                    )
+                    print(f"  Individual ID R-auc: Combined {len(prioritized_values)} datasets")
 
             else:
                 # Standard aggregation for all other cases
-                keys = [
-                    f"{ds}_{metric}"
-                    for ds in datasets
-                    if f"{ds}_{metric}" in df.columns
-                ]
+                keys = [f"{ds}_{metric}" for ds in datasets if f"{ds}_{metric}" in df.columns]
                 missing_keys = [
-                    f"{ds}_{metric}"
-                    for ds in datasets
-                    if f"{ds}_{metric}" not in df.columns
+                    f"{ds}_{metric}" for ds in datasets if f"{ds}_{metric}" not in df.columns
                 ]
 
                 if missing_keys:
-                    print(
-                        f"  ❌ Missing columns for {group_name} {metric}: "
-                        f"{missing_keys}"
-                    )
+                    print(f"  ❌ Missing columns for {group_name} {metric}: {missing_keys}")
 
                 if keys:
                     values = df[keys].apply(pd.to_numeric, errors="coerce")
@@ -374,9 +355,7 @@ def compute_group_averages_with_prioritization(
                                 f"{birdnet_exclusion}"
                             )
                         else:
-                            print(
-                                "  ℹ️  BirdNet not found in index for BirdSet exclusion"
-                            )
+                            print("  ℹ️  BirdNet not found in index for BirdSet exclusion")
 
                     # Check for NaN values before averaging
                     nan_counts = values.isna().sum()
@@ -438,18 +417,14 @@ def load_and_process_data(group_datasets: dict | None = None) -> pd.DataFrame:
     print(f"🔧 BirdSet: {group_datasets['BirdSet']}")
 
     # Validate dataset coverage before processing
-    missing_datasets, found_datasets = validate_dataset_coverage(
-        raw, group_datasets, metrics
-    )
+    missing_datasets, found_datasets = validate_dataset_coverage(raw, group_datasets, metrics)
 
     # Compute group averages with special Individual ID handling
     print("\n🔄 Computing group averages with cross-retrieval prioritization...")
     full = compute_group_averages_with_prioritization(raw, group_datasets, metrics)
 
     # Remove clustering ARI columns, keep NMI
-    full = full.drop(
-        columns=[c for c in full.columns if c.endswith("C-ari")], errors="ignore"
-    )
+    full = full.drop(columns=[c for c in full.columns if c.endswith("C-ari")], errors="ignore")
     full = full.round(VISUAL_CONFIG["decimal_places"])
 
     # Filter out specified models
@@ -484,9 +459,7 @@ def build_column_structure(
     cols = []
     group_info = []
 
-    groups_to_process = (
-        include_groups if include_groups is not None else GROUP_METRICS.keys()
-    )
+    groups_to_process = include_groups if include_groups is not None else GROUP_METRICS.keys()
 
     for group_name in groups_to_process:
         if group_name not in GROUP_METRICS:
@@ -600,6 +573,9 @@ def _rename_model_for_display(raw_name: str) -> str:
     rename_map = {
         "BEATS-NatureLM-audio": "NatureBEATs",
     }
+    # Check for BirdMAE variants (case-insensitive)
+    if "birdmae" in raw_name.lower() or "bird-mae" in raw_name.lower():
+        return "Bird-MAE-Huge"
     return rename_map.get(raw_name, raw_name)
 
 
@@ -668,6 +644,7 @@ def reorder_models_with_separator(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
         "EAT-base (SFT)",
         "Bird-AVES-biox-base",
         "BEATS-NatureLM-audio",  # will be shown as NatureBEATs
+        "BirdMAE (pretrained)",  # will be shown as Bird-MAE-Huge
         "SurfPerch",
         "BirdNet",
         "Perch",
@@ -698,6 +675,8 @@ def reorder_models_with_separator(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
         if name_lower.startswith("eat-base"):
             return True
         if name_lower == "beats-naturelm-audio":
+            return True
+        if "birdmae" in name_lower or "bird-mae" in name_lower:
             return True
         return False
 
@@ -764,9 +743,7 @@ def apply_bold_formatting(df: pd.DataFrame) -> pd.DataFrame:
                     fmt.at[idx, col] = "---"
             else:
                 if abs(val - maxv) < 1e-6:
-                    fmt.at[idx, col] = (
-                        f"\\textbf{{{val:.{VISUAL_CONFIG['decimal_places']}f}}}"
-                    )
+                    fmt.at[idx, col] = f"\\textbf{{{val:.{VISUAL_CONFIG['decimal_places']}f}}}"
                 else:
                     fmt.at[idx, col] = f"{val:.{VISUAL_CONFIG['decimal_places']}f}"
 
@@ -904,6 +881,178 @@ def build_latex_table(
     return latex_content, colfmt
 
 
+def build_latex_table_with_highlighting(
+    fmt_df: pd.DataFrame,
+    group_info: list[tuple[str, int, list[str]]],
+    separators_after: list[str] | None = None,
+    caption: str | None = None,
+    label: str | None = None,
+    resize_width: str | None = None,
+) -> tuple[str, str]:
+    """Build the complete LaTeX table with EfficientNet row highlighting.
+
+    This is a variant of build_latex_table that highlights EfficientNet model rows
+    with light blue color (C6DEE7).
+
+    Parameters
+    ----------
+    fmt_df : pd.DataFrame
+        Formatted DataFrame.
+    group_info : list[tuple[str, int, list[str]]]
+        List of (group_name, col_count, metrics) tuples.
+    separators_after : list[str] | None, optional
+        List of model names to add separators after. Defaults to None.
+    caption : str | None, optional
+        Table caption. Defaults to None.
+    label : str | None, optional
+        Table label. Defaults to None.
+    resize_width : str | None, optional
+        Width for resizebox (e.g., '\\textwidth', '0.6\\textwidth',
+        or None to disable resizebox). Defaults to None.
+
+    Returns
+    -------
+    tuple[str, str]
+        A tuple containing the LaTeX content and column format string.
+    """
+
+    # Use defaults if not provided
+    if caption is None:
+        caption = TABLE_CAPTION
+    if label is None:
+        label = TABLE_LABEL
+    if separators_after is None:
+        separators_after = []
+    if resize_width is None:
+        resize_width = "\\textwidth"
+
+    # Clean column names and index (also display mapping AUROC/nmi)
+    def _display_col(name: str) -> str:
+        name = name.replace("_", "-")
+        name = name.replace("@", "\\@")
+        name = name.replace("R-auc", "R-AUC")
+        name = name.replace("C-nmi", "nmi")
+        return name
+
+    fmt_df.columns = [_display_col(c) for c in fmt_df.columns]
+    fmt_df.index = [i.replace("_", "-") for i in fmt_df.index]
+
+    # Build column format with separators
+    sep = VISUAL_CONFIG["group_separator"]
+    colfmt = f"l{sep}"  # model column with separator
+
+    for i, (_, col_count, _) in enumerate(group_info):
+        colfmt += "c" * col_count
+        if i < len(group_info) - 1:  # Add separator except after last group
+            colfmt += sep
+
+    # Header row 1: multicolumn for groups
+    header1 = [""]  # empty for model column
+    for group_name, col_count, _ in group_info:
+        formatted_name = f"\\textbf{{{group_name}}}"
+        header1.append(f"\\multicolumn{{{col_count}}}{{c}}{{{formatted_name}}}")
+
+    # Header row 2: metric names
+    header2 = ["\\textbf{Model}"]
+    for _group_name, _, metrics in group_info:
+        for m in metrics:
+            clean_m = m.replace("@", "\\@")
+            header2.append(f"\\textit{{{clean_m}}}")
+
+    # Build partial horizontal lines under group headers
+    cline_commands = []
+    col_start = 2  # Start after model column
+    for _group_name, col_count, _ in group_info:
+        col_end = col_start + col_count - 1
+        cline_commands.append(f"\\cline{{{col_start}-{col_end}}}")
+        col_start = col_end + 1
+
+    # Build table body with EfficientNet highlighting
+    lines = ["\\toprule"]
+    lines.append(" & ".join(header1) + " \\\\")
+    lines.extend(cline_commands)
+    lines.append(" & ".join(header2) + " \\\\")
+    lines.append("\\midrule")
+
+    for _i, (idx, row) in enumerate(fmt_df.iterrows()):
+        # Check if this is BirdMAE and should have blue font for all cells
+        idx_lower = idx.lower()
+        is_birdmae = "birdmae" in idx_lower or "bird-mae" in idx_lower
+
+        # Format model name
+        model_name = f"\\textbf{{{idx}}}"
+
+        # For BirdMAE, make all cells blue (name and all values)
+        if is_birdmae:
+            # Wrap model name in blue color
+            model_name = f"\\textcolor[HTML]{{0000FF}}{{\\textbf{{{idx}}}}}"
+            # Wrap all values in blue color
+            blue_values = [f"\\textcolor[HTML]{{0000FF}}{{{val}}}" for val in row.values]
+            line_parts = [model_name] + blue_values
+        else:
+            line_parts = [model_name] + list(row.values)
+
+        row_line = " & ".join(line_parts) + " \\\\"
+
+        # Check if this is a model that should be highlighted
+        # EfficientNet models start with "EffNet" (case-insensitive)
+        # Also highlight SurfPerch, BirdNet, and Perch
+        # Note: idx may have decorations (superscripts), so we check if it contains the model name
+        should_highlight = (
+            idx_lower.startswith("effnet")
+            or "surfperch" in idx_lower
+            or "birdnet" in idx_lower
+            or (
+                idx_lower.startswith("perch") and "surfperch" not in idx_lower
+            )  # Perch but not SurfPerch
+        )
+
+        if should_highlight:
+            # Add rowcolor command before the row using HTML color format
+            # Requires \usepackage[table]{xcolor} in LaTeX preamble
+            row_line = f"\\rowcolor[HTML]{{C6DEE7}}{row_line}"
+
+        lines.append(row_line)
+
+        # Add separator if this model is in the separators_after list
+        # Add separator only for exact matches
+        # (avoid substring matches like Perch vs SurfPerch)
+        if idx in separators_after:
+            lines.append("\\midrule")
+
+    lines.append("\\bottomrule")
+    body = "\n".join(lines)
+
+    # Build resizebox command if needed
+    if resize_width:
+        resize_cmd = f"\\resizebox{{{resize_width}}}{{!}}{{"
+        resize_close = "}"
+    else:
+        resize_cmd = ""
+        resize_close = ""
+
+    # Complete LaTeX table
+    # Note: Requires \usepackage[table]{xcolor} in LaTeX preamble
+    # Color C6DEE7 is defined inline using HTML format for xcolor package
+    latex_content = f"""
+\\begin{{table*}}[t]
+\\centering
+\\{VISUAL_CONFIG["font_size"]}
+\\setlength{{\\tabcolsep}}{{{VISUAL_CONFIG["tabcolsep"]}}}
+\\renewcommand{{\\arraystretch}}{{{VISUAL_CONFIG["arraystretch"]}}}
+{resize_cmd}
+\\begin{{tabular}}{{{colfmt}}}
+{body}
+\\end{{tabular}}%
+{resize_close}
+\\caption{{{caption}}}
+\\label{{{label}}}
+\\end{{table*}}
+"""
+
+    return latex_content, colfmt
+
+
 def generate_sub_table(
     df: pd.DataFrame,
     table_config: dict,
@@ -973,10 +1122,7 @@ def generate_sub_table(
                         else:
                             print(f"Warning: Model '{model}' not found in data")
                     except Exception as e:
-                        print(
-                            f"Warning: Model '{model}' not found in data "
-                            f"(regex error: {e})"
-                        )
+                        print(f"Warning: Model '{model}' not found in data (regex error: {e})")
 
     if not available_models:
         print(f"No models found for sub-table {output_file}")
@@ -1154,9 +1300,7 @@ def generate_main_table(
     print("📝 Building main LaTeX table...")
     # Add separator after the last existing/pretrained model
     if name_map:
-        main_separators = [
-            name_map.get(last_existing_raw, next(iter(name_map.values())))
-        ]
+        main_separators = [name_map.get(last_existing_raw, next(iter(name_map.values())))]
     else:
         main_separators = []
 
@@ -1200,6 +1344,137 @@ def generate_main_table(
     print("🐦 BirdSet: 7 datasets (including SNE, UHH)")
 
 
+def generate_main_table_highlighted(
+    df: pd.DataFrame,
+    output_file: str,
+    table_label_suffix: str = "",
+    group_datasets: dict | None = None,
+    include_groups: list[str] | None = None,
+    comparison_df: pd.DataFrame | None = None,
+) -> None:
+    """Generate the main aggregate table with EfficientNet highlighting.
+
+    This is a variant of generate_main_table that highlights EfficientNet model rows.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with aggregated results.
+    output_file : str
+        Output file path.
+    table_label_suffix : str, optional
+        Suffix to add to table label. Defaults to "".
+    group_datasets : dict | None, optional
+        Group datasets dictionary (for reporting). Defaults to None.
+    include_groups : list[str] | None, optional
+        Optional list of group names to include.
+        If None, includes all groups. Defaults to None.
+    comparison_df : pd.DataFrame | None, optional
+        Optional DataFrame for side-by-side comparison
+        (used for _noesc50 tables). Defaults to None.
+    """
+    if group_datasets is None:
+        group_datasets = CORRECTED_GROUP_DATASETS
+
+    # Order models: existing/pretrained on top, new models below
+    df_ordered, last_existing_raw = reorder_models_with_separator(df)
+
+    # If comparison_df is provided, align it with df_ordered
+    # and combine BEANS Classification columns
+    if comparison_df is not None:
+        # Reorder comparison_df to match df_ordered
+        comparison_ordered, _ = reorder_models_with_separator(comparison_df)
+        # Align indices (keep only models present in both)
+        common_models = df_ordered.index.intersection(comparison_ordered.index)
+        df_ordered = df_ordered.loc[common_models]
+        comparison_ordered = comparison_ordered.loc[common_models]
+
+    cols, group_info = build_column_structure(
+        df_ordered,
+        include_groups=include_groups,
+        comparison_df=comparison_ordered if comparison_df is not None else None,
+    )
+
+    # Combine columns from both dataframes if comparison_df is provided
+    if comparison_df is not None:
+        # Get BEANS Classification columns from both dataframes with suffixes
+        metrics = GROUP_METRICS["BEANS Classification"]
+        beans_cols_noesc50 = [f"BEANS Classification_{m}_noesc50" for m in metrics]
+        beans_cols_wesc50 = [f"BEANS Classification_{m}_wesc50" for m in metrics]
+        original_cols = [f"BEANS Classification_{m}" for m in metrics]
+
+        # Get columns from df (without ESC-50) and rename with suffix
+        selected_df = df_ordered[original_cols].copy()
+        selected_df.columns = beans_cols_noesc50
+
+        # Get columns from comparison_df (with ESC-50) and rename with suffix
+        comparison_cols = comparison_ordered[original_cols].copy()
+        comparison_cols.columns = beans_cols_wesc50
+
+        # Combine both
+        selected_df = pd.concat([selected_df, comparison_cols], axis=1)
+
+        # Reorder columns to match the expected order (noesc50 first, then wesc50)
+        final_cols = beans_cols_noesc50 + beans_cols_wesc50
+        selected_df = selected_df[final_cols]
+    else:
+        selected_df = df_ordered[cols]
+
+    print("✨ Applying formatting...")
+    # Decorate names with training tags and rename NatureBEATs
+    decorated_df, name_map = decorate_model_names_for_table(selected_df)
+    formatted_df = apply_bold_formatting(decorated_df)
+
+    print("📝 Building main LaTeX table with EfficientNet highlighting...")
+    # Add separator after the last existing/pretrained model
+    if name_map:
+        main_separators = [name_map.get(last_existing_raw, next(iter(name_map.values())))]
+    else:
+        main_separators = []
+
+    # Update caption and label if needed
+    # For highlighted table, add note about EfficientNet shading
+    caption = TABLE_CAPTION + " EfficientNet models are shaded."
+    label = TABLE_LABEL
+    if table_label_suffix:
+        label = label + table_label_suffix
+
+    # Use appropriate resize width
+    # For _noesc50 versions with comparison, we have 6 columns (3+3), so use wider width
+    if comparison_df is not None:
+        resize_width = "0.85\\textwidth"  # Wider for side-by-side comparison
+    elif include_groups == ["BEANS Classification"] or (
+        table_label_suffix and "noesc50" in table_label_suffix
+    ):
+        resize_width = "0.6\\textwidth"
+    else:
+        resize_width = "\\textwidth"
+
+    latex_content, colfmt = build_latex_table_with_highlighting(
+        formatted_df,
+        group_info,
+        separators_after=main_separators,
+        caption=caption,
+        label=label,
+        resize_width=resize_width,
+    )
+
+    print(f"💾 Saving highlighted table to {output_file}...")
+    Path(output_file).write_text(latex_content)
+
+    print(f"✅ Success! Generated highlighted table: {output_file}")
+    print(f"📏 Table dimensions: {len(formatted_df)} models × {len(cols)} metrics")
+    print(f"🎨 Column format: {colfmt}")
+    print(f"📋 Groups: {[name for name, _, _ in group_info]}")
+    print("🎨 EfficientNet, Perch, SurfPerch, and BirdNet rows highlighted with color C6DEE7")
+    print("🎨 BirdMAE row displayed in blue font (color 0000FF) with name 'Bird-MAE-Huge'")
+
+    # Count datasets in BEANS Classification
+    beans_class_datasets = len(group_datasets.get("BEANS Classification", []))
+    print(f"🔧 BEANS Classification: {beans_class_datasets} datasets")
+    print("🐦 BirdSet: 7 datasets (including SNE, UHH)")
+
+
 def main() -> None:
     """Main function to generate the enhanced table and sub-tables."""
     print("🔄 Loading and processing data...")
@@ -1209,11 +1484,16 @@ def main() -> None:
     print("\n📊 Generating main table...")
     generate_main_table(df, OUTPUT_FILE, group_datasets=CORRECTED_GROUP_DATASETS)
 
+    # Generate highlighted version with EfficientNet rows highlighted
+    print("\n📊 Generating main table (highlighted version with EfficientNet rows)...")
+    generate_main_table_highlighted(
+        df, OUTPUT_FILE_HIGHLIGHTED, group_datasets=CORRECTED_GROUP_DATASETS
+    )
+
     # Generate _noesc50 version (BEANS Classification without ESC-50
     # vs with ESC-50 side-by-side)
     print(
-        "\n📊 Generating main table (BEANS Classification comparison: "
-        "w/o ESC-50 vs w/ ESC-50)..."
+        "\n📊 Generating main table (BEANS Classification comparison: w/o ESC-50 vs w/ ESC-50)..."
     )
     group_datasets_noesc50 = get_group_datasets_noesc50()
     df_noesc50 = load_and_process_data(group_datasets=group_datasets_noesc50)
@@ -1247,14 +1527,12 @@ def main() -> None:
             if "output_file" in noesc50_config:
                 base_name = Path(noesc50_config["output_file"]).stem
                 noesc50_config["output_file"] = str(
-                    Path(noesc50_config["output_file"]).parent
-                    / f"{base_name}_noesc50.tex"
+                    Path(noesc50_config["output_file"]).parent / f"{base_name}_noesc50.tex"
                 )
             if "alt_output_file" in noesc50_config:
                 base_name = Path(noesc50_config["alt_output_file"]).stem
                 noesc50_config["alt_output_file"] = str(
-                    Path(noesc50_config["alt_output_file"]).parent
-                    / f"{base_name}_noesc50.tex"
+                    Path(noesc50_config["alt_output_file"]).parent / f"{base_name}_noesc50.tex"
                 )
             # Update label
             noesc50_config["label"] = table_config["label"] + "-noesc50"
@@ -1273,15 +1551,14 @@ def main() -> None:
     print("\n🎉 All tables generated successfully!")
     print(f"📁 Main table: {OUTPUT_FILE}")
     print(f"📁 Main table (no ESC-50): {OUTPUT_FILE_NOESC50}")
+    print(f"📁 Main table (highlighted): {OUTPUT_FILE_HIGHLIGHTED}")
     for table_name, config in SUB_TABLES.items():
         print(f"📁 {table_name}: {config['output_file']}")
         if "alt_output_file" in config:
             print(f"📁 {table_name} (alt): {config['alt_output_file']}")
         # Show _noesc50 versions
         base_name = Path(config["output_file"]).stem
-        noesc50_file = str(
-            Path(config["output_file"]).parent / f"{base_name}_noesc50.tex"
-        )
+        noesc50_file = str(Path(config["output_file"]).parent / f"{base_name}_noesc50.tex")
         print(f"📁 {table_name}_noesc50: {noesc50_file}")
 
 
