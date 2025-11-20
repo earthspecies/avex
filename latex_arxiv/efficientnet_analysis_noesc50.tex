@@ -1,0 +1,27 @@
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.2}
+\resizebox{0.85\textwidth}{!}{
+\begin{tabular}{l||ccc||ccc}
+\toprule
+ & \multicolumn{3}{c}{\textbf{BEANS Classification (w/o ESC-50)}} & \multicolumn{3}{c}{\textbf{BEANS Classification (w/ ESC-50)}} \\
+\cline{2-4}
+\cline{5-7}
+\textbf{Model} & \textit{Probe} & \textit{R-auc} & \textit{C-nmi} & \textit{Probe} & \textit{R-auc} & \textit{C-nmi} \\
+\midrule
+\textbf{Perch} & 0.757 & 0.729 & 0.432 & 0.768 & 0.759 & 0.478 \\
+\textbf{SurfPerch} & 0.733 & 0.710 & 0.426 & 0.760 & 0.745 & 0.484 \\
+\textbf{BirdNet$^\dagger$} & 0.794 & 0.751 & 0.496 & 0.796 & 0.772 & 0.523 \\
+\midrule
+\textbf{EffNetB0-AudioSet} & 0.608 & 0.671 & 0.412 & 0.651 & 0.721 & 0.486 \\
+\textbf{EffNetB0-bio} & \textbf{0.798} & 0.780 & 0.536 & 0.786 & 0.799 & 0.563 \\
+\textbf{EffNetB0-all} & 0.794 & \textbf{0.785} & \textbf{0.547} & \textbf{0.800} & \textbf{0.809} & \textbf{0.584} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Comparison of EfficientNet models trained on mixes of AudioSet and large-scale bioacoustic data. We report ROC AUC for retrieval, accuracy for probing on BEANS classification and Individual ID, mean-average precision for probe on BEANS Detection and BirdSet. We report the mean of each metric over datasets per benchmark. $^{\dagger}$BirdNet results on BirdSet are excluded following the authors \citep{rauchbirdset} due to data leakage}
+\label{tab:efficientnet-analysis-noesc50}
+\end{table*}

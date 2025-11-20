@@ -42,9 +42,7 @@ class TrainingParams(BaseModel):
     optimizer: Literal["adamw", "adam", "adamw8bit"] = Field(
         "adamw", description="Optimizer to use"
     )
-    weight_decay: float = Field(
-        0.0, ge=0, description="Weight decay for regularisation"
-    )
+    weight_decay: float = Field(0.0, ge=0, description="Weight decay for regularisation")
 
     # Optional override for Adam/AdamW beta parameters (β₁, β₂).  If omitted
     # we fall back to the libraries' defaults (0.9, 0.999).
@@ -149,6 +147,27 @@ class AudioConfig(BaseModel):
     target_length_seconds: Optional[int] = None
     window_selection: Literal["random", "center"] = "random"
     center: bool = True
+
+    # Activity detection configuration
+    use_activity_detection: bool = Field(
+        False,
+        description="Whether to use activity detection for window selection",
+    )
+    activity_detection_prob: float = Field(
+        0.8,
+        ge=0.0,
+        le=1.0,
+        description="Probability of using activity detection vs random windowing",
+    )
+    activity_energy_threshold_db: float = Field(
+        -40.0,
+        description="Energy threshold in dB for activity detection",
+    )
+    activity_min_window_length_seconds: float = Field(
+        0.5,
+        gt=0,
+        description="Minimum window length when using activity detection (seconds)",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -286,9 +305,7 @@ class ModelSpec(BaseModel):
                 if isinstance(value, dict):
                     check_dict(value)
                 elif not is_serializable(value):
-                    raise ValueError(
-                        f"Non-serializable value found in eat_cfg: {key}={value}"
-                    )
+                    raise ValueError(f"Non-serializable value found in eat_cfg: {key}={value}")
 
         check_dict(v)
         return v
@@ -321,15 +338,9 @@ class ModelSpec(BaseModel):
 class SchedulerConfig(BaseModel):
     """Configuration for learning rate schedulers."""
 
-    name: Literal["cosine", "linear", "none"] = Field(
-        "none", description="Scheduler type to use"
-    )
-    warmup_steps: int = Field(
-        0, ge=0, description="Number of steps to warm up learning rate"
-    )
-    min_lr: float = Field(
-        0.0, ge=0, description="Minimum learning rate for cosine annealing"
-    )
+    name: Literal["cosine", "linear", "none"] = Field("none", description="Scheduler type to use")
+    warmup_steps: int = Field(0, ge=0, description="Number of steps to warm up learning rate")
+    min_lr: float = Field(0.0, ge=0, description="Minimum learning rate for cosine annealing")
 
     model_config = ConfigDict(extra="forbid")
 
@@ -368,9 +379,7 @@ class BaseCLIConfig(BaseSettings):
             raise FileNotFoundError(f"Config file {yaml_file} does not exist")
 
         yaml_values = YamlConfigSettingsSource(cls, yaml_file=yaml_file)
-        cli_values = CliSettingsSource(
-            cls, cli_parse_args=["--" + opt for opt in cli_args]
-        )
+        cli_values = CliSettingsSource(cls, cli_parse_args=["--" + opt for opt in cli_args])
         final_values = deep_update(yaml_values(), cli_values())
         return cls.model_validate(final_values)
 
@@ -430,9 +439,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     # Distributed training options
     distributed: bool = Field(
         False,
-        description=(
-            "Whether to use distributed training (automatically enabled in Slurm)"
-        ),
+        description=("Whether to use distributed training (automatically enabled in Slurm)"),
     )
     distributed_backend: Literal["nccl"] = Field(
         "nccl", description="Backend for distributed training (nccl for GPU training)"
@@ -453,9 +460,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     ]
 
     # Enable multi-label classification
-    multilabel: bool = Field(
-        False, description="Whether to use multi-label classification"
-    )
+    multilabel: bool = Field(False, description="Whether to use multi-label classification")
 
     # Metrics to compute during training
     metrics: List[str] = Field(
@@ -557,8 +562,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         # Check if multilabel is True but loss function isn't BCE/Focal
         if data.get("multilabel", False) and v not in {"bce", "focal"}:
             raise ValueError(
-                "When multilabel=True, loss_function must be 'bce' or 'focal' "
-                f"(got '{v}' instead)"
+                f"When multilabel=True, loss_function must be 'bce' or 'focal' (got '{v}' instead)"
             )
 
         # For self-supervised runs we don't impose any loss-type restrictions
@@ -621,9 +625,7 @@ class ExperimentConfig(BaseModel):
 class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     """Configuration for running evaluation experiments."""
 
-    experiments: List[ExperimentConfig] = Field(
-        ..., description="List of experiments to run"
-    )
+    experiments: List[ExperimentConfig] = Field(..., description="List of experiments to run")
     dataset_config: BenchmarkEvaluationConfig
     save_dir: str = Field(..., description="Directory to save evaluation results")
 
@@ -765,8 +767,7 @@ class DatasetCollectionConfig(BaseModel):
         # one of them has to be provided
         if not (self.train_datasets or self.val_datasets or self.test_datasets):
             raise ValueError(
-                "At least one of train_datasets, val_datasets,"
-                "or test_datasets must be provided."
+                "At least one of train_datasets, val_datasets,or test_datasets must be provided."
             )
         return self
 
@@ -774,13 +775,9 @@ class DatasetCollectionConfig(BaseModel):
 class EvaluationSet(BaseModel):
     """Configuration for a single evaluation set (train/val/test triplet)."""
 
-    name: str = Field(
-        ..., description="Name of this evaluation set (e.g., 'dog_classification')"
-    )
+    name: str = Field(..., description="Name of this evaluation set (e.g., 'dog_classification')")
     train: DatasetConfig = Field(..., description="Training dataset configuration")
-    validation: DatasetConfig = Field(
-        ..., description="Validation dataset configuration"
-    )
+    validation: DatasetConfig = Field(..., description="Validation dataset configuration")
     test: DatasetConfig = Field(..., description="Test dataset configuration")
     metrics: List[str] = Field(
         default_factory=lambda: ["accuracy"],
@@ -791,8 +788,7 @@ class EvaluationSet(BaseModel):
     retrieval_mode: Literal["test_vs_test", "train_vs_test"] = Field(
         "test_vs_test",
         description=(
-            "Retrieval evaluation mode: 'test_vs_test' (current default) "
-            "or 'train_vs_test'"
+            "Retrieval evaluation mode: 'test_vs_test' (current default) or 'train_vs_test'"
         ),
     )
 
@@ -849,9 +845,7 @@ class BenchmarkEvaluationConfig(BaseModel):
     benchmark_name: str = Field(..., description="Name of this benchmark")
     evaluation_sets: List[EvaluationSet] = Field(
         ...,
-        description=(
-            "List of evaluation sets (train/val/test triplets) in this benchmark"
-        ),
+        description=("List of evaluation sets (train/val/test triplets) in this benchmark"),
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -878,8 +872,7 @@ class BenchmarkEvaluationConfig(BaseModel):
             if eval_set.name == name:
                 return eval_set
         raise ValueError(
-            f"No evaluation set named '{name}' found in benchmark "
-            f"'{self.benchmark_name}'"
+            f"No evaluation set named '{name}' found in benchmark '{self.benchmark_name}'"
         )
 
     def get_all_evaluation_sets(self) -> List[Tuple[str, DatasetCollectionConfig]]:

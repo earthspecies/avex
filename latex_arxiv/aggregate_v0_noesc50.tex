@@ -1,0 +1,41 @@
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.2}
+\resizebox{0.85\textwidth}{!}{
+\begin{tabular}{l||ccc||ccc}
+\toprule
+ & \multicolumn{3}{c}{\textbf{BEANS Classification (w/o ESC-50)}} & \multicolumn{3}{c}{\textbf{BEANS Classification (w/ ESC-50)}} \\
+\cline{2-4}
+\cline{5-7}
+\textbf{Model} & \textit{Probe} & \textit{R-auc} & \textit{C-nmi} & \textit{Probe} & \textit{R-auc} & \textit{C-nmi} \\
+\midrule
+\textbf{BEATS (SFT)\textsuperscript{SSL}} & 0.680 & 0.690 & 0.420 & 0.724 & 0.739 & 0.504 \\
+\textbf{BEATS (pretrained)\textsuperscript{SSL}} & 0.742 & 0.698 & 0.488 & 0.774 & 0.734 & 0.542 \\
+\textbf{EAT-base (pretrained)\textsuperscript{SSL}} & 0.643 & 0.633 & 0.378 & 0.679 & 0.675 & 0.424 \\
+\textbf{EAT-base (SFT)\textsuperscript{SL-SSL}} & 0.718 & 0.700 & 0.386 & 0.758 & 0.748 & 0.478 \\
+\textbf{Bird-AVES-biox-base\textsuperscript{SSL}} & 0.674 & 0.618 & 0.367 & 0.705 & 0.646 & 0.410 \\
+\textbf{NatureBEATs\textsuperscript{SL-SSL}} & 0.783 & 0.738 & 0.512 & 0.804 & 0.774 & 0.560 \\
+\textbf{SurfPerch\textsuperscript{SL}} & 0.733 & 0.710 & 0.426 & 0.760 & 0.745 & 0.484 \\
+\textbf{BirdNet\textsuperscript{SL}} & 0.794 & 0.751 & 0.496 & 0.796 & 0.772 & 0.523 \\
+\textbf{Perch\textsuperscript{SL}} & 0.757 & 0.729 & 0.432 & 0.768 & 0.759 & 0.478 \\
+\midrule
+\textbf{EffNetB0-AudioSet\textsuperscript{SL}} & 0.608 & 0.671 & 0.412 & 0.651 & 0.721 & 0.486 \\
+\textbf{EffNetB0-bio\textsuperscript{SL}} & 0.798 & 0.780 & 0.536 & 0.786 & 0.799 & 0.563 \\
+\textbf{EffNetB0-all\textsuperscript{SL}} & 0.794 & 0.785 & 0.547 & 0.800 & 0.809 & 0.584 \\
+\textbf{EAT-AS\textsuperscript{SSL}} & 0.672 & 0.678 & 0.419 & 0.704 & 0.714 & 0.473 \\
+\textbf{EAT-bio\textsuperscript{SSL}} & 0.683 & 0.648 & 0.378 & 0.692 & 0.671 & 0.410 \\
+\textbf{EAT-all\textsuperscript{SSL}} & 0.680 & 0.669 & 0.400 & 0.709 & 0.704 & 0.448 \\
+\textbf{sl-BEATS-bio\textsuperscript{SL-SSL}} & \textbf{0.829} & \textbf{0.786} & 0.552 & \textbf{0.840} & 0.811 & 0.594 \\
+\textbf{sl-BEATS-all\textsuperscript{SL-SSL}} & 0.816 & \textbf{0.786} & \textbf{0.555} & 0.832 & \textbf{0.813} & \textbf{0.604} \\
+\textbf{sl-EAT-bio\textsuperscript{SL-SSL}} & 0.801 & 0.777 & 0.531 & 0.797 & 0.792 & 0.562 \\
+\textbf{sl-EAT-all\textsuperscript{SL-SSL}} & 0.781 & 0.770 & 0.494 & 0.788 & 0.791 & 0.536 \\
+\textbf{BirdMAE (pretrained)\textsuperscript{SSL}} & 0.747 & 0.644 & 0.380 & 0.766 & 0.674 & 0.432 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Aggregate results across bioacoustic benchmarks and tasks (best per metric in bold). We report ROC AUC for retrieval, accuracy for probing on BEANS classification and Individual ID, mean-average precision for probe on BEANS Detection and BirdSet. We report the mean of each metric over datasets per benchmark. $^{\dagger}$BirdNet results on BirdSet are excluded following the authors \citep{rauchbirdset} due to data leakageModel labels carry training tags: \textsuperscript{SSL} self-supervised, \textsuperscript{SL} supervised, \textsuperscript{SL-SSL} supervised fine-tuning after SSL pretraining. Models above the midrule are existing/pretrained checkpoints; below are new models from this work.}
+\label{tab:aggregate_results-noesc50}
+\end{table*}

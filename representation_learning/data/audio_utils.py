@@ -73,6 +73,143 @@ def pad_or_window(
     return processed_wav, mask
 
 
+def detect_active_regions(
+    wav: torch.Tensor,
+    sr: int,
+    energy_threshold_db: float = -40.0,
+    min_region_length_ms: int = 100,
+    frame_length_ms: int = 25,
+) -> list[tuple[int, int]]:
+    """Detect active (non-silent) regions in audio using energy-based VAD.
+
+    Parameters
+    ----------
+    wav : torch.Tensor
+        Mono waveform tensor of shape (T,)
+    sr : int
+        Sample rate
+    energy_threshold_db : float
+        Energy threshold in dB relative to max energy
+    min_region_length_ms : int
+        Minimum length of active region to consider (ms)
+    frame_length_ms : int
+        Frame size for energy computation (ms)
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        List of (start_sample, end_sample) tuples for active regions
+    """
+    # Convert to numpy for efficient frame-based processing
+    wav_np = wav.cpu().numpy()
+    frame_length_samples = int(frame_length_ms * sr / 1000)
+    hop_length_samples = frame_length_samples // 2
+
+    if len(wav_np) < frame_length_samples:
+        return []
+
+    # Compute RMS energy per frame
+    frames = []
+    for i in range(0, len(wav_np) - frame_length_samples + 1, hop_length_samples):
+        frame = wav_np[i : i + frame_length_samples]
+        rms = np.sqrt(np.mean(frame**2))
+        frames.append((i, rms))
+
+    if not frames:
+        return []
+
+    # Convert to dB and find threshold (using adaptive threshold based on max energy)
+    max_rms = max(rms for _, rms in frames)
+    if max_rms < 1e-10:  # Avoid division by zero for silent audio
+        return []
+
+    threshold_linear = max_rms * (10 ** (energy_threshold_db / 20))
+
+    # Find active regions
+    active_regions = []
+    in_region = False
+    region_start = 0
+
+    for frame_start, rms in frames:
+        is_active = rms > threshold_linear
+
+        if is_active and not in_region:
+            # Start of new region
+            region_start = frame_start
+            in_region = True
+        elif not is_active and in_region:
+            # End of region
+            region_end = frame_start + frame_length_samples
+            min_length_samples = int(min_region_length_ms * sr / 1000)
+            if region_end - region_start >= min_length_samples:
+                active_regions.append((region_start, region_end))
+            in_region = False
+
+    # Handle case where audio ends while in active region
+    if in_region:
+        region_end = len(wav_np)
+        min_length_samples = int(min_region_length_ms * sr / 1000)
+        if region_end - region_start >= min_length_samples:
+            active_regions.append((region_start, region_end))
+
+    return active_regions
+
+
+def select_activity_window(
+    wav: torch.Tensor,
+    active_regions: list[tuple[int, int]],
+    target_length_samples: int,
+    min_window_length_samples: int,
+) -> tuple[torch.Tensor, int, int] | None:
+    """Select a random window from active regions.
+
+    Parameters
+    ----------
+    wav : torch.Tensor
+        Input waveform tensor
+    active_regions : list[tuple[int, int]]
+        List of (start_sample, end_sample) tuples for active regions
+    target_length_samples : int
+        Desired window length in samples
+    min_window_length_samples : int
+        Minimum window length in samples
+
+    Returns
+    -------
+    tuple[torch.Tensor, int, int] | None
+        (windowed_wav, start_idx, end_idx) or None if no suitable region found
+    """
+    if not active_regions:
+        return None
+
+    # Filter regions that are long enough
+    valid_regions = [
+        (start, end) for start, end in active_regions if (end - start) >= min_window_length_samples
+    ]
+
+    if not valid_regions:
+        return None
+
+    # Select random region
+    region_start, region_end = valid_regions[torch.randint(0, len(valid_regions), ()).item()]
+
+    # Select random window within region
+    region_length = region_end - region_start
+    if region_length <= target_length_samples:
+        # Use entire region (will pad later)
+        window_start = int(region_start)
+        window_end = int(region_end)
+    else:
+        # Random window within region
+        max_start = int(region_start + region_length - target_length_samples)
+        window_start = int(torch.randint(region_start, max_start + 1, ()).item())
+        window_end = int(window_start + target_length_samples)
+
+    windowed_wav = wav[window_start:window_end]
+
+    return windowed_wav, window_start, window_end
+
+
 class AudioProcessor:
     """Processes raw audio waveforms according to an `AudioConfig`."""
 
@@ -168,9 +305,7 @@ class AudioProcessor:
     def _normalize(x: Tensor) -> Tensor:
         x = x = torch.log(x + 1e-6)
         return (x - x.amin(dim=(-2, -1), keepdim=True)) / (
-            x.amax(dim=(-2, -1), keepdim=True)
-            - x.amin(dim=(-2, -1), keepdim=True)
-            + 1e-8
+            x.amax(dim=(-2, -1), keepdim=True) - x.amin(dim=(-2, -1), keepdim=True) + 1e-8
         )
 
     @staticmethod
@@ -289,9 +424,7 @@ def sync_crop_or_pad_time(
     spec_out = torch.cat([spec, pad_spec], dim=1)
 
     if frame_mask is not None:
-        pad_mask = torch.ones(
-            bsz, pad_len, dtype=frame_mask.dtype, device=frame_mask.device
-        )
+        pad_mask = torch.ones(bsz, pad_len, dtype=frame_mask.dtype, device=frame_mask.device)
         mask_out = torch.cat([frame_mask, pad_mask], dim=1)
     else:
         mask_out = None

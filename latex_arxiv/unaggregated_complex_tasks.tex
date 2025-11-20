@@ -1,0 +1,47 @@
+
+\begin{table*}[t]
+\centering
+\caption{Complex bioacoustic tasks: Individual ID and Vocal Repertoire analysis (best per metric in bold). We report ROC AUC for retrieval as R-AUC. Individual ID probe is accuracy; Vocal Repertoire reports both R-AUC and NMI. Models above the midrule are existing/pretrained checkpoints; below are new models from this work.}
+\label{tab:unaggregated-complex}
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l|cc|cc|cc|cc|cc|cc|cc|cc}
+\toprule
+ & \multicolumn{2}{c}{\textbf{chiffchaff-cross}} & \multicolumn{2}{c}{\textbf{littleowls-cross}} & \multicolumn{2}{c}{\textbf{pipit-cross}} & \multicolumn{2}{c}{\textbf{macaques}} & \multicolumn{2}{c}{\textbf{zebrafinch-je-call}} & \multicolumn{2}{c}{\textbf{Giant_Otters}} & \multicolumn{2}{c}{\textbf{Bengalese_Finch}} & \multicolumn{2}{c}{\textbf{SRKW_Orca}} \\
+\cline{2-3}
+\cline{4-5}
+\cline{6-7}
+\cline{8-9}
+\cline{10-11}
+\cline{12-13}
+\cline{14-15}
+\cline{16-17}
+\textbf{Model} & \textit{Probe} & \textit{R-AUC*} & \textit{Probe} & \textit{R-AUC*} & \textit{Probe} & \textit{R-AUC*} & \textit{Probe} & \textit{R-AUC} & \textit{R-AUC} & \textit{NMI} & \textit{R-AUC} & \textit{NMI} & \textit{R-AUC} & \textit{NMI} & \textit{R-AUC} & \textit{NMI} \\
+\midrule
+\textbf{BEATS (SFT)} & 0.185 & 0.470 & 0.290 & 0.663 & 0.061 & 0.500 & 0.963 & 0.775 & 0.651 & 0.295 & 0.815 & 0.545 & 0.898 & 0.742 & 0.657 & 0.359 \\
+\textbf{BEATS (pretrained)} & 0.180 & 0.536 & 0.263 & 0.700 & 0.093 & 0.486 & 0.985 & 0.827 & 0.707 & 0.352 & 0.848 & 0.577 & 0.848 & 0.653 & 0.697 & 0.409 \\
+\textbf{EAT-base (pretrained)} & 0.205 & 0.544 & 0.317 & 0.676 & 0.058 & 0.469 & 0.872 & 0.804 & 0.684 & 0.231 & 0.788 & 0.503 & 0.974 & 0.871 & 0.626 & 0.265 \\
+\textbf{EAT-base (SFT)} & 0.245 & 0.511 & 0.391 & 0.714 & 0.054 & 0.456 & 0.981 & 0.848 & \textbf{0.742} & 0.341 & 0.855 & \textbf{0.591} & 0.984 & 0.820 & 0.687 & 0.357 \\
+\textbf{Bird-AVES-biox-base} & 0.230 & 0.521 & 0.292 & 0.634 & 0.118 & 0.492 & 0.967 & 0.840 & 0.660 & 0.253 & 0.751 & 0.484 & 0.872 & 0.757 & 0.621 & 0.318 \\
+\textbf{BEATS-NatureLM-audio} & 0.185 & 0.489 & 0.359 & 0.711 & 0.112 & 0.524 & 0.984 & 0.857 & 0.704 & 0.351 & 0.862 & 0.586 & 0.943 & 0.835 & 0.736 & 0.438 \\
+\textbf{SurfPerch} & \textbf{0.280} & 0.550 & 0.383 & 0.713 & 0.179 & 0.518 & \textbf{0.986} & 0.843 & 0.626 & 0.225 & 0.810 & 0.537 & 0.959 & 0.927 & 0.608 & 0.279 \\
+\textbf{BirdNet} & 0.200 & 0.555 & 0.501 & 0.801 & 0.204 & 0.558 & 0.984 & \textbf{0.916} & 0.707 & 0.378 & 0.798 & 0.539 & 0.987 & 0.911 & 0.689 & 0.353 \\
+\textbf{Perch} & 0.210 & 0.500 & \textbf{0.649} & \textbf{0.847} & 0.288 & 0.570 & 0.973 & 0.904 & 0.657 & 0.284 & 0.854 & 0.585 & 0.959 & 0.896 & 0.561 & 0.206 \\
+\midrule
+\textbf{BirdMAE (pretrained)} & 0.195 & 0.503 & 0.361 & 0.706 & 0.104 & 0.497 & 0.956 & 0.841 & 0.678 & 0.278 & \textbf{0.998} & 0.519 & 0.917 & 0.811 & 0.653 & 0.331 \\
+\textbf{EffNetB0-AudioSet} & 0.225 & 0.506 & 0.290 & 0.627 & 0.109 & 0.492 & 0.966 & 0.823 & 0.701 & 0.354 & 0.760 & 0.438 & 0.966 & 0.863 & 0.611 & 0.270 \\
+\textbf{EffNetB0-bio} & 0.140 & 0.532 & 0.346 & 0.730 & 0.361 & 0.557 & 0.982 & 0.912 & 0.717 & 0.350 & 0.828 & 0.574 & 0.964 & 0.903 & 0.717 & 0.443 \\
+\textbf{EffNetB0-all} & 0.273 & 0.546 & 0.496 & 0.776 & 0.372 & 0.567 & 0.984 & 0.915 & \textbf{0.742} & 0.381 & 0.842 & 0.582 & 0.987 & 0.921 & \textbf{0.748} & 0.444 \\
+\textbf{EAT-AS} & 0.165 & 0.544 & 0.251 & 0.643 & 0.073 & 0.473 & 0.957 & 0.848 & 0.707 & 0.301 & 0.833 & 0.566 & 0.977 & 0.885 & 0.688 & 0.379 \\
+\textbf{EAT-bio} & 0.175 & 0.540 & 0.307 & 0.689 & 0.115 & 0.474 & 0.914 & 0.804 & 0.654 & 0.246 & 0.809 & 0.543 & 0.934 & 0.816 & 0.630 & 0.260 \\
+\textbf{EAT-all} & 0.200 & 0.547 & 0.152 & 0.575 & 0.109 & 0.487 & 0.929 & 0.836 & 0.709 & 0.333 & 0.820 & 0.549 & 0.977 & 0.847 & 0.646 & 0.321 \\
+\textbf{sl-BEATS-bio} & 0.235 & 0.558 & 0.339 & 0.722 & 0.390 & 0.570 & 0.972 & 0.873 & 0.700 & 0.369 & 0.840 & 0.572 & 0.880 & 0.675 & 0.735 & 0.448 \\
+\textbf{sl-BEATS-all} & 0.225 & \textbf{0.574} & 0.413 & 0.755 & \textbf{0.428} & \textbf{0.580} & 0.977 & 0.850 & 0.718 & \textbf{0.426} & 0.832 & 0.554 & 0.897 & 0.681 & 0.746 & \textbf{0.457} \\
+\textbf{sl-EAT-bio} & 0.245 & 0.532 & 0.474 & 0.702 & 0.281 & 0.572 & 0.980 & 0.882 & 0.703 & 0.381 & 0.817 & 0.540 & \textbf{0.989} & \textbf{0.937} & 0.716 & 0.402 \\
+\textbf{sl-EAT-all} & 0.195 & 0.509 & 0.354 & 0.688 & 0.326 & 0.557 & 0.949 & 0.795 & 0.718 & 0.338 & 0.789 & 0.501 & 0.980 & 0.898 & 0.703 & 0.383 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}

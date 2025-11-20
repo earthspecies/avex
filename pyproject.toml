@@ -100,7 +100,7 @@ python_files = [
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 indent-width = 4
 exclude = [
     "fix_paths.py",

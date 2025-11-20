@@ -1,0 +1,30 @@
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.2}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l||ccc||cc||cc||cc||cc}
+\toprule
+ & \multicolumn{3}{c}{\textbf{BEANS Classification}} & \multicolumn{2}{c}{\textbf{BEANS Detection}} & \multicolumn{2}{c}{\textbf{BirdSet}} & \multicolumn{2}{c}{\textbf{Individual ID}} & \multicolumn{2}{c}{\textbf{Vocal Repertoire}} \\
+\cline{2-4}
+\cline{5-6}
+\cline{7-8}
+\cline{9-10}
+\cline{11-12}
+\textbf{Model} & \textit{Probe} & \textit{R-auc} & \textit{C-nmi} & \textit{Probe} & \textit{R-auc} & \textit{Probe} & \textit{R-auc} & \textit{Probe} & \textit{R-auc} & \textit{R-auc} & \textit{C-nmi} \\
+\midrule
+\textbf{Perch} & 0.768 & 0.759 & 0.478 & 0.368 & 0.674 & 0.233 & 0.656 & 0.530 & 0.705 & 0.758 & 0.493 \\
+\textbf{SurfPerch} & 0.760 & 0.745 & 0.484 & 0.301 & 0.664 & 0.160 & 0.694 & 0.457 & 0.656 & 0.751 & 0.492 \\
+\textbf{BirdNet$^\dagger$} & 0.796 & 0.772 & 0.523 & \textbf{0.392} & 0.687 & N/A & N/A & 0.472 & \textbf{0.708} & 0.795 & 0.545 \\
+\midrule
+\textbf{EffNetB0-AudioSet} & 0.651 & 0.721 & 0.486 & 0.246 & 0.670 & 0.098 & 0.655 & 0.397 & 0.612 & 0.760 & 0.481 \\
+\textbf{EffNetB0-bio} & 0.786 & 0.799 & 0.563 & 0.365 & 0.695 & \textbf{0.279} & 0.704 & 0.457 & 0.683 & 0.806 & 0.568 \\
+\textbf{EffNetB0-all} & \textbf{0.800} & \textbf{0.809} & \textbf{0.584} & 0.362 & \textbf{0.712} & \textbf{0.279} & \textbf{0.707} & \textbf{0.531} & 0.701 & \textbf{0.830} & \textbf{0.582} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Comparison of EfficientNet models trained on mixes of AudioSet and large-scale bioacoustic data. We report ROC AUC for retrieval, accuracy for probing on BEANS classification and Individual ID, mean-average precision for probe on BEANS Detection and BirdSet. We report the mean of each metric over datasets per benchmark. $^{\dagger}$BirdNet results on BirdSet are excluded following the authors \citep{rauchbirdset} due to data leakage}
+\label{tab:efficientnet-analysis}
+\end{table*}

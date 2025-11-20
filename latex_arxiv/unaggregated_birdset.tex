@@ -1,0 +1,46 @@
+
+\begin{table*}[t]
+\centering
+\caption{BirdSet benchmark results: Multi-label bird detection tasks (best per metric in bold). We report ROC AUC for retrieval as R-AUC and mean-average precision for probe. No clustering metrics are reported. $^{\dagger}$BirdNet results are excluded following the authors \citep{rauchbirdset}. Models above the midrule are existing/pretrained checkpoints; below are new models from this work.}
+\label{tab:unaggregated-birdset}
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l|cc|cc|cc|cc|cc|cc|cc}
+\toprule
+ & \multicolumn{2}{c}{\textbf{POW}} & \multicolumn{2}{c}{\textbf{PER}} & \multicolumn{2}{c}{\textbf{NES}} & \multicolumn{2}{c}{\textbf{NBP}} & \multicolumn{2}{c}{\textbf{HSN}} & \multicolumn{2}{c}{\textbf{SNE}} & \multicolumn{2}{c}{\textbf{UHH}} \\
+\cline{2-3}
+\cline{4-5}
+\cline{6-7}
+\cline{8-9}
+\cline{10-11}
+\cline{12-13}
+\cline{14-15}
+\textbf{Model} & \textit{Probe} & \textit{R-AUC} & \textit{Probe} & \textit{R-AUC} & \textit{Probe} & \textit{R-AUC} & \textit{Probe} & \textit{R-AUC} & \textit{Probe} & \textit{R-AUC} & \textit{Probe} & \textit{R-AUC} & \textit{Probe} & \textit{R-AUC} \\
+\midrule
+\textbf{BEATS (SFT)} & 0.108 & 0.654 & 0.046 & 0.642 & 0.062 & 0.726 & 0.213 & 0.649 & 0.107 & 0.625 & 0.079 & 0.725 & 0.094 & 0.704 \\
+\textbf{BEATS (pretrained)} & 0.157 & 0.703 & 0.070 & 0.649 & 0.095 & 0.731 & 0.248 & 0.648 & 0.105 & 0.568 & 0.116 & 0.753 & 0.109 & 0.751 \\
+\textbf{EAT-base (pretrained)} & 0.137 & 0.658 & 0.053 & 0.621 & 0.064 & 0.712 & 0.188 & 0.627 & 0.094 & 0.548 & 0.092 & 0.679 & 0.098 & 0.706 \\
+\textbf{EAT-base (SFT)} & 0.163 & 0.649 & 0.066 & 0.634 & 0.097 & 0.745 & 0.290 & 0.651 & 0.140 & 0.585 & 0.124 & 0.741 & 0.124 & 0.724 \\
+\textbf{Bird-AVES-biox-base} & 0.142 & 0.679 & 0.044 & 0.615 & 0.050 & 0.755 & 0.196 & 0.631 & 0.050 & 0.556 & 0.082 & 0.714 & 0.081 & 0.740 \\
+\textbf{BEATS-NatureLM-audio} & 0.244 & \textbf{0.722} & 0.132 & \textbf{0.690} & 0.177 & 0.819 & 0.419 & 0.708 & 0.251 & 0.574 & 0.197 & \textbf{0.796} & 0.143 & 0.749 \\
+\textbf{SurfPerch} & 0.186 & 0.691 & 0.067 & 0.619 & 0.151 & 0.811 & 0.252 & 0.639 & 0.183 & 0.582 & 0.120 & 0.747 & 0.164 & 0.766 \\
+\textbf{BirdNet} & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A & N/A \\
+\textbf{Perch} & 0.236 & 0.686 & 0.132 & 0.626 & \textbf{0.341} & 0.803 & 0.374 & 0.595 & 0.183 & 0.512 & 0.160 & 0.658 & 0.203 & 0.713 \\
+\midrule
+\textbf{BirdMAE (pretrained)} & 0.243 & 0.718 & 0.092 & 0.621 & 0.148 & 0.686 & 0.314 & 0.599 & 0.104 & 0.527 & 0.132 & 0.618 & 0.141 & 0.686 \\
+\textbf{EffNetB0-AudioSet} & 0.115 & 0.637 & 0.045 & 0.569 & 0.054 & 0.728 & 0.181 & 0.615 & 0.087 & 0.609 & 0.087 & 0.725 & 0.115 & 0.701 \\
+\textbf{EffNetB0-bio} & 0.283 & 0.717 & 0.128 & 0.621 & 0.263 & 0.832 & 0.454 & 0.717 & 0.383 & 0.544 & 0.212 & 0.738 & \textbf{0.231} & 0.759 \\
+\textbf{EffNetB0-all} & 0.276 & 0.719 & 0.137 & 0.616 & 0.273 & \textbf{0.845} & 0.473 & 0.727 & 0.375 & 0.525 & 0.196 & 0.770 & 0.220 & 0.749 \\
+\textbf{EAT-AS} & 0.147 & 0.698 & 0.060 & 0.638 & 0.074 & 0.761 & 0.230 & 0.646 & 0.138 & 0.588 & 0.112 & 0.723 & 0.114 & 0.739 \\
+\textbf{EAT-bio} & 0.214 & 0.658 & 0.069 & 0.618 & 0.105 & 0.662 & 0.257 & 0.637 & 0.119 & 0.542 & 0.114 & 0.657 & 0.125 & 0.642 \\
+\textbf{EAT-all} & 0.188 & 0.702 & 0.065 & 0.649 & 0.113 & 0.731 & 0.303 & 0.648 & 0.185 & 0.568 & 0.147 & 0.708 & 0.158 & 0.734 \\
+\textbf{sl-BEATS-bio} & 0.304 & 0.707 & 0.150 & 0.629 & 0.279 & 0.836 & \textbf{0.496} & \textbf{0.737} & 0.349 & 0.627 & \textbf{0.226} & 0.766 & 0.213 & 0.781 \\
+\textbf{sl-BEATS-all} & \textbf{0.322} & 0.720 & \textbf{0.152} & 0.612 & 0.257 & 0.834 & 0.493 & \textbf{0.737} & \textbf{0.404} & \textbf{0.640} & 0.211 & 0.786 & 0.221 & \textbf{0.796} \\
+\textbf{sl-EAT-bio} & 0.274 & 0.670 & 0.143 & 0.596 & 0.224 & 0.813 & 0.436 & 0.713 & 0.283 & 0.636 & 0.190 & 0.760 & 0.191 & 0.748 \\
+\textbf{sl-EAT-all} & 0.265 & 0.700 & 0.129 & 0.600 & 0.219 & 0.828 & 0.452 & 0.707 & 0.328 & 0.586 & 0.192 & 0.760 & 0.203 & 0.763 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}

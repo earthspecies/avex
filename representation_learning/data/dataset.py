@@ -1,3 +1,9 @@
+"""Dataset classes and utilities for representation learning.
+
+This module provides dataset classes and utilities for loading, processing,
+and managing datasets used in representation learning tasks.
+"""
+
 from __future__ import annotations
 
 import os
@@ -16,9 +22,9 @@ import torch.distributed as dist
 from esp_data import (
     Dataset,
     DatasetConfig,
-    concatenate_datasets,
     dataset_from_config,
 )
+from esp_data.concat import ConcatenatedDataset
 
 # Temporary patch for AnimalSpeak for compatibility
 # with dataset concatenation while relevant issue is raised in esp-data.
@@ -42,7 +48,9 @@ from representation_learning.configs import (  # noqa: E402
     RunConfig,
 )
 from representation_learning.data.audio_utils import (  # noqa: E402
+    detect_active_regions,  # type: ignore
     pad_or_window,  # type: ignore
+    select_activity_window,  # type: ignore
 )
 from representation_learning.data.augmentations import (  # noqa: E402
     AugmentationProcessor,
@@ -58,7 +66,10 @@ class AudioDataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self, ds: Dataset, metadata: dict, postprocessors: Optional[list[Any]] = None
+        self,
+        ds: Dataset,
+        metadata: dict,
+        postprocessors: Optional[list[Any]] = None,
     ) -> None:
         """Initialize the AudioDataset with a Dataset instance."""
         self.ds = ds
@@ -87,14 +98,34 @@ class AudioDataset(torch.utils.data.Dataset):
         -------
         dict[str, Any]
             A dictionary containing the audio data, text label, label, and path.
+
+        Raises
+        ------
+        RuntimeError
+            If a sample cannot be loaded after ``max_retries`` attempts.
         """
-        sample = self.ds[idx]
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                actual_idx = (idx + attempt) % len(self.ds)
+                sample = self.ds[actual_idx]
 
-        if self.postprocessors:
-            for postprocessor in self.postprocessors:
-                sample = postprocessor(sample)
+                if self.postprocessors:
+                    for postprocessor in self.postprocessors:
+                        sample = postprocessor(sample)
 
-        return sample
+                return sample
+            except (RuntimeError, ValueError) as e:
+                if attempt == max_retries - 1:
+                    raise RuntimeError(
+                        f"Failed to load sample after {max_retries} attempts. "
+                        f"Last error at index {actual_idx}: {e}"
+                    ) from e
+                logger.warning(
+                    f"Failed to load sample at index {actual_idx}: {e}. "
+                    f"Retrying with next sample (attempt {attempt + 1}/{max_retries})"
+                )
+                continue
 
 
 def _build_one_dataset_split(
@@ -140,8 +171,8 @@ def _build_one_dataset_split(
 
         if concatenate and len(ds_list) > 1:
             # Concatenate all training datasets into one
-            ds = concatenate_datasets(
-                [d[0] for d in ds_list], merge_level=concatenate_method
+            ds = ConcatenatedDataset(
+                datasets=[d[0] for d in ds_list], merge_level=concatenate_method
             )
 
             return ds, ds_list[0][1]  # return first metadata as representative
@@ -151,14 +182,14 @@ def _build_one_dataset_split(
             return ds_list[0]
     except Exception as e:
         raise ValueError(
-            "Failed to load training datasets."
-            f"Error: {e}\n"
-            "Check your dataset configurations."
+            f"Failed to load training datasets.Error: {e}\nCheck your dataset configurations."
         ) from e
 
 
 def _build_datasets(
-    cfg: DatasetCollectionConfig, postprocessors: list[Callable], label_type: str
+    cfg: DatasetCollectionConfig,
+    postprocessors: list[Callable],
+    label_type: str,
 ) -> list[AudioDataset]:
     """Build datasets from the provided configuration.
     Parameters
@@ -289,6 +320,10 @@ class Collater:
         batch_aug_processor: Optional[AugmentationProcessor] = None,
         num_labels: int = 0,
         dataset_audio_max_length_seconds: Optional[int] = None,
+        use_activity_detection: bool = False,
+        activity_detection_prob: float = 0.8,
+        activity_energy_threshold_db: float = -40.0,
+        activity_min_window_length_seconds: float = 0.5,
     ) -> None:
         self.audio_max_length_seconds = audio_max_length_seconds
         self.dataset_audio_max_length_seconds = dataset_audio_max_length_seconds
@@ -298,6 +333,11 @@ class Collater:
         self.device = device
         self.batch_aug_processor = batch_aug_processor
         self.num_labels = num_labels
+        self.use_activity_detection = use_activity_detection
+        self.activity_detection_prob = activity_detection_prob
+        self.activity_energy_threshold_db = activity_energy_threshold_db
+        self.activity_min_window_length_seconds = activity_min_window_length_seconds
+        self.min_window_length_samples = int(activity_min_window_length_seconds * sr)
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
         # First prepare data with uniform lengths
@@ -312,8 +352,7 @@ class Collater:
             # Handle rare corrupted audio without crashing
             if torch.isnan(wav).any() or torch.isinf(wav).any():
                 logger.warning(
-                    f"Corrupted audio detected (NaN/Inf), "
-                    f"replacing with zeros. Shape: {wav.shape}"
+                    f"Corrupted audio detected (NaN/Inf), replacing with zeros. Shape: {wav.shape}"
                 )
                 wav = torch.zeros_like(wav)
 
@@ -327,14 +366,55 @@ class Collater:
                 if wav.size(-1) > dataset_max_samples:
                     # Apply dataset constraint truncation with same window
                     # selection strategy
-                    wav, _ = pad_or_window(
-                        wav, dataset_max_samples, self.window_selection
-                    )
+                    wav, _ = pad_or_window(wav, dataset_max_samples, self.window_selection)
 
             # Step 2: Apply model requirement (pad/truncate to target length)
-            wav, pad_mask = pad_or_window(
-                wav, self.audio_max_length_seconds * self.sr, self.window_selection
+            target_length_samples = int(self.audio_max_length_seconds * self.sr)
+
+            # Decide whether to use activity detection
+            use_activity = (
+                self.use_activity_detection
+                and wav.size(-1) > target_length_samples  # Only if we need to crop
+                and torch.rand(1).item() < self.activity_detection_prob
             )
+
+            if use_activity:
+                # Try activity detection
+                active_regions = detect_active_regions(
+                    wav,
+                    self.sr,
+                    energy_threshold_db=self.activity_energy_threshold_db,
+                )
+
+                result = select_activity_window(
+                    wav,
+                    active_regions,
+                    target_length_samples,
+                    self.min_window_length_samples,
+                )
+
+                if result is not None:
+                    windowed_wav, start_idx, end_idx = result
+                    # Pad if needed to reach target length
+                    wav, pad_mask = pad_or_window(
+                        windowed_wav,
+                        target_length_samples,
+                        window_selection="start",  # No-op since already windowed
+                    )
+                else:
+                    # Fall back to normal windowing
+                    wav, pad_mask = pad_or_window(
+                        wav,
+                        target_length_samples,
+                        self.window_selection,
+                    )
+            else:
+                # Normal windowing
+                wav, pad_mask = pad_or_window(
+                    wav,
+                    target_length_samples,
+                    self.window_selection,
+                )
             audios.append(wav)
             masks.append(pad_mask)
             # Some pipelines (e.g. CLAP) do not create numeric labels.  Keep the
@@ -361,7 +441,8 @@ class Collater:
             # Convert integer labels to one-hot vectors for classification
             if self.num_labels > 0:
                 label_tensor = torch.nn.functional.one_hot(
-                    torch.tensor(labels, dtype=torch.long), num_classes=self.num_labels
+                    torch.tensor(labels, dtype=torch.long),
+                    num_classes=self.num_labels,
                 ).float()
             else:
                 # For CLAP models without numeric labels, create dummy tensor
@@ -524,9 +605,7 @@ def build_dataloaders(
         else:
             # For classification tasks (or unknown task types), require multiple classes
             if num_labels <= 1:
-                raise ValueError(
-                    "Dataset must have more than one label for classification tasks."
-                )
+                raise ValueError("Dataset must have more than one label for classification tasks.")
     # For CLAP/CLIP models (label_type="text"), numeric labels are not required
 
     logger.info(f"Train data size : {len(ds_train)} samples")
@@ -570,6 +649,10 @@ def build_dataloaders(
         batch_aug_processor=train_aug_processor,
         num_labels=num_labels,
         dataset_audio_max_length_seconds=dataset_audio_max_length_seconds,
+        use_activity_detection=cfg.model_spec.audio_config.use_activity_detection,
+        activity_detection_prob=cfg.model_spec.audio_config.activity_detection_prob,
+        activity_energy_threshold_db=cfg.model_spec.audio_config.activity_energy_threshold_db,
+        activity_min_window_length_seconds=cfg.model_spec.audio_config.activity_min_window_length_seconds,
     )
     collate_fn_eval = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
@@ -579,6 +662,10 @@ def build_dataloaders(
         batch_aug_processor=eval_aug_processor,
         num_labels=num_labels,
         dataset_audio_max_length_seconds=dataset_audio_max_length_seconds,
+        use_activity_detection=cfg.model_spec.audio_config.use_activity_detection,
+        activity_detection_prob=cfg.model_spec.audio_config.activity_detection_prob,
+        activity_energy_threshold_db=cfg.model_spec.audio_config.activity_energy_threshold_db,
+        activity_min_window_length_seconds=cfg.model_spec.audio_config.activity_min_window_length_seconds,
     )
     collate_fn_test = Collater(
         audio_max_length_seconds=cfg.model_spec.audio_config.target_length_seconds,
@@ -588,6 +675,10 @@ def build_dataloaders(
         batch_aug_processor=test_aug_processor,  # ALWAYS None
         num_labels=num_labels,
         dataset_audio_max_length_seconds=dataset_audio_max_length_seconds,
+        use_activity_detection=cfg.model_spec.audio_config.use_activity_detection,
+        activity_detection_prob=cfg.model_spec.audio_config.activity_detection_prob,
+        activity_energy_threshold_db=cfg.model_spec.audio_config.activity_energy_threshold_db,
+        activity_min_window_length_seconds=cfg.model_spec.audio_config.activity_min_window_length_seconds,
     )
 
     # ------------------------------------------------------------------ #
