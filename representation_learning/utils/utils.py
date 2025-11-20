@@ -65,7 +65,7 @@ def universal_torch_load(
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                fs.put(str(path), str(cache_path))
+                fs.get(str(path), str(cache_path))
             else:
                 logger.debug(f"Found {cache_path}, using local cache.")
             f = cache_path
