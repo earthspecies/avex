@@ -7,12 +7,14 @@ from typing import Any
 
 import pytest
 import torch
+from esp_data.io import anypath, exists
 from torch.utils.data import Dataset
 
 from representation_learning.configs import RunConfig
 from representation_learning.data.audio_utils import pad_or_window
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.models.get_model import get_model
+from representation_learning.utils import universal_torch_load
 
 
 class MockDataset(Dataset[dict[str, Any]]):
@@ -83,9 +85,9 @@ def test_clip_mini_inference() -> None:
     # --------------------------------------------------------------
     ckpt_path = getattr(run_cfg, "resume_from_checkpoint", None)
     if ckpt_path:
-        ckpt_file = Path(ckpt_path)
-        if ckpt_file.exists():
-            state = torch.load(ckpt_file, map_location=device)
+        ckpt_file = anypath(ckpt_path)
+        if exists(ckpt_file):
+            state = universal_torch_load(ckpt_file, map_location=device)
             if "model_state_dict" in state:
                 model.load_state_dict(state["model_state_dict"])
                 print(f"Loaded checkpoint weights from {ckpt_file}")

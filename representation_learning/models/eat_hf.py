@@ -18,6 +18,7 @@ from representation_learning.models.base_model import ModelBase
 from representation_learning.models.eat.audio_processor import (
     EATAudioProcessor,
 )
+from representation_learning.utils.utils import universal_torch_load
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
             key = "model." + key
         return key
 
-    alt_model = torch.load(weights_path)["model"]
+    alt_model = universal_torch_load(weights_path)["model"]
 
     hf_keys = set(model.state_dict().keys())
     mapped_state_dict: OrderedDict[str, torch.Tensor] = OrderedDict()

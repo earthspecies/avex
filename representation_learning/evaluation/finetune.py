@@ -12,13 +12,14 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.optim.lr_scheduler as lr_scheduler
+from esp_data.io import anypath, exists
 from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, ExperimentConfig
 from representation_learning.metrics.metric_factory import get_metric_class
 from representation_learning.models.probes import get_probe
 from representation_learning.training.optimisers import get_optimizer
-from representation_learning.utils import ExperimentLogger
+from representation_learning.utils import ExperimentLogger, universal_torch_load
 
 logger = logging.getLogger("run_finetune")
 logging.basicConfig(
@@ -400,17 +401,17 @@ class FineTuneTrainer:
         """Load the best model checkpoint from disk."""
         # Get the path to the best checkpoint
         if self.log is not None and hasattr(self.log, "log_dir"):
-            ckpt_dir = Path(self.log.log_dir)
+            ckpt_dir = anypath(self.log.log_dir)
         else:
-            ckpt_dir = Path(self.cfg.save_dir)
+            ckpt_dir = anypath(self.cfg.save_dir)
         ckpt_path = ckpt_dir / "best.pt"
 
-        if not ckpt_path.exists():
+        if not exists(ckpt_path):
             logger.warning(f"Best checkpoint not found at {ckpt_path}. Using current model state.")
             return
 
         # Load the checkpoint
-        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        checkpoint = universal_torch_load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
 
         # Re-register hooks on base_model if needed (they can be cleared by load)
