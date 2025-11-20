@@ -6,6 +6,7 @@ This module contains utility functions that are used across multiple modules.
 
 from __future__ import annotations
 
+import io
 import logging
 import os
 from pathlib import Path
@@ -74,7 +75,7 @@ def universal_torch_load(
         f = path
 
     with fs.open(str(f), "rb") as opened_file:
-        return torch.load(opened_file, **kwargs)
+        return torch.load(io.BytesIO(opened_file.read()), **kwargs)
 
 
 # -------------------------------------------------------------------- #

@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import h5py
 import numpy as np
 import torch
-from esp_data.io.paths import PureCloudPath, anypath, exists, filesystem_from_path
+from esp_data.io import anypath, exists, filesystem_from_path
+from esp_data.io.paths import PureCloudPath
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
