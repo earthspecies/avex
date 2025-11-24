@@ -145,7 +145,7 @@ def _build_one_dataset_split(
 
         if concatenate and len(ds_list) > 1:
             # Concatenate all training datasets into one
-            ds = concatenate_datasets([d[0] for d in ds_list], merge_level=concatenate_method)
+            ds = ConcatenatedDataset([d[0] for d in ds_list], merge_level=concatenate_method)
 
             return ds, ds_list[0][1]  # return first metadata as representative
 
