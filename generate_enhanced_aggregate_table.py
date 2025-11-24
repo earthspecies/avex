@@ -841,7 +841,23 @@ def build_latex_table(
     lines.append("\\midrule")
 
     for _i, (idx, row) in enumerate(fmt_df.iterrows()):
-        line_parts = [f"\\textbf{{{idx}}}"] + list(row.values)
+        # Check if this is BirdMAE and should have blue font for all cells
+        idx_lower = idx.lower()
+        is_birdmae = "birdmae" in idx_lower or "bird-mae" in idx_lower
+
+        # Format model name
+        model_name = f"\\textbf{{{idx}}}"
+
+        # For BirdMAE, make all cells blue (name and all values)
+        if is_birdmae:
+            # Wrap model name in blue color
+            model_name = f"\\textcolor[HTML]{{0000FF}}{{\\textbf{{{idx}}}}}"
+            # Wrap all values in blue color
+            blue_values = [f"\\textcolor[HTML]{{0000FF}}{{{val}}}" for val in row.values]
+            line_parts = [model_name] + blue_values
+        else:
+            line_parts = [model_name] + list(row.values)
+
         lines.append(" & ".join(line_parts) + " \\\\")
 
         # Add separator if this model is in the separators_after list

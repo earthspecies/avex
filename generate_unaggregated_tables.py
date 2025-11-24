@@ -221,8 +221,7 @@ TABLE_CONFIGS = {
         + UNAGG_METRIC_CAPTIONS["complex_tasks"]
         + MIDRULE_NOTE,
         "label": "tab:unaggregated-complex",
-        "datasets": BENCHMARK_DATASETS["Individual ID"]
-        + BENCHMARK_DATASETS["Vocal Repertoire"],
+        "datasets": BENCHMARK_DATASETS["Individual ID"] + BENCHMARK_DATASETS["Vocal Repertoire"],
         "separators": ["Individual ID"],  # Separator after Individual ID
     },
 }
@@ -251,9 +250,7 @@ def load_excel_data() -> pd.DataFrame:
     model_col = "Unnamed: 1"
     if model_col in raw.columns:
         # Create mask for models to exclude
-        mask = ~raw[model_col].astype(str).str.contains(
-            "|".join(EXCLUDE_MODELS), na=False
-        )
+        mask = ~raw[model_col].astype(str).str.contains("|".join(EXCLUDE_MODELS), na=False)
         filtered = raw[mask]
     else:
         # If index contains model names, convert to string
@@ -354,13 +351,101 @@ def apply_bold_formatting(df: pd.DataFrame) -> pd.DataFrame:
                     fmt.at[idx, col] = "---"
             else:
                 if abs(val - maxv) < 1e-6:
-                    fmt.at[idx, col] = (
-                        f"\\textbf{{{val:.{VISUAL_CONFIG['decimal_places']}f}}}"
-                    )
+                    fmt.at[idx, col] = f"\\textbf{{{val:.{VISUAL_CONFIG['decimal_places']}f}}}"
                 else:
                     fmt.at[idx, col] = f"{val:.{VISUAL_CONFIG['decimal_places']}f}"
 
     return fmt
+
+
+def reorder_models_with_separator(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """Reorder models so that existing/pretrained models come first, then new models.
+
+    Bird-MAE-Huge is placed before SurfPerch in the existing models section.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, str]
+        The reordered frame and the raw-name of the last 'existing' model
+        to place a midrule after.
+    """
+    raw_models = df.index.tolist()
+
+    preferred_existing = [
+        "BEATS (SFT)",
+        "BEATS (pretrained)",
+        "EAT-base (pretrained)",
+        "EAT-base (SFT)",
+        "Bird-AVES-biox-base",
+        "BEATS-NatureLM-audio",  # will be shown as NatureBEATs
+        "BirdMAE (pretrained)",  # will be shown as Bird-MAE-Huge, before SurfPerch
+        "SurfPerch",
+        "BirdNet",
+        "Perch",
+    ]
+
+    preferred_new = [
+        "EffNetB0-AudioSet",
+        "EffNetB0-bio",
+        "EffNetB0-all",
+        "EAT-AS",
+        "EAT-bio",
+        "EAT-all",
+        "sl-BEATS-bio",
+        "sl-BEATS-all",
+        "sl-EAT-bio",
+        "sl-EAT-all",
+    ]
+
+    def is_existing(name: str) -> bool:
+        # Ensure name is a string
+        if not isinstance(name, str):
+            return False
+        name_lower = name.lower()
+        if name_lower in {"perch", "surfperch", "birdnet"}:
+            return True
+        if name_lower.startswith("beats") or name_lower.startswith("bird-aves"):
+            return True
+        if name_lower.startswith("eat-base"):
+            return True
+        if name_lower == "beats-naturelm-audio":
+            return True
+        if "birdmae" in name_lower or "bird-mae" in name_lower:
+            return True
+        return False
+
+    ordered = []
+
+    # Filter out non-string model names
+    raw_models = [m for m in raw_models if isinstance(m, str)]
+
+    # Add preferred existing in order
+    for m in preferred_existing:
+        if m in raw_models:
+            ordered.append(m)
+
+    # Add any other existing not yet included
+    for m in raw_models:
+        if m not in ordered and is_existing(m):
+            ordered.append(m)
+
+    # Remember the last existing model for the separator;
+    # if none, place after first group by default
+    last_existing = ordered[-1] if ordered else None
+
+    # Add preferred new models in order
+    for m in preferred_new:
+        if m in raw_models and m not in ordered:
+            ordered.append(m)
+
+    # Add any remaining models (treat as new)
+    for m in raw_models:
+        if m not in ordered:
+            ordered.append(m)
+
+    # Reindex to this order intersecting with current
+    df_reordered = df.reindex([m for m in ordered if m in df.index])
+    return df_reordered, last_existing or "Perch"
 
 
 def get_benchmark_group(dataset: str) -> str:
@@ -380,6 +465,126 @@ def get_benchmark_group(dataset: str) -> str:
         if dataset in datasets:
             return group_name
     return "Unknown"
+
+
+def _determine_model_type(raw_name: str) -> str:
+    """Return one of {'SSL', 'SL', 'SL-SSL'} based on model naming patterns.
+
+    We standardize ambiguous 'SSL/SL' wording to 'SL-SSL'.
+
+    Returns
+    -------
+    str
+        One of 'SSL', 'SL', or 'SL-SSL'.
+    """
+    name = raw_name or ""
+    lower = name.lower()
+
+    # Explicit rules first
+    if lower in {"beats-naturelm-audio", "naturebeats"}:
+        return "SL-SSL"
+
+    # sl- models: supervised fine-tuning of SSL backbones
+    if lower.startswith("sl-beats") or lower.startswith("sl-eat"):
+        return "SL-SSL"
+
+    # Our EAT SSL pretrains
+    if lower in {"eat-as", "eat-bio", "eat-all"}:
+        return "SSL"
+
+    # EAT-base variants
+    if lower.startswith("eat-base"):
+        if "(sft)" in lower:
+            return "SL-SSL"
+        return "SSL"
+
+    # BEATS existing checkpoints
+    if lower.startswith("beats"):
+        return "SSL"
+
+    # Bird-AVES SSL baseline
+    if lower.startswith("bird-aves"):
+        return "SSL"
+
+    # EffNets are supervised
+    if lower.startswith("effnet"):
+        return "SL"
+
+    # Classic supervised baselines
+    if lower in {"perch", "surfperch", "birdnet"}:
+        return "SL"
+
+    # Default fallback (be explicit rather than silent)
+    return "SSL"
+
+
+def _rename_model_for_display(raw_name: str) -> str:
+    """Apply explicit display-name overrides (e.g., NatureBEATs).
+
+    Parameters
+    ----------
+    raw_name : str
+        The raw model name.
+
+    Returns
+    -------
+    str
+        The display name (overridden if in rename_map, otherwise raw_name).
+    """
+    rename_map = {
+        "BEATS-NatureLM-audio": "NatureBEATs",
+    }
+    # Check for BirdMAE variants (case-insensitive)
+    if "birdmae" in raw_name.lower() or "bird-mae" in raw_name.lower():
+        return "Bird-MAE-Huge"
+    return rename_map.get(raw_name, raw_name)
+
+
+def decorate_model_names_for_table(
+    df: pd.DataFrame,
+    *,
+    show_training_tags: bool = True,
+    append_dagger_to: list | None = None,
+) -> tuple[pd.DataFrame, dict]:
+    """Return a copy of df where the index is replaced with display names.
+
+    Includes training tags in the display names.
+
+    Also return a mapping from raw name -> decorated display name for downstream use
+    (e.g., to place separators after a specific model).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe.
+    show_training_tags : bool, optional
+        Whether to show training tags in display names. Defaults to True.
+    append_dagger_to : list | None, optional
+        List of model names to append dagger symbol to. Defaults to None.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, dict]
+        A tuple containing the dataframe with decorated names and a mapping
+        from raw names to decorated names.
+    """
+    display_names = []
+    mapping = {}
+    append_dagger_to = append_dagger_to or []
+    for raw in df.index.tolist():
+        renamed = _rename_model_for_display(raw)
+        decorated = renamed
+        if any(raw == target or renamed == target for target in append_dagger_to):
+            decorated = f"{decorated}$^\\dagger$"
+        if show_training_tags:
+            tag = _determine_model_type(raw)
+            decorated = f"{decorated}\\textsuperscript{{{tag}}}"
+        display_names.append(decorated)
+        mapping[raw] = decorated
+
+    out = df.copy()
+    out.index = display_names
+    return out, mapping
 
 
 def build_latex_table(
@@ -466,7 +671,23 @@ def build_latex_table(
     lines.append("\\midrule")
 
     for _i, (idx, row) in enumerate(fmt_df.iterrows()):
-        line_parts = [f"\\textbf{{{idx}}}"] + list(row.values)
+        # Check if this is BirdMAE and should have blue font for all cells
+        idx_lower = idx.lower()
+        is_birdmae = "birdmae" in idx_lower or "bird-mae" in idx_lower
+
+        # Format model name
+        model_name = f"\\textbf{{{idx}}}"
+
+        # For BirdMAE, make all cells blue (name and all values)
+        if is_birdmae:
+            # Wrap model name in blue color
+            model_name = f"\\textcolor[HTML]{{0000FF}}{{\\textbf{{{idx}}}}}"
+            # Wrap all values in blue color
+            blue_values = [f"\\textcolor[HTML]{{0000FF}}{{{val}}}" for val in row.values]
+            line_parts = [model_name] + blue_values
+        else:
+            line_parts = [model_name] + list(row.values)
+
         lines.append(" & ".join(line_parts) + " \\\\")
 
         # Add separator if we're at the end of a benchmark group
@@ -530,11 +751,13 @@ def generate_table(df: pd.DataFrame, table_config: dict) -> str:
     # Select data
     selected_df = df[cols].round(VISUAL_CONFIG["decimal_places"])
 
+    # Reorder models: existing/pretrained on top, new models below
+    # Bird-MAE-Huge will be placed before SurfPerch
+    selected_df, last_existing_raw = reorder_models_with_separator(selected_df)
+
     # Special handling: exclude BirdNet results on BirdSet datasets
     birdset_datasets = BENCHMARK_DATASETS["BirdSet"]
-    birdset_cols = [
-        col for col in selected_df.columns if any(ds in col for ds in birdset_datasets)
-    ]
+    birdset_cols = [col for col in selected_df.columns if any(ds in col for ds in birdset_datasets)]
 
     if birdset_cols:
         # Handle potential case variations or exact name matching
@@ -551,8 +774,11 @@ def generate_table(df: pd.DataFrame, table_config: dict) -> str:
         else:
             print("  BirdNet not found in index for BirdSet exclusion")
 
+    # Decorate model display names with training tags
+    decorated_df, name_mapping = decorate_model_names_for_table(selected_df)
+
     # Apply formatting
-    formatted_df = apply_bold_formatting(selected_df)
+    formatted_df = apply_bold_formatting(decorated_df)
 
     # Build separators after specified groups/datasets
     separators_after = []
@@ -572,31 +798,15 @@ def generate_table(df: pd.DataFrame, table_config: dict) -> str:
             separators_after = separators
 
     # Always add a horizontal midrule split between existing vs new models.
-    # We place it after the last "existing" model present, ideally after Perch.
-    existing_priority = [
-        "Perch",
-        "SurfPerch",
-        "BirdNet",
-        "BEATS (SFT)",
-        "BEATS (pretrained)",
-        "EAT-base (pretrained)",
-        "EAT-base (SFT)",
-        "Bird-AVES-biox-base",
-        "BEATS-NatureLM-audio",
-    ]
-    present = selected_df.index.tolist()
-    split_after = None
-    for name in existing_priority:
-        if name in present:
-            split_after = name
-            break
-    if split_after:
-        separators_after = separators_after + [split_after]
+    # We place it after the last "existing" model present.
+    # Use the last_existing_raw from reordering and map to decorated name
+    if name_mapping and last_existing_raw in name_mapping:
+        decorated_last_existing = name_mapping[last_existing_raw]
+        if decorated_last_existing in formatted_df.index:
+            separators_after = separators_after + [decorated_last_existing]
 
     # Generate LaTeX table
-    latex_content = build_latex_table(
-        formatted_df, dataset_info, separators_after, caption, label
-    )
+    latex_content = build_latex_table(formatted_df, dataset_info, separators_after, caption, label)
 
     # Save to file
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
