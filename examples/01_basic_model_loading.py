@@ -28,8 +28,8 @@ def main() -> None:
     print("\n🔧 Loading pre-trained model with checkpoint (actual classes):")
     try:
         # Use load_model to load with checkpoint and class mapping
-        # num_classes=None will extract the actual number of classes from the checkpoint
-        model = load_model("efficientnet_animalspeak", num_classes=None, device="cpu")
+        # num_classes defaults to None, which extracts the actual number of classes from the checkpoint
+        model = load_model("efficientnet_animalspeak", device="cpu")
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 

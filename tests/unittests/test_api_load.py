@@ -583,7 +583,7 @@ class TestLoadFromModelSpec:
 
     def test_loads_with_return_features_only(self) -> None:
         """Test loading model with return_features_only=True."""
-        model = load_model("test_model", num_classes=None, device="cpu", return_features_only=True)
+        model = load_model("test_model", device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
         assert model.return_features_only is True
@@ -641,7 +641,7 @@ class TestLoadFromModelSpec:
         )
         register_model("test_pretrained_model", model_spec)
 
-        model = load_model("test_pretrained_model", num_classes=None, device="cpu")
+        model = load_model("test_pretrained_model", device="cpu")
 
         assert isinstance(model, ModelBase)
         assert model.return_features_only is True

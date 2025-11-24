@@ -58,11 +58,10 @@ def main() -> None:
 
     try:
         # Test 1: Load with num_classes=None (should keep classifier weights)
-        print("\n📋 Test 1: Loading with num_classes=None")
+        print("\n📋 Test 1: Loading with num_classes=None (default)")
         print("   Expected: Classifier weights should match checkpoint")
         loaded_model_1 = load_model(
             "sl_beats_animalspeak",
-            num_classes=None,  # Should extract from checkpoint
             checkpoint_path=str(checkpoint_path),  # Use saved checkpoint
             device="cpu",
         )
@@ -151,9 +150,9 @@ def main() -> None:
     print("   Expected: Cannot load original classifier (none exists - model loads in embedding mode)")
     print("-" * 60)
     try:
-        # beats_naturelm has no checkpoint and no classifier, so loading with num_classes=None
+        # beats_naturelm has no checkpoint and no classifier, so loading without num_classes
         # will automatically use return_features_only=True (embedding extraction mode)
-        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model = load_model("beats_naturelm", device="cpu")
         model.eval()
 
         # Check if classifier exists and is not None (BEATs sets classifier=None when return_features_only=True)
@@ -215,7 +214,7 @@ def main() -> None:
     print("-" * 60)
     try:
         # Load without num_classes - should automatically use return_features_only=True
-        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model = load_model("beats_naturelm", device="cpu")
         model.eval()
 
         # Check if classifier exists and is not None (BEATs sets classifier=None when return_features_only=True)

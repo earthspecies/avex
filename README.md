@@ -1,6 +1,6 @@
 # Representation Learning Framework
 
-A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms.
+A comprehensive Python-based system for training, evaluating, and analyzing bioacoustics representation learning models with support for both supervised and self-supervised learning paradigms.
 
 ## 🚀 Quick Start
 
@@ -43,13 +43,13 @@ print(f"Available models: {list(models.keys())}")
 describe_model("beats_naturelm", verbose=True)
 
 # Load a pre-trained model with checkpoint (num_classes extracted automatically)
-model = load_model("sl_beats_animalspeak", num_classes=None, device="cpu")
+model = load_model("sl_beats_animalspeak", device="cpu")
 
 # Load a model for a new task (creates new classifier)
 model = load_model("beats_naturelm", num_classes=10, device="cpu")
 
 # Load for embedding extraction (no classifier)
-model = load_model("beats_naturelm", num_classes=None, return_features_only=True, device="cpu")
+model = load_model("beats_naturelm", return_features_only=True, device="cpu")
 ```
 
 For more examples, see the `examples/` directory:
@@ -95,7 +95,7 @@ model = load_model("efficientnet_animalspeak")  # Uses default checkpoint from Y
 
 # Load for embedding extraction (no classifier head)
 # When num_classes=None and no checkpoint, builds model for embedding extraction
-model = load_model("beats", num_classes=None)  # Returns embeddings, not logits
+model = load_model("beats")  # Returns embeddings, not logits
 
 # Load from config file
 model = load_model("experiments/my_model.yml")
@@ -113,10 +113,10 @@ The `num_classes` parameter has different behaviors depending on the context:
    - Loads the classifier weights from the checkpoint (preserves trained classifier)
    - Example: `load_model("efficientnet_animalspeak")` - extracts classes from checkpoint
 
-2. **`num_classes=None` without checkpoint**:
+2. **`num_classes=None` without checkpoint** (default behavior):
    - If the model supports `return_features_only=True`, builds the model for embedding extraction
    - No classifier head is added (returns embeddings instead of logits)
-   - Example: `load_model("beats", num_classes=None)` - for embedding extraction
+   - Example: `load_model("beats")` - for embedding extraction
 
 3. **`num_classes` explicitly provided**:
    - Creates a new classifier head with the specified number of classes
@@ -136,7 +136,7 @@ When `pretrained=True` and no `checkpoint_path` is provided:
 
 ```python
 # Load with pretrained=True (no checkpoint) - uses model's own pretrained weights
-model = load_model("beats", pretrained=True, num_classes=None)  # BEATs loads SSL weights
+model = load_model("beats", pretrained=True)  # BEATs loads SSL weights
 
 # Load with checkpoint - pretrained is automatically False
 model = load_model("efficientnet_animalspeak")  # Uses checkpoint, pretrained=False
@@ -489,7 +489,7 @@ import torch
 from representation_learning import load_model
 
 # Load pre-trained model with checkpoint
-model = load_model("sl_beats_animalspeak", num_classes=None, device="cpu")
+model = load_model("sl_beats_animalspeak", device="cpu")
 
 # Set to evaluation mode
 model.eval()
