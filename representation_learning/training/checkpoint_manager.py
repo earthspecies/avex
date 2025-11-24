@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
-from esp_data.io.paths import GSPath, R2Path, anypath
+from esp_data.io import AnyPathT, anypath, exists
+from esp_data.io.paths import PureCloudPath
 
 from representation_learning.configs import RunConfig
 from representation_learning.training.distributed import is_main_process
@@ -25,13 +26,12 @@ if TYPE_CHECKING:
     from representation_learning.utils.experiment_logger import (
         ExperimentLogger,
     )
+from representation_learning.utils import universal_torch_load
 from representation_learning.utils.experiment_tracking import (
     save_experiment_metadata,
 )
 
 logger = logging.getLogger(__name__)
-
-CloudPathT = GSPath | R2Path
 
 
 class CheckpointManager:
@@ -124,7 +124,7 @@ class CheckpointManager:
             return  # Don't save if not periodic, best, or final
 
         # Determine base directory
-        if isinstance(self.model_dir, CloudPathT):
+        if isinstance(self.model_dir, PureCloudPath):
             base_dir = self.model_dir
         elif self.experiment_logger is not None and hasattr(self.experiment_logger, "log_dir"):
             base_dir = Path(self.experiment_logger.log_dir)
@@ -140,7 +140,7 @@ class CheckpointManager:
         ckpt_path = base_dir / filename
 
         # Save checkpoint
-        if isinstance(ckpt_path, CloudPathT):
+        if isinstance(ckpt_path, PureCloudPath):
             with ckpt_path.open("wb") as f:
                 torch.save(checkpoint, f)
         else:
@@ -153,7 +153,7 @@ class CheckpointManager:
 
     def load_checkpoint(
         self,
-        checkpoint_path: str,
+        checkpoint_path: str | AnyPathT,
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
@@ -179,13 +179,13 @@ class CheckpointManager:
         Dict[str, Any]
             Dictionary containing loaded training state (epoch, best_val_acc, etc.)
         """
-        checkpoint_path = Path(checkpoint_path)
-        if not checkpoint_path.exists():
+        checkpoint_path = anypath(checkpoint_path)
+        if not exists(checkpoint_path):
             logger.warning(f"Checkpoint file not found: {checkpoint_path}. Starting training from scratch.")
             return {"start_epoch": 1, "best_val_acc": 0.0}
 
         # Load checkpoint
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        checkpoint = universal_torch_load(checkpoint_path, map_location="cpu")
 
         # Load model state
         try:

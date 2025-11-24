@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import pytest
 import torch
+from esp_data.io import anypath
 
 from representation_learning import (
     load_model,
     register_model,
 )
 from representation_learning.configs import AudioConfig, ModelSpec
+from representation_learning.utils.utils import universal_torch_load
 
 
 class TestLoadModelClassifierHead:
@@ -86,10 +88,8 @@ class TestLoadModelClassifierHead:
         assert actual_num_classes == 12279, f"Expected 12279 classes from checkpoint, got {actual_num_classes}"
 
         # Load the checkpoint directly to compare weights
-        from esp_data.io import anypath
-
         ckpt_path = anypath(checkpoint_path)
-        checkpoint = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        checkpoint = universal_torch_load(ckpt_path, map_location="cpu", weights_only=False)
 
         # Get classifier weights from checkpoint
         if isinstance(checkpoint, dict):
@@ -143,10 +143,7 @@ class TestLoadModelClassifierHead:
         checkpoint_path = "gs://representation-learning/models/sl_beats_animalspeak.pt"
 
         # Load checkpoint to get original classifier weights for comparison
-        from esp_data.io import anypath
-
-        ckpt_path = anypath(checkpoint_path)
-        checkpoint = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        checkpoint = universal_torch_load(checkpoint_path, map_location="cpu", weights_only=False)
 
         # Get classifier weights from checkpoint
         if isinstance(checkpoint, dict):
@@ -201,10 +198,7 @@ class TestLoadModelClassifierHead:
         checkpoint_path = "gs://representation-learning/models/sl_beats_animalspeak.pt"
 
         # Load checkpoint to get original classifier weights
-        from esp_data.io import anypath
-
-        ckpt_path = anypath(checkpoint_path)
-        checkpoint = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        checkpoint = universal_torch_load(checkpoint_path, map_location="cpu", weights_only=False)
 
         # Get classifier weights from checkpoint
         if isinstance(checkpoint, dict):

@@ -22,6 +22,8 @@ from torch.nn.init import trunc_normal_
 from torch.optim import AdamW
 from torchvision import transforms
 
+from representation_learning.utils import universal_torch_load
+
 N_BLOCKS = 12
 
 __all__ = [
@@ -1790,7 +1792,7 @@ def load_model(model_path: str, device: str, ssl_model: bool = False) -> nn.Modu
     ).to(device)
     to_db = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80).to(device)
     normalize = MinMax(min=-79.6482, max=50.6842)
-    s = torch.load(model_path)
+    s = universal_torch_load(model_path)
 
     if ssl_model:
         pretrained_model = FrameATSTLightningModule.load_from_checkpoint(model_path)
