@@ -20,6 +20,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from esp_data import (
+    ConcatenatedDataset,
     Dataset,
     DatasetConfig,
     dataset_from_config,
@@ -32,12 +33,7 @@ from representation_learning.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
 
-# Temporary cloudpathlib retries while we migrate away/fix
-from representation_learning.data.cloudpathlib_retry_patch import (
-    apply_cloudpathlib_patch,
-)
-
-apply_cloudpathlib_patch()
+# apply_cloudpathlib_patch()
 apply_animalspeak_column_patch()
 
 
@@ -149,9 +145,7 @@ def _build_one_dataset_split(
 
         if concatenate and len(ds_list) > 1:
             # Concatenate all training datasets into one
-            ds = concatenate_datasets(
-                [d[0] for d in ds_list], merge_level=concatenate_method
-            )
+            ds = concatenate_datasets([d[0] for d in ds_list], merge_level=concatenate_method)
 
             return ds, ds_list[0][1]  # return first metadata as representative
 

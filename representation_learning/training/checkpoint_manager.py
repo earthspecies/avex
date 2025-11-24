@@ -25,13 +25,14 @@ if TYPE_CHECKING:
     from representation_learning.utils.experiment_logger import (
         ExperimentLogger,
     )
+from representation_learning.utils import universal_torch_load
 from representation_learning.utils.experiment_tracking import (
     save_experiment_metadata,
 )
 
 logger = logging.getLogger(__name__)
 
-CloudPathT = Union[PureCloudPath, PureGSPath, PureR2Path]
+CloudPathT = GSPath | R2Path
 
 
 class CheckpointManager:
@@ -124,7 +125,7 @@ class CheckpointManager:
             return  # Don't save if not periodic, best, or final
 
         # Determine base directory
-        if isinstance(self.model_dir, CloudPathT):
+        if isinstance(self.model_dir, PureCloudPath):
             base_dir = self.model_dir
         elif self.experiment_logger is not None and hasattr(
             self.experiment_logger, "log_dir"
@@ -142,7 +143,7 @@ class CheckpointManager:
         ckpt_path = base_dir / filename
 
         # Save checkpoint
-        if isinstance(ckpt_path, CloudPathT):
+        if isinstance(ckpt_path, PureCloudPath):
             with ckpt_path.open("wb") as f:
                 torch.save(checkpoint, f)
         else:
@@ -155,7 +156,7 @@ class CheckpointManager:
 
     def load_checkpoint(
         self,
-        checkpoint_path: str,
+        checkpoint_path: str | AnyPathT,
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
@@ -189,7 +190,7 @@ class CheckpointManager:
             return {"start_epoch": 1, "best_val_acc": 0.0}
 
         # Load checkpoint
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        checkpoint = universal_torch_load(checkpoint_path, map_location="cpu")
 
         # Load model state
         try:

@@ -491,12 +491,13 @@ class Trainer:
             label_map = self.train_dataloader.dataset.metadata.get("label_map", {})
             if label_map:
                 # Use the same output directory structure as checkpoints
-                from esp_data.io.paths import anypath
+                from esp_data.io import anypath, filesystem_from_path
 
                 output_dir = anypath(self.config.output_dir)
                 label_map_path = output_dir / "label_map.json"
+                fs = filesystem_from_path(label_map_path)
 
-                with label_map_path.open("w") as f:
+                with fs.open(str(label_map_path), "w") as f:
                     json.dump(label_map, f, indent=2)
                 logger.info(f"Saved final label_map with {len(label_map)} classes to {label_map_path}")
             else:

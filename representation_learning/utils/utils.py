@@ -6,13 +6,15 @@ This module contains utility functions that are used across multiple modules.
 
 from __future__ import annotations
 
+import io
 import logging
 import os
 from pathlib import Path
 from typing import Any, Literal
 
 import torch
-from esp_data.io import AnyPathT, anypath
+from esp_data.io import AnyPathT, anypath, filesystem_from_path
+from esp_data.io.paths import PureCloudPath
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +47,12 @@ def universal_torch_load(
         **kwargs: Additional keyword arguments passed to torch.load().
 
     Returns:
-        The object loaded from the file using torch.load.
-
-    Raises:
-        IsADirectoryError: If the cloud path points to a directory instead of a file.
-        FileNotFoundError: If the local file does not exist.
+        The object loaded from the file using torch.load.g
     """
     path = anypath(f)
+    fs = filesystem_from_path(path)
 
-    if path.is_cloud:
-        if path.is_dir():
-            raise IsADirectoryError(f"Cannot load a directory: {f}")
-
+    if isinstance(path, PureCloudPath):
         if cache_mode in ["use", "force"]:
             if "ESP_CACHE_HOME" in os.environ:
                 cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
@@ -69,19 +65,18 @@ def universal_torch_load(
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                path.download_to(cache_path)
+                fs.get(str(path), str(cache_path))
             else:
                 logger.debug(f"Found {cache_path}, using local cache.")
             f = cache_path
+            fs = filesystem_from_path(f)  # local filesystem
         else:
             f = path
     else:
-        if not path.exists():
-            raise FileNotFoundError(f"File does not exist: {f}")
         f = path
 
-    with open(f, "rb") as opened_file:
-        return torch.load(opened_file, **kwargs)
+    with fs.open(str(f), "rb") as opened_file:
+        return torch.load(io.BytesIO(opened_file.read()), **kwargs)
 
 
 # -------------------------------------------------------------------- #
