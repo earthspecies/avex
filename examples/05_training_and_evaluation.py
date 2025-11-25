@@ -212,10 +212,11 @@ def main() -> None:
     print("\n🔧 Fine-tuning Pre-trained Model:")
     try:
         # Load a pre-trained model (if available)
+        print("\n📋 Available models:")
         models = list_models()
         if models:
             model_name = list(models.keys())[0]
-            print(f"   Using model: {model_name}")
+            print(f"\n   Using model: {model_name}")
 
             # Create model for fine-tuning
             model = create_model(model_name, num_classes=5, device=device)

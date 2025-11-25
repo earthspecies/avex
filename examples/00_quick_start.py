@@ -17,11 +17,10 @@ def main() -> None:
     print("🚀 Quick Start Example")
     print("=" * 30)
 
-    # List available models
+    # List available models (prints table and returns info dict)
     print("\n📋 Available Models:")
     models = list_models()
-    for name, spec in models.items():
-        print(f"  - {name}: {spec.name} ({spec.pretrained})")
+    # Note: list_models() prints a formatted table above
 
     if not models:
         print("  No models available")

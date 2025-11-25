@@ -31,14 +31,22 @@ def main() -> None:
     print("   Note: Checkpoint paths are defined in YAML files in configs/official_models/")
 
     try:
-        # List registered models and their default checkpoint paths
+        # List registered models (prints table and returns detailed info)
         models = list_models()
+
+        # The table above shows which models have trained classifiers
+        # We can also programmatically access checkpoint paths
+        print("\n   Checkpoint details:")
         for model_name in models.keys():
-            checkpoint = get_checkpoint_path(model_name)
+            checkpoint = models[model_name]["checkpoint_path"]
             if checkpoint:
-                print(f"  - {model_name}: {checkpoint}")
+                print(
+                    f"  - {model_name}: {checkpoint[:60]}..."
+                    if len(checkpoint) > 60
+                    else f"  - {model_name}: {checkpoint}"
+                )
             else:
-                print(f"  - {model_name}: No default checkpoint (model spec only)")
+                print(f"  - {model_name}: No checkpoint")
 
     except Exception as e:
         print(f"❌ Error listing checkpoints: {e}")

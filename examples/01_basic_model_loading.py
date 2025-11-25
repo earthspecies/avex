@@ -18,11 +18,11 @@ def main() -> None:
     print("🚀 Example 1: Basic Model Loading")
     print("=" * 50)
 
-    # List available models
+    # List available models (prints formatted table and returns info dict)
     print("\n📋 Available Models:")
     models = list_models()
-    for name, spec in models.items():
-        print(f"  - {name}: {spec.name} ({spec.pretrained})")
+    # Note: list_models() automatically prints a formatted table above
+    # The returned dict contains detailed info for programmatic access
 
     # Example 1: Load a pre-trained model with checkpoint and class mapping
     print("\n🔧 Loading pre-trained model with checkpoint (actual classes):")

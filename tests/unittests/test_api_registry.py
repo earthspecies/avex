@@ -134,12 +134,11 @@ class TestImportlibResources:
             # Initialize registry - should use resources.files()
             registry.initialize_registry()
 
-            # Verify models were loaded
-            models = registry.list_models()
-            assert "model1" in models
-            assert "model2" in models
-            assert models["model1"].name == "beats"
-            assert models["model2"].name == "efficientnet"
+            # Verify models were loaded by checking internal registry
+            assert "model1" in registry._MODEL_REGISTRY
+            assert "model2" in registry._MODEL_REGISTRY
+            assert registry._MODEL_REGISTRY["model1"].name == "beats"
+            assert registry._MODEL_REGISTRY["model2"].name == "efficientnet"
 
             # Verify checkpoint path reading
             checkpoint = registry.get_checkpoint_path("model1")
@@ -478,19 +477,36 @@ class TestListModels:
         models = list_models()
         assert "test_model" in models
 
+        # Verify returned structure
+        assert isinstance(models["test_model"], dict)
+        assert "description" in models["test_model"]
+        assert "has_trained_classifier" in models["test_model"]
+        assert "model_type" in models["test_model"]
+
         # Modify the returned dict - should not affect registry
-        models["test_model"] = ModelSpec(name="modified", pretrained=True, device="cuda")
-        assert get_model_spec("test_model").name == "test"  # Original unchanged
+        models["test_model"]["description"] = "modified"
+        # Verify original registry is unchanged
+        models_again = list_models()
+        assert models_again["test_model"]["description"] != "modified"
 
         registry._MODEL_REGISTRY.clear()
 
-    def test_list_models_empty_registry(self) -> None:
-        """Test that list_models returns empty dict when registry is empty."""
+    def test_list_models_with_official_models(self) -> None:
+        """Test that list_models works correctly with official models loaded."""
         from representation_learning.models.utils import registry
 
-        registry._MODEL_REGISTRY.clear()
+        # Ensure registry is initialized (happens at module import)
+        registry.initialize_registry()
+
         models = list_models()
-        assert models == {}
+        # Should have official models loaded from YAML files
+        assert len(models) > 0  # Should have at least some official models
+        assert isinstance(models, dict)
+        # Check that models have the expected structure
+        for _name, info in models.items():
+            assert "description" in info
+            assert "has_trained_classifier" in info
+            assert "model_type" in info
 
 
 class TestListModelClasses:

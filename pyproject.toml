@@ -1,6 +1,6 @@
 [project]
 name = "representation-learning"
-version = "0.1.0"
+version = "0.1.1"
 description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -95,7 +95,7 @@ Documentation = "https://github.com/earthspecies/representation-learning#readme"
 "Bug Tracker" = "https://github.com/earthspecies/representation-learning/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.6,<0.10.0"]
+requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

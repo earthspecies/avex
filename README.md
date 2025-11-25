@@ -35,12 +35,13 @@ python setup.py install
 ```python
 from representation_learning import list_models, load_model, describe_model
 
-# List available models
-models = list_models()
+# List available models (prints table and returns dict)
+models = list_models()  # Prints table + returns dict with detailed info
 print(f"Available models: {list(models.keys())}")
 
 # Get detailed information about a model
 describe_model("beats_naturelm", verbose=True)
+# Shows: model type, whether it has a trained classifier, number of classes, usage examples
 
 # Load a pre-trained model with checkpoint (num_classes extracted automatically)
 model = load_model("sl_beats_animalspeak", device="cpu")
@@ -215,13 +216,28 @@ model_spec = ModelSpec(
 )
 register_model("my_model", model_spec)
 
-# List available models
+# List available models (prints table and returns dict)
 models = list_models()
+# Prints formatted table:
+# ====================================================================================================
+# Model Name                          Description                              Trained Classifier
+# ====================================================================================================
+# beats_naturelm                      beats (pretrained backbone) - NatureLM   ❌ No
+# sl_beats_animalspeak                beats (fine-tuned) - 12279 classes       ✅ Yes (12279 classes)
+# ====================================================================================================
+#
+# Returns dictionary: {'model_name': {'description': '...', 'has_trained_classifier': True/False, ...}}
 print(f"Available models: {list(models.keys())}")
 
-# Get model information
-model_info = describe_model("efficientnet")
-print(f"Model type: {model_info['_metadata']['model_type']}")
+# Get detailed model information
+model_info = describe_model("beats_naturelm", verbose=True)
+# Prints formatted output showing:
+# - Model type and device
+# - Whether it has a trained classifier
+# - Number of classes (if applicable)
+# - Checkpoint and class mapping paths
+# - Audio configuration
+# - Usage examples
 
 # Check if model is registered
 model_spec = get_model_spec("efficientnet")
