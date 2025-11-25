@@ -286,8 +286,8 @@ def list_models() -> Dict[str, dict]:
         'checkpoint_path', 'num_classes', 'model_type'
 
     Example:
-        >>> models = list_models()
-        # Prints:
+        >>> models = list_models()  # doctest: +SKIP
+        # Prints a formatted table:
         # ====================================================================================================
         # Model Name                          Description                              Trained Classifier
         # ====================================================================================================
