@@ -41,10 +41,10 @@ def main() -> None:
         print(f"   Number of classes: {output.shape[-1]}")
 
         # Use class mapping for predictions if available
-        if hasattr(model, "class_mapping"):
-            print("\n   🏷️  Class mapping available!")
-            index_to_label = model.class_mapping["index_to_label"]
-            label_to_index = model.class_mapping["label_to_index"]
+        if hasattr(model, "label_mapping"):
+            print("\n   🏷️  Label mapping available!")
+            index_to_label = model.label_mapping["index_to_label"]
+            label_to_index = model.label_mapping["label_to_index"]
             print(f"   Total classes in mapping: {len(label_to_index)}")
 
             # Get top-3 predictions with actual class labels

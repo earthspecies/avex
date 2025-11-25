@@ -322,10 +322,10 @@ def list_models() -> Dict[str, dict]:
                     class_mapping_path = yaml_data.get("class_mapping_path")
                     # Try to extract num_classes if available
                     if has_checkpoint and class_mapping_path:
-                        from .load import load_class_mapping
+                        from .load import load_label_mapping
 
                         try:
-                            mapping = load_class_mapping(name)
+                            mapping = load_label_mapping(name)
                             if mapping:
                                 num_classes = len(mapping.get("label_to_index", {}))
                         except Exception:
@@ -450,12 +450,12 @@ def describe_model(name: str, verbose: bool = False) -> dict:
                 yaml_data = yaml.safe_load(f)
             if isinstance(yaml_data, dict):
                 class_mapping_path = yaml_data.get("class_mapping_path")
-                # Try to load class mapping to get num_classes
+                # Try to load label mapping to get num_classes
                 if has_checkpoint and class_mapping_path:
-                    from .load import load_class_mapping
+                    from .load import load_label_mapping
 
                     try:
-                        mapping = load_class_mapping(name)
+                        mapping = load_label_mapping(name)
                         if mapping:
                             num_classes = len(mapping.get("label_to_index", {}))
                     except Exception:

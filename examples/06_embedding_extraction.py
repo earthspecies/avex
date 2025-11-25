@@ -88,11 +88,11 @@ def main() -> None:
         classification_model = load_model("sl_beats_all", device="cpu")
         classification_model.eval()
 
-        # Check if class mapping is available
-        if hasattr(classification_model, "class_mapping"):
-            index_to_label = classification_model.class_mapping["index_to_label"]
-            label_to_index = classification_model.class_mapping["label_to_index"]
-            print(f"   ✅ Class mapping loaded: {len(label_to_index)} classes")
+        # Check if label mapping is available
+        if hasattr(classification_model, "label_mapping"):
+            index_to_label = classification_model.label_mapping["index_to_label"]
+            label_to_index = classification_model.label_mapping["label_to_index"]
+            print(f"   ✅ Label mapping loaded: {len(label_to_index)} classes")
 
         # Test both with same input
         dummy_input = torch.randn(1, 16000 * 5)
