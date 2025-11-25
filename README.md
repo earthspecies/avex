@@ -361,10 +361,12 @@ The framework includes support for various audio representation learning models:
 
 ### Model Configuration
 
-Models are configured using YAML files in the `api/configs/official_models/` directory:
+Models are configured using YAML files in the `api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
+
+**Minimal Model Configuration:**
 
 ```yaml
-# Example: efficientnet_animalspeak.yml
+# Example: my_model.yml - Minimal configuration for model loading
 model_spec:
   name: efficientnet
   pretrained: false
@@ -374,24 +376,32 @@ model_spec:
     representation: mel_spectrogram
     n_mels: 128
   efficientnet_variant: b0
-
-# Placeholder fields for RunConfig validation (not used for training)
-training_params:
-  train_epochs: 1
-  lr: 0.001
-  batch_size: 1
-  optimizer: adamw
-  weight_decay: 0.0
-
-dataset_config:
-  train_datasets:
-    - dataset_name: placeholder
-  val_datasets:
-    - dataset_name: placeholder
-
-output_dir: "./runs/placeholder"
-loss_function: cross_entropy
 ```
+
+**Full Model Configuration (with checkpoint):**
+
+```yaml
+# Example: efficientnet_animalspeak.yml - Complete configuration
+# Optional: Default checkpoint path
+checkpoint_path: gs://my-bucket/models/efficientnet_animalspeak.pt
+
+# Optional: Label mapping for human-readable predictions
+class_mapping_path: gs://my-bucket/models/label_map.json
+
+# Required: Model specification
+model_spec:
+  name: efficientnet
+  pretrained: false
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: mel_spectrogram
+    n_mels: 128
+    target_length_seconds: 10
+  efficientnet_variant: b0
+```
+
+These configurations can be loaded directly with `load_model("path/to/config.yml")`. See the "Loading Pre-trained Models" section for usage examples.
 
 ## 🔧 Configuration
 
@@ -506,23 +516,24 @@ from representation_learning import load_model
 
 # Load pre-trained model with checkpoint
 model = load_model("sl_beats_animalspeak", device="cpu")
-
-# Set to evaluation mode
 model.eval()
 
-# Run evaluation
-correct = 0
-total = 0
+# Run inference
 with torch.no_grad():
-    for batch_audio, batch_labels in eval_loader:
-        outputs = model(batch_audio, padding_mask=None)
-        _, predicted = torch.max(outputs, 1)
-        total += batch_labels.size(0)
-        correct += (predicted == batch_labels).sum().item()
+    audio = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+    outputs = model(audio, padding_mask=None)
+    predictions = torch.softmax(outputs, dim=-1)
 
-accuracy = 100 * correct / total
-print(f"Accuracy: {accuracy:.2f}%")
+    # If model has label mapping, get human-readable labels
+    if hasattr(model, "label_mapping"):
+        top_k = 5
+        probs, indices = torch.topk(predictions, top_k)
+        for prob, idx in zip(probs[0], indices[0]):
+            label = model.label_mapping["index_to_label"][idx.item()]
+            print(f"{label}: {prob.item():.4f}")
 ```
+
+For complete evaluation examples, see `examples/05_training_and_evaluation.py`.
 
 ## 📦 Package Structure
 
@@ -629,18 +640,47 @@ model = create_model("my_audio_cnn", num_classes=10, device="cpu")
 
 Checkpoint paths are now managed directly in YAML configuration files (`api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
 
+**Creating Custom Model Configurations**
+
+To create your own model configuration, create a YAML file with the following structure:
+
+```yaml
+# my_model.yml - Custom model configuration
+# Optional: Default checkpoint path (can be local or cloud storage)
+checkpoint_path: gs://my-bucket/models/my_model.pt
+
+# Optional: Path to label mapping JSON file
+class_mapping_path: gs://my-bucket/models/my_model_labels.json
+
+# Required: Model specification
+model_spec:
+  name: efficientnet  # Model architecture type
+  pretrained: false
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: mel_spectrogram
+    n_mels: 128
+    target_length_seconds: 10
+    window_selection: random
+  # Model-specific parameters
+  efficientnet_variant: b0
+```
+
+**Using Custom Configurations**
+
 ```python
 from representation_learning import load_model, get_checkpoint_path
 
-# Checkpoint paths are defined in YAML files (api/configs/official_models/*.yml)
-# Get default checkpoint path (read from YAML)
-# Returns None if the model doesn't have checkpoint_path
+# Load model from custom YAML file
+model = load_model("path/to/my_model.yml")
+
+# Or for official models, checkpoint paths are read automatically from YAML
 checkpoint = get_checkpoint_path("efficientnet_animalspeak")
 print(f"Default checkpoint: {checkpoint}")
 
 # Load with default checkpoint (from YAML)
 # num_classes=None automatically extracts num_classes from checkpoint
-# and preserves the classifier weights from the checkpoint
 model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint + extracts num_classes
 
 # Load with custom checkpoint (overrides YAML default)
