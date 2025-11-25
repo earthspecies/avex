@@ -12,10 +12,10 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 
-import torch
+from esp_data.io import anypath, exists, filesystem_from_path
 
 from representation_learning.configs import ModelSpec
-from representation_learning.utils.utils import _process_state_dict
+from representation_learning.utils.utils import _process_state_dict, universal_torch_load
 
 from .factory import build_model_from_spec
 from .registry import (
@@ -406,17 +406,14 @@ def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> O
     Returns:
         Number of classes if found, None otherwise
     """
-    import torch
-    from esp_data.io import anypath
-
     ckpt_path = anypath(checkpoint_path)
 
-    if not ckpt_path.exists():
+    if not exists(ckpt_path):
         logger.warning(f"Checkpoint not found: {ckpt_path}")
         return None
 
     try:
-        checkpoint = torch.load(ckpt_path, map_location=device)
+        checkpoint = universal_torch_load(ckpt_path, map_location=device)
 
         # Try to extract from model state dict
         if isinstance(checkpoint, dict):
@@ -506,8 +503,6 @@ def load_label_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
     """
     import json
 
-    from esp_data.io import anypath
-
     # If it's a model name, get the path from YAML config
     if (
         isinstance(model_or_path, str)
@@ -554,11 +549,12 @@ def load_label_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
 
     try:
         mapping_path = anypath(mapping_path_str)
-        if not mapping_path.exists():
+        if not exists(mapping_path):
             logger.warning(f"Class mapping file not found: {mapping_path_str}")
             return None
 
-        with mapping_path.open("r", encoding="utf-8") as f:
+        fs = filesystem_from_path(mapping_path)
+        with fs.open(str(mapping_path), mode="r", encoding="utf-8") as f:
             mapping = json.load(f)
 
         if not isinstance(mapping, dict):
@@ -593,17 +589,15 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
     Raises:
         FileNotFoundError: If checkpoint file doesn't exist
     """
-    from esp_data.io import anypath
-
     ckpt_path = anypath(checkpoint_path)
 
     logger.info(f"Loading checkpoint from: {checkpoint_path}")
 
-    if not ckpt_path.exists():
+    if not exists(ckpt_path):
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
     # Load checkpoint
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    checkpoint = universal_torch_load(ckpt_path, map_location=device)
 
     # Process state dict if needed
     state_dict = _process_state_dict(checkpoint, keep_classifier=keep_classifier)

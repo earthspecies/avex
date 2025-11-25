@@ -24,7 +24,8 @@ os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
 import pandas as pd
 import torch
 from esp_data import DatasetConfig
-from esp_data.io import anypath
+from esp_data.io import AnyPathT, anypath, exists
+from esp_data.io.paths import PureCloudPath
 
 # Import representation_learning modules
 from representation_learning.configs import (
@@ -59,7 +60,7 @@ from representation_learning.utils.experiment_tracking import (
     get_or_create_experiment_metadata,
     save_evaluation_metadata,
 )
-from representation_learning.utils.utils import _process_state_dict
+from representation_learning.utils.utils import _process_state_dict, universal_torch_load
 
 logger = logging.getLogger("run_finetune")
 
@@ -103,7 +104,7 @@ def run_experiment(
     experiment_cfg: ExperimentConfig,
     data_collection_cfg: DatasetCollectionConfig,
     device: torch.device,
-    save_dir: Path,
+    save_dir: Path | AnyPathT,
     evaluation_dataset_name: Optional[str] = None,
     evaluation_set_metrics: Optional[List[str]] = None,
     evaluation_set: Optional[EvaluationSet] = None,
@@ -444,10 +445,14 @@ def run_experiment(
 
             if experiment_cfg.checkpoint_path:
                 ckpt_path = anypath(experiment_cfg.checkpoint_path)
-                if not ckpt_path.exists():
+                if not exists(ckpt_path):
                     raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-                with ckpt_path.open("rb") as f:
-                    state = torch.load(f, map_location=device)
+
+                # fs = filesystem_from_path(ckpt_path)
+                # with fs.open(ckpt_path, "rb") as f:
+                state = universal_torch_load(ckpt_path, map_location=device)
+                # state = torch.load(f, map_location=device)
+
                 if "model_state_dict" in state:
                     state = _process_state_dict(state)
 
@@ -938,11 +943,12 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     logger.info(f"Loaded {len(evaluation_sets)} evaluation sets")
 
     # 2. Output dir & device
-    if str(eval_cfg.save_dir).startswith("gs://"):
+    if isinstance(str(eval_cfg.save_dir), PureCloudPath):
         save_dir = anypath(str(eval_cfg.save_dir))
     else:
         save_dir = Path(str(eval_cfg.save_dir)).expanduser()
         save_dir.mkdir(parents=True, exist_ok=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
 
