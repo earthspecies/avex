@@ -17,6 +17,7 @@ from esp_data.io import anypath, exists, filesystem_from_path
 from representation_learning.configs import ModelSpec
 from representation_learning.utils.utils import _process_state_dict, universal_torch_load
 
+from . import registry
 from .factory import build_model_from_spec
 from .registry import (
     get_checkpoint_path,
@@ -187,7 +188,7 @@ def _load_from_modelspec(
         else:
             # Optimized lookup: Filter by model_spec.name first, then compare
             # This avoids comparing against all models when we can filter by name
-            all_models = list_models()
+            all_models = registry._MODEL_REGISTRY
             candidates = {key: spec for key, spec in all_models.items() if spec.name == model_spec.name}
 
             # Compare only the filtered candidates (much faster than comparing all)
