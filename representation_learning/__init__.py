@@ -10,7 +10,7 @@ from .models.utils.factory import (
     build_model,
     build_model_from_spec,
 )
-from .models.utils.load import create_model, load_class_mapping, load_model
+from .models.utils.load import create_model, load_label_mapping, load_model
 from .models.utils.registry import (
     describe_model,
     get_checkpoint_path,
@@ -48,6 +48,6 @@ __all__ = [
     "build_model_from_spec",
     # Checkpoint management
     "get_checkpoint_path",
-    # Class mapping management
-    "load_class_mapping",
+    # Label mapping management
+    "load_label_mapping",
 ]
