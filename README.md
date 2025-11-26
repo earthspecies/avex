@@ -6,7 +6,41 @@ A comprehensive Python-based system for training, evaluating, and analyzing bioa
 
 ### Installation
 
-**Method 1: Using uv (Recommended)**
+**Method 1: Install from Internal PyPI (esp-pypi) using uv**
+
+For users with access to the Earth Species Project's internal PyPI:
+
+```bash
+# 1. Authenticate with Google Cloud
+gcloud auth login
+gcloud auth application-default login
+
+# 2. Install keyring package system-wide with Google Artifact Registry plugin
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+
+# 3. Configure your pyproject.toml to use the private index
+cat >> pyproject.toml << 'EOF'
+
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+representation-learning = { index = "esp-pypi" }
+
+[tool.uv]
+keyring-provider = "subprocess"
+EOF
+
+# 4. Install the package
+uv add representation-learning
+
+# Or use pip with extra index
+uv pip install representation-learning --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+**Method 2: Install from Source using uv (Development)**
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -16,18 +50,13 @@ cd representation-learning
 uv sync
 ```
 
-**Method 2: Using pip**
+**Method 3: Install from Source using pip**
 ```bash
 # Install from source
 pip install -e .
 
 # Or install with private index for esp-data
 pip install -e . --extra-index-url https://esp-pypi.com/simple/
-```
-
-**Method 3: Using setup.py**
-```bash
-python setup.py install
 ```
 
 ### Basic Usage
