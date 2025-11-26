@@ -273,13 +273,107 @@ def get_model_spec(name: str) -> Optional[ModelSpec]:
     return _MODEL_REGISTRY[name]
 
 
-def list_models() -> Dict[str, ModelSpec]:
-    """Return available registered models.
+def list_models() -> Dict[str, dict]:
+    """List available registered models with a formatted table.
+
+    This function prints a human-readable table of all registered models showing:
+    - Model name
+    - Description (model type, whether fine-tuned, special features)
+    - Whether it has a trained classifier and number of classes
 
     Returns:
-        Copy of the model registry
+        Dictionary of model information with keys: 'description', 'has_trained_classifier',
+        'checkpoint_path', 'num_classes', 'model_type'
+
+    Example:
+        >>> models = list_models()  # doctest: +SKIP
+        # Prints a formatted table:
+        # ====================================================================================================
+        # Model Name                          Description                              Trained Classifier
+        # ====================================================================================================
+        # beats_naturelm                      beats (pretrained backbone) - NatureLM   ❌ No
+        # sl_beats_animalspeak                beats (fine-tuned) - 12279 classes       ✅ Yes (12279 classes)
+        # ====================================================================================================
+        #
+        # Returns dict:
+        # {'beats_naturelm': {'description': '...', 'has_trained_classifier': False, ...}}
     """
-    return _MODEL_REGISTRY.copy()
+    # Build human-readable information for each model
+    models_info = {}
+    for name in _MODEL_REGISTRY.keys():
+        spec = _MODEL_REGISTRY[name]
+
+        # Check if model has trained classifier by looking for checkpoint and class mapping
+        checkpoint_path = get_checkpoint_path(name)
+        has_checkpoint = checkpoint_path is not None
+
+        # Try to get class mapping to determine if it's a trained classifier
+        class_mapping_path = None
+        num_classes = None
+        try:
+            from importlib import resources
+
+            root = resources.files(_OFFICIAL_MODELS_PKG)
+            yaml_file = root / f"{name}.yml"
+            if yaml_file.is_file():
+                with yaml_file.open("r", encoding="utf-8") as f:
+                    yaml_data = yaml.safe_load(f)
+                if isinstance(yaml_data, dict):
+                    class_mapping_path = yaml_data.get("class_mapping_path")
+                    # Try to extract num_classes if available
+                    if has_checkpoint and class_mapping_path:
+                        from .load import load_label_mapping
+
+                        try:
+                            mapping = load_label_mapping(name)
+                            if mapping:
+                                num_classes = len(mapping.get("label_to_index", {}))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        has_trained_classifier = has_checkpoint and class_mapping_path is not None
+
+        # Create description
+        model_type = spec.name
+        if has_trained_classifier:
+            desc_parts = [f"{model_type} (fine-tuned)"]
+            if num_classes:
+                desc_parts.append(f"{num_classes} classes")
+        else:
+            desc_parts = [f"{model_type} (pretrained backbone)"]
+
+        # Add additional context
+        if spec.use_naturelm:
+            desc_parts.append("NatureLM")
+        if spec.fine_tuned:
+            desc_parts.append("fine-tuned")
+
+        description = " - ".join(desc_parts)
+
+        models_info[name] = {
+            "description": description,
+            "has_trained_classifier": has_trained_classifier,
+            "checkpoint_path": checkpoint_path,
+            "num_classes": num_classes,
+            "model_type": model_type,
+        }
+
+    # Always print formatted table
+    print("\n" + "=" * 100)
+    print(f"{'Model Name':<35} {'Description':<40} {'Trained Classifier':<20}")
+    print("=" * 100)
+    for name, info in sorted(models_info.items()):
+        has_clf = "✅ Yes" if info["has_trained_classifier"] else "❌ No"
+        if info["num_classes"]:
+            has_clf += f" ({info['num_classes']} classes)"
+        print(f"{name:<35} {info['description']:<40} {has_clf:<20}")
+    print("=" * 100)
+    print(f"Total models: {len(models_info)}")
+    print("\n💡 Tip: Use describe_model(name) to see detailed information about a specific model\n")
+
+    return models_info
 
 
 def get_checkpoint_path(name: str) -> Optional[str]:
@@ -328,7 +422,7 @@ def describe_model(name: str, verbose: bool = False) -> dict:
 
     Args:
         name: Name of the model to describe
-        verbose: If True, pretty-print the model information to stdout
+        verbose: If True, print a human-readable formatted description to stdout
 
     Returns:
         Dictionary containing the model's configuration details
@@ -340,10 +434,41 @@ def describe_model(name: str, verbose: bool = False) -> dict:
     if spec is None:
         raise KeyError(f"Model '{name}' is not registered")
 
+    # Get checkpoint and class mapping information
+    checkpoint_path = get_checkpoint_path(name)
+    has_checkpoint = checkpoint_path is not None
+
+    class_mapping_path = None
+    num_classes = None
+    try:
+        from importlib import resources
+
+        root = resources.files(_OFFICIAL_MODELS_PKG)
+        yaml_file = root / f"{name}.yml"
+        if yaml_file.is_file():
+            with yaml_file.open("r", encoding="utf-8") as f:
+                yaml_data = yaml.safe_load(f)
+            if isinstance(yaml_data, dict):
+                class_mapping_path = yaml_data.get("class_mapping_path")
+                # Try to load label mapping to get num_classes
+                if has_checkpoint and class_mapping_path:
+                    from .load import load_label_mapping
+
+                    try:
+                        mapping = load_label_mapping(name)
+                        if mapping:
+                            num_classes = len(mapping.get("label_to_index", {}))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    has_trained_classifier = has_checkpoint and class_mapping_path is not None
+
     # Get the full model dump with all fields
     model_info = spec.model_dump()
 
-    # Add some additional metadata
+    # Add enhanced metadata
     model_info["_metadata"] = {
         "name": name,
         "model_type": spec.name,
@@ -353,16 +478,74 @@ def describe_model(name: str, verbose: bool = False) -> dict:
         "has_text_model": spec.text_model_name is not None,
         "has_eat_config": spec.eat_cfg is not None,
         "is_pretraining_mode": spec.pretraining_mode,
+        # Enhanced metadata for classifier information
+        "has_trained_classifier": has_trained_classifier,
+        "checkpoint_path": checkpoint_path,
+        "class_mapping_path": class_mapping_path,
+        "num_classes": num_classes,
     }
 
     if verbose:
-        try:
-            import json
+        # Print human-readable summary
+        print("\n" + "=" * 80)
+        print(f"Model: {name}")
+        print("=" * 80)
+        print(f"  Model Type: {spec.name}")
+        print(f"  Device: {spec.device}")
 
-            print(json.dumps(model_info, indent=2, sort_keys=True, default=str))
-        except Exception:
-            # Fallback to repr if something is not JSON-serializable
-            print(model_info)
+        print("\n📦 Classifier Information:")
+        if has_trained_classifier:
+            print("  ✅ Has Trained Classifier: Yes")
+            if num_classes:
+                print(f"  📊 Number of Classes: {num_classes}")
+            if checkpoint_path:
+                print(
+                    f"  💾 Checkpoint: {checkpoint_path[:80]}..."
+                    if len(checkpoint_path) > 80
+                    else f"  💾 Checkpoint: {checkpoint_path}"
+                )
+            if class_mapping_path:
+                print(
+                    f"  🏷️  Class Mapping: {class_mapping_path[:80]}..."
+                    if len(class_mapping_path) > 80
+                    else f"  🏷️  Class Mapping: {class_mapping_path}"
+                )
+        else:
+            print("  ❌ Has Trained Classifier: No")
+            if checkpoint_path:
+                print(
+                    f"  💾 Checkpoint: {checkpoint_path[:80]}..."
+                    if len(checkpoint_path) > 80
+                    else f"  💾 Checkpoint: {checkpoint_path}"
+                )
+                print("  💡 Note: Checkpoint contains pretrained weights but no classifier head")
+            else:
+                print("  💡 Note: This is a pretrained backbone model without a checkpoint")
+
+        print("\n⚙️  Model Configuration:")
+        if spec.audio_config:
+            print(f"  🎵 Sample Rate: {spec.audio_config.sample_rate} Hz")
+            print(f"  📊 Representation: {spec.audio_config.representation}")
+            print(f"  ⏱️  Target Length: {spec.audio_config.target_length_seconds}s")
+
+        if spec.use_naturelm:
+            print("  🌿 Uses NatureLM: Yes")
+        if spec.fine_tuned:
+            print("  🎯 Fine-tuned: Yes")
+
+        print("\n💡 Usage:")
+        if has_trained_classifier:
+            print(f"  # Load with original trained classifier ({num_classes} classes):")
+            print(f'  model = load_model("{name}", num_classes=None)')
+            print("\n  # Load with new classifier (e.g., 10 classes):")
+            print(f'  model = load_model("{name}", num_classes=10)')
+        else:
+            print("  # Load for embedding extraction:")
+            print(f'  model = load_model("{name}", num_classes=None, return_features_only=True)')
+            print("\n  # Load with new classifier (e.g., 10 classes):")
+            print(f'  model = load_model("{name}", num_classes=10)')
+
+        print("=" * 80 + "\n")
 
     return model_info
 
