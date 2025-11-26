@@ -97,6 +97,10 @@ Documentation = "https://github.com/earthspecies/representation-learning#readme"
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+module-name = "representation_learning"
+module-root = ""
+
 [tool.pytest.ini_options]
 python_files = [
     "test_*.py",
