@@ -20,7 +20,7 @@ from representation_learning.models.utils.load import (
     _extract_num_classes_from_checkpoint,
     _load_checkpoint,
     create_model,
-    load_class_mapping,
+    load_label_mapping,
 )
 from representation_learning.models.utils.registry import (
     register_model_class,
@@ -346,8 +346,8 @@ class TestExtractNumClassesFromCheckpoint:
         assert num_classes is None
 
 
-class TestLoadClassMapping:
-    """Test load_class_mapping function."""
+class TestLoadLabelMapping:
+    """Test load_label_mapping function."""
 
     @pytest.fixture(autouse=True)
     def setup_registry(self) -> None:
@@ -384,7 +384,7 @@ class TestLoadClassMapping:
         json_file = tmp_path / "mapping.json"
         json_file.write_text(json.dumps(mapping_data), encoding="utf-8")
 
-        mapping = load_class_mapping(str(json_file))
+        mapping = load_label_mapping(str(json_file))
 
         assert mapping is not None
         assert mapping["label_to_index"]["class_a"] == 0
@@ -397,7 +397,7 @@ class TestLoadClassMapping:
         json_file = tmp_path / "mapping.json"
         json_file.write_text(json.dumps(mapping_data), encoding="utf-8")
 
-        mapping = load_class_mapping(json_file)
+        mapping = load_label_mapping(json_file)
 
         assert mapping is not None
         assert mapping["label_to_index"]["label1"] == 0
@@ -406,7 +406,7 @@ class TestLoadClassMapping:
         """Test that None is returned when file doesn't exist."""
         json_file = tmp_path / "nonexistent.json"
 
-        mapping = load_class_mapping(str(json_file))
+        mapping = load_label_mapping(str(json_file))
 
         assert mapping is None
 
@@ -415,7 +415,7 @@ class TestLoadClassMapping:
         json_file = tmp_path / "invalid.json"
         json_file.write_text("not valid json", encoding="utf-8")
 
-        mapping = load_class_mapping(str(json_file))
+        mapping = load_label_mapping(str(json_file))
 
         assert mapping is None
 
@@ -424,7 +424,7 @@ class TestLoadClassMapping:
         json_file = tmp_path / "not_dict.json"
         json_file.write_text("[1, 2, 3]", encoding="utf-8")
 
-        mapping = load_class_mapping(str(json_file))
+        mapping = load_label_mapping(str(json_file))
 
         assert mapping is None
 
@@ -583,7 +583,7 @@ class TestLoadFromModelSpec:
 
     def test_loads_with_return_features_only(self) -> None:
         """Test loading model with return_features_only=True."""
-        model = load_model("test_model", num_classes=None, device="cpu", return_features_only=True)
+        model = load_model("test_model", device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
         assert model.return_features_only is True
@@ -641,7 +641,7 @@ class TestLoadFromModelSpec:
         )
         register_model("test_pretrained_model", model_spec)
 
-        model = load_model("test_pretrained_model", num_classes=None, device="cpu")
+        model = load_model("test_pretrained_model", device="cpu")
 
         assert isinstance(model, ModelBase)
         assert model.return_features_only is True

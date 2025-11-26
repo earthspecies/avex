@@ -95,11 +95,9 @@ def main() -> None:
         register_model("custom_beats", custom_beats)
         print("✅ Registered custom_beats")
 
-        # List all registered models
+        # List all registered models (prints table automatically)
         models = list_models()
-        print(f"Total registered models: {len(models)}")
-        for name in list_models().keys():
-            print(f"  - {name}")
+        print(f"\n   Total registered models: {len(models)}")
 
     except Exception as e:
         print(f"❌ Error registering models: {e}")
@@ -212,10 +210,11 @@ def main() -> None:
     print("   Example: register_model('custom_efficientnet_v2', new_spec)")
 
     # Check registration status
+    print("\n📋 Current registry state:")
     models = list_models()
     is_reg1 = "custom_efficientnet" in models
     is_reg2 = "custom_beats" in models
-    print(f"   custom_efficientnet still registered: {is_reg1}")
+    print(f"\n   custom_efficientnet still registered: {is_reg1}")
     print(f"   custom_beats still registered: {is_reg2}")
 
     # Models remain registered and can be used
@@ -232,8 +231,8 @@ def main() -> None:
         models = list_models()
         model_names = list(models.keys())
 
-        print(f"Total registered models: {len(models)}")
-        print(f"Model names: {model_names}")
+        print(f"\n   Total registered models: {len(models)}")
+        print(f"   Model names: {model_names}")
 
         # Count by model type
         model_types = {}

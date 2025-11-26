@@ -26,7 +26,7 @@ def main() -> None:
     try:
         # Load without num_classes - automatically uses return_features_only=True
         print("Loading BEATs NatureLM model without num_classes (embedding extraction mode)...")
-        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model = load_model("beats_naturelm", device="cpu")
         model.eval()
 
         print(f"✅ Loaded model: {type(model).__name__}")
@@ -52,7 +52,7 @@ def main() -> None:
     try:
         # Load without num_classes - automatically uses return_features_only=True
         print("Loading EAT-HF model without num_classes (embedding extraction mode)...")
-        model = load_model("sl_eat_animalspeak_ssl_all", num_classes=None, device="cpu")
+        model = load_model("sl_eat_animalspeak_ssl_all", device="cpu")
         model.eval()
 
         print(f"✅ Loaded model: {type(model).__name__}")
@@ -79,20 +79,20 @@ def main() -> None:
         # Load in embedding mode (return_features_only=True strips classifier from checkpoint)
         print("Loading sl_beats_all in embedding extraction mode (return_features_only=True)...")
         print("   (Same checkpoint used, but classifier head is stripped)")
-        embedding_model = load_model("sl_beats_all", num_classes=None, return_features_only=True, device="cpu")
+        embedding_model = load_model("sl_beats_all", return_features_only=True, device="cpu")
         embedding_model.eval()
 
         # Load in classification mode (with checkpoint, extracts actual classes and class mapping)
         print("Loading sl_beats_all in classification mode (with checkpoint and class mapping)...")
         print("   (Same checkpoint used, classifier head is preserved)")
-        classification_model = load_model("sl_beats_all", num_classes=None, device="cpu")
+        classification_model = load_model("sl_beats_all", device="cpu")
         classification_model.eval()
 
-        # Check if class mapping is available
-        if hasattr(classification_model, "class_mapping"):
-            index_to_label = classification_model.class_mapping["index_to_label"]
-            label_to_index = classification_model.class_mapping["label_to_index"]
-            print(f"   ✅ Class mapping loaded: {len(label_to_index)} classes")
+        # Check if label mapping is available
+        if hasattr(classification_model, "label_mapping"):
+            index_to_label = classification_model.label_mapping["index_to_label"]
+            label_to_index = classification_model.label_mapping["label_to_index"]
+            print(f"   ✅ Label mapping loaded: {len(label_to_index)} classes")
 
         # Test both with same input
         dummy_input = torch.randn(1, 16000 * 5)

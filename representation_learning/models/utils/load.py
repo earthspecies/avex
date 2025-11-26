@@ -17,6 +17,7 @@ from esp_data.io import anypath, exists, filesystem_from_path
 from representation_learning.configs import ModelSpec
 from representation_learning.utils.utils import _process_state_dict, universal_torch_load
 
+from . import registry
 from .factory import build_model_from_spec
 from .registry import (
     get_checkpoint_path,
@@ -187,7 +188,7 @@ def _load_from_modelspec(
         else:
             # Optimized lookup: Filter by model_spec.name first, then compare
             # This avoids comparing against all models when we can filter by name
-            all_models = list_models()
+            all_models = registry._MODEL_REGISTRY
             candidates = {key: spec for key, spec in all_models.items() if spec.name == model_spec.name}
 
             # Compare only the filtered candidates (much faster than comparing all)
@@ -283,15 +284,15 @@ def _load_from_modelspec(
     # Create model using factory
     backbone = build_model_from_spec(model_spec, device, num_classes, **kwargs)
 
-    # Load class mapping if available (only for models with classifier heads)
-    # Don't load class mapping if return_features_only=True
+    # Load label mapping if available (only for models with classifier heads)
+    # Don't load label mapping if return_features_only=True
     if not return_features_only and registry_key is not None:
-        class_mapping = load_class_mapping(registry_key)
-        if class_mapping:
-            # Attach class mapping to model for easy access
-            backbone.class_mapping = class_mapping
+        label_mapping = load_label_mapping(registry_key)
+        if label_mapping:
+            # Attach label mapping to model for easy access
+            backbone.label_mapping = label_mapping
             logger.info(
-                f"Attached class mapping to model (label_to_index: {len(class_mapping['label_to_index'])} classes)"
+                f"Attached label mapping to model (label_to_index: {len(label_mapping['label_to_index'])} classes)"
             )
 
     # Load checkpoint if provided
@@ -478,15 +479,15 @@ def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> O
         return None
 
 
-def load_class_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
-    """Load class mapping from JSON file.
+def load_label_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
+    """Load label mapping from JSON file.
 
-    The class mapping is a JSON dictionary that maps class labels to their
+    The label mapping is a JSON dictionary that maps class labels to their
     corresponding indices (logit positions) in the classifier head.
 
     Args:
         model_or_path: Either a model name (str) to load mapping from YAML config,
-            or a path (str/Path) to the JSON file containing the class mapping.
+            or a path (str/Path) to the JSON file containing the label mapping.
             Supports cloud storage paths (e.g., gs://).
 
     Returns:
@@ -495,10 +496,10 @@ def load_class_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
 
     Example:
         >>> # Load by model name (reads path from YAML config)
-        >>> mapping = load_class_mapping("sl_beats_animalspeak")
+        >>> mapping = load_label_mapping("sl_beats_animalspeak")
         >>>
         >>> # Load by direct path
-        >>> mapping = load_class_mapping("gs://bucket/label_map.json")
+        >>> mapping = load_label_mapping("gs://bucket/label_map.json")
         >>> # mapping = {"label_to_index": {...}, "index_to_label": {...}}
     """
     import json

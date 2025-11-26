@@ -18,18 +18,18 @@ def main() -> None:
     print("🚀 Example 1: Basic Model Loading")
     print("=" * 50)
 
-    # List available models
+    # List available models (prints formatted table and returns info dict)
     print("\n📋 Available Models:")
     models = list_models()
-    for name, spec in models.items():
-        print(f"  - {name}: {spec.name} ({spec.pretrained})")
+    # Note: list_models() automatically prints a formatted table above
+    # The returned dict contains detailed info for programmatic access
 
     # Example 1: Load a pre-trained model with checkpoint and class mapping
     print("\n🔧 Loading pre-trained model with checkpoint (actual classes):")
     try:
         # Use load_model to load with checkpoint and class mapping
-        # num_classes=None will extract the actual number of classes from the checkpoint
-        model = load_model("efficientnet_animalspeak", num_classes=None, device="cpu")
+        # num_classes defaults to None, which extracts the actual number of classes from the checkpoint
+        model = load_model("efficientnet_animalspeak", device="cpu")
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -41,10 +41,10 @@ def main() -> None:
         print(f"   Number of classes: {output.shape[-1]}")
 
         # Use class mapping for predictions if available
-        if hasattr(model, "class_mapping"):
-            print("\n   🏷️  Class mapping available!")
-            index_to_label = model.class_mapping["index_to_label"]
-            label_to_index = model.class_mapping["label_to_index"]
+        if hasattr(model, "label_mapping"):
+            print("\n   🏷️  Label mapping available!")
+            index_to_label = model.label_mapping["index_to_label"]
+            label_to_index = model.label_mapping["label_to_index"]
             print(f"   Total classes in mapping: {len(label_to_index)}")
 
             # Get top-3 predictions with actual class labels

@@ -17,7 +17,7 @@ import torch
 from representation_learning import (
     get_checkpoint_path,
     list_models,
-    load_class_mapping,
+    load_label_mapping,
     load_model,
 )
 
@@ -31,14 +31,22 @@ def main() -> None:
     print("   Note: Checkpoint paths are defined in YAML files in configs/official_models/")
 
     try:
-        # List registered models and their default checkpoint paths
+        # List registered models (prints table and returns detailed info)
         models = list_models()
+
+        # The table above shows which models have trained classifiers
+        # We can also programmatically access checkpoint paths
+        print("\n   Checkpoint details:")
         for model_name in models.keys():
-            checkpoint = get_checkpoint_path(model_name)
+            checkpoint = models[model_name]["checkpoint_path"]
             if checkpoint:
-                print(f"  - {model_name}: {checkpoint}")
+                print(
+                    f"  - {model_name}: {checkpoint[:60]}..."
+                    if len(checkpoint) > 60
+                    else f"  - {model_name}: {checkpoint}"
+                )
             else:
-                print(f"  - {model_name}: No default checkpoint (model spec only)")
+                print(f"  - {model_name}: No checkpoint")
 
     except Exception as e:
         print(f"❌ Error listing checkpoints: {e}")
@@ -159,8 +167,8 @@ def main() -> None:
         # Show which models have class mappings by trying to load them
         models_with_mapping = []
         for model_name in list_models().keys():
-            class_mapping = load_class_mapping(model_name)
-            if class_mapping:
+            label_mapping = load_label_mapping(model_name)
+            if label_mapping:
                 models_with_mapping.append(model_name)
 
         if models_with_mapping:
@@ -173,11 +181,11 @@ def main() -> None:
         # Example: Load a model with class mapping
         print("\n   Example: Loading model with class mapping:")
         model_name = "sl_beats_animalspeak"
-        print(f"   Loading class mapping for model: {model_name}")
-        class_mapping = load_class_mapping(model_name)
-        if class_mapping:
-            label_to_index = class_mapping["label_to_index"]
-            index_to_label = class_mapping["index_to_label"]
+        print(f"   Loading label mapping for model: {model_name}")
+        label_mapping = load_label_mapping(model_name)
+        if label_mapping:
+            label_to_index = label_mapping["label_to_index"]
+            index_to_label = label_mapping["index_to_label"]
             print(f"   ✅ Loaded class mapping with {len(label_to_index)} classes")
             print("   Example labels (first 5):")
             for _i, (label, idx) in enumerate(list(label_to_index.items())[:5]):
@@ -192,9 +200,9 @@ def main() -> None:
             try:
                 model = load_model(model_name, device="cpu")
                 if hasattr(model, "class_mapping"):
-                    print("   ✅ Model loaded with class mapping attached")
+                    print("   ✅ Model loaded with label mapping attached")
                     print(
-                        "   Access via: model.class_mapping['label_to_index'] or model.class_mapping['index_to_label']"
+                        "   Access via: model.label_mapping['label_to_index'] or model.label_mapping['index_to_label']"
                     )
 
                     # Example: Use class mapping for predictions
