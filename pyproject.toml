@@ -50,7 +50,7 @@ dependencies = [
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
   "pydantic-settings>=2.9.1",
-  "esp-sweep>=0.2.0",
+  "esp-sweep>=0.1.0",
   "esp-data>=1.3.0",
   "wandb>=0.21.0",
   "birdnetlib>=0.18.0",
@@ -96,10 +96,6 @@ Documentation = "https://github.com/earthspecies/representation-learning#readme"
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
-
-[tool.uv.build-backend]
-module-name = "representation_learning"
-module-root = ""
 
 [tool.pytest.ini_options]
 python_files = [
