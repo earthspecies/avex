@@ -211,11 +211,33 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
             model_id=model_id,
         )
+    elif model_name == "openbeats":
+        from representation_learning.models.openbeats_model import (
+            Model as OpenBEATsModel,  # Local import to avoid HF deps when unused
+        )
+
+        model_id = getattr(model_config, "model_id", None)
+        model_size = getattr(model_config, "model_size", "large")
+        use_flash_attn = getattr(model_config, "use_flash_attn", False)
+        disable_layerdrop = getattr(model_config, "disable_layerdrop", False)
+        checkpoint_path = getattr(model_config, "checkpoint_path", None)
+
+        return OpenBEATsModel(
+            num_classes=num_classes,
+            pretrained=model_config.pretrained,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+            model_id=model_id,
+            model_size=model_size,
+            use_flash_attn=use_flash_attn,
+            disable_layerdrop=disable_layerdrop,
+            checkpoint_path=checkpoint_path,
+        )
     else:
         # Fallback
         supported = (
             "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
             "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', "
-            "'birdnet', 'birdmae', 'biolingual', "
+            "'birdnet', 'birdmae', 'biolingual', 'openbeats', "
         )
         raise NotImplementedError(f"Model '{model_name}' is not implemented. Supported models: {supported}")
