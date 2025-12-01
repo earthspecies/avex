@@ -8,6 +8,8 @@ This example demonstrates:
 - Model class management functions
 """
 
+import argparse
+
 import torch
 import torch.nn as nn
 
@@ -241,7 +243,7 @@ class SimpleAudioMLP(ModelBase):
         return 128  # Last hidden layer size
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 3: Custom Model Registration and Plugin Architecture")
     print("=" * 70)
 
@@ -254,13 +256,13 @@ def main() -> None:
     # Example 2: Test custom CNN model
     print("\n🔧 Testing Simple Audio CNN:")
     try:
-        model = create_model("simple_audio_cnn", num_classes=10, device="cpu")
+        model = create_model("simple_audio_cnn", num_classes=10, device=device)
         print(f"✅ Created CNN model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Embedding dim: {model.get_embedding_dim()}")
 
         # Test forward pass
-        dummy_input = torch.randn(2, 16000)  # 2 samples, 1 second each
+        dummy_input = torch.randn(2, 16000, device=device)  # 2 samples, 1 second each
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
@@ -274,7 +276,7 @@ def main() -> None:
         model = create_model(
             "simple_audio_transformer",
             num_classes=15,
-            device="cpu",
+            device=device,
             d_model=64,  # Custom parameter
             nhead=4,  # Custom parameter
             num_layers=2,  # Custom parameter
@@ -284,7 +286,7 @@ def main() -> None:
         print(f"   Embedding dim: {model.get_embedding_dim()}")
 
         # Test forward pass
-        dummy_input = torch.randn(2, 1000)  # 2 samples, 1000 timesteps
+        dummy_input = torch.randn(2, 1000, device=device)  # 2 samples, 1000 timesteps
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
@@ -298,7 +300,7 @@ def main() -> None:
         model = create_model(
             "simple_audio_mlp",
             num_classes=20,
-            device="cpu",
+            device=device,
             hidden_dims=[256, 128, 64],  # Custom architecture
             dropout=0.3,  # Custom dropout
         )
@@ -307,7 +309,7 @@ def main() -> None:
         print(f"   Embedding dim: {model.get_embedding_dim()}")
 
         # Test forward pass
-        dummy_input = torch.randn(3, 8000)  # 3 samples, shorter audio
+        dummy_input = torch.randn(3, 8000, device=device)  # 3 samples, shorter audio
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
@@ -328,7 +330,7 @@ def main() -> None:
             print(f"Model class: {model_class.__name__}")
 
         # Create model using build_model (alternative to create_model)
-        model = build_model("simple_audio_cnn", device="cpu", num_classes=5)
+        model = build_model("simple_audio_cnn", device=device, num_classes=5)
         print(f"✅ Built model with build_model: {type(model).__name__}")
 
     except Exception as e:
@@ -349,7 +351,7 @@ def main() -> None:
 
         # Try to create it (should fail)
         try:
-            model = create_model("simple_audio_mlp", num_classes=10, device="cpu")
+            model = create_model("simple_audio_mlp", num_classes=10, device=device)
             print("❌ Unexpected: Model creation succeeded after unregistering")
         except Exception as e:
             print(f"✅ Expected error after unregistering: {e}")
@@ -359,4 +361,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Custom Model Registration Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

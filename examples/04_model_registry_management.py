@@ -8,6 +8,7 @@ This example demonstrates:
 - Registry introspection and management
 """
 
+import argparse
 import tempfile
 from pathlib import Path
 
@@ -58,7 +59,7 @@ def create_sample_yaml_config() -> dict:
     return config
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 4: Model Registry Management")
     print("=" * 50)
 
@@ -69,7 +70,7 @@ def main() -> None:
         custom_efficientnet = ModelSpec(
             name="efficientnet",
             pretrained=False,
-            device="cpu",
+            device=device,
             audio_config=AudioConfig(
                 sample_rate=22050,  # Different sample rate
                 representation="mel_spectrogram",
@@ -86,7 +87,7 @@ def main() -> None:
         custom_beats = ModelSpec(
             name="beats",
             pretrained=False,
-            device="cpu",
+            device=device,
             audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=5),
             use_naturelm=True,
             fine_tuned=True,
@@ -145,7 +146,7 @@ def main() -> None:
         updated_efficientnet = ModelSpec(
             name="efficientnet",
             pretrained=True,  # Changed to pretrained
-            device="cuda",  # Changed to cuda
+            device=device,
             audio_config=AudioConfig(
                 sample_rate=16000,  # Changed sample rate
                 representation="mel_spectrogram",
@@ -219,7 +220,7 @@ def main() -> None:
 
     # Models remain registered and can be used
     try:
-        model = create_model("custom_efficientnet", num_classes=10, device="cpu")
+        model = create_model("custom_efficientnet", num_classes=10, device=device)
         print(f"✅ Model creation succeeded: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
     except Exception as e:
@@ -249,4 +250,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Model Registry Management Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)
