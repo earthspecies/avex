@@ -187,7 +187,9 @@ class Model(ModelBase):
         Returns
         -------
         torch.Tensor
-            Model output (logits or features based on init flag)
+            Model output (logits or unpooled features based on init flag)
+            - If return_features_only=True: spatial feature maps (B, C, H, W)
+            - If return_features_only=False: classification logits (B, num_classes)
         """
         # Process audio
         x = self.process_audio(x)
@@ -198,15 +200,14 @@ class Model(ModelBase):
         else:
             features = self.model.features(x)
 
+        # Return unpooled spatial features if requested
+        if self.return_features_only:
+            return features
+
         pooled_features = self.model.avgpool(features)
         flattened_features = torch.flatten(pooled_features, 1)
-
-        # Return features or logits based on the flag
-        if self.return_features_only:
-            return flattened_features
-        else:
-            logits = self.model.classifier(flattened_features)
-            return logits
+        logits = self.model.classifier(flattened_features)
+        return logits
 
     def extract_embeddings(
         self,

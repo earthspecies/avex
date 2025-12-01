@@ -33,12 +33,28 @@ def main() -> None:
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
-        # Test forward pass - should return embeddings, not logits
+        # Test forward pass - should return unpooled frame-level embeddings
         dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-        print("   ✅ Model returns embeddings (not classification logits)")
+
+        # Output should be 3D: (batch, frames, features) for sequence models
+        if output.dim() == 3:
+            print(
+                f"   ✅ Model returns unpooled frame-level features: "
+                f"({output.shape[0]}, {output.shape[1]}, {output.shape[2]})"
+            )
+            print(f"      - Batch size: {output.shape[0]}")
+            print(f"      - Number of frames: {output.shape[1]}")
+            print(f"      - Feature dimension: {output.shape[2]}")
+        elif output.dim() == 4:
+            print(
+                f"   ✅ Model returns spatial feature maps: "
+                f"({output.shape[0]}, {output.shape[1]}, {output.shape[2]}, {output.shape[3]})"
+            )
+        else:
+            print(f"   ✅ Model returns embeddings (shape: {output.shape})")
 
     except Exception as e:
         print(f"❌ Error loading BEATs model: {e}")
@@ -59,12 +75,28 @@ def main() -> None:
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
-        # Test forward pass
+        # Test forward pass - should return unpooled patch embeddings
         dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-        print("   ✅ Model returns embeddings (not classification logits)")
+
+        # Output should be 3D: (batch, patches, features) for transformer models
+        if output.dim() == 3:
+            print(
+                f"   ✅ Model returns unpooled patch embeddings: "
+                f"({output.shape[0]}, {output.shape[1]}, {output.shape[2]})"
+            )
+            print(f"      - Batch size: {output.shape[0]}")
+            print(f"      - Number of patches: {output.shape[1]}")
+            print(f"      - Feature dimension: {output.shape[2]}")
+        elif output.dim() == 4:
+            print(
+                f"   ✅ Model returns spatial feature maps: "
+                f"({output.shape[0]}, {output.shape[1]}, {output.shape[2]}, {output.shape[3]})"
+            )
+        else:
+            print(f"   ✅ Model returns embeddings (shape: {output.shape})")
 
     except Exception as e:
         print(f"❌ Error loading model: {e}")
@@ -101,7 +133,24 @@ def main() -> None:
             classification_output = classification_model(dummy_input, padding_mask=None)
 
         print(f"\n   Embedding mode output shape: {embedding_output.shape}")
+        if embedding_output.dim() == 3:
+            print(
+                f"      → Unpooled features: "
+                f"(batch={embedding_output.shape[0]}, frames={embedding_output.shape[1]}, "
+                f"features={embedding_output.shape[2]})"
+            )
+        elif embedding_output.dim() == 4:
+            print(
+                f"      → Spatial features: "
+                f"(batch={embedding_output.shape[0]}, channels={embedding_output.shape[1]}, "
+                f"height={embedding_output.shape[2]}, width={embedding_output.shape[3]})"
+            )
+
         print(f"   Classification mode output shape: {classification_output.shape}")
+        print(
+            f"      → Class logits: "
+            f"(batch={classification_output.shape[0]}, num_classes={classification_output.shape[1]})"
+        )
 
         # Show example prediction with class labels
         if hasattr(classification_model, "class_mapping"):
@@ -125,6 +174,8 @@ def main() -> None:
     print("\n💡 Key Takeaways:")
     print("   - Models can be loaded without num_classes for embedding extraction")
     print("   - Automatically uses return_features_only=True when supported")
+    print("   - Returns unpooled features (3D tensors for sequence models, 4D for CNNs)")
+    print("   - Unpooled features preserve temporal/spatial information")
     print("   - Useful for representation learning and feature analysis")
     print("   - Works with pretrained=True for models like BEATs and EAT-HF")
 

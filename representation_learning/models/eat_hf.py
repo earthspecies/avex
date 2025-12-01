@@ -102,7 +102,7 @@ class EATHFModel(ModelBase):
     num_classes
         If >0, a linear classifier is appended on top of the pooled backbone
         representation allowing end-to-end fine-tuning.  When set to 0 the
-        model returns features only.
+        model returns unpooled patch embeddings (shape: B x L x D).
     device
         PyTorch device string (e.g. ``"cuda"``).
     audio_config
@@ -260,15 +260,16 @@ class EATHFModel(ModelBase):
         padding_mask
             Not used (kept for interface compatibility).
         framewise_embeddings
-            If True, return frame-wise embeddings instead of pooled features.
+            Deprecated: use return_features_only=True instead.
+            If True, return frame-wise embeddings without cls token.
         return_features_only
-            If True, return features instead of classification logits.
+            If True, return unpooled patch embeddings instead of classification logits.
             Defaults to False, but automatically True if num_classes=0.
 
         Returns
         -------
         torch.Tensor
-            Either pooled feature embeddings or classification logits
+            Either unpooled patch embeddings (B, L, D) or classification logits (B, num_classes)
 
         Raises
         ------
@@ -287,8 +288,14 @@ class EATHFModel(ModelBase):
         # )  # type: ignore[arg-type]
         # feats: torch.Tensor = backbone_out["x"]  # (B, L, D)
         feats = self.backbone.extract_features(spec)
+
+        # Handle legacy framewise_embeddings parameter
         if framewise_embeddings:
             return feats[:, 1:]  # drop the cls embedding
+
+        # Return unpooled features if explicitly requested (parameter or instance attribute) or if no classifier exists
+        if return_features_only or self.return_features_only or self.classifier is None:
+            return feats
 
         # 4) Pool patch embeddings → clip-level vector
         if self.pooling == "cls":
@@ -298,10 +305,7 @@ class EATHFModel(ModelBase):
         else:
             raise ValueError("pooling must be 'cls' or 'mean'")
 
-        # 5) Optional classification head
-        # Return features if explicitly requested or if no classifier exists
-        if return_features_only or self.classifier is None:
-            return pooled
+        # 5) Classification head
         return self.classifier(pooled)
 
     # ------------------------------------------------------------------ #

@@ -382,9 +382,12 @@ class TestBEATsModelEmbeddingExtraction:
         beats_model.deregister_all_hooks()
 
         # Forward method should still work
+        # When return_features_only=True, forward returns unpooled features (B, T, D)
         output = beats_model.forward(sample_audio)
+        assert output.dim() == 3  # (batch, frames, features)
         assert output.shape[0] == 2  # batch size
-        assert output.shape[1] > 0  # features
+        assert output.shape[1] > 0  # frames
+        assert output.shape[2] > 0  # features
 
     def test_extract_embeddings_state_preservation(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
         """Test that model state is preserved after embedding extraction."""

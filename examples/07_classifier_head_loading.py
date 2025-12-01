@@ -165,12 +165,15 @@ def main() -> None:
             print("   ✅ Model automatically loaded in embedding extraction mode")
             print(f"      Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
-            # Test forward pass - should return embeddings, not logits
+            # Test forward pass - should return unpooled embeddings
             dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
             with torch.no_grad():
                 output = model(dummy_input, padding_mask=None)
             print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-            print("      ✅ Model returns embeddings (not classification logits)")
+            if output.dim() >= 3:
+                print("      ✅ Model returns unpooled frame-level features (not classification logits)")
+            else:
+                print("      ✅ Model returns embeddings (not classification logits)")
             print("   💡 Note: You cannot load the 'original' classification head")
             print("      because beats_naturelm is self-supervised (no classifier trained)")
 
@@ -225,12 +228,15 @@ def main() -> None:
             print("   ✅ SUCCESS: Model is in embedding extraction mode")
             print(f"      Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
-            # Test forward pass - should return embeddings
+            # Test forward pass - should return unpooled embeddings
             dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
             with torch.no_grad():
                 output = model(dummy_input, padding_mask=None)
             print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-            print("      ✅ Model returns embeddings (not classification logits)")
+            if output.dim() >= 3:
+                print("      ✅ Model returns unpooled frame-level features (not classification logits)")
+            else:
+                print("      ✅ Model returns embeddings (not classification logits)")
 
     except Exception as e:
         print(f"   ❌ ERROR: {type(e).__name__}: {e}")
