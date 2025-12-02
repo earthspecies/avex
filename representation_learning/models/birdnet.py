@@ -16,12 +16,9 @@ import numpy as np
 import soundfile as sf  # lightweight; writes the tmp .wav we feed in
 import torch
 import torch.nn as nn
-from birdnetlib import Recording, RecordingBuffer
 
-# --- external deps (≈ 30 MB wheels) -----------------------------------------
-#   pip install birdnetlib tflite-runtime
-from birdnetlib.analyzer import Analyzer  # downloads + wraps *.tflite
-
+# NOTE: birdnetlib imports are LAZY to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+# which would break PyTorch CUDA availability. Imports happen in __init__ and forward methods.
 from representation_learning.models.base_model import (
     ModelBase,
 )  # Add missing import
@@ -80,7 +77,22 @@ class Model(ModelBase):
         if num_classes is None:
             num_classes = 0
 
+        # Preserve CUDA_VISIBLE_DEVICES before importing TensorFlow
+        # TensorFlow sets it to "" which breaks PyTorch CUDA
+        cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+
+        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+        from birdnetlib.analyzer import Analyzer
+
         self._analyzer = Analyzer()  # classification helper
+
+        # Restore CUDA_VISIBLE_DEVICES after TensorFlow import
+        if cuda_visible_devices is None:
+            # Remove the empty string that TensorFlow set
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        else:
+            # Restore the original value
+            os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
         self._interpreter = self._analyzer.interpreter  # TFLite interpreter
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
@@ -267,6 +279,9 @@ class Model(ModelBase):
         Returns:
             torch.Tensor: Probability vector for the audio clip.
         """
+        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+        from birdnetlib import Recording
+
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
             with suppress_stdout_stderr():
@@ -319,6 +334,9 @@ class Model(ModelBase):
 
         # Get output details
         output_details = interp.get_output_details()
+
+        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+        from birdnetlib import RecordingBuffer
 
         # Create the buffer and analyze (suppress verbose output)
         with suppress_stdout_stderr():

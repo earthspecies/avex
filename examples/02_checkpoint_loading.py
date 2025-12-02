@@ -12,6 +12,8 @@ are defined in YAML files in configs/official_models/. Checkpoint paths can be
 overridden by passing checkpoint_path parameter to load_model().
 """
 
+import argparse
+
 import torch
 
 from representation_learning import (
@@ -22,7 +24,7 @@ from representation_learning import (
 )
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 2: Checkpoint Loading and Management")
     print("=" * 50)
 
@@ -60,12 +62,12 @@ def main() -> None:
 
         model_spec = get_model_spec("efficientnet_animalspeak")
         model = get_model(model_spec, num_classes=10)
-        model = model.cpu()
+        model = model.to(device)
         print(f"✅ Loaded model with default checkpoint: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -92,12 +94,12 @@ def main() -> None:
         torch.save(dummy_state_dict, dummy_checkpoint_path)
 
         # Load with custom checkpoint
-        model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device="cpu")
+        model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
         print(f"✅ Loaded model with custom checkpoint: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -117,13 +119,13 @@ def main() -> None:
         model = load_model(
             "efficientnet_animalspeak",
             num_classes=20,  # Override any checkpoint num_classes
-            device="cpu",
+            device=device,
         )
         print(f"✅ Loaded model with explicit num_classes: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(2, 16000 * 3)
+        dummy_input = torch.randn(2, 16000 * 3, device=device)
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -138,7 +140,7 @@ def main() -> None:
         model = load_model(
             "sl_eat_animalspeak_ssl_all",
             checkpoint_path="gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt",
-            device="cpu",
+            device=device,
         )
         print(f"✅ Loaded model from cloud storage: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -198,7 +200,7 @@ def main() -> None:
             # Demonstrate loading model with automatic class mapping attachment
             print(f"\n   Loading model '{model_name}' (class mapping will be attached automatically):")
             try:
-                model = load_model(model_name, device="cpu")
+                model = load_model(model_name, device=device)
                 if hasattr(model, "class_mapping"):
                     print("   ✅ Model loaded with label mapping attached")
                     print(
@@ -233,4 +235,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Checkpoint Loading Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Device to use for model and data (e.g. cpu, cuda, cuda:0)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

@@ -10,12 +10,14 @@ Key use cases:
 - Using models with return_features_only=True
 """
 
+import argparse
+
 import torch
 
 from representation_learning import load_model
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 8: Embedding Extraction Mode")
     print("=" * 50)
 
@@ -26,15 +28,15 @@ def main() -> None:
     try:
         # Load without num_classes - automatically uses return_features_only=True
         print("Loading BEATs NatureLM model without num_classes (embedding extraction mode)...")
-        model = load_model("beats_naturelm", device="cpu")
+        model = load_model("beats_naturelm", device=device)
         model.eval()
 
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
-        # Test forward pass - should return unpooled frame-level embeddings
-        dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+        # Test forward pass - should return embeddings, not logits
+        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -68,14 +70,14 @@ def main() -> None:
     try:
         # Load without num_classes - automatically uses return_features_only=True
         print("Loading EAT-HF model without num_classes (embedding extraction mode)...")
-        model = load_model("sl_eat_animalspeak_ssl_all", device="cpu")
+        model = load_model("sl_eat_animalspeak_ssl_all", device=device)
         model.eval()
 
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
-        # Test forward pass - should return unpooled patch embeddings
+        # Test forward pass
         dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
@@ -111,13 +113,13 @@ def main() -> None:
         # Load in embedding mode (return_features_only=True strips classifier from checkpoint)
         print("Loading sl_beats_all in embedding extraction mode (return_features_only=True)...")
         print("   (Same checkpoint used, but classifier head is stripped)")
-        embedding_model = load_model("sl_beats_all", return_features_only=True, device="cpu")
+        embedding_model = load_model("sl_beats_all", return_features_only=True, device=device)
         embedding_model.eval()
 
         # Load in classification mode (with checkpoint, extracts actual classes and class mapping)
         print("Loading sl_beats_all in classification mode (with checkpoint and class mapping)...")
         print("   (Same checkpoint used, classifier head is preserved)")
-        classification_model = load_model("sl_beats_all", device="cpu")
+        classification_model = load_model("sl_beats_all", device=device)
         classification_model.eval()
 
         # Check if label mapping is available
@@ -127,7 +129,7 @@ def main() -> None:
             print(f"   ✅ Label mapping loaded: {len(label_to_index)} classes")
 
         # Test both with same input
-        dummy_input = torch.randn(1, 16000 * 5)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             embedding_output = embedding_model(dummy_input, padding_mask=None)
             classification_output = classification_model(dummy_input, padding_mask=None)
@@ -181,4 +183,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Embedding Extraction Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Device to use for model and data (e.g. cpu, cuda, cuda:0)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

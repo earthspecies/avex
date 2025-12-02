@@ -1,13 +1,10 @@
-name: Build and Publish Package
+name: Build and Publish Package (Dry Run)
 
 on:    # yamllint disable-line rule:truthy
   workflow_dispatch:
-  workflow_call:
-  release:
-    types: [published]
 
 jobs:
-  build-and-publish:
+  build-and-publish-dry-run:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -15,6 +12,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Authenticate to Google Cloud
         uses: "google-github-actions/auth@v2"
         id: auth
@@ -41,5 +39,5 @@ jobs:
       - name: Build the package
         run: uv build
 
-      - name: Publish the package
-        run: uv publish --index esp-pypi --password ${{ steps.auth.outputs.access_token }}
+      - name: Publish the package (dry run)
+        run: uv publish --dry-run --index esp-pypi --password ${{ steps.auth.outputs.access_token }}
