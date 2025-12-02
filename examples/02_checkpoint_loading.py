@@ -12,17 +12,19 @@ are defined in YAML files in configs/official_models/. Checkpoint paths can be
 overridden by passing checkpoint_path parameter to load_model().
 """
 
+import argparse
+
 import torch
 
 from representation_learning import (
     get_checkpoint_path,
     list_models,
-    load_class_mapping,
+    load_label_mapping,
     load_model,
 )
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 2: Checkpoint Loading and Management")
     print("=" * 50)
 
@@ -31,14 +33,22 @@ def main() -> None:
     print("   Note: Checkpoint paths are defined in YAML files in configs/official_models/")
 
     try:
-        # List registered models and their default checkpoint paths
+        # List registered models (prints table and returns detailed info)
         models = list_models()
+
+        # The table above shows which models have trained classifiers
+        # We can also programmatically access checkpoint paths
+        print("\n   Checkpoint details:")
         for model_name in models.keys():
-            checkpoint = get_checkpoint_path(model_name)
+            checkpoint = models[model_name]["checkpoint_path"]
             if checkpoint:
-                print(f"  - {model_name}: {checkpoint}")
+                print(
+                    f"  - {model_name}: {checkpoint[:60]}..."
+                    if len(checkpoint) > 60
+                    else f"  - {model_name}: {checkpoint}"
+                )
             else:
-                print(f"  - {model_name}: No default checkpoint (model spec only)")
+                print(f"  - {model_name}: No checkpoint")
 
     except Exception as e:
         print(f"❌ Error listing checkpoints: {e}")
@@ -52,12 +62,12 @@ def main() -> None:
 
         model_spec = get_model_spec("efficientnet_animalspeak")
         model = get_model(model_spec, num_classes=10)
-        model = model.cpu()
+        model = model.to(device)
         print(f"✅ Loaded model with default checkpoint: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -84,12 +94,12 @@ def main() -> None:
         torch.save(dummy_state_dict, dummy_checkpoint_path)
 
         # Load with custom checkpoint
-        model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device="cpu")
+        model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
         print(f"✅ Loaded model with custom checkpoint: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -109,13 +119,13 @@ def main() -> None:
         model = load_model(
             "efficientnet_animalspeak",
             num_classes=20,  # Override any checkpoint num_classes
-            device="cpu",
+            device=device,
         )
         print(f"✅ Loaded model with explicit num_classes: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(2, 16000 * 3)
+        dummy_input = torch.randn(2, 16000 * 3, device=device)
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -130,7 +140,7 @@ def main() -> None:
         model = load_model(
             "sl_eat_animalspeak_ssl_all",
             checkpoint_path="gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt",
-            device="cpu",
+            device=device,
         )
         print(f"✅ Loaded model from cloud storage: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -159,8 +169,8 @@ def main() -> None:
         # Show which models have class mappings by trying to load them
         models_with_mapping = []
         for model_name in list_models().keys():
-            class_mapping = load_class_mapping(model_name)
-            if class_mapping:
+            label_mapping = load_label_mapping(model_name)
+            if label_mapping:
                 models_with_mapping.append(model_name)
 
         if models_with_mapping:
@@ -173,11 +183,11 @@ def main() -> None:
         # Example: Load a model with class mapping
         print("\n   Example: Loading model with class mapping:")
         model_name = "sl_beats_animalspeak"
-        print(f"   Loading class mapping for model: {model_name}")
-        class_mapping = load_class_mapping(model_name)
-        if class_mapping:
-            label_to_index = class_mapping["label_to_index"]
-            index_to_label = class_mapping["index_to_label"]
+        print(f"   Loading label mapping for model: {model_name}")
+        label_mapping = load_label_mapping(model_name)
+        if label_mapping:
+            label_to_index = label_mapping["label_to_index"]
+            index_to_label = label_mapping["index_to_label"]
             print(f"   ✅ Loaded class mapping with {len(label_to_index)} classes")
             print("   Example labels (first 5):")
             for _i, (label, idx) in enumerate(list(label_to_index.items())[:5]):
@@ -190,11 +200,11 @@ def main() -> None:
             # Demonstrate loading model with automatic class mapping attachment
             print(f"\n   Loading model '{model_name}' (class mapping will be attached automatically):")
             try:
-                model = load_model(model_name, device="cpu")
+                model = load_model(model_name, device=device)
                 if hasattr(model, "class_mapping"):
-                    print("   ✅ Model loaded with class mapping attached")
+                    print("   ✅ Model loaded with label mapping attached")
                     print(
-                        "   Access via: model.class_mapping['label_to_index'] or model.class_mapping['index_to_label']"
+                        "   Access via: model.label_mapping['label_to_index'] or model.label_mapping['index_to_label']"
                     )
 
                     # Example: Use class mapping for predictions
@@ -225,4 +235,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Checkpoint Loading Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

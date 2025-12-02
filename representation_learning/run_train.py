@@ -8,7 +8,7 @@ from pathlib import Path
 
 import torch
 import yaml
-from esp_data.io.paths import anypath  # type: ignore
+from esp_data.io import anypath, filesystem_from_path
 
 from representation_learning.configs import RunConfig
 from representation_learning.data.dataset import build_dataloaders
@@ -117,16 +117,14 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     base_out = anypath(config.output_dir)
     output_dir = base_out / timestamp  # type: ignore[operator]
 
-    try:
+    if isinstance(output_dir, Path):
         output_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
-    except AttributeError:
-        # CloudPath objects may not implement mkdir – will create implicitly
-        pass
 
     config.output_dir = str(output_dir)
 
-    # Save the config (works for cloud & local)
-    with (output_dir / "config.yml").open("w") as f:
+    # Save the config
+    fs = filesystem_from_path(output_dir)
+    with fs.open(str(output_dir / "config.yml"), "w") as f:
         yaml.dump(config.model_dump(mode="json"), f)
 
     # Save label_map for reference

@@ -8,6 +8,8 @@ This example demonstrates:
 - Best practices for model development
 """
 
+import argparse
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -154,12 +156,11 @@ def evaluate(
     return total_loss / len(dataloader), 100.0 * correct / total
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 5: Training and Evaluation Workflows")
     print("=" * 60)
 
     # Setup
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
     # Example 1: Training a custom model from scratch
@@ -212,10 +213,11 @@ def main() -> None:
     print("\n🔧 Fine-tuning Pre-trained Model:")
     try:
         # Load a pre-trained model (if available)
+        print("\n📋 Available models:")
         models = list_models()
         if models:
             model_name = list(models.keys())[0]
-            print(f"   Using model: {model_name}")
+            print(f"\n   Using model: {model_name}")
 
             # Create model for fine-tuning
             model = create_model(model_name, num_classes=5, device=device)
@@ -385,4 +387,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Training and Evaluation Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

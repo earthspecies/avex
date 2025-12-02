@@ -8,6 +8,7 @@ This example demonstrates:
 - Registry introspection and management
 """
 
+import argparse
 import tempfile
 from pathlib import Path
 
@@ -58,7 +59,7 @@ def create_sample_yaml_config() -> dict:
     return config
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 4: Model Registry Management")
     print("=" * 50)
 
@@ -69,7 +70,7 @@ def main() -> None:
         custom_efficientnet = ModelSpec(
             name="efficientnet",
             pretrained=False,
-            device="cpu",
+            device=device,
             audio_config=AudioConfig(
                 sample_rate=22050,  # Different sample rate
                 representation="mel_spectrogram",
@@ -86,7 +87,7 @@ def main() -> None:
         custom_beats = ModelSpec(
             name="beats",
             pretrained=False,
-            device="cpu",
+            device=device,
             audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=5),
             use_naturelm=True,
             fine_tuned=True,
@@ -95,11 +96,9 @@ def main() -> None:
         register_model("custom_beats", custom_beats)
         print("✅ Registered custom_beats")
 
-        # List all registered models
+        # List all registered models (prints table automatically)
         models = list_models()
-        print(f"Total registered models: {len(models)}")
-        for name in list_models().keys():
-            print(f"  - {name}")
+        print(f"\n   Total registered models: {len(models)}")
 
     except Exception as e:
         print(f"❌ Error registering models: {e}")
@@ -147,7 +146,7 @@ def main() -> None:
         updated_efficientnet = ModelSpec(
             name="efficientnet",
             pretrained=True,  # Changed to pretrained
-            device="cuda",  # Changed to cuda
+            device=device,
             audio_config=AudioConfig(
                 sample_rate=16000,  # Changed sample rate
                 representation="mel_spectrogram",
@@ -212,15 +211,16 @@ def main() -> None:
     print("   Example: register_model('custom_efficientnet_v2', new_spec)")
 
     # Check registration status
+    print("\n📋 Current registry state:")
     models = list_models()
     is_reg1 = "custom_efficientnet" in models
     is_reg2 = "custom_beats" in models
-    print(f"   custom_efficientnet still registered: {is_reg1}")
+    print(f"\n   custom_efficientnet still registered: {is_reg1}")
     print(f"   custom_beats still registered: {is_reg2}")
 
     # Models remain registered and can be used
     try:
-        model = create_model("custom_efficientnet", num_classes=10, device="cpu")
+        model = create_model("custom_efficientnet", num_classes=10, device=device)
         print(f"✅ Model creation succeeded: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
     except Exception as e:
@@ -232,8 +232,8 @@ def main() -> None:
         models = list_models()
         model_names = list(models.keys())
 
-        print(f"Total registered models: {len(models)}")
-        print(f"Model names: {model_names}")
+        print(f"\n   Total registered models: {len(models)}")
+        print(f"   Model names: {model_names}")
 
         # Count by model type
         model_types = {}
@@ -250,4 +250,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Model Registry Management Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

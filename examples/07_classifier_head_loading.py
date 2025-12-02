@@ -6,6 +6,8 @@ This example demonstrates how load_model handles classifier head weights:
 - When num_classes is explicit: classifier weights are NOT loaded (random init)
 """
 
+import argparse
+
 import torch
 
 from representation_learning import (
@@ -15,7 +17,7 @@ from representation_learning import (
 from representation_learning.models.get_model import get_model
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 7: Classifier Head Loading Behavior")
     print("=" * 60)
 
@@ -36,12 +38,12 @@ def main() -> None:
         print("❌ Error: sl_beats_animalspeak model not found in registry")
         return
 
-    # Force CPU device for this example
-    model_spec.device = "cpu"
+    # Set device for this example
+    model_spec.device = device
 
     original_num_classes = 15
     model = get_model(model_spec, num_classes=original_num_classes)
-    model = model.to("cpu")
+    model = model.to(device)
 
     # Store the original classifier weights
     original_classifier_weight = model.classifier.weight.clone()
@@ -58,13 +60,12 @@ def main() -> None:
 
     try:
         # Test 1: Load with num_classes=None (should keep classifier weights)
-        print("\n📋 Test 1: Loading with num_classes=None")
+        print("\n📋 Test 1: Loading with num_classes=None (default)")
         print("   Expected: Classifier weights should match checkpoint")
         loaded_model_1 = load_model(
             "sl_beats_animalspeak",
-            num_classes=None,  # Should extract from checkpoint
             checkpoint_path=str(checkpoint_path),  # Use saved checkpoint
-            device="cpu",
+            device=device,
         )
 
         weights_match = torch.allclose(
@@ -92,7 +93,7 @@ def main() -> None:
             "sl_beats_animalspeak",
             num_classes=original_num_classes,  # Explicit, matches
             checkpoint_path=str(checkpoint_path),  # Use saved checkpoint
-            device="cpu",
+            device=device,
         )
 
         weights_different = not torch.allclose(
@@ -119,7 +120,7 @@ def main() -> None:
             "sl_beats_animalspeak",
             num_classes=new_num_classes,  # Different from checkpoint
             checkpoint_path=str(checkpoint_path),  # Use saved checkpoint
-            device="cpu",
+            device=device,
         )
 
         if loaded_model_3.classifier.weight.shape[0] == new_num_classes:
@@ -151,9 +152,9 @@ def main() -> None:
     print("   Expected: Cannot load original classifier (none exists - model loads in embedding mode)")
     print("-" * 60)
     try:
-        # beats_naturelm has no checkpoint and no classifier, so loading with num_classes=None
+        # beats_naturelm has no checkpoint and no classifier, so loading without num_classes
         # will automatically use return_features_only=True (embedding extraction mode)
-        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model = load_model("beats_naturelm", device=device)
         model.eval()
 
         # Check if classifier exists and is not None (BEATs sets classifier=None when return_features_only=True)
@@ -167,7 +168,7 @@ def main() -> None:
             print(f"      Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
             # Test forward pass - should return embeddings, not logits
-            dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+            dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
             with torch.no_grad():
                 output = model(dummy_input, padding_mask=None)
             print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -187,7 +188,7 @@ def main() -> None:
     print("-" * 60)
     try:
         num_classes = 10
-        model = load_model("beats_naturelm", num_classes=num_classes, device="cpu")
+        model = load_model("beats_naturelm", num_classes=num_classes, device=device)
         model.eval()
 
         if hasattr(model, "classifier"):
@@ -196,7 +197,7 @@ def main() -> None:
             print(f"      Classifier bias shape: {model.classifier.bias.shape}")
 
             # Test forward pass
-            dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+            dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
             with torch.no_grad():
                 output = model(dummy_input, padding_mask=None)
             print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -215,7 +216,7 @@ def main() -> None:
     print("-" * 60)
     try:
         # Load without num_classes - should automatically use return_features_only=True
-        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model = load_model("beats_naturelm", device=device)
         model.eval()
 
         # Check if classifier exists and is not None (BEATs sets classifier=None when return_features_only=True)
@@ -227,7 +228,7 @@ def main() -> None:
             print(f"      Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
             # Test forward pass - should return embeddings
-            dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+            dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
             with torch.no_grad():
                 output = model(dummy_input, padding_mask=None)
             print(f"      Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -247,4 +248,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Classifier Head Loading Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

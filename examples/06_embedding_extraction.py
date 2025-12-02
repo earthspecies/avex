@@ -10,12 +10,14 @@ Key use cases:
 - Using models with return_features_only=True
 """
 
+import argparse
+
 import torch
 
 from representation_learning import load_model
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 8: Embedding Extraction Mode")
     print("=" * 50)
 
@@ -26,7 +28,7 @@ def main() -> None:
     try:
         # Load without num_classes - automatically uses return_features_only=True
         print("Loading BEATs NatureLM model without num_classes (embedding extraction mode)...")
-        model = load_model("beats_naturelm", num_classes=None, device="cpu")
+        model = load_model("beats_naturelm", device=device)
         model.eval()
 
         print(f"✅ Loaded model: {type(model).__name__}")
@@ -34,7 +36,7 @@ def main() -> None:
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
         # Test forward pass - should return embeddings, not logits
-        dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -52,7 +54,7 @@ def main() -> None:
     try:
         # Load without num_classes - automatically uses return_features_only=True
         print("Loading EAT-HF model without num_classes (embedding extraction mode)...")
-        model = load_model("sl_eat_animalspeak_ssl_all", num_classes=None, device="cpu")
+        model = load_model("sl_eat_animalspeak_ssl_all", device=device)
         model.eval()
 
         print(f"✅ Loaded model: {type(model).__name__}")
@@ -60,7 +62,7 @@ def main() -> None:
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -79,23 +81,23 @@ def main() -> None:
         # Load in embedding mode (return_features_only=True strips classifier from checkpoint)
         print("Loading sl_beats_all in embedding extraction mode (return_features_only=True)...")
         print("   (Same checkpoint used, but classifier head is stripped)")
-        embedding_model = load_model("sl_beats_all", num_classes=None, return_features_only=True, device="cpu")
+        embedding_model = load_model("sl_beats_all", return_features_only=True, device=device)
         embedding_model.eval()
 
         # Load in classification mode (with checkpoint, extracts actual classes and class mapping)
         print("Loading sl_beats_all in classification mode (with checkpoint and class mapping)...")
         print("   (Same checkpoint used, classifier head is preserved)")
-        classification_model = load_model("sl_beats_all", num_classes=None, device="cpu")
+        classification_model = load_model("sl_beats_all", device=device)
         classification_model.eval()
 
-        # Check if class mapping is available
-        if hasattr(classification_model, "class_mapping"):
-            index_to_label = classification_model.class_mapping["index_to_label"]
-            label_to_index = classification_model.class_mapping["label_to_index"]
-            print(f"   ✅ Class mapping loaded: {len(label_to_index)} classes")
+        # Check if label mapping is available
+        if hasattr(classification_model, "label_mapping"):
+            index_to_label = classification_model.label_mapping["index_to_label"]
+            label_to_index = classification_model.label_mapping["label_to_index"]
+            print(f"   ✅ Label mapping loaded: {len(label_to_index)} classes")
 
         # Test both with same input
-        dummy_input = torch.randn(1, 16000 * 5)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             embedding_output = embedding_model(dummy_input, padding_mask=None)
             classification_output = classification_model(dummy_input, padding_mask=None)
@@ -130,4 +132,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Embedding Extraction Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda"],
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)
