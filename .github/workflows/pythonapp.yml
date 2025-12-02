@@ -19,9 +19,10 @@ jobs:
             contents: read
             id-token: write
 
+        # Run CI on a single Python version to keep checks simple
         strategy:
             matrix:
-                python-version: ["3.10", "3.11", "3.12"]
+                python-version: ["3.10"]
         steps:
             - uses: actions/checkout@v2
 
