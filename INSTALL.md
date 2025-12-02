@@ -4,7 +4,7 @@ This guide explains how to install the `representation-learning` package.
 
 ## Prerequisites
 
-- Python 3.11 or 3.12
+- Python 3.10, 3.11, or 3.12
 - `uv` package manager (recommended) or `pip`
 
 ## Installation
