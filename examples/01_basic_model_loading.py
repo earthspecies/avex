@@ -8,19 +8,21 @@ This example demonstrates the fundamental model loading capabilities:
 - Using class mappings for predictions
 """
 
+import argparse
+
 import torch
 
-from representation_learning import describe_model, list_models, load_model
+from representation_learning import describe_model, get_model_spec, list_models, load_model
 from representation_learning.models.get_model import get_model
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Example 1: Basic Model Loading")
     print("=" * 50)
 
     # List available models (prints formatted table and returns info dict)
     print("\n📋 Available Models:")
-    models = list_models()
+    list_models()  # Prints formatted table
     # Note: list_models() automatically prints a formatted table above
     # The returned dict contains detailed info for programmatic access
 
@@ -29,12 +31,12 @@ def main() -> None:
     try:
         # Use load_model to load with checkpoint and class mapping
         # num_classes defaults to None, which extracts the actual number of classes from the checkpoint
-        model = load_model("efficientnet_animalspeak", device="cpu")
+        model = load_model("efficientnet_animalspeak", device=device)
         print(f"✅ Loaded model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -72,18 +74,21 @@ def main() -> None:
     # Example 2: Create a new model for training
     print("\n🔧 Creating new model for training:")
     try:
-        # Use get_model directly for official models (avoid AVES models that download)
-        model_spec = models["sl_beats_animalspeak"]
-        model = get_model(model_spec, num_classes=50)
-        model = model.cpu()  # Ensure on CPU
-        print(f"✅ Created model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+        # Use get_model_spec to get the ModelSpec, then get_model to create the model
+        model_spec = get_model_spec("sl_beats_animalspeak")
+        if model_spec is None:
+            print("❌ Model 'sl_beats_animalspeak' not found")
+        else:
+            model = get_model(model_spec, num_classes=50)
+            model = model.to(device)  # Move to specified device
+            print(f"✅ Created model: {type(model).__name__}")
+            print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-        # Test forward pass
-        dummy_input = torch.randn(2, 16000 * 3)  # 3 seconds of audio
-        with torch.no_grad():
-            output = model(dummy_input, padding_mask=None)
-        print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
+            # Test forward pass
+            dummy_input = torch.randn(2, 16000 * 3, device=device)  # 3 seconds of audio
+            with torch.no_grad():
+                output = model(dummy_input, padding_mask=None)
+            print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
 
     except Exception as e:
         print(f"❌ Error creating model: {e}")
@@ -97,7 +102,7 @@ def main() -> None:
         custom_spec = ModelSpec(
             name="efficientnet",
             pretrained=False,
-            device="cpu",
+            device=device,
             audio_config=AudioConfig(
                 sample_rate=16000,
                 representation="mel_spectrogram",
@@ -108,7 +113,7 @@ def main() -> None:
         )
 
         model = get_model(custom_spec, num_classes=25)
-        model = model.cpu()  # Ensure on CPU
+        model = model.to(device)  # Move to specified device
         print(f"✅ Loaded model with custom parameters: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -125,4 +130,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Basic Model Loading Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Device to use for model and data (e.g. cpu, cuda, cuda:0)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)

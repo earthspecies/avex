@@ -7,13 +7,15 @@ This example demonstrates the basic functionality that works out of the box:
 - Basic model loading and testing
 """
 
+import argparse
+
 import torch
 
-from representation_learning import describe_model, list_models
+from representation_learning import describe_model, get_model_spec, list_models
 from representation_learning.models.get_model import get_model
 
 
-def main() -> None:
+def main(device: str = "cpu") -> None:
     print("🚀 Quick Start Example")
     print("=" * 30)
 
@@ -28,7 +30,11 @@ def main() -> None:
 
     # Test with the first available model
     model_name = list(models.keys())[0]
-    model_spec = models[model_name]
+    model_spec = get_model_spec(model_name)
+
+    if model_spec is None:
+        print(f"❌ Model '{model_name}' not found")
+        return
 
     print(f"\n🔧 Testing with model: {model_name}")
 
@@ -38,12 +44,12 @@ def main() -> None:
         print(f"✅ Created model: {type(model).__name__}")
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-        # Ensure model is on CPU for this example
-        model = model.cpu()
+        # Move model to specified device
+        model = model.to(device)
         model.eval()
 
         # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio on CPU
+        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
         with torch.no_grad():
             output = model(dummy_input)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -66,4 +72,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Quick Start Example")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Device to use for model and data (default: cpu)",
+    )
+    args = parser.parse_args()
+    main(device=args.device)
