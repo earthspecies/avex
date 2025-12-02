@@ -34,10 +34,7 @@ jobs:
           python-version-file: ".python-version"
 
       - name: Install the project
-        run: |
-          uv python install
-          uv tool install keyring --with keyrings.google-artifactregistry-auth
-          uv sync --all-extras --dev
+        run: uv sync --all-extras --dev
 
       - name: Build the package
         run: uv build
