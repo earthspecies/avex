@@ -17,7 +17,7 @@ Usage
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Self, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import yaml
 from esp_data import DatasetConfig
@@ -580,7 +580,7 @@ class BaseCLIConfig(BaseSettings):
     """
 
     @classmethod
-    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> Self:
+    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> "RunConfig":
         """
         Create a RunConfig object from a YAML file and CLI arguments. If there are any
         conflicts, the CLI arguments will take precedence over the YAML file.
@@ -1281,7 +1281,7 @@ class DatasetCollectionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
-    def check_nonempty_datasets(self) -> Self:
+    def check_nonempty_datasets(self) -> "DatasetCollectionConfig":
         # Check that not all of train, val and test are empty
         # one of them has to be provided
         if not (self.train_datasets or self.val_datasets or self.test_datasets):
