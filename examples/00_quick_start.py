@@ -77,7 +77,6 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="cpu",
-        choices=["cpu", "cuda"],
         help="Device to use for model and data (default: cpu)",
     )
     args = parser.parse_args()

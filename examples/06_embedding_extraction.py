@@ -137,8 +137,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="cpu",
-        choices=["cpu", "cuda"],
-        help="Device to use for model and data (default: cpu)",
+        help="Device to use for model and data (e.g. cpu, cuda, cuda:0)",
     )
     args = parser.parse_args()
     main(device=args.device)
