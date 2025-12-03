@@ -32,7 +32,7 @@ from representation_learning.utils.experiment_tracking import (
 
 logger = logging.getLogger(__name__)
 
-CloudPathT = GSPath | R2Path
+CloudPathT = Union[PureCloudPath, PureGSPath, PureR2Path]
 
 
 class CheckpointManager:
