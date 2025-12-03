@@ -22,6 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
+  "ffmpeg",
   "cloudpathlib>=0.21.0",
   "google-cloud-storage>=3.1.0",
   "gradio>=4.0.0",
