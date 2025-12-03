@@ -12,9 +12,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 
-from esp_data.io import anypath, exists, filesystem_from_path
-
 from representation_learning.configs import ModelSpec
+from representation_learning.io import anypath, exists, filesystem_from_path
 from representation_learning.utils.utils import _process_state_dict, universal_torch_load
 
 from . import registry

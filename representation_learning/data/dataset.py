@@ -38,10 +38,7 @@ apply_animalspeak_column_patch()
 
 from torch.utils.data import DataLoader, DistributedSampler  # noqa: E402
 
-from representation_learning.configs import (  # noqa: E402
-    DatasetCollectionConfig,
-    RunConfig,
-)
+from representation_learning.configs import RunConfig  # noqa: E402
 from representation_learning.data.audio_utils import (  # noqa: E402
     pad_or_window,  # type: ignore
 )
@@ -49,6 +46,7 @@ from representation_learning.data.augmentations import (  # noqa: E402
     AugmentationProcessor,
     make_item_postprocessor,
 )
+from representation_learning.data.configs import DatasetCollectionConfig  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

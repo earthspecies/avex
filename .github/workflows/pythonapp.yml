@@ -45,7 +45,7 @@ jobs:
             - name: Install dependencies
               run: |
                   uv tool install keyring --with keyrings.google-artifactregistry-auth
-                  uv sync
+                  uv sync --group project-dev
 
             - name: Display Python version
               run: python -c "import sys; print(sys.version)"

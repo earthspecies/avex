@@ -1,26 +1,51 @@
 # Representation Learning Framework
 
-A comprehensive Python-based system for training, evaluating, and analyzing bioacoustics representation learning models with support for both supervised and self-supervised learning paradigms.
+An API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.
 
 ## 🚀 Quick Start
 
 ### Installation
 
-**Method 1: Install from Internal PyPI (esp-pypi) using uv**
+The installation process depends on how you plan to use this package:
 
-For users with access to the Earth Species Project's internal PyPI:
+- **API user**: you just want to load models and run inference.
+- **Developer**: you want to clone the repo, modify code, or run the full training/evaluation stack.
+
+### 1. API Usage
+
+For users who want to install the package and use it as a library (for example to load models and run inference).
+
+#### 1.1 Prerequisites
+
+- Python 3.10, 3.11, or 3.12
+- ESP GCP authentication:
 
 ```bash
-# 1. Authenticate with Google Cloud
+# Authenticate with Google Cloud
 gcloud auth login
 gcloud auth application-default login
+```
 
-# 2. Install keyring package system-wide with Google Artifact Registry plugin
+#### 1.2 Install with uv (recommended)
+
+This assumes you are using `uv` to manage your project or environment.
+
+1. Install keyring with the Google Artifact Registry plugin (once per machine):
+
+```bash
 uv tool install keyring --with keyrings.google-artifactregistry-auth
+```
 
-# 3. Configure your pyproject.toml to use the private index
-cat >> pyproject.toml << 'EOF'
+2. Create and activate a uv-managed virtual environment (if you do not already have one):
 
+```bash
+uv venv
+source .venv/bin/activate
+```
+
+3. Configure `uv` to use the internal ESP PyPI index. Add the following to your `pyproject.toml` (either create one or edit the existing one):
+
+```toml
 [[tool.uv.index]]
 name = "esp-pypi"
 url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
@@ -28,36 +53,133 @@ explicit = true
 
 [tool.uv.sources]
 representation-learning = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+esp-data = { index = "esp-pypi" }
+esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
 keyring-provider = "subprocess"
-EOF
-
-# 4. Install the package
-uv add representation-learning
-
-# Or use pip with extra index
-uv pip install representation-learning --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
-**Method 2: Install from Source using uv (Development)**
-```bash
-# Clone the repository
-git clone <repository-url>
-cd representation-learning
+**Note:** If you plan to install `representation-learning[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
-# Install with uv
+4. Install the package (API dependencies only):
+
+```bash
+# Option A: Add and install in one step
+uv add representation-learning
+
+# Option B: If you've already added it to [project.dependencies] in pyproject.toml
 uv sync
 ```
 
-**Method 3: Install from Source using pip**
-```bash
-# Install from source
-pip install -e .
+#### 1.3 Install with pip
 
-# Or install with private index for esp-data
-pip install -e . --extra-index-url https://esp-pypi.com/simple/
+If you prefer plain `pip`:
+
+1. Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
+
+2. Install the package from the ESP index:
+
+```bash
+pip install representation-learning \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+#### 1.4 API + full dependencies (training / evaluation)
+
+If you want to use additional functionality such as `run_train.py`, `run_evaluate.py`, or other advanced workflows, install the `dev` extras:
+
+```bash
+# With uv (in a project configured for esp-pypi as above)
+
+# Option A: Add and install in one step
+uv add "representation-learning[dev]"
+
+# Option B: If you've already added it to pyproject.toml
+uv sync
+
+# With pip
+pip install "representation-learning[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+This pulls in additional dependencies, including for example:
+
+- `pytorch-lightning` – training (for ATST)
+- `mlflow` – experiment tracking
+- `wandb` – Weights & Biases integration
+- `esp-sweep` – hyperparameter sweeping
+- `esp-data` – dataset management
+- `gradio` – interactive demos
+- `gradio-leaderboard` – leaderboard visualization
+
+### 2. Development Usage
+
+For contributors or power users who clone the repository and want the full development and runtime stack locally.
+
+#### 2.1 Prerequisites
+
+- Python 3.10, 3.11, or 3.12
+- Git
+- GCP authentication:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+```
+
+#### 2.2 Clone the repository
+
+```bash
+git clone <repository-url>
+cd representation-learning
+```
+
+#### 2.3 Install with uv (recommended for development)
+
+```bash
+# 1. Install keyring with Google Artifact Registry plugin
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+
+# 2. Install the project with all dev/runtime dependencies
+uv sync --group project-dev
+```
+
+This will install:
+
+- Base API dependencies
+- Training/evaluation runtime dependencies (for example `pytorch-lightning`, `mlflow`, `wandb`, `esp-data`, etc.)
+- Development tools (`pytest`, `ruff`, `pre-commit`, etc.)
+- Optional GPU-related packages (for example `bitsandbytes`, when supported)
+
+The `project-dev` dependency group is used by CI and is intended to match the full development environment.
+
+#### 2.4 Install with pip (alternative for development)
+
+```bash
+# 1. Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 2. Install in editable mode with dev extras
+pip install -e ".[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+Notes for development:
+
+- Editable install (`-e`) means changes in the repo are picked up immediately without reinstalling.
+- The `[dev]` extra mirrors the runtime dependencies used by `uv`’s `project-dev` group.
+- Use this setup if you plan to:
+  - Run tests (`pytest`)
+  - Run training/evaluation scripts
+  - Contribute code via pull requests
 
 ### Basic Usage
 
@@ -382,15 +504,15 @@ model = create_model("my_custom_model", num_classes=10)
 
 The framework includes support for various audio representation learning models:
 
-- **EfficientNet**: Audio classification with different variants (b0, b1)
-- **BEATs**: Self-supervised audio representation learning
-- **EAT**: Audio transformer models (standard and HuggingFace versions)
-- **AVES**: Audio-visual event detection
-- **BirdMAE**: Bird-specific masked autoencoder
+- **EfficientNet**: EfficientNet-based models adapted for audio classification
+- **BEATs**: BEATs transformer models for audio representation learning
+- **EAT**: Efficient Audio Transformer models
+- **AVES**: AVES model for bioacoustics
+- **BirdMAE**: BirdMAE masked autoencoder for bioacoustic representation learning
 
 ### Model Configuration
 
-Models are configured using YAML files in the `api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
+Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
 
 **Minimal Model Configuration:**
 
@@ -499,7 +621,7 @@ audio_config = AudioConfig(
 )
 ```
 
-## 🚀 Training and Evaluation
+## 🚀 Training and Evaluation with the API
 
 ### Training
 
@@ -762,4 +884,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built on top of PyTorch
 - Uses esp-data for dataset management
 - Integrates with various pre-trained audio models
-- Inspired by modern representation learning practices

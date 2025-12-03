@@ -138,7 +138,7 @@ def test_run_experiment_small(
     )
 
     # Create a mock data collection config
-    from representation_learning.configs import DatasetCollectionConfig
+    from representation_learning.data.configs import DatasetCollectionConfig
 
     data_collection_cfg = DatasetCollectionConfig(
         train_datasets=[DatasetConfig(dataset_name="dummy_train")],
@@ -150,7 +150,7 @@ def test_run_experiment_small(
     #  Execute experiment
     # ------------------------------------------------------------------------- #
     # Create a mock evaluation set with train_vs_test retrieval mode
-    from representation_learning.configs import EvaluationSet
+    from representation_learning.data.configs import EvaluationSet
 
     evaluation_set = EvaluationSet(
         name="test_set",

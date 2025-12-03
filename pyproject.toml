@@ -1,6 +1,6 @@
 [project]
 name = "representation-learning"
-version = "0.1.1"
+version = "0.2.0"
 description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -23,21 +23,13 @@ classifiers = [
 ]
 
 dependencies = [
-  "cloudpathlib>=0.21.0",
-  "google-cloud-storage>=3.1.0",
-  "gradio>=4.0.0",
-  "gradio-leaderboard>=0.0.13",
-  "joblib>=1.4.2",
   "librosa>=0.11.0",
-  "mlflow>=2.22.0",
   "numpy==1.26.4",
   "omegaconf>=2.3.0",
-  "pandas>=2.2.3",
-  "psutil>=7.0.0",
   "pydantic>=2.11.3",
   "pyyaml>=6.0.2",
-  "resampy>=0.4.3",
   "soundfile>=0.13.1",
+  "birdnetlib>=0.18.0",
   "timm>=1.0.15",
   "torch==2.5.0",
   "torchaudio>=2.2.0",
@@ -45,16 +37,25 @@ dependencies = [
   "tqdm>=4.67.1",
   "transformers>=4.0.0",
   "h5py>=3.13.0",
-  "semver>=3.0.4",
   "tensorflow==2.17.0",
-  "pytorch-lightning>=2.5.1.post0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
   "pydantic-settings>=2.9.1",
+  "fsspec>=2024.2.0",
+  "gcsfs>=2024.2.0",
+  "s3fs>=2024.2.0",
+  "pandas>=2.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytorch-lightning>=2.5.1.post0",
+  "mlflow>=2.22.0",
+  "wandb>=0.21.0",
   "esp-sweep>=0.1.0",
   "esp-data>=1.3.0",
-  "wandb>=0.21.0",
-  "birdnetlib>=0.18.0",
+  "gradio>=4.0.0",
+  "gradio-leaderboard>=0.0.13",
 ]
 
 [dependency-groups]
@@ -68,6 +69,15 @@ dev = [
   "yamllint<=1.35.1",
   "ipykernel>=6.29.5",
 ]
+project-dev = [
+  "pytorch-lightning>=2.5.1.post0",
+  "mlflow>=2.22.0",
+  "wandb>=0.21.0",
+  "esp-sweep>=0.1.0",
+  "esp-data>=1.3.0",
+  "gradio>=4.0.0",
+  "gradio-leaderboard>=0.0.13",
+]
 
 [project.scripts]
 repr-learn = "representation_learning.cli:cli"
@@ -80,7 +90,6 @@ publish-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503
 explicit = true
 
 [tool.uv.sources]
-#esp-data = { path = "./esp_data_reference" }
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 

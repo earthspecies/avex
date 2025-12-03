@@ -29,10 +29,12 @@ from esp_data.io.paths import PureCloudPath
 
 # Import representation_learning modules
 from representation_learning.configs import (
-    DatasetCollectionConfig,
     EvaluateConfig,
-    EvaluationSet,
     ExperimentConfig,
+)
+from representation_learning.data.configs import (
+    DatasetCollectionConfig,
+    EvaluationSet,
 )
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
