@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
-from esp_data.io.paths import GSPath, R2Path, anypath
+from esp_data.io.paths import PureCloudPath, PureGSPath, PureR2Path, anypath
 
 from representation_learning.configs import RunConfig
 from representation_learning.training.distributed import is_main_process
@@ -31,7 +31,7 @@ from representation_learning.utils.experiment_tracking import (
 
 logger = logging.getLogger(__name__)
 
-CloudPathT = GSPath | R2Path
+CloudPathT = Union[PureCloudPath, PureGSPath, PureR2Path]
 
 
 class CheckpointManager:
@@ -126,7 +126,9 @@ class CheckpointManager:
         # Determine base directory
         if isinstance(self.model_dir, CloudPathT):
             base_dir = self.model_dir
-        elif self.experiment_logger is not None and hasattr(self.experiment_logger, "log_dir"):
+        elif self.experiment_logger is not None and hasattr(
+            self.experiment_logger, "log_dir"
+        ):
             base_dir = Path(self.experiment_logger.log_dir)
         else:
             base_dir = Path(self.model_dir)
@@ -181,7 +183,9 @@ class CheckpointManager:
         """
         checkpoint_path = Path(checkpoint_path)
         if not checkpoint_path.exists():
-            logger.warning(f"Checkpoint file not found: {checkpoint_path}. Starting training from scratch.")
+            logger.warning(
+                f"Checkpoint file not found: {checkpoint_path}. Starting training from scratch."
+            )
             return {"start_epoch": 1, "best_val_acc": 0.0}
 
         # Load checkpoint
@@ -192,7 +196,9 @@ class CheckpointManager:
             model.load_state_dict(checkpoint["model_state_dict"])
             logger.info(f"Loaded model state from {checkpoint_path}")
         except Exception as e:
-            logger.error(f"Error loading model state_dict: {e}. Model weights might be incompatible.")
+            logger.error(
+                f"Error loading model state_dict: {e}. Model weights might be incompatible."
+            )
             return {"start_epoch": 1, "best_val_acc": 0.0}
 
         # Load optimizer state
@@ -200,29 +206,45 @@ class CheckpointManager:
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             logger.info("Loaded optimizer state.")
         except Exception as e:
-            logger.warning(f"Could not load optimizer state: {e}. Optimizer will start from scratch.")
+            logger.warning(
+                f"Could not load optimizer state: {e}. Optimizer will start from scratch."
+            )
 
         # Load scheduler state
-        if scheduler and "scheduler_state_dict" in checkpoint and checkpoint["scheduler_state_dict"]:
+        if (
+            scheduler
+            and "scheduler_state_dict" in checkpoint
+            and checkpoint["scheduler_state_dict"]
+        ):
             try:
                 scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
                 logger.info("Loaded scheduler state.")
             except Exception as e:
-                logger.warning(f"Could not load scheduler state: {e}. Scheduler will start from scratch.")
+                logger.warning(
+                    f"Could not load scheduler state: {e}. Scheduler will start from scratch."
+                )
 
         # Load scaler state
-        if scaler and "scaler_state_dict" in checkpoint and checkpoint["scaler_state_dict"]:
+        if (
+            scaler
+            and "scaler_state_dict" in checkpoint
+            and checkpoint["scaler_state_dict"]
+        ):
             try:
                 scaler.load_state_dict(checkpoint["scaler_state_dict"])
                 logger.info("Loaded AMP scaler state.")
             except Exception as e:
-                logger.warning(f"Could not load AMP scaler state: {e}. Scaler will start from scratch.")
+                logger.warning(
+                    f"Could not load AMP scaler state: {e}. Scaler will start from scratch."
+                )
 
         # Extract training state
         start_epoch = checkpoint.get("epoch", 0) + 1
         best_val_acc = checkpoint.get("best_val_acc", 0.0)
 
-        logger.info(f"Resuming training from epoch {start_epoch} with best validation accuracy {best_val_acc:.4f}")
+        logger.info(
+            f"Resuming training from epoch {start_epoch} with best validation accuracy {best_val_acc:.4f}"
+        )
 
         return {
             "start_epoch": start_epoch,
@@ -243,7 +265,9 @@ class CheckpointManager:
             and self.run_config
             and not self.run_config.run_name
         ):
-            self.run_config.run_name = get_active_mlflow_run_name(self.experiment_logger)
+            self.run_config.run_name = get_active_mlflow_run_name(
+                self.experiment_logger
+            )
 
         try:
             save_experiment_metadata(
@@ -252,7 +276,10 @@ class CheckpointManager:
                 checkpoint_name=checkpoint_name,
                 metrics=(
                     self.experiment_logger.last_metrics
-                    if (self.experiment_logger and hasattr(self.experiment_logger, "last_metrics"))
+                    if (
+                        self.experiment_logger
+                        and hasattr(self.experiment_logger, "last_metrics")
+                    )
                     else {}
                 ),
                 is_best=is_best,
