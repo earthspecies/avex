@@ -50,8 +50,12 @@ class TrainingParams(BaseModel):
     train_epochs: int = Field(..., ge=1, description="Number of training epochs")
     lr: float = Field(..., gt=0, description="Learning rate")
     batch_size: int = Field(..., ge=1, description="Batch size for training")
-    optimizer: Literal["adamw", "adam", "adamw8bit"] = Field("adamw", description="Optimizer to use")
-    weight_decay: float = Field(0.0, ge=0, description="Weight decay for regularisation")
+    optimizer: Literal["adamw", "adam", "adamw8bit"] = Field(
+        "adamw", description="Optimizer to use"
+    )
+    weight_decay: float = Field(
+        0.0, ge=0, description="Weight decay for regularisation"
+    )
 
     # Optional override for Adam/AdamW beta parameters (β₁, β₂).  If omitted
     # we fall back to the libraries' defaults (0.9, 0.999).
@@ -67,13 +71,17 @@ class TrainingParams(BaseModel):
     log_steps: int = Field(100, ge=1, description="Log interval in training steps")
 
     # Gradient checkpointing for memory optimization
-    gradient_checkpointing: bool = Field(False, description="Enable gradient checkpointing to save memory")
+    gradient_checkpointing: bool = Field(
+        False, description="Enable gradient checkpointing to save memory"
+    )
 
     # Gradient clipping for training stability
     gradient_clip_val: Optional[float] = Field(
         None,
         ge=0,
-        description=("Maximum gradient norm for clipping. If None, no clipping is applied."),
+        description=(
+            "Maximum gradient norm for clipping. If None, no clipping is applied."
+        ),
     )
 
     # Two-stage fine-tuning parameters
@@ -90,12 +98,16 @@ class TrainingParams(BaseModel):
     second_stage_lr: Optional[float] = Field(
         None,
         ge=0,
-        description=("Learning rate to use after unfreezing the backbone. If omitted we default to current lr × 0.1."),
+        description=(
+            "Learning rate to use after unfreezing the backbone. If omitted we default to current lr × 0.1."
+        ),
     )
     second_stage_warmup_steps: Optional[int] = Field(
         None,
         ge=0,
-        description=("Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided."),
+        description=(
+            "Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided."
+        ),
     )
 
     # Skip validation during training
@@ -236,7 +248,9 @@ class ModelSpec(BaseModel):
     handle_padding: Optional[bool] = None
 
     # EAT HF specific configuration: TODO handling for model-specific configs
-    fairseq_weights_path: Optional[str] = Field(None, description="Path to fairseq checkpoint for EAT HF model")
+    fairseq_weights_path: Optional[str] = Field(
+        None, description="Path to fairseq checkpoint for EAT HF model"
+    )
 
     # EAT HF audio normalization parameters
     eat_norm_mean: Optional[float] = Field(
@@ -249,15 +263,23 @@ class ModelSpec(BaseModel):
     )
 
     # EfficientNet variant configuration
-    efficientnet_variant: Literal["b0", "b1"] = Field("b0", description="EfficientNet variant to use (b0 or b1)")
+    efficientnet_variant: Literal["b0", "b1"] = Field(
+        "b0", description="EfficientNet variant to use (b0 or b1)"
+    )
 
     # BEATs-specific configuration
     # TODO: general approach for model-specific configs
-    use_naturelm: Optional[bool] = Field(None, description="Whether to use NatureLM for BEATs model")
-    fine_tuned: Optional[bool] = Field(None, description="Whether to use fine-tuned weights for BEATs model")
+    use_naturelm: Optional[bool] = Field(
+        None, description="Whether to use NatureLM for BEATs model"
+    )
+    fine_tuned: Optional[bool] = Field(
+        None, description="Whether to use fine-tuned weights for BEATs model"
+    )
 
     # BirdNet-specific configuration
-    language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")
+    language: Optional[str] = Field(
+        None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')"
+    )
 
     # EAT HF model ID for HuggingFace model loading
     model_id: Optional[str] = Field(
@@ -266,6 +288,15 @@ class ModelSpec(BaseModel):
             "HuggingFace model repository ID or local path for EAT HF model "
             "(e.g., 'worstchan/EAT-base_epoch30_pretrain')"
         ),
+    )
+
+    # OpenBEATs-specific configuration
+    model_size: Optional[str] = Field(
+        None, description="Model size for OpenBEATs (e.g., 'base', 'large')"
+    )
+    use_flash_attn: Optional[bool] = Field(
+        None,
+        description="Enable flash attention for OpenBEATs (requires PyTorch >= 2.0)",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -312,7 +343,9 @@ class ModelSpec(BaseModel):
                 if isinstance(value, dict):
                     check_dict(value)
                 elif not is_serializable(value):
-                    raise ValueError(f"Non-serializable value found in eat_cfg: {key}={value}")
+                    raise ValueError(
+                        f"Non-serializable value found in eat_cfg: {key}={value}"
+                    )
 
         check_dict(v)
         return v
@@ -366,14 +399,22 @@ class ProbeConfig(BaseModel):
         description="How to process input embeddings before feeding to probe",
     )
 
-    target_layers: List[str] = Field(..., description="List of layer names to extract embeddings from")
+    target_layers: List[str] = Field(
+        ..., description="List of layer names to extract embeddings from"
+    )
 
-    freeze_backbone: bool = Field(True, description="Whether to freeze the backbone model during probing")
+    freeze_backbone: bool = Field(
+        True, description="Whether to freeze the backbone model during probing"
+    )
 
     # MLP-specific parameters
-    hidden_dims: Optional[List[int]] = Field(None, description="Hidden dimensions for MLP probe (e.g., [512, 256])")
+    hidden_dims: Optional[List[int]] = Field(
+        None, description="Hidden dimensions for MLP probe (e.g., [512, 256])"
+    )
 
-    dropout_rate: float = Field(0.1, ge=0, le=1, description="Dropout rate for non-linear probes")
+    dropout_rate: float = Field(
+        0.1, ge=0, le=1, description="Dropout rate for non-linear probes"
+    )
 
     activation: Literal["relu", "gelu", "tanh", "swish"] = Field(
         "relu", description="Activation function for non-linear probes"
@@ -386,12 +427,18 @@ class ProbeConfig(BaseModel):
         description="Number of attention heads for attention/transformer probes",
     )
 
-    attention_dim: Optional[int] = Field(None, ge=1, description="Dimension for attention mechanism")
+    attention_dim: Optional[int] = Field(
+        None, ge=1, description="Dimension for attention mechanism"
+    )
 
-    num_layers: Optional[int] = Field(None, ge=1, description="Number of layers for transformer/LSTM probes")
+    num_layers: Optional[int] = Field(
+        None, ge=1, description="Number of layers for transformer/LSTM probes"
+    )
 
     # LSTM-specific parameters
-    lstm_hidden_size: Optional[int] = Field(None, ge=1, description="Hidden size for LSTM probe")
+    lstm_hidden_size: Optional[int] = Field(
+        None, ge=1, description="Hidden size for LSTM probe"
+    )
 
     bidirectional: bool = Field(False, description="Whether to use bidirectional LSTM")
 
@@ -459,11 +506,17 @@ class ProbeConfig(BaseModel):
             "transformer",
         ]:
             if self.num_heads is None:
-                raise ValueError(f"{self.probe_type} probe requires num_heads to be specified")
+                raise ValueError(
+                    f"{self.probe_type} probe requires num_heads to be specified"
+                )
             if self.attention_dim is None:
-                raise ValueError(f"{self.probe_type} probe requires attention_dim to be specified")
+                raise ValueError(
+                    f"{self.probe_type} probe requires attention_dim to be specified"
+                )
             if self.num_layers is None:
-                raise ValueError(f"{self.probe_type} probe requires num_layers to be specified")
+                raise ValueError(
+                    f"{self.probe_type} probe requires num_layers to be specified"
+                )
 
         # Validate LSTM-specific parameters
         if self.probe_type in ["lstm"]:
@@ -483,7 +536,9 @@ class ProbeConfig(BaseModel):
         # Enforce: unfrozen backbone requires online training
         # If freeze_backbone is False, online_training must be True for fine-tuning
         if not self.freeze_backbone and self.online_training is False:
-            raise ValueError("When freeze_backbone=False, online_training must be True for fine-tuning with raw audio.")
+            raise ValueError(
+                "When freeze_backbone=False, online_training must be True for fine-tuning with raw audio."
+            )
 
         return self
 
@@ -567,9 +622,15 @@ PROBE_CONFIGS = {
 class SchedulerConfig(BaseModel):
     """Configuration for learning rate schedulers."""
 
-    name: Literal["cosine", "linear", "none"] = Field("none", description="Scheduler type to use")
-    warmup_steps: int = Field(0, ge=0, description="Number of steps to warm up learning rate")
-    min_lr: float = Field(0.0, ge=0, description="Minimum learning rate for cosine annealing")
+    name: Literal["cosine", "linear", "none"] = Field(
+        "none", description="Scheduler type to use"
+    )
+    warmup_steps: int = Field(
+        0, ge=0, description="Number of steps to warm up learning rate"
+    )
+    min_lr: float = Field(
+        0.0, ge=0, description="Minimum learning rate for cosine annealing"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -608,7 +669,9 @@ class BaseCLIConfig(BaseSettings):
             raise FileNotFoundError(f"Config file {yaml_file} does not exist")
 
         yaml_values = YamlConfigSettingsSource(cls, yaml_file=yaml_file)
-        cli_values = CliSettingsSource(cls, cli_parse_args=["--" + opt for opt in cli_args])
+        cli_values = CliSettingsSource(
+            cls, cli_parse_args=["--" + opt for opt in cli_args]
+        )
         final_values = deep_update(yaml_values(), cli_values())
         return cls.model_validate(final_values)
 
@@ -626,8 +689,12 @@ class ClusteringEvalConfig(BaseModel):
         True,
         description="Use validation set for clustering (else use train set)",
     )
-    max_samples: Optional[int] = Field(None, ge=100, description="Maximum samples to use (None = use all)")
-    run_before_training: bool = Field(False, description="Run clustering evaluation before the first epoch")
+    max_samples: Optional[int] = Field(
+        None, ge=100, description="Maximum samples to use (None = use all)"
+    )
+    run_before_training: bool = Field(
+        False, description="Run clustering evaluation before the first epoch"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -666,13 +733,17 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     # Distributed training options
     distributed: bool = Field(
         False,
-        description=("Whether to use distributed training (automatically enabled in Slurm)"),
+        description=(
+            "Whether to use distributed training (automatically enabled in Slurm)"
+        ),
     )
     distributed_backend: Literal["nccl"] = Field(
         "nccl",
         description="Backend for distributed training (nccl for GPU training)",
     )
-    distributed_port: int = Field(29500, description="Base port for distributed training communication")
+    distributed_port: int = Field(
+        29500, description="Base port for distributed training communication"
+    )
 
     augmentations: List[Augment] = Field(default_factory=list)
     # Allow common aliases for BCE to avoid validation errors in older configs
@@ -686,7 +757,9 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     ]
 
     # Enable multi-label classification
-    multilabel: bool = Field(False, description="Whether to use multi-label classification")
+    multilabel: bool = Field(
+        False, description="Whether to use multi-label classification"
+    )
 
     # Metrics to compute during training
     metrics: List[str] = Field(
@@ -788,7 +861,9 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
 
         # Check if multilabel is True but loss function isn't BCE/Focal
         if data.get("multilabel", False) and v not in {"bce", "focal"}:
-            raise ValueError(f"When multilabel=True, loss_function must be 'bce' or 'focal' (got '{v}' instead)")
+            raise ValueError(
+                f"When multilabel=True, loss_function must be 'bce' or 'focal' (got '{v}' instead)"
+            )
 
         # For self-supervised runs we don't impose any loss-type restrictions
         if data.get("label_type") == "self_supervised":
@@ -796,7 +871,9 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
 
         # Check if loss is clip/contrastive but label_type isn't text
         if v in ("clip", "contrastive") and data.get("label_type") != "text":
-            raise ValueError(f"Loss function '{v}' requires label_type='text' (got '{data.get('label_type')}' instead)")
+            raise ValueError(
+                f"Loss function '{v}' requires label_type='text' (got '{data.get('label_type')}' instead)"
+            )
 
         return v
 
@@ -1008,7 +1085,9 @@ class ExperimentConfig(BaseModel):
             if self.probe_config.max_sequence_length is not None:
                 params["max_sequence_length"] = self.probe_config.max_sequence_length
             if self.probe_config.use_positional_encoding is not None:
-                params["use_positional_encoding"] = self.probe_config.use_positional_encoding
+                params["use_positional_encoding"] = (
+                    self.probe_config.use_positional_encoding
+                )
 
             return params
         else:
@@ -1061,7 +1140,9 @@ class ExperimentConfig(BaseModel):
 class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     """Configuration for running evaluation experiments."""
 
-    experiments: List[ExperimentConfig] = Field(..., description="List of experiments to run")
+    experiments: List[ExperimentConfig] = Field(
+        ..., description="List of experiments to run"
+    )
     dataset_config: BenchmarkEvaluationConfig
     save_dir: str = Field(..., description="Directory to save evaluation results")
 
@@ -1148,7 +1229,9 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         )
         auto_chunk_size: bool = Field(
             True,
-            description=("Auto-calculate optimal chunk size based on available GPU memory."),
+            description=(
+                "Auto-calculate optimal chunk size based on available GPU memory."
+            ),
         )
         max_chunk_size: int = Field(
             2000,
@@ -1163,7 +1246,9 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         batch_chunk_size: int = Field(
             10,
             ge=1,
-            description=("Number of batches to process before writing during streaming."),
+            description=(
+                "Number of batches to process before writing during streaming."
+            ),
         )
 
         model_config = ConfigDict(extra="forbid")
@@ -1285,7 +1370,9 @@ class DatasetCollectionConfig(BaseModel):
         # Check that not all of train, val and test are empty
         # one of them has to be provided
         if not (self.train_datasets or self.val_datasets or self.test_datasets):
-            raise ValueError("At least one of train_datasets, val_datasets,or test_datasets must be provided.")
+            raise ValueError(
+                "At least one of train_datasets, val_datasets,or test_datasets must be provided."
+            )
         return self
 
 
@@ -1297,7 +1384,9 @@ class EvaluationSet(BaseModel):
         description="Name of this evaluation set (e.g., 'dog_classification')",
     )
     train: DatasetConfig = Field(..., description="Training dataset configuration")
-    validation: DatasetConfig = Field(..., description="Validation dataset configuration")
+    validation: DatasetConfig = Field(
+        ..., description="Validation dataset configuration"
+    )
     test: DatasetConfig = Field(..., description="Test dataset configuration")
     metrics: List[str] = Field(
         default_factory=lambda: ["accuracy"],
@@ -1307,7 +1396,9 @@ class EvaluationSet(BaseModel):
     # Add retrieval mode configuration
     retrieval_mode: Literal["test_vs_test", "train_vs_test"] = Field(
         "test_vs_test",
-        description=("Retrieval evaluation mode: 'test_vs_test' (current default) or 'train_vs_test'"),
+        description=(
+            "Retrieval evaluation mode: 'test_vs_test' (current default) or 'train_vs_test'"
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -1363,7 +1454,9 @@ class BenchmarkEvaluationConfig(BaseModel):
     benchmark_name: str = Field(..., description="Name of this benchmark")
     evaluation_sets: List[EvaluationSet] = Field(
         ...,
-        description=("List of evaluation sets (train/val/test triplets) in this benchmark"),
+        description=(
+            "List of evaluation sets (train/val/test triplets) in this benchmark"
+        ),
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -1389,7 +1482,9 @@ class BenchmarkEvaluationConfig(BaseModel):
         for eval_set in self.evaluation_sets:
             if eval_set.name == name:
                 return eval_set
-        raise ValueError(f"No evaluation set named '{name}' found in benchmark '{self.benchmark_name}'")
+        raise ValueError(
+            f"No evaluation set named '{name}' found in benchmark '{self.benchmark_name}'"
+        )
 
     def get_all_evaluation_sets(
         self,
@@ -1404,7 +1499,10 @@ class BenchmarkEvaluationConfig(BaseModel):
         List[Tuple[str, DatasetCollectionConfig]]
             List of (evaluation_set_name, dataset_collection_config) pairs
         """
-        return [(eval_set.name, eval_set.to_dataset_collection_config()) for eval_set in self.evaluation_sets]
+        return [
+            (eval_set.name, eval_set.to_dataset_collection_config())
+            for eval_set in self.evaluation_sets
+        ]
 
     def get_metrics_for_evaluation_set(self, name: str) -> List[str]:
         """Get the metrics list for a specific evaluation set.
