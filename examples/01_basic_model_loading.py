@@ -4,8 +4,19 @@ Example 1: Basic Model Loading
 This example demonstrates the fundamental model loading capabilities:
 - Loading pre-trained models with weights
 - Creating new models for training
-- Using different model types and configurations
 - Using class mappings for predictions
+- Using different model configurations
+
+Audio Requirements:
+- Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
+- Check with: describe_model("model_name") or get_model_spec("model_name").audio_config.sample_rate
+- For full reproducibility, resample using librosa with these exact parameters:
+
+    import librosa
+    audio_resampled = librosa.resample(
+        audio, orig_sr=original_sr, target_sr=target_sr,
+        res_type="kaiser_best", scale=True
+    )
 """
 
 import argparse
@@ -13,120 +24,120 @@ import argparse
 import torch
 
 from representation_learning import describe_model, get_model_spec, list_models, load_model
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.get_model import get_model
 
 
 def main(device: str = "cpu") -> None:
-    print("🚀 Example 1: Basic Model Loading")
+    """Demonstrate basic model loading capabilities."""
+    print("Example 1: Basic Model Loading")
     print("=" * 50)
 
-    # List available models (prints formatted table and returns info dict)
-    print("\n📋 Available Models:")
+    # =========================================================================
+    # Part 1: List available models
+    # =========================================================================
+    print("\nPart 1: Available Models")
+    print("-" * 50)
     list_models()  # Prints formatted table
-    # Note: list_models() automatically prints a formatted table above
-    # The returned dict contains detailed info for programmatic access
 
-    # Example 1: Load a pre-trained model with checkpoint and class mapping
-    print("\n🔧 Loading pre-trained model with checkpoint (actual classes):")
-    try:
-        # Use load_model to load with checkpoint and class mapping
-        # num_classes defaults to None, which extracts the actual number of classes from the checkpoint
-        model = load_model("efficientnet_animalspeak", device=device)
-        print(f"✅ Loaded model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    # =========================================================================
+    # Part 2: Load a pre-trained model with checkpoint
+    # =========================================================================
+    print("\nPart 2: Load Pre-trained Model with Checkpoint")
+    print("-" * 50)
 
-        # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
-        with torch.no_grad():
-            output = model(dummy_input, padding_mask=None)
-        print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-        print(f"   Number of classes: {output.shape[-1]}")
+    # Load model with checkpoint - num_classes extracted automatically
+    model = load_model("efficientnet_animalspeak", device=device)
+    print(f"Loaded model: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-        # Use class mapping for predictions if available
-        if hasattr(model, "label_mapping"):
-            print("\n   🏷️  Label mapping available!")
-            index_to_label = model.label_mapping["index_to_label"]
-            label_to_index = model.label_mapping["label_to_index"]
-            print(f"   Total classes in mapping: {len(label_to_index)}")
+    # Test forward pass
+    dummy_input = torch.randn(1, 16000 * 5, device=device)
+    with torch.no_grad():
+        output = model(dummy_input, padding_mask=None)
+    print(f"   Input shape: {dummy_input.shape}")
+    print(f"   Output shape: {output.shape}")
+    print(f"   Number of classes: {output.shape[-1]}")
 
-            # Get top-3 predictions with actual class labels
-            probs = torch.softmax(output, dim=-1)
-            top_probs, top_indices = torch.topk(probs, k=min(3, output.shape[-1]), dim=-1)
-            print("\n   Top-3 predicted classes:")
-            for i, (prob, idx) in enumerate(zip(top_probs[0], top_indices[0], strict=False)):
-                idx_int = idx.item()
-                label = index_to_label.get(idx_int, f"Unknown (index {idx_int})")
-                print(f"     {i + 1}. {label}: {prob.item():.4f}")
+    # Use class mapping for predictions if available
+    if hasattr(model, "label_mapping") and model.label_mapping:
+        index_to_label = model.label_mapping["index_to_label"]
+        label_to_index = model.label_mapping["label_to_index"]
+        print(f"\n   Label mapping available: {len(label_to_index)} classes")
 
-            # Show example of label to index conversion
-            print("\n   Example label lookups:")
-            example_labels = list(label_to_index.keys())[:3]
-            for label in example_labels:
-                idx = label_to_index[label]
-                print(f"     '{label}' -> index {idx}")
-        else:
-            print("   ⚠️  No class mapping available (model may not have classifier head)")
+        # Get top-3 predictions with actual class labels
+        probs = torch.softmax(output, dim=-1)
+        top_probs, top_indices = torch.topk(probs, k=min(3, output.shape[-1]), dim=-1)
+        print("   Top-3 predicted classes:")
+        for i, (prob, idx) in enumerate(zip(top_probs[0], top_indices[0], strict=False)):
+            label = index_to_label.get(idx.item(), f"Unknown (index {idx.item()})")
+            print(f"     {i + 1}. {label}: {prob.item():.4f}")
 
-    except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        print("   (This is expected if the checkpoint doesn't exist)")
+    # =========================================================================
+    # Part 3: Create a new model for training
+    # =========================================================================
+    print("\nPart 3: Create New Model for Training")
+    print("-" * 50)
 
-    # Example 2: Create a new model for training
-    print("\n🔧 Creating new model for training:")
-    try:
-        # Use get_model_spec to get the ModelSpec, then get_model to create the model
-        model_spec = get_model_spec("sl_beats_animalspeak")
-        if model_spec is None:
-            print("❌ Model 'sl_beats_animalspeak' not found")
-        else:
-            model = get_model(model_spec, num_classes=50)
-            model = model.to(device)  # Move to specified device
-            print(f"✅ Created model: {type(model).__name__}")
-            print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    model_spec = get_model_spec("sl_beats_animalspeak")
+    model = get_model(model_spec, num_classes=50)
+    model = model.to(device)
 
-            # Test forward pass
-            dummy_input = torch.randn(2, 16000 * 3, device=device)  # 3 seconds of audio
-            with torch.no_grad():
-                output = model(dummy_input, padding_mask=None)
-            print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
+    print(f"Created model: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    except Exception as e:
-        print(f"❌ Error creating model: {e}")
+    # Test forward pass
+    dummy_input = torch.randn(2, 16000 * 3, device=device)
+    with torch.no_grad():
+        output = model(dummy_input, padding_mask=None)
+    print(f"   Input shape: {dummy_input.shape}")
+    print(f"   Output shape: {output.shape}")
 
-    # Example 3: Load model with custom parameters
-    print("\n🔧 Loading model with custom parameters:")
-    try:
-        # Create a custom model spec with different parameters
-        from representation_learning.configs import AudioConfig, ModelSpec
+    # =========================================================================
+    # Part 4: Load model with custom parameters
+    # =========================================================================
+    print("\nPart 4: Load Model with Custom Parameters")
+    print("-" * 50)
 
-        custom_spec = ModelSpec(
-            name="efficientnet",
-            pretrained=False,
-            device=device,
-            audio_config=AudioConfig(
-                sample_rate=16000,
-                representation="mel_spectrogram",
-                n_mels=128,
-                target_length_seconds=5,
-            ),
-            efficientnet_variant="b1",  # Custom variant
-        )
+    custom_spec = ModelSpec(
+        name="efficientnet",
+        pretrained=False,
+        device=device,
+        audio_config=AudioConfig(
+            sample_rate=16000,
+            representation="mel_spectrogram",
+            n_mels=128,
+            target_length_seconds=5,
+        ),
+        efficientnet_variant="b1",
+    )
 
-        model = get_model(custom_spec, num_classes=25)
-        model = model.to(device)  # Move to specified device
-        print(f"✅ Loaded model with custom parameters: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    model = get_model(custom_spec, num_classes=25)
+    model = model.to(device)
 
-    except Exception as e:
-        print(f"❌ Error loading model with custom params: {e}")
+    print(f"Created model with custom parameters: {type(model).__name__}")
+    print("   Variant: b1")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    # Example 4: Get model information
-    print("\n📊 Model Information:")
-    try:
-        describe_model("beats_naturelm", verbose=True)
+    # =========================================================================
+    # Part 5: Get detailed model information
+    # =========================================================================
+    print("\nPart 5: Model Information")
+    print("-" * 50)
+    describe_model("beats_naturelm", verbose=True)
 
-    except Exception as e:
-        print(f"❌ Error getting model info: {e}")
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    print("\n" + "=" * 50)
+    print("Key Takeaways")
+    print("=" * 50)
+    print("""
+- load_model(): Loads model with checkpoint, extracts num_classes automatically
+- get_model(): Creates model from ModelSpec, requires explicit num_classes
+- label_mapping: Available for models with trained classifiers
+- Custom ModelSpec: Override architecture parameters for specific needs
+""")
 
 
 if __name__ == "__main__":
