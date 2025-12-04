@@ -403,8 +403,12 @@ class Model(ModelBase):
                 for detail in tensor_details:
                     shape = detail.get("shape", [])
                     name = detail.get("name", "")
-                    # Normalize shape to tuple for comparison (handles both list and tuple)
-                    shape_tuple = tuple(shape) if shape else ()
+                    # Normalize shape to tuple for comparison (handles both list, tuple, and numpy array)
+                    # Check if shape exists and has elements before converting
+                    if shape is not None and len(shape) > 0:
+                        shape_tuple = tuple(shape)
+                    else:
+                        shape_tuple = ()
                     if (
                         len(shape) >= 1
                         and 1024 in shape
