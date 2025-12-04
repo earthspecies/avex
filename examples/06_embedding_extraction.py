@@ -56,9 +56,6 @@ def main(device: str = "cpu") -> None:
 
     except Exception as e:
         print(f"❌ Error loading BEATs model: {e}")
-        import traceback
-
-        traceback.print_exc()
 
     # Example 2: Load EAT-HF for embedding extraction (transformer model)
     print("\n📋 Example 2: Loading EAT-HF for Embedding Extraction (Transformer)")
@@ -88,10 +85,7 @@ def main(device: str = "cpu") -> None:
         print(f"      - Feature dimension: {output.shape[2]}")
 
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        import traceback
-
-        traceback.print_exc()
+        print(f"❌ Error loading EAT model: {e}")
 
     # Example 3: Load EfficientNet for embedding extraction (CNN model)
     print("\n📋 Example 3: Loading EfficientNet for Embedding Extraction (CNN)")
@@ -141,9 +135,6 @@ def main(device: str = "cpu") -> None:
 
     except Exception as e:
         print(f"❌ Error loading EfficientNet model: {e}")
-        import traceback
-
-        traceback.print_exc()
 
     # Example 4: Compare embedding vs classification mode using the same model
     print("\n📋 Example 4: Comparison - Embedding vs Classification Mode (same model)")
@@ -201,9 +192,6 @@ def main(device: str = "cpu") -> None:
 
     except Exception as e:
         print(f"❌ Error in comparison: {e}")
-        import traceback
-
-        traceback.print_exc()
 
     print("\n🎉 Embedding extraction example completed!")
     print("\n💡 Key Takeaways:")
