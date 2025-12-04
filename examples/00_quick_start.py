@@ -1,10 +1,21 @@
 """
 Quick Start Example
 
-This example demonstrates the basic functionality that works out of the box:
-- Using the original get_model system
-- Working with existing model specs
-- Basic model loading and testing
+This example demonstrates the basic functionality of the representation-learning library:
+- Listing available models
+- Getting model information
+- Loading and running a model
+
+Audio Requirements:
+- Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
+- Check with: describe_model("model_name") or get_model_spec("model_name").audio_config.sample_rate
+- For full reproducibility, resample using librosa with these exact parameters:
+
+    import librosa
+    audio_resampled = librosa.resample(
+        audio, orig_sr=original_sr, target_sr=target_sr,
+        res_type="kaiser_best", scale=True
+    )
 """
 
 import argparse
@@ -16,59 +27,63 @@ from representation_learning.models.get_model import get_model
 
 
 def main(device: str = "cpu") -> None:
-    print("🚀 Quick Start Example")
-    print("=" * 30)
+    """Demonstrate basic library functionality."""
+    print("Quick Start Example")
+    print("=" * 50)
 
-    # List available models (prints table and returns info dict)
-    print("\n📋 Available Models:")
-    models = list_models()
-    # Note: list_models() prints a formatted table above
+    # =========================================================================
+    # Part 1: List available models
+    # =========================================================================
+    print("\nPart 1: Available Models")
+    print("-" * 50)
+    models = list_models()  # Prints formatted table
+    print(f"\nTotal available models: {len(models)}")
 
-    if not models:
-        print("  No models available")
-        return
+    # =========================================================================
+    # Part 2: Get model information
+    # =========================================================================
+    print("\nPart 2: Model Information")
+    print("-" * 50)
 
-    # Test with the first available model
-    model_name = list(models.keys())[0]
+    # Use beats_naturelm as example
+    model_name = "beats_naturelm"
+    print(f"Detailed information for '{model_name}':")
+    describe_model(model_name, verbose=True)
+
+    # =========================================================================
+    # Part 3: Load and test a model
+    # =========================================================================
+    print("\nPart 3: Load and Test Model")
+    print("-" * 50)
+
     model_spec = get_model_spec(model_name)
+    model = get_model(model_spec, num_classes=10)
+    model = model.to(device)
+    model.eval()
 
-    if model_spec is None:
-        print(f"❌ Model '{model_name}' not found")
-        return
+    print(f"Created model: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    print(f"\n🔧 Testing with model: {model_name}")
+    # Test forward pass (BEATs expects 16kHz audio)
+    dummy_input = torch.randn(1, 16000 * 5, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input shape: {dummy_input.shape}")
+    print(f"   Output shape: {output.shape}")
 
-    try:
-        # Use the original get_model system
-        model = get_model(model_spec, num_classes=10)
-        print(f"✅ Created model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-        # Move model to specified device
-        model = model.to(device)
-        model.eval()
-
-        # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
-        with torch.no_grad():
-            output = model(dummy_input)
-        print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-
-    except Exception as e:
-        print(f"❌ Error creating model: {e}")
-        import traceback
-
-        traceback.print_exc()
-
-    # Get model information
-    print(f"\n📊 Model Information for {model_name}:")
-    try:
-        describe_model(model_name, verbose=True)
-
-    except Exception as e:
-        print(f"❌ Error getting model info: {e}")
-
-    print("\n🎉 Quick start example completed!")
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    print("\n" + "=" * 50)
+    print("Key Functions")
+    print("=" * 50)
+    print("""
+- list_models(): List all available models with details
+- describe_model(name): Get detailed model information
+- get_model_spec(name): Get model specification
+- get_model(spec, num_classes): Create model from spec
+- load_model(name, ...): Load model with optional checkpoint
+""")
 
 
 if __name__ == "__main__":

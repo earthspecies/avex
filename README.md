@@ -90,6 +90,8 @@ For more examples, see the `examples/` directory:
 - `01_basic_model_loading.py` - Loading models with different configurations
 - `02_checkpoint_loading.py` - Working with checkpoints and class mappings
 - `03_custom_model_registration.py` - Creating and registering custom models
+- `04_model_registry_management.py` - Managing model configurations and registrations
+- `05_training_and_evaluation.py` - Full training loop and evaluation examples
 - `06_embedding_extraction.py` - Feature extraction with `return_features_only=True` (unpooled features)
 - `07_classifier_head_loading.py` - Understanding classifier head behavior
 
