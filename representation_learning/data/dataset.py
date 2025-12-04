@@ -6,11 +6,6 @@ and managing datasets used in representation learning tasks.
 
 from __future__ import annotations
 
-import os
-
-# Ensure google-cloud-storage finds a default project when running on compute
-os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
-
 import logging
 import multiprocessing
 import random
