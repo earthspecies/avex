@@ -9,9 +9,11 @@ from representation_learning.models.beats_model import Model
 class TestBEATsModelEmbeddingExtraction:
     """Test BEATs model embedding extraction functionality."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def beats_model(self) -> Model:
         """Create a BEATs model for testing.
+
+        Model is loaded once per test class to improve performance.
 
         Returns:
             Model: A configured BEATs model for testing.
@@ -21,13 +23,15 @@ class TestBEATsModelEmbeddingExtraction:
             pretrained=True,
             return_features_only=True,
             device="cpu",
-            use_naturelm=True,  # Use NatureLM like the working integration tests
+            use_naturelm=True,
             disable_layerdrop=True,
         )
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def beats_model_with_classifier(self) -> Model:
         """Create a BEATs model with classifier for testing.
+
+        Model is loaded once per test class to improve performance.
 
         Returns:
             Model: A configured BEATs model with classifier for testing.
@@ -37,9 +41,34 @@ class TestBEATsModelEmbeddingExtraction:
             pretrained=True,
             return_features_only=False,
             device="cpu",
-            use_naturelm=True,  # Use NatureLM like the working integration tests
+            use_naturelm=True,
             disable_layerdrop=True,
         )
+
+    @pytest.fixture(autouse=True)
+    def cleanup_hooks(self, request: pytest.FixtureRequest) -> None:
+        """Ensure hooks are cleaned up after each test.
+
+        This fixture runs automatically after each test to ensure hooks
+        are deregistered, maintaining test isolation even when using
+        class-scoped model fixtures. Only cleans up models that are
+        actually requested by the test to avoid unnecessary initialization.
+
+        Args:
+            request: Pytest request object to access test fixtures.
+
+        Yields:
+            None: Yields control to the test, then cleans up hooks after.
+        """
+        yield
+        # Clean up hooks only for models that are actually requested by the test
+        # Checking request.fixturenames ensures we don't initialize unused fixtures
+        if "beats_model" in request.fixturenames:
+            beats_model = request.getfixturevalue("beats_model")
+            beats_model.deregister_all_hooks()
+        if "beats_model_with_classifier" in request.fixturenames:
+            beats_model_with_classifier = request.getfixturevalue("beats_model_with_classifier")
+            beats_model_with_classifier.deregister_all_hooks()
 
     @pytest.fixture
     def sample_audio(self) -> torch.Tensor:
@@ -50,351 +79,249 @@ class TestBEATsModelEmbeddingExtraction:
         """
         return torch.randn(2, 16000)  # 2 seconds at 16kHz
 
-    def test_extract_embeddings_empty_layers(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that empty layers list with dict input returns main features."""
-        input_dict = {"raw_wav": sample_audio}
-
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model.extract_embeddings(input_dict, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_empty_layers_dict_input(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that empty layers list with dict input returns main features."""
-        input_dict = {"raw_wav": sample_audio}
-
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model.extract_embeddings(input_dict, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape == (2, 768)
-        assert torch.is_tensor(embeddings)
-
-    def test_extract_embeddings_all_layers(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that 'all' layers extracts from all linear layers."""
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_all_layers_with_classifier(
-        self, beats_model_with_classifier: Model, sample_audio: torch.Tensor
+    def test_extract_embeddings_basic_functionality(
+        self, beats_model: Model, beats_model_with_classifier: Model, sample_audio: torch.Tensor
     ) -> None:
-        """Test that 'all' layers works with classifier model."""
-        # Register hooks for specific layers that we know exist
+        """Test basic embedding extraction with tensor and dict inputs, both model types."""
+        # Test with tensor input
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+        embeddings_tensor = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+        beats_model.deregister_all_hooks()
+
+        # Test with dict input
+        input_dict = {"raw_wav": sample_audio}
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+        embeddings_dict = beats_model.extract_embeddings(input_dict, aggregation="mean")
+        beats_model.deregister_all_hooks()
+
+        # Test with classifier model
         beats_model_with_classifier.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model_with_classifier.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Clean up
+        embeddings_classifier = beats_model_with_classifier.extract_embeddings(sample_audio, aggregation="mean")
         beats_model_with_classifier.deregister_all_hooks()
 
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
+        # All should work and have correct shapes
+        assert embeddings_tensor.shape == (2, 768)
+        assert embeddings_dict.shape == (2, 768)
+        assert embeddings_classifier.shape[0] == 2
+        assert embeddings_classifier.shape[1] > 0
+        assert torch.is_tensor(embeddings_tensor)
+        assert torch.is_tensor(embeddings_dict)
+        assert torch.is_tensor(embeddings_classifier)
 
-    def test_extract_embeddings_specific_layers(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test extraction from specific layers."""
-        # Test with classifier layer if available
-        if hasattr(beats_model, "classifier") and beats_model.classifier is not None:
-            beats_model.register_hooks_for_layers(["classifier"])
-            embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-            beats_model.deregister_all_hooks()
-            assert embeddings.shape == (2, 10)  # num_classes
-        else:
-            # Test with a known linear layer from backbone
-            beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-            embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-            beats_model.deregister_all_hooks()
-            assert embeddings.shape[0] == 2  # batch size
-            assert embeddings.shape[1] > 0  # features
+    def test_extract_embeddings_layer_selection(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
+        """Test extraction from single, multiple, and all layers."""
+        # Single layer
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+        embeddings_single = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+        beats_model.deregister_all_hooks()
 
-    def test_extract_embeddings_multiple_layers(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test extraction from multiple specific layers."""
+        # Multiple layers (if classifier available)
         layers = ["backbone.post_extract_proj"]
         if hasattr(beats_model, "classifier") and beats_model.classifier is not None:
             layers.append("classifier")
-
-        # Register hooks for the specified layers
         beats_model.register_hooks_for_layers(layers)
-        embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+        embeddings_multiple = beats_model.extract_embeddings(sample_audio, aggregation="mean")
         beats_model.deregister_all_hooks()
 
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_all_and_specific(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that 'all' and specific layers work together."""
-        # Register hooks for all discoverable layers plus specific ones
+        # All layers
+        beats_model._discover_linear_layers()
         all_layers = beats_model._layer_names + ["backbone.post_extract_proj"]
         beats_model.register_hooks_for_layers(all_layers)
-
-        embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_invalid_layer(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that invalid layer names raise appropriate error."""
-        # Try to register hooks for non-existent layer
-        with pytest.raises(ValueError, match="Layer 'nonexistent_layer' not found in model"):
-            beats_model.register_hooks_for_layers(["nonexistent_layer"])
-
-    def test_extract_embeddings_no_layers_found(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test behavior when no valid layers are found."""
-        # Try to extract embeddings without registering any hooks
-        with pytest.raises(ValueError, match="No hooks are registered in the model"):
-            beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-    def test_extract_embeddings_with_padding_mask(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test extraction with padding mask."""
-        padding_mask = torch.zeros(2, 16000, dtype=torch.bool)
-        padding_mask[:, 8000:] = True  # Pad second half
-
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model.extract_embeddings(sample_audio, padding_mask=padding_mask, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_dict_input_with_padding(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test extraction with dict input containing padding mask."""
-        padding_mask = torch.zeros(2, 16000, dtype=torch.bool)
-        padding_mask[:, 8000:] = True
-
-        input_dict = {"raw_wav": sample_audio, "padding_mask": padding_mask}
-
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model.extract_embeddings(input_dict, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_aggregation_none(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test extraction without aggregation (returns tensor for single embedding)."""
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings = beats_model.extract_embeddings(sample_audio, aggregation="none")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        # When aggregation="none" and single embedding, we get a tensor
-        assert torch.is_tensor(embeddings)
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_hook_management(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that hooks are properly managed across calls."""
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        # First call
-        embeddings1 = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Second call
-        embeddings2 = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        # Results should be consistent
-        assert torch.allclose(embeddings1, embeddings2)
-        assert embeddings1.shape[0] == 2  # batch size
-        assert embeddings1.shape[1] > 0  # features
-
-    def test_extract_embeddings_different_layer_sets(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that different layer sets work correctly."""
-        # Test with 'all'
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
         embeddings_all = beats_model.extract_embeddings(sample_audio, aggregation="mean")
         beats_model.deregister_all_hooks()
 
-        # Test with specific layers
-        specific_layers = ["backbone.post_extract_proj"]
-        if hasattr(beats_model, "classifier") and beats_model.classifier is not None:
-            specific_layers.append("classifier")
+        # All should work
+        assert embeddings_single.shape[0] == 2
+        assert embeddings_multiple.shape[0] == 2
+        assert embeddings_all.shape[0] == 2
+        assert all(emb.shape[1] > 0 for emb in [embeddings_single, embeddings_multiple, embeddings_all])
 
-        beats_model.register_hooks_for_layers(specific_layers)
-        embeddings_specific = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+    def test_extract_embeddings_input_formats_and_padding(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
+        """Test extraction with padding mask in both tensor and dict formats."""
+        padding_mask = torch.zeros(2, 16000, dtype=torch.bool)
+        padding_mask[:, 8000:] = True  # Pad second half
+
+        # Test with padding_mask parameter
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+        embeddings_param = beats_model.extract_embeddings(sample_audio, padding_mask=padding_mask, aggregation="mean")
+        beats_model.deregister_all_hooks()
+
+        # Test with padding_mask in dict
+        input_dict = {"raw_wav": sample_audio, "padding_mask": padding_mask}
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+        embeddings_dict = beats_model.extract_embeddings(input_dict, aggregation="mean")
         beats_model.deregister_all_hooks()
 
         # Both should work
-        assert embeddings_all.shape[0] == 2  # batch size
-        assert embeddings_specific.shape[0] == 2  # batch size
-        assert embeddings_all.shape[1] > 0  # features
-        assert embeddings_specific.shape[1] > 0  # features
+        assert embeddings_param.shape[0] == 2
+        assert embeddings_dict.shape[0] == 2
+        assert embeddings_param.shape[1] > 0
+        assert embeddings_dict.shape[1] > 0
 
-    def test_extract_embeddings_features_only_mode(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that features_only mode works correctly."""
-        # Should work in features_only mode
+    def test_extract_embeddings_aggregation_modes(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
+        """Test different aggregation modes."""
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+
+        # Mean aggregation
+        embeddings_mean = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+
+        # None aggregation (returns tensor)
+        embeddings_none = beats_model.extract_embeddings(sample_audio, aggregation="none")
+
+        beats_model.deregister_all_hooks()
+
+        # Both should work
+        assert torch.is_tensor(embeddings_mean)
+        assert torch.is_tensor(embeddings_none)
+        assert embeddings_mean.shape[0] == 2
+        assert embeddings_none.shape[0] == 2
+        assert embeddings_mean.shape[1] > 0
+        assert embeddings_none.shape[1] > 0
+
+    def test_extract_embeddings_consistency_and_state_preservation(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test consistency across calls and state preservation."""
+        initial_training = beats_model.training
+
+        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+
+        # Multiple calls should be consistent
+        embeddings1 = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+        embeddings2 = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+
+        # Forward should still work after embedding extraction
+        forward_output = beats_model.forward(sample_audio)
+
+        beats_model.deregister_all_hooks()
+
+        # Check consistency
+        assert torch.allclose(embeddings1, embeddings2)
+        assert embeddings1.shape == embeddings2.shape
+
+        # Check state preservation
+        assert beats_model.training == initial_training
+
+        # Forward should work
+        assert forward_output.shape[0] == 2
+        assert forward_output.shape[1] > 0
+
+    def test_extract_embeddings_gradient_handling(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
+        """Test that extraction is gradient-free and handles gradients correctly."""
+        sample_audio.requires_grad_(True)
+
         beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
         embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
         beats_model.deregister_all_hooks()
 
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_classifier_mode(
-        self, beats_model_with_classifier: Model, sample_audio: torch.Tensor
-    ) -> None:
-        """Test that classifier mode works correctly."""
-        # Should work with classifier
-        beats_model_with_classifier.register_hooks_for_layers(["backbone.post_extract_proj"])
-        embeddings = beats_model_with_classifier.extract_embeddings(sample_audio, aggregation="mean")
-        beats_model_with_classifier.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_layer_discovery(self, beats_model: Model) -> None:
-        """Test that linear layers are properly discovered."""
-        # Manually discover layers
-        beats_model._discover_linear_layers()
-
-        # Check that MLP layers are discovered
-        assert hasattr(beats_model, "_layer_names")
-        assert isinstance(beats_model._layer_names, list)
-        assert len(beats_model._layer_names) > 0
-
-        # Use discovered MLP layers for testing
-        layer_names = beats_model._layer_names
-
-        # Check that we have some backbone layers
-        assert any("backbone" in name for name in layer_names)
-
-    def test_extract_embeddings_consistent_outputs(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that outputs are consistent across multiple calls."""
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        embeddings1 = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-        embeddings2 = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        # Results should be consistent
-        assert torch.allclose(embeddings1, embeddings2)
-        assert embeddings1.shape[0] == 2  # batch size
-        assert embeddings1.shape[1] > 0  # features
-
-    def test_extract_embeddings_gradient_free(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that extraction is gradient-free."""
-        sample_audio.requires_grad_(True)
-
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        _ = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
         # Should not have gradients
-        assert not sample_audio.grad is not None
+        assert sample_audio.grad is None
+        assert embeddings.shape[0] == 2
+        assert embeddings.shape[1] > 0
 
-    def test_extract_embeddings_different_batch_sizes(self, beats_model: Model) -> None:
-        """Test that extraction works with different batch sizes."""
-        # Single sample
-        single_audio = torch.randn(1, 16000)
+    def test_extract_embeddings_batch_sizes_and_error_handling(
+        self, beats_model: Model, sample_audio: torch.Tensor
+    ) -> None:
+        """Test different batch sizes and error handling."""
+        # Different batch sizes
+        for batch_size in [1, 2]:
+            audio = torch.randn(batch_size, 16000)
+            beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
+            embeddings = beats_model.extract_embeddings(audio, aggregation="mean")
+            beats_model.deregister_all_hooks()
+            assert embeddings.shape[0] == batch_size
+            assert embeddings.shape[1] > 0
 
-        # Register hooks for specific layers that we know exist
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-
-        single_embeddings = beats_model.extract_embeddings(single_audio, aggregation="mean")
-
-        # Clean up
-        beats_model.deregister_all_hooks()
-
-        assert single_embeddings.shape[0] == 1  # single batch
-        assert single_embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_error_handling(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test error handling for invalid inputs."""
-        # Test with None input
+        # Error handling
         with pytest.raises(ValueError):
             beats_model.extract_embeddings(None)
 
-        # Test with empty audio
         empty_audio = torch.empty(0)
         with pytest.raises(ValueError):
             beats_model.extract_embeddings(empty_audio)
 
-    def test_extract_embeddings_layer_specific_behavior(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that specific layer extraction works as expected."""
-        # Test with a specific layer
+    def test_extract_embeddings_error_cases(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
+        """Test error cases for invalid layers and missing hooks."""
+        # Invalid layer
+        with pytest.raises(ValueError, match="Layer 'nonexistent_layer' not found in model"):
+            beats_model.register_hooks_for_layers(["nonexistent_layer"])
+
+        # No hooks registered
+        with pytest.raises(ValueError, match="No hooks are registered in the model"):
+            beats_model.extract_embeddings(sample_audio, aggregation="mean")
+
+    def test_extract_embeddings_layer_discovery(self, beats_model: Model) -> None:
+        """Test that linear layers are properly discovered."""
+        beats_model._discover_linear_layers()
+
+        assert hasattr(beats_model, "_layer_names")
+        assert isinstance(beats_model._layer_names, list)
+        assert len(beats_model._layer_names) > 0
+        assert any("backbone" in name for name in beats_model._layer_names)
+
+    def test_deterministic_embeddings_regression(self, beats_model: Model) -> None:
+        """Regression test: verify embeddings match expected values for deterministic step signal.
+
+        This test uses a fixed step signal and deterministic settings to ensure
+        model outputs remain consistent across runs.
+        """
+        import numpy as np
+
+        # Set deterministic behavior
+        torch.manual_seed(42)
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        np.random.seed(42)
+        if torch.backends.cudnn.is_available():
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
+        # Create deterministic step signal (1 second at 16kHz)
+        # First half is -1.0, second half is +1.0
+        num_samples = 16000
+        signal = torch.zeros(1, num_samples)
+        mid_point = num_samples // 2
+        signal[0, :mid_point] = -1.0
+        signal[0, mid_point:] = 1.0
+
+        # Ensure model is in eval mode
+        beats_model.eval()
+
         beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-        embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
+        with torch.no_grad():
+            embeddings = beats_model.extract_embeddings(signal, aggregation="mean")
         beats_model.deregister_all_hooks()
 
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
+        # Expected first 20 values (captured with seed=42)
+        expected_first_20 = [
+            -0.507676899433136,
+            -0.1969260573387146,
+            0.03937510401010513,
+            0.14362706243991852,
+            0.13660180568695068,
+            -0.04688118025660515,
+            -0.08418136835098267,
+            0.0059922984801232815,
+            -0.021161099895834923,
+            -0.10174560546875,
+            -0.24325279891490936,
+            -0.07431062310934067,
+            -0.0019120449433103204,
+            0.053144972771406174,
+            0.04045940935611725,
+            -0.13030825555324554,
+            -0.1450606733560562,
+            -0.05920398235321045,
+            -0.06417909264564514,
+            -0.04930436983704567,
+        ]
 
-    def test_extract_embeddings_mixed_layer_types(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test extraction with mixed layer types."""
-        layers = ["backbone.post_extract_proj"]
-        if hasattr(beats_model, "classifier") and beats_model.classifier is not None:
-            layers.append("classifier")
+        actual_first_20 = embeddings[0, :20].cpu().numpy().tolist()
 
-        # Register hooks for the specified layers
-        beats_model.register_hooks_for_layers(layers)
-        embeddings = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-        beats_model.deregister_all_hooks()
-
-        assert embeddings.shape[0] == 2  # batch size
-        assert embeddings.shape[1] > 0  # features
-
-    def test_extract_embeddings_forward_compatibility(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that forward method still works after embedding extraction."""
-        # Extract embeddings
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-        _ = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-        beats_model.deregister_all_hooks()
-
-        # Forward method should still work
-        output = beats_model.forward(sample_audio)
-        assert output.shape[0] == 2  # batch size
-        assert output.shape[1] > 0  # features
-
-    def test_extract_embeddings_state_preservation(self, beats_model: Model, sample_audio: torch.Tensor) -> None:
-        """Test that model state is preserved after embedding extraction."""
-        # Get initial state
-        initial_state = beats_model.training
-
-        # Extract embeddings
-        beats_model.register_hooks_for_layers(["backbone.post_extract_proj"])
-        _ = beats_model.extract_embeddings(sample_audio, aggregation="mean")
-        beats_model.deregister_all_hooks()
-
-        # State should be preserved
-        assert beats_model.training == initial_state
+        # Use rtol=1e-5, atol=1e-5 for floating point comparison
+        np.testing.assert_allclose(
+            actual_first_20,
+            expected_first_20,
+            rtol=1e-5,
+            atol=1e-5,
+            err_msg="BEATs embeddings do not match expected values",
+        )

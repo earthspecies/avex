@@ -1,12 +1,13 @@
 from typing import Optional
 
+import pytest
 import torch
 import torch.nn as nn
 
 from representation_learning.models.base_model import ModelBase
 
 
-class TestModel(ModelBase):
+class MockTestModel(ModelBase):
     """Simple test model for testing hook functionality."""
 
     def __init__(self, device: str = "cpu") -> None:
@@ -47,171 +48,131 @@ class TestModel(ModelBase):
 class TestModelBaseHooks:
     """Test the persistent hooks implementation in ModelBase."""
 
-    def test_hook_initialization(self) -> None:
-        """Test that hooks are properly initialized."""
-        model = TestModel()
+    @pytest.fixture(scope="class")
+    def model(self) -> MockTestModel:
+        """Create a test model for testing.
 
-        # Check that hook storage is initialized
+        Model is created once per test class to improve performance.
+
+        Returns:
+            MockTestModel: A configured test model for testing.
+        """
+        return MockTestModel()
+
+    @pytest.fixture(autouse=True)
+    def setup_and_cleanup_hooks(self, request: pytest.FixtureRequest) -> None:
+        """Ensure hooks are set up before and cleaned up after each test.
+
+        Args:
+            request: Pytest request object to access test fixtures.
+
+        Yields:
+            None: Yields control to the test, then cleans up hooks after.
+        """
+        if "model" in request.fixturenames:
+            model = request.getfixturevalue("model")
+            # Always re-register original hooks at start of test to ensure consistent state
+            # (previous tests may have modified hooks)
+            original_hook_layers = ["layer1", "layer2", "output"]
+            model.register_hooks_for_layers(original_hook_layers)
+        yield
+        if "model" in request.fixturenames:
+            model = request.getfixturevalue("model")
+            model.deregister_all_hooks()
+
+    @pytest.fixture
+    def sample_input(self) -> torch.Tensor:
+        """Create sample input tensor.
+
+        Returns:
+            torch.Tensor: Random input tensor with shape (2, 10).
+        """
+        return torch.randn(2, 10)
+
+    def test_model_initialization_and_layer_discovery(self, model: MockTestModel) -> None:
+        """Test model initialization, hook setup, and layer discovery."""
+        # Check hook storage
         assert isinstance(model._hooks, dict)
         assert isinstance(model._hook_outputs, dict)
-        # Hooks are now registered in __init__
-        assert len(model._hooks) == 3  # Hooks registered for layer1, layer2, output
-        assert len(model._hook_layers) == 3  # Layers discovered
+        assert len(model._hooks) == 3
+        assert len(model._hook_layers) == 3
 
-        # Check that linear layers are discovered
+        # Check layer discovery
         assert len(model._layer_names) == 3
         assert "layer1" in model._layer_names
         assert "layer2" in model._layer_names
         assert "output" in model._layer_names
-
-    def test_linear_layer_discovery(self) -> None:
-        """Test that linear layers are correctly discovered and cached."""
-        model = TestModel()
 
         # Test getting linear layers excluding last
         linear_layers = model._get_linear_layers_excluding_last()
         assert len(linear_layers) == 2
         assert "layer1" in linear_layers
         assert "layer2" in linear_layers
-        assert "output" not in linear_layers  # Last layer excluded
+        assert "output" not in linear_layers
 
-    def test_hook_registration(self) -> None:
-        """Test that hooks can be registered on-demand."""
-        model = TestModel()
-
+    def test_hook_registration_and_management(self, model: MockTestModel) -> None:
+        """Test hook registration and re-registration."""
         # Initially hooks are registered from __init__
         assert len(model._hooks) == 3
 
-        # Register hooks for different layers - should clear and re-register
+        # Register hooks for different layers
         model.register_hooks_for_layers(["layer1", "layer2"])
         assert len(model._hooks) == 2
         assert "layer1" in model._hooks
         assert "layer2" in model._hooks
 
-        # Register same layers again - should clear and re-register
+        # Register same layers again
         model.register_hooks_for_layers(["layer1", "layer2"])
-        assert len(model._hooks) == 2  # Same count
+        assert len(model._hooks) == 2
 
-    def test_hook_output_capture(self) -> None:
-        """Test that hook outputs are captured correctly."""
-        model = TestModel()
-
-        # Hooks are already registered from __init__
-        assert "layer1" in model._hooks
-        assert "layer2" in model._hooks
-
-        # Create test input
-        x = torch.randn(2, 10)
-
+    def test_hook_output_capture_and_clearing(self, model: MockTestModel, sample_input: torch.Tensor) -> None:
+        """Test hook output capture and clearing."""
         # Forward pass
-        model(x)
+        model(sample_input)
 
-        # Check that outputs are captured
+        # Check outputs are captured
         assert "layer1" in model._hook_outputs
         assert "layer2" in model._hook_outputs
         assert model._hook_outputs["layer1"].shape == (2, 20)
         assert model._hook_outputs["layer2"].shape == (2, 30)
 
-    def test_extract_embeddings_efficiency(self) -> None:
-        """Test that extract_embeddings works with pre-registered hooks."""
-        model = TestModel()
-
-        # Hooks are already registered from __init__
-        assert len(model._hooks) == 3
-
-        # First call - should work with existing hooks
-        x = torch.randn(2, 10)
-        result1 = model.extract_embeddings(x, aggregation="mean")
-
-        # Second call - should work without re-registering hooks
-        result2 = model.extract_embeddings(x, aggregation="mean")
-
-        # Results should be the same
-        assert torch.allclose(result1, result2)
+        # Clear outputs
+        model._clear_hook_outputs()
+        assert len(model._hook_outputs) == 0
 
         # Hooks should still be registered
         assert len(model._hooks) == 3
 
-    def test_extract_embeddings_all_layers(self) -> None:
-        """Test extract_embeddings with 'all' layers specification."""
-        model = TestModel()
+    def test_extract_embeddings_functionality(self, model: MockTestModel, sample_input: torch.Tensor) -> None:
+        """Test extract_embeddings with hooks and consistency."""
+        # First call
+        result1 = model.extract_embeddings(sample_input, aggregation="mean")
 
-        x = torch.randn(2, 10)
-        embeddings = model.extract_embeddings(x, aggregation="mean")
+        # Second call
+        result2 = model.extract_embeddings(sample_input, aggregation="mean")
 
-        # Should extract from all registered hooks (layer1, layer2, output)
-        assert embeddings.shape[1] == 55  # 20 + 30 + 5 dimensions
+        # Results should be consistent
+        assert torch.allclose(result1, result2)
+        assert result1.shape[1] == 55  # 20 + 30 + 5 dimensions
 
-    def test_hook_cleanup(self) -> None:
-        """Test that hooks are properly cleaned up."""
-        model = TestModel()
-
-        # Check that hooks are registered from __init__
+        # Hooks should still be registered
         assert len(model._hooks) == 3
+
+    def test_hook_persistence_and_cleanup(self, model: MockTestModel, sample_input: torch.Tensor) -> None:
+        """Test hook persistence across forward passes and cleanup."""
+        initial_hook_count = len(model._hooks)
+        assert initial_hook_count == 3
+
+        # Multiple forward passes
+        for _ in range(3):
+            model(sample_input)
+            assert len(model._hooks) == initial_hook_count
 
         # Cleanup hooks
         model.deregister_all_hooks()
         assert len(model._hooks) == 0
         assert len(model._hook_outputs) == 0
 
-    def test_clear_hook_outputs(self) -> None:
-        """Test that hook outputs are cleared correctly."""
-        model = TestModel()
-
-        # Hooks are already registered from __init__
-        assert "layer1" in model._hooks
-
-        # Capture outputs
-        x = torch.randn(2, 10)
-        model(x)
-
-        assert len(model._hook_outputs) > 0
-
-        # Clear outputs
-        model._clear_hook_outputs()
-        assert len(model._hook_outputs) == 0
-
-    def test_extract_embeddings_no_layers_found(self) -> None:
-        """When no hooks are registered, fallback to main features without error."""
-        model = TestModel()
-
-        # Remove all hooks
-        model.deregister_all_hooks()
-        assert len(model._hooks) == 0
-
-        x = torch.randn(2, 10)
-
-        _ = model.extract_embeddings(x)
-
-    def test_hook_persistence(self) -> None:
-        """Test that hooks persist across multiple forward passes."""
-        model = TestModel()
-
-        # Hooks are registered in __init__
-        initial_hook_count = len(model._hooks)
-        assert initial_hook_count == 3
-
-        # Multiple forward passes
-        x = torch.randn(2, 10)
-        for _ in range(3):
-            model(x)
-            # Hooks should remain registered
-            assert len(model._hooks) == initial_hook_count
-
-    def test_hook_output_clearing(self) -> None:
-        """Test that hook outputs are cleared between calls but hooks remain."""
-        model = TestModel()
-
-        x = torch.randn(2, 10)
-
-        # First call
-        result1 = model.extract_embeddings(x, aggregation="mean")
-
-        # Second call
-        result2 = model.extract_embeddings(x, aggregation="mean")
-
-        # Results should be the same
-        assert torch.allclose(result1, result2)
-
-        # Hooks should still be registered
-        assert len(model._hooks) == 3
+        # Test fallback when no hooks
+        result = model.extract_embeddings(sample_input)
+        assert result is not None

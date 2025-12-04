@@ -2,13 +2,15 @@
 
 import tempfile
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
+import h5py
 import numpy as np
 import pytest
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
+from representation_learning.configs import ExperimentConfig
 from representation_learning.evaluation.embedding_utils import (
     EmbeddingDataset,
     _extract_embeddings_in_memory,
@@ -412,6 +414,257 @@ class TestStreamingExtraction:
             # File should exist
             assert save_path.exists()
 
+    def test_streaming_and_inmemory_write_identical(self, tmp_path: Path) -> None:
+        """Test that streaming and in-memory extraction produce identical results."""
+
+        class _TinyRawDataset(Dataset):
+            def __init__(self, num_samples: int, wav_len: int, num_classes: int) -> None:
+                self._num_samples = num_samples
+                self._wav_len = wav_len
+                self._num_classes = num_classes
+
+            def __len__(self) -> int:
+                return self._num_samples
+
+            def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+                wav = torch.randn(self._wav_len)
+                label = torch.tensor(idx % self._num_classes, dtype=torch.int64)
+                return {"raw_wav": wav, "label": label}
+
+        class _FakeModel:
+            def __init__(self, seq_len: int = 4, feat_dim: int = 6) -> None:
+                self.seq_len = seq_len
+                self.feat_dim = feat_dim
+
+            def register_hooks_for_layers(self, layers: list[str]) -> list[str]:
+                return layers
+
+            def deregister_all_hooks(self) -> None:
+                return None
+
+            def extract_embeddings(
+                self,
+                x: Dict[str, torch.Tensor],
+                aggregation: str = "none",
+                padding_mask: Optional[torch.Tensor] = None,
+            ) -> Optional[torch.Tensor]:
+                if isinstance(x, dict):
+                    batch_size = x["raw_wav"].shape[0] if x["raw_wav"].dim() > 1 else 1
+                elif isinstance(x, torch.Tensor):
+                    batch_size = x.shape[0] if x.dim() > 1 else 1
+                else:
+                    batch_size = 1
+
+                def _make(batch: int, offset: int) -> torch.Tensor:
+                    base = torch.arange(batch * self.seq_len * self.feat_dim, dtype=torch.float32)
+                    base = base.reshape(batch, self.seq_len, self.feat_dim)
+                    return base + float(offset)
+
+                if aggregation == "none":
+                    return [_make(batch_size, 0), _make(batch_size, 1000)]
+                return _make(batch_size, 0).mean(dim=1)
+
+        def _read_h5(path: str) -> Dict[str, Any]:
+            with h5py.File(path, "r") as h5f:
+                attrs = {k: h5f.attrs[k] for k in h5f.attrs.keys()}
+                keys = list(h5f.keys())
+                datasets = {k: np.asarray(h5f[k]) for k in keys}
+            return attrs, datasets
+
+        device = torch.device("cpu")
+        num_samples = 8
+        wav_len = 16
+        num_classes = 3
+        layer_names = ["layer_a", "layer_b"]
+        aggregation = "none"
+
+        ds = _TinyRawDataset(num_samples=num_samples, wav_len=wav_len, num_classes=num_classes)
+        dl = DataLoader(ds, batch_size=4, shuffle=False)
+
+        model = _FakeModel(seq_len=4, feat_dim=6)
+
+        stream_path = tmp_path / "stream.h5"
+        mem_path = tmp_path / "mem.h5"
+
+        # STREAMING: writes directly
+        _ = _extract_embeddings_streaming(
+            model,
+            dl,
+            layer_names,
+            device,
+            save_path=stream_path,
+            chunk_size=4,
+            compression="gzip",
+            compression_level=4,
+            aggregation=aggregation,
+            auto_chunk_size=False,
+            max_chunk_size=16,
+            min_chunk_size=1,
+            batch_chunk_size=2,
+            disable_tqdm=True,
+            disable_layerdrop=None,
+        )
+
+        # IN-MEMORY: compute then save via the same saving routine
+        embeds_dict, labels, _ = _extract_embeddings_in_memory(
+            model,
+            dl,
+            layer_names,
+            device,
+            aggregation=aggregation,
+            disable_tqdm=True,
+            disable_layerdrop=None,
+        )
+
+        num_labels = int(torch.unique(labels if labels.dim() == 1 else torch.argmax(labels, dim=-1)).numel())
+        save_embeddings_arrays(
+            embeds_dict,
+            labels,
+            mem_path,
+            num_labels,
+            compression="gzip",
+            compression_level=4,
+        )
+
+        # Compare HDF5 structure and data
+        attrs_stream, data_stream = _read_h5(str(stream_path))
+        attrs_mem, data_mem = _read_h5(str(mem_path))
+
+        # Attributes
+        assert attrs_stream["multi_layer"] == attrs_mem["multi_layer"]
+        assert list(attrs_stream["layer_names"]) == list(attrs_mem["layer_names"])
+        assert attrs_stream.get("num_labels", None) == attrs_mem.get("num_labels", None)
+
+        # Embedding datasets per layer must match in shape and content
+        for lname in layer_names:
+            key = f"embeddings_{lname}"
+            assert key in data_stream and key in data_mem
+            a = data_stream[key]
+            b = data_mem[key]
+            assert a.shape == b.shape
+            np.testing.assert_allclose(a, b, rtol=0, atol=0)
+
+        # Labels
+        np.testing.assert_array_equal(data_stream["labels"], data_mem["labels"])
+
+    def test_loading_matches_original_values(self, tmp_path: Path) -> None:
+        """Test that loaded embeddings match original values."""
+
+        class _TinyRawDataset(Dataset):
+            def __init__(self, num_samples: int, wav_len: int, num_classes: int) -> None:
+                self._num_samples = num_samples
+                self._wav_len = wav_len
+                self._num_classes = num_classes
+
+            def __len__(self) -> int:
+                return self._num_samples
+
+            def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+                wav = torch.randn(self._wav_len)
+                label = torch.tensor(idx % self._num_classes, dtype=torch.int64)
+                return {"raw_wav": wav, "label": label}
+
+        class _FakeModel:
+            def __init__(self, seq_len: int = 4, feat_dim: int = 6) -> None:
+                self.seq_len = seq_len
+                self.feat_dim = feat_dim
+
+            def register_hooks_for_layers(self, layers: list[str]) -> list[str]:
+                return layers
+
+            def deregister_all_hooks(self) -> None:
+                return None
+
+            def extract_embeddings(
+                self,
+                x: Dict[str, torch.Tensor],
+                aggregation: str = "none",
+                padding_mask: Optional[torch.Tensor] = None,
+            ) -> Optional[torch.Tensor]:
+                if isinstance(x, dict):
+                    batch_size = x["raw_wav"].shape[0] if x["raw_wav"].dim() > 1 else 1
+                elif isinstance(x, torch.Tensor):
+                    batch_size = x.shape[0] if x.dim() > 1 else 1
+                else:
+                    batch_size = 1
+
+                def _make(batch: int, offset: int) -> torch.Tensor:
+                    base = torch.arange(batch * self.seq_len * self.feat_dim, dtype=torch.float32)
+                    base = base.reshape(batch, self.seq_len, self.feat_dim)
+                    return base + float(offset)
+
+                if aggregation == "none":
+                    return [_make(batch_size, 0), _make(batch_size, 1000)]
+                return _make(batch_size, 0).mean(dim=1)
+
+        device = torch.device("cpu")
+        num_samples = 6
+        wav_len = 10
+        num_classes = 4
+        layer_names = ["layer_a", "layer_b"]
+        aggregation = "none"
+
+        ds = _TinyRawDataset(num_samples=num_samples, wav_len=wav_len, num_classes=num_classes)
+        dl = DataLoader(ds, batch_size=3, shuffle=False)
+        model = _FakeModel(seq_len=3, feat_dim=5)
+
+        stream_path = tmp_path / "stream_load.h5"
+        mem_path = tmp_path / "mem_load.h5"
+
+        _ = _extract_embeddings_streaming(
+            model,
+            dl,
+            layer_names,
+            device,
+            save_path=stream_path,
+            chunk_size=3,
+            compression="gzip",
+            compression_level=4,
+            aggregation=aggregation,
+            auto_chunk_size=False,
+            max_chunk_size=12,
+            min_chunk_size=1,
+            batch_chunk_size=2,
+            disable_tqdm=True,
+            disable_layerdrop=None,
+        )
+
+        embeds_dict, labels, _ = _extract_embeddings_in_memory(
+            model,
+            dl,
+            layer_names,
+            device,
+            aggregation=aggregation,
+            disable_tqdm=True,
+            disable_layerdrop=None,
+        )
+        num_labels = int(torch.unique(labels if labels.dim() == 1 else torch.argmax(labels, dim=-1)).numel())
+        save_embeddings_arrays(
+            embeds_dict,
+            labels,
+            mem_path,
+            num_labels,
+            compression="gzip",
+            compression_level=4,
+        )
+
+        # Now load back via helper and compare to the raw HDF5 reads
+        embeds_stream_loaded, labels_stream_loaded, _ = load_embeddings_arrays(stream_path)
+        embeds_mem_loaded, labels_mem_loaded, _ = load_embeddings_arrays(mem_path)
+
+        # Labels must match
+        assert torch.equal(labels_stream_loaded, labels_mem_loaded)
+
+        # Compare each layer content matches original in-memory tensors
+        assert isinstance(embeds_stream_loaded, dict)
+        assert isinstance(embeds_mem_loaded, dict)
+
+        for lname in layer_names:
+            a = embeds_stream_loaded[lname]
+            b = embeds_mem_loaded[lname]
+            assert a.shape == b.shape
+            torch.testing.assert_close(a, b, rtol=0, atol=0)
+
 
 class TestEdgeCases:
     """Test edge cases and error handling."""
@@ -662,3 +915,123 @@ class TestEdgeCases:
                     assert reshaped.view(batch_size, -1)[i, j] == expected_val, (
                         f"Reshaped value mismatch at [{i}, {j}] for shape {shape}"
                     )
+
+
+class TestEmbeddingReuse:
+    """Test embedding file reuse across different probe types."""
+
+    def test_embedding_paths_are_dataset_model_level(self) -> None:
+        """Test that embedding paths are at dataset+model level, not experiment level."""
+        save_dir = Path("/tmp/test_results")
+        dataset_name = "test_dataset"
+        evaluation_dataset_name = "test_eval_dataset"
+        model_name = "beats_pretrained"
+
+        # Simulate the path construction logic from run_evaluate.py
+        embedding_dir_name = evaluation_dataset_name or dataset_name
+        emb_base_dir = save_dir / f"{embedding_dir_name}_{model_name}"
+        train_path = emb_base_dir / "embedding_train.h5"
+        val_path = emb_base_dir / "embedding_val.h5"
+        test_path = emb_base_dir / "embedding_test.h5"
+
+        # Verify paths don't include experiment_name but include model_name
+        expected_base = save_dir / "test_eval_dataset_beats_pretrained"
+        assert emb_base_dir == expected_base
+        assert train_path == expected_base / "embedding_train.h5"
+        assert val_path == expected_base / "embedding_val.h5"
+        assert test_path == expected_base / "embedding_test.h5"
+
+        # Verify paths are the same regardless of experiment_name but different models
+        emb_base_dir2 = save_dir / f"{embedding_dir_name}_{model_name}"
+        assert emb_base_dir == emb_base_dir2
+
+        # Different model should have different path
+        model_name2 = "efficientnet_b0"
+        emb_base_dir3 = save_dir / f"{embedding_dir_name}_{model_name2}"
+        assert emb_base_dir != emb_base_dir3
+
+    def test_aggregation_none_for_offline_training(self) -> None:
+        """Test that offline training uses aggregation='none'."""
+        from unittest.mock import MagicMock
+
+        experiment_cfg = MagicMock(spec=ExperimentConfig)
+        experiment_cfg.get_training_mode.return_value = False  # offline training
+        experiment_cfg.get_aggregation_method.return_value = "mean"
+
+        # Simulate the aggregation logic from run_evaluate.py
+        need_probe = True
+        offline_training = need_probe and not experiment_cfg.get_training_mode()
+
+        if offline_training:
+            aggregation_method = "none"
+        else:
+            aggregation_method = experiment_cfg.get_aggregation_method()
+
+        assert offline_training is True
+        assert aggregation_method == "none"
+        experiment_cfg.get_aggregation_method.assert_not_called()
+
+    def test_aggregation_from_config_for_online_training(self) -> None:
+        """Test that online training uses aggregation from config."""
+        from unittest.mock import MagicMock
+
+        experiment_cfg = MagicMock(spec=ExperimentConfig)
+        experiment_cfg.get_training_mode.return_value = True  # online training
+        experiment_cfg.get_aggregation_method.return_value = "mean"
+
+        # Simulate the aggregation logic from run_evaluate.py
+        need_probe = True
+        online_training = need_probe and experiment_cfg.get_training_mode()
+        offline_training = need_probe and not experiment_cfg.get_training_mode()
+
+        if offline_training:
+            aggregation_method = "none"
+        else:
+            aggregation_method = experiment_cfg.get_aggregation_method()
+
+        assert online_training is True
+        assert offline_training is False
+        assert aggregation_method == "mean"
+        experiment_cfg.get_aggregation_method.assert_called_once()
+
+    @pytest.mark.integration
+    def test_embedding_file_reuse_integration(self) -> None:
+        """Integration test to verify embedding file reuse works end-to-end."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            save_dir = Path(temp_dir)
+
+            # Test with different experiment names but same dataset and model
+            experiments = ["linear_probe", "lstm_probe", "attention_probe"]
+            dataset_name = "test_dataset"
+            model_name = "beats_pretrained"
+
+            embedding_paths = []
+            for _ in experiments:
+                # Simulate path construction
+                embedding_dir_name = dataset_name
+                emb_base_dir = save_dir / f"{embedding_dir_name}_{model_name}"
+                train_path = emb_base_dir / "embedding_train.h5"
+                embedding_paths.append(train_path)
+
+            # All experiments should use the same embedding file (same dataset+model)
+            assert all(path == embedding_paths[0] for path in embedding_paths)
+
+            # The path should not contain any experiment name but should contain model name
+            assert "linear_probe" not in str(embedding_paths[0])
+            assert "lstm_probe" not in str(embedding_paths[0])
+            assert "attention_probe" not in str(embedding_paths[0])
+            assert "test_dataset" in str(embedding_paths[0])
+            assert "beats_pretrained" in str(embedding_paths[0])
+
+            # Test with different model - should have different path
+            model_name2 = "efficientnet_b0"
+            embedding_paths2 = []
+            for _ in experiments:
+                embedding_dir_name = dataset_name
+                emb_base_dir = save_dir / f"{embedding_dir_name}_{model_name2}"
+                train_path = emb_base_dir / "embedding_train.h5"
+                embedding_paths2.append(train_path)
+
+            # Different model should have different embedding files
+            assert embedding_paths[0] != embedding_paths2[0]
+            assert "efficientnet_b0" in str(embedding_paths2[0])

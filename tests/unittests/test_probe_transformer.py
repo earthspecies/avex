@@ -1,13 +1,10 @@
 """Tests for TransformerProbe."""
 
-from typing import List, Optional, Union
-
+import pytest
 import torch
 
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.transformer_probe import (
-    TransformerProbe,
-)
+from representation_learning.models.probes.transformer_probe import TransformerProbe
 
 
 class MockAudioProcessor:
@@ -27,57 +24,77 @@ class MockBaseModel(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor,
-        padding_mask: Optional[torch.Tensor] = None,
+        padding_mask: torch.Tensor | None = None,
         aggregation: str = "mean",
         freeze_backbone: bool = True,
-    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+    ) -> torch.Tensor | list[torch.Tensor]:
         batch_size = x.shape[0]
         if aggregation == "none":
             return [torch.randn(batch_size, 20, dim, device=self.device) for dim in self.embedding_dims]
         return torch.randn(batch_size, 20, self.embedding_dims[0], device=self.device)
 
 
-def test_transformer_feature_mode_with_input_dim() -> None:
-    input_dim = 96
-    num_classes = 4
-    probe = TransformerProbe(
-        base_model=None,
-        layers=[],
-        num_classes=num_classes,
-        device="cpu",
-        feature_mode=True,
-        input_dim=input_dim,
-    )
-    x = torch.randn(2, 10, input_dim)
-    out = probe(x)
-    assert out.shape == (2, num_classes)
+class TestTransformerProbe:
+    """Test cases for TransformerProbe."""
 
+    @pytest.fixture(scope="class")
+    def base_model_single(self) -> MockBaseModel:
+        """Create a base model with single embedding dimension.
 
-def test_transformer_with_base_model_single() -> None:
-    base = MockBaseModel([64])
-    probe = TransformerProbe(
-        base_model=base,
-        layers=["layer1"],
-        num_classes=3,
-        device="cpu",
-        feature_mode=False,
-        aggregation="mean",
-    )
-    x = torch.randn(2, 1000)
-    out = probe(x)
-    assert out.shape == (2, 3)
+        Returns:
+            MockBaseModel: A mock base model with a single embedding dimension of 64.
+        """
+        return MockBaseModel([64])
 
+    @pytest.fixture(scope="class")
+    def base_model_multi(self) -> MockBaseModel:
+        """Create a base model with multiple embeddings.
 
-def test_transformer_multi_layer_weighted_sum() -> None:
-    base = MockBaseModel([32, 64, 96])
-    probe = TransformerProbe(
-        base_model=base,
-        layers=["l1", "l2", "l3"],
-        num_classes=2,
-        device="cpu",
-        feature_mode=False,
-        aggregation="none",
-    )
-    x = torch.randn(2, 1000)
-    out = probe(x)
-    assert out.shape == (2, 2)
+        Returns:
+            MockBaseModel: A mock base model with three embeddings of dimensions 32, 64, and 96.
+        """
+        return MockBaseModel([32, 64, 96])
+
+    def test_transformer_feature_mode(self) -> None:
+        """Test transformer probe in feature mode."""
+        probe = TransformerProbe(
+            base_model=None,
+            layers=[],
+            num_classes=4,
+            device="cpu",
+            feature_mode=True,
+            input_dim=96,
+        )
+        x = torch.randn(2, 10, 96)
+        out = probe(x)
+        assert out.shape == (2, 4)
+
+    def test_transformer_with_base_model(
+        self, base_model_single: MockBaseModel, base_model_multi: MockBaseModel
+    ) -> None:
+        """Test transformer probe with base model in different configurations."""
+        # Single layer
+        probe1 = TransformerProbe(
+            base_model=base_model_single,
+            layers=["layer1"],
+            num_classes=3,
+            device="cpu",
+            feature_mode=False,
+            aggregation="mean",
+        )
+        x1 = torch.randn(2, 1000)
+        out1 = probe1(x1)
+        assert out1.shape == (2, 3)
+
+        # Multi-layer weighted sum
+        probe2 = TransformerProbe(
+            base_model=base_model_multi,
+            layers=["l1", "l2", "l3"],
+            num_classes=2,
+            device="cpu",
+            feature_mode=False,
+            aggregation="none",
+        )
+        x2 = torch.randn(2, 1000)
+        out2 = probe2(x2)
+        assert out2.shape == (2, 2)
