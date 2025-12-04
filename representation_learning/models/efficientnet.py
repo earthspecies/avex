@@ -51,8 +51,8 @@ class Model(ModelBase):
 
         # Load the appropriate EfficientNet variant based on configuration
         # Use weights parameter instead of deprecated pretrained parameter
-        weights = EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
         if efficientnet_variant == "b0":
+            weights = EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
             self.model = efficientnet_b0(weights=weights)
         elif efficientnet_variant == "b1":
             weights = EfficientNet_B1_Weights.IMAGENET1K_V1 if pretrained else None
