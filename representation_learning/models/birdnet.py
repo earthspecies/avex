@@ -403,14 +403,16 @@ class Model(ModelBase):
                 for detail in tensor_details:
                     shape = detail.get("shape", [])
                     name = detail.get("name", "")
+                    # Normalize shape to tuple for comparison (handles both list and tuple)
+                    shape_tuple = tuple(shape) if shape else ()
                     if (
                         len(shape) >= 1
                         and 1024 in shape
                         and (
                             "embedding" in name.lower()
                             or "feature" in name.lower()
-                            or shape == [1024]
-                            or shape == [1, 1024]
+                            or shape_tuple == (1024,)
+                            or shape_tuple == (1, 1024)
                         )
                     ):
                         try:
