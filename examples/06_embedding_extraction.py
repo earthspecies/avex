@@ -9,7 +9,18 @@ Key use cases:
 - Building models without classifiers for embedding analysis
 - Using models with return_features_only=True
 
-Note:
+Audio Requirements:
+- Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
+- Check with: describe_model("model_name") or get_model_spec("model_name").audio_config.sample_rate
+- For full reproducibility, resample using librosa with these exact parameters:
+
+    import librosa
+    audio_resampled = librosa.resample(
+        audio, orig_sr=original_sr, target_sr=target_sr,
+        res_type="kaiser_best", scale=True
+    )
+
+Output Formats:
 - Transformer models (BEATs, EAT) return 3D tensors: (batch, frames/patches, features)
 - CNN models (EfficientNet, ResNet) return 4D tensors: (batch, channels, height, width)
 """
@@ -40,7 +51,8 @@ def main(device: str = "cpu") -> None:
         print(f"   Return features only: {getattr(model, '_return_features_only', 'N/A')}")
 
         # Test forward pass - should return embeddings, not logits
-        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
+        # BEATs expects 16kHz audio: 16000 samples/sec * 5 seconds = 80000 samples
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -70,8 +82,8 @@ def main(device: str = "cpu") -> None:
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Return features only: {getattr(model, 'return_features_only', 'N/A')}")
 
-        # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5)  # 5 seconds of audio
+        # Test forward pass (EAT expects 16kHz audio, 5 seconds)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -117,8 +129,8 @@ def main(device: str = "cpu") -> None:
         print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
         print(f"   Return features only: {getattr(model, 'return_features_only', 'N/A')}")
 
-        # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5, device=device)  # 5 seconds of audio
+        # Test forward pass (sample rate from audio_config: 16kHz, 5 seconds)
+        dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             output = model(dummy_input, padding_mask=None)
         print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
@@ -158,7 +170,7 @@ def main(device: str = "cpu") -> None:
             label_to_index = classification_model.label_mapping["label_to_index"]
             print(f"   ✅ Label mapping loaded: {len(label_to_index)} classes")
 
-        # Test both with same input
+        # Test both with same input (BEATs expects 16kHz, 5 seconds)
         dummy_input = torch.randn(1, 16000 * 5, device=device)
         with torch.no_grad():
             embedding_output = embedding_model(dummy_input, padding_mask=None)

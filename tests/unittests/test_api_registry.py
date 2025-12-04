@@ -428,6 +428,29 @@ class TestGetModelSpec:
 
         registry._MODEL_REGISTRY.clear()
 
+    def test_get_model_spec_sample_rate_from_audio_config(self) -> None:
+        """Test that sample_rate can be accessed from a model's audio_config.
+
+        This verifies that users can programmatically determine the expected
+        sample rate for a given model, which is important for audio preprocessing.
+        """
+        from representation_learning.models.utils import registry
+
+        # Ensure registry is initialized with official models
+        registry.initialize_registry()
+
+        # Test with beats_naturelm (should have audio_config with sample_rate)
+        spec = get_model_spec("beats_naturelm")
+        assert spec is not None, "beats_naturelm should be registered"
+        assert spec.audio_config is not None, "beats_naturelm should have audio_config"
+        assert spec.audio_config.sample_rate is not None, "audio_config should have sample_rate"
+        assert isinstance(spec.audio_config.sample_rate, int), "sample_rate should be an integer"
+        assert spec.audio_config.sample_rate > 0, "sample_rate should be positive"
+
+        # The sample rate should be accessible for resampling audio
+        target_sr = spec.audio_config.sample_rate
+        assert target_sr == 16000, f"BEATs expects 16kHz, got {target_sr}"
+
 
 class TestGetModelClass:
     """Test get_model_class function."""
