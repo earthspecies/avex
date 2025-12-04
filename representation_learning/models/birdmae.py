@@ -169,15 +169,13 @@ class Model(ModelBase):
 
         # Extract embeddings from model output
         if hasattr(outputs, "last_hidden_state"):
-            # BirdMAE outputs shape [batch_size, embedding_dim] directly
+            # BirdMAE outputs shape [batch_size, seq_len, embedding_dim] or [batch_size, embedding_dim]
             embeddings = outputs.last_hidden_state
         elif hasattr(outputs, "pooler_output"):
             embeddings = outputs.pooler_output
         elif isinstance(outputs, torch.Tensor):
             # Direct tensor output
             embeddings = outputs
-            if embeddings.dim() > 2:
-                embeddings = embeddings.mean(dim=1)  # Pool if needed
         else:
             # For BirdMAE, the output might be a custom object
             # Try to access common attributes
@@ -189,9 +187,9 @@ class Model(ModelBase):
                 # Use the last hidden state
                 hidden_states = outputs.hidden_states
                 if isinstance(hidden_states, (list, tuple)):
-                    embeddings = hidden_states[-1].mean(dim=1)  # Pool last layer
+                    embeddings = hidden_states[-1]
                 else:
-                    embeddings = hidden_states.mean(dim=1)
+                    embeddings = hidden_states
             else:
                 # Debug: print available attributes
                 attrs = [attr for attr in dir(outputs) if not attr.startswith("_")]
@@ -199,23 +197,27 @@ class Model(ModelBase):
                     f"Unexpected output format from BirdMAE. Type: {type(outputs)}, Available attributes: {attrs}"
                 )
 
-        # Ensure embeddings are 2D [batch_size, embedding_dim]
+        # Return unpooled features if requested
+        if self.return_features_only:
+            # Ensure at least 2D
+            if embeddings.dim() == 1:
+                embeddings = embeddings.unsqueeze(0)  # Add batch dimension if missing
+            return embeddings
+
+        # For classification, ensure embeddings are 2D [batch_size, embedding_dim]
         if embeddings.dim() == 1:
             embeddings = embeddings.unsqueeze(0)  # Add batch dimension if missing
         elif embeddings.dim() > 2:
-            # Flatten extra dimensions
-            embeddings = embeddings.view(embeddings.size(0), -1)
+            # Pool temporal/spatial dimensions for classification
+            embeddings = embeddings.mean(dim=1)
 
         # Ensure classifier exists if needed
-        if not self.return_features_only:
-            if self.classifier is None:
-                # Determine number of classes from forward call context
-                # For now, we'll defer classification head creation
-                return embeddings
-            else:
-                return self.classifier(embeddings)
-
-        return embeddings
+        if self.classifier is None:
+            # Determine number of classes from forward call context
+            # For now, we'll defer classification head creation
+            return embeddings
+        else:
+            return self.classifier(embeddings)
 
     def extract_embeddings(
         self,

@@ -6,35 +6,53 @@ This example demonstrates:
 - Model evaluation and testing
 - Working with different model types
 - Best practices for model development
+
+Audio Requirements:
+- Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
+- Check with: describe_model("model_name") or get_model_spec("model_name").audio_config.sample_rate
+- For full reproducibility, resample using librosa with these exact parameters:
+
+    import librosa
+    audio_resampled = librosa.resample(
+        audio, orig_sr=original_sr, target_sr=target_sr,
+        res_type="kaiser_best", scale=True
+    )
 """
 
 import argparse
+import time
+from pathlib import Path
+from typing import Optional
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from representation_learning import (
-    create_model,
-    list_models,
-    load_model,
-    register_model_class,
-)
+from representation_learning import create_model, load_model, register_model_class
 from representation_learning.models.base_model import ModelBase
 
+# =============================================================================
+# Custom Training Model
+# =============================================================================
 
-# Custom model for training example
+
 @register_model_class
 class TrainingExampleModel(ModelBase):
     """A simple model for demonstrating training workflows."""
 
     name = "training_example"
 
-    def __init__(self, device: str, num_classes: int, audio_config: dict = None, **kwargs: object) -> None:
+    def __init__(
+        self,
+        device: str,
+        num_classes: int,
+        audio_config: Optional[dict] = None,
+        **kwargs: object,
+    ) -> None:
+        """Initialize the model."""
         super().__init__(device=device, audio_config=audio_config)
 
-        # Simple architecture
         self.feature_extractor = nn.Sequential(
             nn.Conv1d(1, 32, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -57,52 +75,66 @@ class TrainingExampleModel(ModelBase):
 
         self.to(device)
 
-    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass.
+
+        Returns
+        -------
+        torch.Tensor
+            Model output tensor.
+        """
         if x.dim() == 2:
             x = x.unsqueeze(1)
-
         features = self.feature_extractor(x)
-        output = self.classifier(features)
-        return output
+        return self.classifier(features)
 
     def get_embedding_dim(self) -> int:
-        """Return the embedding dimension.
+        """Return embedding dimension.
 
-        Returns:
-            int: The embedding dimension (256).
+        Returns
+        -------
+        int
+            Embedding dimension.
         """
         return 256
 
 
-def create_dummy_dataset(num_samples: int = 1000, num_classes: int = 10, audio_length: int = 16000) -> TensorDataset:
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def create_dummy_dataset(
+    num_samples: int = 1000, num_classes: int = 10, audio_length: int = 16000
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Create a dummy dataset for training.
 
-    Returns:
-        TensorDataset: A dataset containing random audio data and labels.
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        Tuple of (audio_data, labels).
     """
-    # Generate random audio data
     audio_data = torch.randn(num_samples, audio_length)
-
-    # Generate random labels
     labels = torch.randint(0, num_classes, (num_samples,))
-
     return audio_data, labels
 
 
 def train_epoch(
-    model: torch.nn.Module,
+    model: nn.Module,
     dataloader: DataLoader,
-    optimizer: torch.optim.Optimizer,
-    criterion: torch.nn.Module,
+    optimizer: optim.Optimizer,
+    criterion: nn.Module,
     device: str,
 ) -> tuple[float, float]:
     """Train for one epoch.
 
-    Returns:
-        tuple[float, float]: A tuple of (average_loss, accuracy).
+    Returns
+    -------
+    tuple[float, float]
+        Tuple of (average_loss, accuracy_percentage).
     """
     model.train()
-    total_loss = 0
+    total_loss = 0.0
     correct = 0
     total = 0
 
@@ -121,24 +153,26 @@ def train_epoch(
         total += target.size(0)
 
         if batch_idx % 10 == 0:
-            print(f"Batch {batch_idx}, Loss: {loss.item():.4f}, Acc: {100.0 * correct / total:.2f}%")
+            print(f"   Batch {batch_idx}, Loss: {loss.item():.4f}, Acc: {100.0 * correct / total:.2f}%")
 
     return total_loss / len(dataloader), 100.0 * correct / total
 
 
 def evaluate(
-    model: torch.nn.Module,
+    model: nn.Module,
     dataloader: DataLoader,
-    criterion: torch.nn.Module,
+    criterion: nn.Module,
     device: str,
 ) -> tuple[float, float]:
     """Evaluate the model.
 
-    Returns:
-        tuple[float, float]: A tuple of (average_loss, accuracy).
+    Returns
+    -------
+    tuple[float, float]
+        Tuple of (average_loss, accuracy_percentage).
     """
     model.eval()
-    total_loss = 0
+    total_loss = 0.0
     correct = 0
     total = 0
 
@@ -156,234 +190,187 @@ def evaluate(
     return total_loss / len(dataloader), 100.0 * correct / total
 
 
-def main(device: str = "cpu") -> None:
-    print("🚀 Example 5: Training and Evaluation Workflows")
-    print("=" * 60)
+# =============================================================================
+# Main Example
+# =============================================================================
 
-    # Setup
+
+def main(device: str = "cpu") -> None:
+    """Demonstrate training and evaluation workflows."""
+    print("Example 5: Training and Evaluation Workflows")
+    print("=" * 60)
     print(f"Using device: {device}")
 
-    # Example 1: Training a custom model from scratch
-    print("\n🏋️ Training Custom Model from Scratch:")
-    try:
-        # Create model
-        model = create_model("training_example", num_classes=10, device=device)
-        print(f"✅ Created model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    # =========================================================================
+    # Part 1: Training from scratch
+    # =========================================================================
+    print("\nPart 1: Training Custom Model from Scratch")
+    print("-" * 60)
 
-        # Create dummy dataset
-        train_data, train_labels = create_dummy_dataset(800, 10)
-        val_data, val_labels = create_dummy_dataset(200, 10)
+    model = create_model("training_example", num_classes=10, device=device)
+    print(f"Created model: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-        # Create data loaders
-        train_dataset = TensorDataset(train_data, train_labels)
-        val_dataset = TensorDataset(val_data, val_labels)
+    # Create datasets
+    train_data, train_labels = create_dummy_dataset(800, 10)
+    val_data, val_labels = create_dummy_dataset(200, 10)
 
-        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+    train_dataset = TensorDataset(train_data, train_labels)
+    val_dataset = TensorDataset(val_data, val_labels)
 
-        print(f"   Training samples: {len(train_dataset)}")
-        print(f"   Validation samples: {len(val_dataset)}")
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-        # Setup training
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+    print(f"   Training samples: {len(train_dataset)}")
+    print(f"   Validation samples: {len(val_dataset)}")
 
-        # Training loop
-        num_epochs = 3
-        print(f"\n   Training for {num_epochs} epochs...")
+    # Training setup
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-        for epoch in range(num_epochs):
-            print(f"\n   Epoch {epoch + 1}/{num_epochs}:")
-            train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
-            val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+    # Training loop
+    num_epochs = 2
+    print(f"\nTraining for {num_epochs} epochs...")
 
-            print(f"   Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
-            print(f"   Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
-
-        print("✅ Training completed successfully!")
-
-    except Exception as e:
-        print(f"❌ Error in training: {e}")
-        import traceback
-
-        traceback.print_exc()
-
-    # Example 2: Fine-tuning a pre-trained model
-    print("\n🔧 Fine-tuning Pre-trained Model:")
-    try:
-        # Load a pre-trained model (if available)
-        print("\n📋 Available models:")
-        models = list_models()
-        if models:
-            model_name = list(models.keys())[0]
-            print(f"\n   Using model: {model_name}")
-
-            # Create model for fine-tuning
-            model = create_model(model_name, num_classes=5, device=device)
-            print(f"✅ Created model for fine-tuning: {type(model).__name__}")
-
-            # Setup for fine-tuning (lower learning rate)
-            criterion = nn.CrossEntropyLoss()
-            optimizer = optim.Adam(model.parameters(), lr=0.0001)  # Lower LR for fine-tuning
-
-            # Create smaller dataset for fine-tuning
-            fine_tune_data, fine_tune_labels = create_dummy_dataset(200, 5)
-            fine_tune_dataset = TensorDataset(fine_tune_data, fine_tune_labels)
-            fine_tune_loader = DataLoader(fine_tune_dataset, batch_size=16, shuffle=True)
-
-            # Fine-tuning loop (fewer epochs)
-            print("   Fine-tuning for 2 epochs...")
-            for epoch in range(2):
-                print(f"\n   Fine-tuning Epoch {epoch + 1}/2:")
-                train_loss, train_acc = train_epoch(model, fine_tune_loader, optimizer, criterion, device)
-                print(f"   Fine-tune Loss: {train_loss:.4f}, Fine-tune Acc: {train_acc:.2f}%")
-
-            print("✅ Fine-tuning completed!")
-        else:
-            print("   No pre-trained models available for fine-tuning")
-
-    except Exception as e:
-        print(f"❌ Error in fine-tuning: {e}")
-
-    # Example 3: Model evaluation and testing
-    print("\n📊 Model Evaluation and Testing:")
-    try:
-        # Create a test model
-        model = create_model("training_example", num_classes=8, device=device)
-        model.eval()
-
-        # Create test dataset
-        test_data, test_labels = create_dummy_dataset(100, 8)
-        test_dataset = TensorDataset(test_data, test_labels)
-        test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
-
-        # Evaluate model
-        criterion = nn.CrossEntropyLoss()
-        test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-
-        print("✅ Model evaluation completed:")
-        print(f"   Test Loss: {test_loss:.4f}")
-        print(f"   Test Accuracy: {test_acc:.2f}%")
-
-        # Test inference speed
-        import time
-
-        model.eval()
-        test_input = torch.randn(1, 16000).to(device)
-
-        # Warmup
-        for _ in range(10):
-            with torch.no_grad():
-                _ = model(test_input)
-
-        # Time inference
-        start_time = time.time()
-        with torch.no_grad():
-            for _ in range(100):
-                _ = model(test_input)
-        end_time = time.time()
-
-        avg_inference_time = (end_time - start_time) / 100
-        print(f"   Average inference time: {avg_inference_time * 1000:.2f}ms")
-
-    except Exception as e:
-        print(f"❌ Error in evaluation: {e}")
-
-    # Example 4: Model checkpointing
-    print("\n💾 Model Checkpointing:")
-    try:
-        # Create and train a model
-        model = create_model("training_example", num_classes=6, device=device)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-        # Quick training
-        train_data, train_labels = create_dummy_dataset(100, 6)
-        train_dataset = TensorDataset(train_data, train_labels)
-        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-
-        # Train for 1 epoch
+    for epoch in range(num_epochs):
+        print(f"\nEpoch {epoch + 1}/{num_epochs}:")
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
-        print(f"   Trained model - Loss: {train_loss:.4f}, Acc: {train_acc:.2f}%")
+        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
 
-        # Save checkpoint
-        from pathlib import Path
+        print(f"   Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
+        print(f"   Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
 
-        # Ensure checkpoints directory exists
-        checkpoints_dir = Path(__file__).parent.parent / "checkpoints"
-        checkpoints_dir.mkdir(exist_ok=True)
+    print("\nTraining completed.")
 
-        checkpoint_path = checkpoints_dir / "example_checkpoint.pt"
-        checkpoint = {
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "epoch": 1,
-            "loss": train_loss,
-            "accuracy": train_acc,
-            "num_classes": 6,
-        }
-        torch.save(checkpoint, checkpoint_path)
-        print(f"✅ Saved checkpoint to: {checkpoint_path}")
+    # =========================================================================
+    # Part 2: Model evaluation
+    # =========================================================================
+    print("\nPart 2: Model Evaluation")
+    print("-" * 60)
 
-        # Load model from checkpoint (pass checkpoint_path directly)
-        loaded_model = load_model("training_example", checkpoint_path=str(checkpoint_path), device=device)
-        print("✅ Loaded model from checkpoint")
-        print(f"✅ Loaded model from checkpoint: {type(loaded_model).__name__}")
+    model = create_model("training_example", num_classes=8, device=device)
+    model.eval()
 
-        # Verify the loaded model works
-        test_input = torch.randn(1, 16000).to(device)
+    test_data, test_labels = create_dummy_dataset(100, 8)
+    test_dataset = TensorDataset(test_data, test_labels)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+
+    criterion = nn.CrossEntropyLoss()
+    test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Test Accuracy: {test_acc:.2f}%")
+
+    # Inference speed test
+    test_input = torch.randn(1, 16000).to(device)
+
+    # Warmup
+    for _ in range(10):
         with torch.no_grad():
-            output = loaded_model(test_input)
-        print(f"   Loaded model output shape: {output.shape}")
+            _ = model(test_input)
 
-        # Clean up
-        import os
+    # Time inference
+    start_time = time.time()
+    with torch.no_grad():
+        for _ in range(100):
+            _ = model(test_input)
+    end_time = time.time()
 
-        os.remove(checkpoint_path)
-        print("✅ Cleaned up checkpoint file")
+    avg_inference_time = (end_time - start_time) / 100
+    print(f"Average inference time: {avg_inference_time * 1000:.2f}ms")
 
-    except Exception as e:
-        print(f"❌ Error in checkpointing: {e}")
+    # =========================================================================
+    # Part 3: Model checkpointing
+    # =========================================================================
+    print("\nPart 3: Model Checkpointing")
+    print("-" * 60)
 
-    # Example 5: Model comparison
-    print("\n🔍 Model Comparison:")
-    try:
-        # Create different models for comparison
-        models_to_compare = [
-            ("training_example", 5),
-            ("simple_audio_cnn", 5),
-            ("simple_audio_mlp", 5),
-        ]
+    model = create_model("training_example", num_classes=6, device=device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-        test_data, test_labels = create_dummy_dataset(50, 5)
-        test_dataset = TensorDataset(test_data, test_labels)
-        test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+    # Quick training
+    train_data, train_labels = create_dummy_dataset(100, 6)
+    train_dataset = TensorDataset(train_data, train_labels)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
-        criterion = nn.CrossEntropyLoss()
+    train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
+    print(f"Trained model - Loss: {train_loss:.4f}, Acc: {train_acc:.2f}%")
 
-        print("   Comparing models:")
-        for model_name, num_classes in models_to_compare:
-            try:
-                model = create_model(model_name, num_classes=num_classes, device=device)
-                model.eval()
+    # Save checkpoint
+    checkpoints_dir = Path(__file__).parent.parent / "checkpoints"
+    checkpoints_dir.mkdir(exist_ok=True)
 
-                # Evaluate
-                test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-                param_count = sum(p.numel() for p in model.parameters())
+    checkpoint_path = checkpoints_dir / "example_checkpoint.pt"
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "epoch": 1,
+        "loss": train_loss,
+        "accuracy": train_acc,
+        "num_classes": 6,
+    }
+    torch.save(checkpoint, checkpoint_path)
+    print(f"Saved checkpoint: {checkpoint_path}")
 
-                print(f"   - {model_name}:")
-                print(f"     Parameters: {param_count:,}")
-                print(f"     Test Accuracy: {test_acc:.2f}%")
-                print(f"     Test Loss: {test_loss:.4f}")
+    # Load model from checkpoint
+    loaded_model = load_model("training_example", checkpoint_path=str(checkpoint_path), device=device)
+    print(f"Loaded model: {type(loaded_model).__name__}")
 
-            except Exception as e:
-                print(f"   - {model_name}: Error - {e}")
+    # Verify loaded model
+    test_input = torch.randn(1, 16000).to(device)
+    with torch.no_grad():
+        output = loaded_model(test_input)
+    print(f"   Output shape: {output.shape}")
 
-    except Exception as e:
-        print(f"❌ Error in model comparison: {e}")
+    # Clean up
+    checkpoint_path.unlink()
+    print("Cleaned up checkpoint file.")
 
-    print("\n🎉 Training and evaluation examples completed!")
+    # =========================================================================
+    # Part 4: Model comparison
+    # =========================================================================
+    print("\nPart 4: Model Comparison")
+    print("-" * 60)
+
+    models_to_compare = [
+        ("training_example", {}),
+        ("simple_audio_cnn", {}),
+        ("simple_audio_mlp", {"hidden_dims": [256, 128]}),
+    ]
+
+    test_data, test_labels = create_dummy_dataset(50, 5)
+    test_dataset = TensorDataset(test_data, test_labels)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+
+    criterion = nn.CrossEntropyLoss()
+
+    print("Comparing models:")
+    for model_name, kwargs in models_to_compare:
+        model = create_model(model_name, num_classes=5, device=device, **kwargs)
+        model.eval()
+
+        test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+        param_count = sum(p.numel() for p in model.parameters())
+
+        print(f"\n  {model_name}:")
+        print(f"    Parameters: {param_count:,}")
+        print(f"    Test Accuracy: {test_acc:.2f}%")
+        print(f"    Test Loss: {test_loss:.4f}")
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    print("\n" + "=" * 60)
+    print("Key Takeaways")
+    print("=" * 60)
+    print("""
+- Use create_model() for training new models
+- Save checkpoints with model state, optimizer state, and metadata
+- Use load_model() with checkpoint_path to resume training
+- Compare models with consistent evaluation setup
+- Measure inference time for deployment decisions
+""")
 
 
 if __name__ == "__main__":

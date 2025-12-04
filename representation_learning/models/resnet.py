@@ -128,10 +128,22 @@ class Model(ModelBase):
         torch.Tensor
             • When *return_features_only* is **False**: class-logit tensor of shape
               ``(B, num_classes)``
-            • Otherwise: feature tensor of shape ``(B, in_features)``
+            • Otherwise: unpooled spatial feature maps of shape ``(B, C, H, W)``
         """
         x = self.process_audio(x)
-        features = self.backbone(x)  # (B, in_features)
+
         if self.return_features_only:
-            return features
+            # Extract unpooled spatial features before avgpool
+            x = self.backbone.conv1(x)
+            x = self.backbone.bn1(x)
+            x = self.backbone.relu(x)
+            x = self.backbone.maxpool(x)
+            x = self.backbone.layer1(x)
+            x = self.backbone.layer2(x)
+            x = self.backbone.layer3(x)
+            x = self.backbone.layer4(x)
+            return x  # (B, C, H, W)
+
+        # Standard forward pass with pooling and classification
+        features = self.backbone(x)  # (B, in_features)
         return self.classifier(features)

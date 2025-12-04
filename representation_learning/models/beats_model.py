@@ -44,8 +44,8 @@ class Model(ModelBase):
         variable-length sequence into a fixed-dimensional vector via masked
         mean-pooling before feeding it to a linear classifier.
     2.  When ``return_features_only=True`` the classifier layer is skipped and
-        the pooled embedding is returned directly, which is handy for
-        representation extraction / linear probing.
+        the unpooled frame-level features are returned directly (shape: B x T x D),
+        which is handy for representation extraction / linear probing.
     """
 
     def __init__(
@@ -180,8 +180,8 @@ class Model(ModelBase):
         torch.Tensor
             • When *return_features_only* is **False**: logits of shape
               ``(batch, num_classes)``
-            • Otherwise: pooled embeddings of shape
-              ``(batch, encoder_embed_dim)``
+            • Otherwise: unpooled frame-level features of shape
+              ``(batch, num_frames, encoder_embed_dim)``
         """
         # Optional audio pre-processing
         x = self.process_audio(x)
@@ -190,6 +190,9 @@ class Model(ModelBase):
 
         # features: (B, T', D)
         # frame_padding: (B, T') or None
+
+        if self._return_features_only:
+            return features
 
         # ------------------------------------------------------------------
         # 3.  Masked mean-pooling over the temporal dimension
@@ -202,10 +205,7 @@ class Model(ModelBase):
         else:
             pooled = features.mean(dim=1)
 
-        if self._return_features_only:
-            return pooled
-        else:
-            return self.classifier(pooled)
+        return self.classifier(pooled)
 
     def extract_embeddings(
         self,
