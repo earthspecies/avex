@@ -248,8 +248,6 @@ class EATHFModel(ModelBase):
         self,
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
-        framewise_embeddings: bool = False,
-        return_features_only: bool = False,
     ) -> torch.Tensor:  # noqa: D401 – keep signature consistent
         """Forward pass through the EAT model.
 
@@ -259,17 +257,13 @@ class EATHFModel(ModelBase):
             Raw waveform tensor of shape ``(B, T)``.
         padding_mask
             Not used (kept for interface compatibility).
-        framewise_embeddings
-            Deprecated: use return_features_only=True instead.
-            If True, return frame-wise embeddings without cls token.
-        return_features_only
-            If True, return unpooled patch embeddings instead of classification logits.
-            Defaults to False, but automatically True if num_classes=0.
 
         Returns
         -------
         torch.Tensor
-            Either unpooled patch embeddings (B, L, D) or classification logits (B, num_classes)
+            • When *return_features_only* is **True** (set at init): unpooled patch
+              embeddings of shape ``(B, L, D)``
+            • Otherwise: classification logits of shape ``(B, num_classes)``
 
         Raises
         ------
@@ -283,18 +277,10 @@ class EATHFModel(ModelBase):
         spec = spec.unsqueeze(1)  # (B, 1, F, T)
 
         # 3) Backbone – we only need features (classification handled below)
-        # backbone_out: Dict[str, torch.Tensor] = self.backbone(
-        #     spec, mask=False, features_only=True
-        # )  # type: ignore[arg-type]
-        # feats: torch.Tensor = backbone_out["x"]  # (B, L, D)
         feats = self.backbone.extract_features(spec)
 
-        # Handle legacy framewise_embeddings parameter
-        if framewise_embeddings:
-            return feats[:, 1:]  # drop the cls embedding
-
-        # Return unpooled features if explicitly requested (parameter or instance attribute) or if no classifier exists
-        if return_features_only or self.return_features_only or self.classifier is None:
+        # Return unpooled features if set at init or if no classifier exists
+        if self.return_features_only or self.classifier is None:
             return feats
 
         # 4) Pool patch embeddings → clip-level vector
