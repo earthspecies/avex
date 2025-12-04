@@ -4,42 +4,89 @@ import argparse
 from tqdm import tqdm
 
 import torch
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
+
+if torch.cuda.is_available():
+    _ = torch.cuda.device_count()  # Check device count
+    # Create a small tensor on CUDA to fully initialize the context
+    # This prevents CUDA from becoming unavailable during subsequent imports
+    try:
+        _cuda_init_tensor = torch.zeros(1, device="cuda")
+        del _cuda_init_tensor  # Clean up immediately
+        torch.cuda.synchronize()  # Ensure CUDA operations complete
+    except Exception:
+        pass  # If CUDA tensor creation fails, continue anyway
+
 from representation_learning import load_model
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
 import torch
 import torchaudio  # noqa: F401  # (kept in case model uses it internally)
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
 from torch.utils.data import Dataset, DataLoader
 from esp_data.io import read_audio
 import librosa
 import pandas as pd
 
 MODEL_SR = 32000
-TARGET_SEC = 3.0
+TARGET_SEC = 1.0
+
+# def pad_and_crop(audio: torch.Tensor, target_dur_sec: float, sr: int) -> torch.Tensor:
+#     """
+#     Right-pad or left-crop a 1-D audio tensor to `target_dur_sec`.
+
+#     Parameters
+#     ----------
+#     audio : torch.Tensor
+#         1-D tensor of shape [T]. If shape is [1, T], pass audio.squeeze(0).
+#     target_dur_sec : float
+#         Target duration in seconds.
+#     sr : int
+#         Sample rate.
+
+#     Raises
+#     -------
+#     ValueError
+#         If audio is not 1-D.
+
+#     Returns
+#     -------
+#     torch.Tensor
+#         1-D tensor of shape [target_len].
+#     """
+#     if audio.dim() != 1:
+#         raise ValueError(f"Expected a 1-D tensor, got shape: {audio.shape}")
+
+#     target_len = int(round(target_dur_sec * sr))
+#     T = audio.shape[0]
+
+#     # Case 1: Exact length
+#     if T == target_len:
+#         return audio
+
+#     # Case 2: Pad on the right
+#     if T < target_len:
+#         out = torch.zeros(target_len, dtype=audio.dtype, device=audio.device)
+#         out[:T] = audio
+#         return out
+
+#     # Case 3: Crop by keeping the leftmost samples
+#     return audio[:target_len]
 
 def pad_and_crop(audio: torch.Tensor, target_dur_sec: float, sr: int) -> torch.Tensor:
     """
-    Right-pad or left-crop a 1-D audio tensor to `target_dur_sec`.
+    Center pad or center crop a 1-D audio tensor to `target_dur_sec`.
 
     Parameters
     ----------
     audio : torch.Tensor
         1-D tensor of shape [T]. If shape is [1, T], pass audio.squeeze(0).
     target_dur_sec : float
-        Target duration in seconds.
+        Target duration in seconds, e.g. 3.0
     sr : int
-        Sample rate.
+        Sample rate, e.g. 32000
 
     Raises
     -------
     ValueError
-        If audio is not 1-D.
+        If not right shape
 
     Returns
     -------
@@ -47,7 +94,9 @@ def pad_and_crop(audio: torch.Tensor, target_dur_sec: float, sr: int) -> torch.T
         1-D tensor of shape [target_len].
     """
     if audio.dim() != 1:
-        raise ValueError(f"Expected a 1-D tensor, got shape: {audio.shape}")
+        raise ValueError(
+            "Expected a 1-D tensor for `audio`. Got shape: {}".format(audio.shape)
+        )
 
     target_len = int(round(target_dur_sec * sr))
     T = audio.shape[0]
@@ -56,14 +105,21 @@ def pad_and_crop(audio: torch.Tensor, target_dur_sec: float, sr: int) -> torch.T
     if T == target_len:
         return audio
 
-    # Case 2: Pad on the right
+    # Case 2: Pad (audio shorter)
     if T < target_len:
+        pad_total = target_len - T
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+
         out = torch.zeros(target_len, dtype=audio.dtype, device=audio.device)
-        out[:T] = audio
+        out[pad_left : pad_left + T] = audio
         return out
 
-    # Case 3: Crop by keeping the leftmost samples
-    return audio[:target_len]
+    # Case 3: Crop (audio longer)
+    extra = T - target_len
+    crop_left = extra // 2
+    crop_right = crop_left + target_len
+    return audio[crop_left:crop_right]
 
 class PseudovoxDataset(Dataset):
     def __init__(self, metadata: pd.DataFrame):
@@ -142,6 +198,7 @@ def main():
         "sl_beats_all",
         checkpoint_path="gs://representation-learning/models/v1/beats_32khz.pt",
         num_classes=None,
+        device=device
     )
 
     # -----------------------
@@ -186,7 +243,7 @@ def main():
     dataset = PseudovoxDataset(shard_metadata)
     loader = DataLoader(
         dataset,
-        batch_size=64,   # adjust as needed
+        batch_size=1,   # adjust as needed
         shuffle=False,
         num_workers=12,  # adjust for your system
         pin_memory=True,
@@ -240,7 +297,7 @@ def main():
     # -----------------------
     out_csv = (
         "animalspeak_pseudovox_with_birdnet_with_qf_with_c_with_meta_with_classifications"
-        f"_shard{SHARD}_{TARGET_SEC}.csv"
+        f"_shard{SHARD}.csv"
     )
     shard_metadata.to_csv(out_csv)
     os.system(
