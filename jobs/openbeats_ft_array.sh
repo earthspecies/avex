@@ -42,7 +42,7 @@ echo "Running on: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID, Array Task: $SLURM_ARRAY_TASK_ID"
 echo "Experiment: $EXPERIMENT"
 
-source ~/.slurm_env
+source ~/slurm_env
 cd ~/representation-learning
 
 # Set up the virtual environment using uv

@@ -18,7 +18,7 @@ echo "Start time: $(date)"
 echo "Running on: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
 
-source ~/.slurm_env
+source ~/slurm_env
 cd ~/representation-learning
 
 # Set up the virtual environment using uv
