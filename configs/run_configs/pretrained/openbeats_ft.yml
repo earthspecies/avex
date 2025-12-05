@@ -1,15 +1,13 @@
 ---
-# OpenBEATs backbone for audio classification (mean pooling + linear head)
-# Fine-tuning from HuggingFace pretrained checkpoints
+# OpenBEATs fine-tuning on AnimalSpeak2 dataset
+#
+# Training schedule (from OpenBEATs paper):
+#   - Stage 1 (epochs 1-2): Backbone frozen, only classifier trains
+#   - Stage 2 (epochs 3-10): Full model fine-tuning with lower LR
 #
 # Available pretrained checkpoints:
 #   - openbeats-base-i1, openbeats-base-i2, openbeats-base-i3 (~90M parameters)
 #   - openbeats-large-i1, openbeats-large-i2, openbeats-large-i3 (~317M parameters)
-#
-# To use a pretrained checkpoint, set:
-#   - pretrained: true
-#   - model_id: <checkpoint_name> (e.g., "openbeats-large-i2")
-#   - model_size: base or large (auto-detected from model_id if available)
 model_spec:
   name: openbeats
   pretrained: true
@@ -46,13 +44,16 @@ logging: wandb
 resume_from_checkpoint: null
 
 training_params:
-  train_epochs: 20
+  train_epochs: 10
   lr: 0.0001
   batch_size: 8
   optimizer: adamw
   weight_decay: 0.01
   amp: true
   amp_dtype: bf16
+  # Two-stage training: freeze backbone for first 2 epochs, then finetune for 8 more
+  freeze_backbone_epochs: 2
+  second_stage_lr: 0.0001  
 
 # Learning rate scheduler configuration
 scheduler:
@@ -70,5 +71,35 @@ num_workers: 4
 # W&B logging (optional)
 wandb_project: representation_learning
 
-# Optional: uncomment to freeze backbone for first N epochs (two-stage training)
-# freeze_backbone_epochs: 2
+augmentations:
+  # Add background noise at random SNRs
+  - noise:
+      noise_dirs:
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/demand_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/idmt"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/tut2016_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/urbansound"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/freesound_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/\
+          orcasound_shipnoise_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/deepship_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/shipsear_10s"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/wham_noise"
+        - "/home/milad_earthspecies_org/data-migration/lambda/home/ubuntu/\
+          foundation-model-storage/foundation-model-data/audio_16k/noise/audioset"
+      snr_db_range: [-5, 20]  # mix noise between -5 dB and 20 dB SNR
+      augmentation_prob: 0.5
+  # Mixup augmentation for audio samples
+  - mixup:
+      alpha: 0.4  # Controls the Beta distribution shape
+      n_mixup: 1  # Maximum number of mixup pairs per batch (defaults to 1)
+      augmentation_prob: 0.5  # Probability of applying mixup to a batch
