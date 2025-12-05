@@ -179,8 +179,8 @@ def main():
     from representation_learning.data.dataset import build_dataloaders
     from representation_learning.models.get_model import get_model
 
-    # Load config
-    config = RunConfig.from_yaml(args.config)
+    # Load config using from_sources (the correct method)
+    config = RunConfig.from_sources(yaml_file=args.config, cli_args=())
 
     logger.info(f"\nDataset: {config.dataset_config}")
     logger.info(f"Model: {config.model_spec.name}")
