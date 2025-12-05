@@ -10,7 +10,7 @@ dataset_config: configs/data_configs/benchmark_beans.yml
 training_params:
   train_epochs: 900
   lr: 0.001
-  batch_size: 32
+  batch_size: 8
   optimizer: adamw
   weight_decay: 0.01
   amp: false

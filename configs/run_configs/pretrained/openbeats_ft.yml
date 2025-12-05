@@ -48,7 +48,7 @@ resume_from_checkpoint: null
 training_params:
   train_epochs: 20
   lr: 0.0001
-  batch_size: 32
+  batch_size: 8
   optimizer: adamw
   weight_decay: 0.01
   amp: true
