@@ -152,6 +152,32 @@ class CheckpointManager:
 
         logger.info("Saved checkpoint → %s", ckpt_path)
 
+        # Log checkpoint as artifact to experiment tracker (W&B, MLflow)
+        if self.experiment_logger is not None and not isinstance(
+            ckpt_path, PureCloudPath
+        ):
+            # Determine artifact name (use run name if available)
+            run_name = ""
+            if self.run_config is not None and hasattr(self.run_config, "run_name"):
+                run_name = f"{self.run_config.run_name}_"
+
+            artifact_name = f"{run_name}{filename.replace('.pt', '').replace('.', '_')}"
+            artifact_type = "model" if is_best or is_final else "checkpoint"
+
+            metadata = {
+                "epoch": epoch,
+                "best_val_acc": best_val_acc,
+                "is_best": is_best,
+                "is_final": is_final,
+            }
+
+            self.experiment_logger.log_artifact(
+                file_path=ckpt_path,
+                artifact_name=artifact_name,
+                artifact_type=artifact_type,
+                metadata=metadata,
+            )
+
         # Save metadata
         self._save_metadata(base_dir, filename, is_best, is_final)
 

@@ -59,7 +59,9 @@ class ExperimentLogger:
         return cls._build_none()
 
     @classmethod
-    def _build_mlflow(cls, run_name: Optional[str], logging_uri: Optional[str]) -> "ExperimentLogger":
+    def _build_mlflow(
+        cls, run_name: Optional[str], logging_uri: Optional[str]
+    ) -> "ExperimentLogger":
         try:
             mlflow = importlib.import_module("mlflow")
         except ModuleNotFoundError:
@@ -178,6 +180,46 @@ class ExperimentLogger:
 
         elif self.backend == "wandb":
             self.handle.log({f"{split}/{k}": v for k, v in metrics.items()}, step=step)  # type: ignore[attr-defined]
+
+    def log_artifact(
+        self,
+        file_path: Union[str, Path],
+        artifact_name: str,
+        artifact_type: str = "model",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Log a file as an artifact to the experiment tracking backend.
+
+        Parameters
+        ----------
+        file_path : Union[str, Path]
+            Path to the file to log as an artifact
+        artifact_name : str
+            Name for the artifact (e.g., "best_model", "checkpoint_epoch_005")
+        artifact_type : str, optional
+            Type of artifact (e.g., "model", "checkpoint"), by default "model"
+        metadata : Optional[Dict[str, Any]], optional
+            Additional metadata to attach to the artifact, by default None
+        """
+        if self.backend == "mlflow":
+            self.handle.log_artifact(str(file_path))  # type: ignore[attr-defined]
+            logger.info("Logged artifact to MLflow: %s", file_path)
+
+        elif self.backend == "wandb":
+            try:
+                wandb = importlib.import_module("wandb")
+                artifact = wandb.Artifact(
+                    name=artifact_name,
+                    type=artifact_type,
+                    metadata=metadata or {},
+                )
+                artifact.add_file(str(file_path))
+                self.handle.log_artifact(artifact)  # type: ignore[attr-defined]
+                logger.info(
+                    "Logged artifact to W&B: %s (type=%s)", artifact_name, artifact_type
+                )
+            except Exception as e:
+                logger.warning("Failed to log artifact to W&B: %s", e)
 
     def finalize(self) -> None:
         if self.backend == "mlflow":
