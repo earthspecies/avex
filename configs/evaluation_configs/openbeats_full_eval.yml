@@ -7,9 +7,8 @@
 #   - Individual ID: Probe accuracy, R-AUC
 #   - Vocal Repertoire: R-AUC, NMI
 #
-# Available OpenBEATs checkpoints:
-#   - openbeats-base-i1, openbeats-base-i2, openbeats-base-i3 (~90M params)
-#   - openbeats-large-i1, openbeats-large-i2, openbeats-large-i3 (~317M params)
+# Uses OpenBEATs Large i2 checkpoint (best performing)
+# For other checkpoints, create separate run_config files or use --patch
 #
 # Usage:
 #   uv run repr-learn evaluate --config configs/evaluation_configs/openbeats_full_eval.yml
@@ -31,90 +30,11 @@ training_params:
   amp: false
   amp_dtype: bf16
 
-# OpenBEATs pretrained model experiments
+# OpenBEATs pretrained model experiment (Large i2 - best performing)
 experiments:
-  # =====================================================
-  # OpenBEATs BASE models (~90M parameters)
-  # =====================================================
-  - run_name: openbeats_base_i1
-    run_config: configs/run_configs/pretrained/openbeats_eval.yml
-    pretrained: true
-    model_override:
-      model_id: "openbeats-base-i1"
-      model_size: "base"
-    probe_config:
-      probe_type: linear
-      target_layers: ["backbone"]
-      aggregation: "mean"
-      input_processing: "pooled"
-      freeze_backbone: true
-      online_training: false
-
-  - run_name: openbeats_base_i2
-    run_config: configs/run_configs/pretrained/openbeats_eval.yml
-    pretrained: true
-    model_override:
-      model_id: "openbeats-base-i2"
-      model_size: "base"
-    probe_config:
-      probe_type: linear
-      target_layers: ["backbone"]
-      aggregation: "mean"
-      input_processing: "pooled"
-      freeze_backbone: true
-      online_training: false
-
-  - run_name: openbeats_base_i3
-    run_config: configs/run_configs/pretrained/openbeats_eval.yml
-    pretrained: true
-    model_override:
-      model_id: "openbeats-base-i3"
-      model_size: "base"
-    probe_config:
-      probe_type: linear
-      target_layers: ["backbone"]
-      aggregation: "mean"
-      input_processing: "pooled"
-      freeze_backbone: true
-      online_training: false
-
-  # =====================================================
-  # OpenBEATs LARGE models (~317M parameters)
-  # =====================================================
-  - run_name: openbeats_large_i1
-    run_config: configs/run_configs/pretrained/openbeats_eval.yml
-    pretrained: true
-    model_override:
-      model_id: "openbeats-large-i1"
-      model_size: "large"
-    probe_config:
-      probe_type: linear
-      target_layers: ["backbone"]
-      aggregation: "mean"
-      input_processing: "pooled"
-      freeze_backbone: true
-      online_training: false
-
   - run_name: openbeats_large_i2
     run_config: configs/run_configs/pretrained/openbeats_eval.yml
     pretrained: true
-    model_override:
-      model_id: "openbeats-large-i2"
-      model_size: "large"
-    probe_config:
-      probe_type: linear
-      target_layers: ["backbone"]
-      aggregation: "mean"
-      input_processing: "pooled"
-      freeze_backbone: true
-      online_training: false
-
-  - run_name: openbeats_large_i3
-    run_config: configs/run_configs/pretrained/openbeats_eval.yml
-    pretrained: true
-    model_override:
-      model_id: "openbeats-large-i3"
-      model_size: "large"
     probe_config:
       probe_type: linear
       target_layers: ["backbone"]
