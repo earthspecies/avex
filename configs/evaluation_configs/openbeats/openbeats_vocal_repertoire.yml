@@ -1,0 +1,54 @@
+# OpenBEATs Vocal Repertoire Benchmark Evaluation
+# ================================================
+# Evaluates OpenBEATs on Vocal Repertoire Classification tasks
+#
+# Vocal Repertoire tasks from the paper:
+#   - Zebra Finch call types
+#   - Giant Otters vocalizations
+#
+# Metrics from the paper:
+#   - R-AUC (retrieval)
+#   - NMI (clustering)
+#
+# Usage:
+#   uv run repr-learn evaluate --config configs/evaluation_configs/openbeats/openbeats_vocal_repertoire.yml
+
+dataset_config: configs/data_configs/benchmark_id_repertoire_48khz.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+experiments:
+  # OpenBEATs Large i2 (best performing checkpoint)
+  - run_name: openbeats_large_i2
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+save_dir: evaluation_results/openbeats_vocal_repertoire
+results_csv_path: evaluation_results/openbeats_vocal_repertoire_results.csv
+
+device: cuda
+seed: 42
+num_workers: 8
+
+# Vocal Repertoire focuses on retrieval and clustering metrics
+eval_modes:
+  - probe
+  - retrieval
+  - clustering
+
+offline_embeddings:
+  overwrite_embeddings: true

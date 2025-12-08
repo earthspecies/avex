@@ -1,0 +1,148 @@
+# OpenBEATs Full Evaluation Configuration
+# =========================================
+# This config runs all evaluations from the paper on OpenBEATs pretrained models:
+#   - BEANS Classification: Probe accuracy, R-AUC, NMI
+#   - BEANS Detection: Probe (mAP), R-AUC
+#   - BirdSet: Probe (mAP), R-AUC
+#   - Individual ID: Probe accuracy, R-AUC
+#   - Vocal Repertoire: R-AUC, NMI
+#
+# Available OpenBEATs checkpoints:
+#   - openbeats-base-i1, openbeats-base-i2, openbeats-base-i3 (~90M params)
+#   - openbeats-large-i1, openbeats-large-i2, openbeats-large-i3 (~317M params)
+#
+# Usage:
+#   uv run repr-learn evaluate --config configs/evaluation_configs/openbeats_full_eval.yml
+#   
+# For specific benchmarks, use --patch:
+#   uv run repr-learn evaluate --config configs/evaluation_configs/openbeats_full_eval.yml \
+#       --patch dataset_config=configs/data_configs/beans.yml
+
+# Default dataset configuration (BEANS benchmark)
+# Change via --patch to run other benchmarks
+dataset_config: configs/data_configs/beans.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# OpenBEATs pretrained model experiments
+experiments:
+  # =====================================================
+  # OpenBEATs BASE models (~90M parameters)
+  # =====================================================
+  - run_name: openbeats_base_i1
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    model_override:
+      model_id: "openbeats-base-i1"
+      model_size: "base"
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+  - run_name: openbeats_base_i2
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    model_override:
+      model_id: "openbeats-base-i2"
+      model_size: "base"
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+  - run_name: openbeats_base_i3
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    model_override:
+      model_id: "openbeats-base-i3"
+      model_size: "base"
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+  # =====================================================
+  # OpenBEATs LARGE models (~317M parameters)
+  # =====================================================
+  - run_name: openbeats_large_i1
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    model_override:
+      model_id: "openbeats-large-i1"
+      model_size: "large"
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+  - run_name: openbeats_large_i2
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    model_override:
+      model_id: "openbeats-large-i2"
+      model_size: "large"
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+  - run_name: openbeats_large_i3
+    run_config: configs/run_configs/pretrained/openbeats_eval.yml
+    pretrained: true
+    model_override:
+      model_id: "openbeats-large-i3"
+      model_size: "large"
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+# Where to save the evaluation results
+save_dir: evaluation_results/openbeats_full_eval
+
+# Optional: Append results to a global CSV file for cross-model comparison
+results_csv_path: evaluation_results/openbeats_all_benchmarks.csv
+
+device: cuda
+
+seed: 42
+
+num_workers: 8
+
+# Evaluation modes matching the paper:
+# - probe: Linear probe accuracy (for classification) or mAP (for detection)
+# - retrieval: R-AUC (Retrieval Area Under Curve)
+# - clustering: NMI (Normalized Mutual Information)
+eval_modes:
+  - probe
+  - retrieval
+  - clustering
+
+offline_embeddings:
+  overwrite_embeddings: true
