@@ -1,0 +1,35 @@
+---
+# OpenBEATs backbone for evaluation (pretrained, frozen encoder)
+# Uses HuggingFace pretrained checkpoints for linear probe evaluation
+
+model_spec:
+  name: openbeats
+  pretrained: true
+  model_id: "openbeats-large-i2"  # HuggingFace checkpoint to load
+  model_size: "large"             # base (~90M), large (~317M), giant (~1B), titan (~1.9B)
+  use_flash_attn: true            # Enable flash attention (requires PyTorch >= 2.0)
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw             # OpenBEATs expects raw waveform
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+# Output directory for checkpoints and logs
+output_dir: "./runs/openbeats_eval"
+run_name: openbeats_eval
+label_type: supervised
+
+# Audio preprocessing (none – handled inside the model)
+preprocessing: null
+
+# Target sample rate expected by the model
+sr: 16000
+debug_mode: false
+
+# Log training runs to wandb
+logging: wandb
+
+# Path to checkpoint to resume from (set to null for pretrained)
+resume_from_checkpoint: null
