@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 import torch
-from esp_data.io import AnyPathT, anypath, filesystem_from_path
-from esp_data.io.paths import PureCloudPath
+
+from representation_learning.io import AnyPathT, PureCloudPath, anypath, filesystem_from_path
 
 logger = logging.getLogger(__name__)
 

@@ -12,14 +12,10 @@ Key points
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-
-# Seems to prevent a cloudpathlib error
-os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
 
 import pandas as pd
 import torch
@@ -29,10 +25,12 @@ from esp_data.io.paths import PureCloudPath
 
 # Import representation_learning modules
 from representation_learning.configs import (
-    DatasetCollectionConfig,
     EvaluateConfig,
-    EvaluationSet,
     ExperimentConfig,
+)
+from representation_learning.data.configs import (
+    DatasetCollectionConfig,
+    EvaluationSet,
 )
 from representation_learning.data.dataset import build_dataloaders
 from representation_learning.evaluation.clustering import (
