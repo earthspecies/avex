@@ -50,7 +50,7 @@ declare -A BENCHMARK_CONFIGS=(
     ["beans"]="configs/data_configs/beans.yml"
     ["birdset"]="configs/data_configs/benchmark_birdset.yml"
     ["individual_id"]="configs/data_configs/individual_id_icassp.yml"
-    ["vocal_repertoire"]="configs/data_configs/benchmark_id_repertoire_48khz.yml"
+    ["vocal_repertoire"]="configs/data_configs/benchmark_id_repertoire_with_clustering.yml"
 )
 
 # Evaluation config for OpenBEATs

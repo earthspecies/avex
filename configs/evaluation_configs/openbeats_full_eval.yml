@@ -53,7 +53,8 @@ device: cuda
 
 seed: 42
 
-num_workers: 8
+# Reduced from 8 to avoid DataLoader worker crashes with OpenBEATs
+num_workers: 4
 
 # Evaluation modes matching the paper:
 # - probe: Linear probe accuracy (for classification) or mAP (for detection)

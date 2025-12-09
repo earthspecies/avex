@@ -33,7 +33,7 @@ evaluation_sets:
           feature: "id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "pipit_id_within_year"
     train:
@@ -63,7 +63,7 @@ evaluation_sets:
           feature: "individual_id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "pipit_id_across_year"
     train:
@@ -93,7 +93,7 @@ evaluation_sets:
           feature: "individual_id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "chiffchaff_id_within_year"
     train:
@@ -123,7 +123,7 @@ evaluation_sets:
           feature: "individual_id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "chiffchaff_id_across_year"
     train:
@@ -153,7 +153,7 @@ evaluation_sets:
           feature: "individual_id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "littleowl_id_across_year"
     train:
@@ -183,7 +183,7 @@ evaluation_sets:
           feature: "individual_id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "giant_otters_individual_id"
     train:
@@ -213,7 +213,7 @@ evaluation_sets:
           feature: "Individual"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   # =====================================================
   # VOCAL REPERTOIRE CLASSIFICATION TASKS
@@ -241,7 +241,7 @@ evaluation_sets:
           feature: "call_type_1"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "zebra_finch_call_type_id"
     train:
@@ -265,7 +265,7 @@ evaluation_sets:
           feature: "call_type_id"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   - name: "giant_otters_vocalization"
     train:
@@ -295,7 +295,7 @@ evaluation_sets:
           feature: "vocalization"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
 
   # =====================================================
   # SPECIES CLASSIFICATION TASKS
@@ -329,4 +329,4 @@ evaluation_sets:
           feature: "species_scientific"
           override: true
 
-    metrics: ["accuracy", "f1_macro", "f1_weighted"]
+    metrics: ["accuracy", "balanced_accuracy"]
