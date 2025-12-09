@@ -1,14 +1,11 @@
 # OpenBEATs Full Evaluation Configuration
 # =========================================
-# This config runs all evaluations from the paper on OpenBEATs pretrained models:
+# Evaluates OpenBEATs Large i3 (best performing checkpoint) on all benchmarks:
 #   - BEANS Classification: Probe accuracy, R-AUC, NMI
 #   - BEANS Detection: Probe (mAP), R-AUC
 #   - BirdSet: Probe (mAP), R-AUC
 #   - Individual ID: Probe accuracy, R-AUC
 #   - Vocal Repertoire: R-AUC, NMI
-#
-# Uses OpenBEATs Large i2 checkpoint (best performing)
-# For other checkpoints, create separate run_config files or use --patch
 #
 # Usage:
 #   uv run repr-learn evaluate --config configs/evaluation_configs/openbeats_full_eval.yml
@@ -30,9 +27,9 @@ training_params:
   amp: false
   amp_dtype: bf16
 
-# OpenBEATs pretrained model experiment (Large i2 - best performing)
+# OpenBEATs Large i3 pretrained model experiment
 experiments:
-  - run_name: openbeats_large_i2
+  - run_name: openbeats_large_i3
     run_config: configs/run_configs/pretrained/openbeats_eval.yml
     pretrained: true
     probe_config:

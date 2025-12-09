@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# OpenBEATs Full Evaluation Script
+# OpenBEATs Large i3 Evaluation Script
 # ==============================================================================
-# This script runs all evaluations from the paper on OpenBEATs pretrained models:
+# Evaluates OpenBEATs Large i3 (best performing checkpoint) on all benchmarks:
 #
-# Benchmarks (matching the paper table):
-#   1. BEANS Classification - Probe accuracy, R-AUC, NMI
-#   2. BEANS Detection - Probe (mAP), R-AUC  
-#   3. BirdSet - Probe (mAP), R-AUC
-#   4. Individual ID - Probe accuracy, R-AUC
-#   5. Vocal Repertoire - R-AUC, NMI
+#   1. beans            - BEANS Classification + Detection
+#   2. birdset          - BirdSet Detection  
+#   3. individual_id    - Individual ID Classification
+#   4. vocal_repertoire - Vocal Repertoire Classification
 #
 # Usage:
 #   ./jobs/openbeats_full_eval.sh                    # Run all benchmarks
@@ -18,14 +16,14 @@
 #   ./jobs/openbeats_full_eval.sh individual_id      # Run Individual ID only
 #   ./jobs/openbeats_full_eval.sh vocal_repertoire   # Run Vocal Repertoire only
 #
-# SLURM Usage:
-#   sbatch jobs/openbeats_full_eval.sh
+# SLURM:
+#   sbatch jobs/openbeats_full_eval.sh [benchmark]
 # ==============================================================================
 
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
 #SBATCH --output="/home/%u/logs/openbeats_eval_%A.log"
-#SBATCH --job-name="openbeats-full-eval"
+#SBATCH --job-name="openbeats-eval"
 #SBATCH --cpus-per-gpu=12
 
 set -e
@@ -38,103 +36,74 @@ cd ~/representation-learning 2>/dev/null || cd "$(git rev-parse --show-toplevel)
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 export BEANS_DEBUG=0
 
-# Sync dependencies
 uv sync
 
 # ==============================================================================
-# Benchmark Configurations
+# Configuration
 # ==============================================================================
-# Maps benchmark names to their data config files
 
-declare -A BENCHMARK_CONFIGS=(
+EVAL_CONFIG="configs/evaluation_configs/openbeats_full_eval.yml"
+
+declare -A DATA_CONFIGS=(
     ["beans"]="configs/data_configs/beans.yml"
     ["birdset"]="configs/data_configs/benchmark_birdset.yml"
     ["individual_id"]="configs/data_configs/individual_id_icassp.yml"
     ["vocal_repertoire"]="configs/data_configs/benchmark_id_repertoire_with_clustering.yml"
 )
 
-# Evaluation config for OpenBEATs
-EVAL_CONFIG="configs/evaluation_configs/openbeats_full_eval.yml"
+ALL_BENCHMARKS="beans birdset individual_id vocal_repertoire"
 
 # ==============================================================================
-# Helper Functions
+# Main
 # ==============================================================================
 
-run_benchmark() {
-    local benchmark_name=$1
-    local data_config=${BENCHMARK_CONFIGS[$benchmark_name]}
+run_eval() {
+    local bench=$1
+    local data_cfg=${DATA_CONFIGS[$bench]}
     
-    if [ -z "$data_config" ]; then
-        echo "Error: Unknown benchmark '$benchmark_name'"
-        echo "Available benchmarks: ${!BENCHMARK_CONFIGS[*]}"
-        exit 1
-    fi
+    echo "════════════════════════════════════════"
+    echo "  OpenBEATs Large i3 → $bench"
+    echo "════════════════════════════════════════"
     
-    echo "========================================"
-    echo "Running OpenBEATs evaluation on: $benchmark_name"
-    echo "Data config: $data_config"
-    echo "========================================"
+    local cmd="uv run repr-learn evaluate \
+        --config $EVAL_CONFIG \
+        --patch dataset_config=$data_cfg \
+        --patch save_dir=evaluation_results/openbeats_$bench"
     
-    # Use srun if in SLURM environment, otherwise run directly
     if [ -n "$SLURM_JOB_ID" ]; then
-        srun uv run repr-learn evaluate \
-            --config "$EVAL_CONFIG" \
-            --patch "dataset_config=$data_config" \
-            --patch "save_dir=evaluation_results/openbeats_${benchmark_name}"
+        srun $cmd
     else
-        uv run repr-learn evaluate \
-            --config "$EVAL_CONFIG" \
-            --patch "dataset_config=$data_config" \
-            --patch "save_dir=evaluation_results/openbeats_${benchmark_name}"
+        $cmd
     fi
-    
-    echo "Completed: $benchmark_name"
-    echo ""
 }
-
-# ==============================================================================
-# Main Execution
-# ==============================================================================
 
 BENCHMARK=${1:-all}
 
-echo "=============================================="
-echo "OpenBEATs Full Evaluation"
-echo "=============================================="
-echo "Running benchmark(s): $BENCHMARK"
-echo "Start time: $(date)"
+echo ""
+echo "╔══════════════════════════════════════════╗"
+echo "║  OpenBEATs Large i3 Evaluation           ║"
+echo "╚══════════════════════════════════════════╝"
+echo "Benchmark: $BENCHMARK"
+echo "Start: $(date)"
 echo ""
 
 case $BENCHMARK in
     all)
-        echo "Running ALL benchmarks from the paper..."
-        echo ""
-        for bench in beans birdset individual_id vocal_repertoire; do
-            run_benchmark "$bench"
+        for bench in $ALL_BENCHMARKS; do
+            run_eval "$bench"
         done
         ;;
     beans|birdset|individual_id|vocal_repertoire)
-        run_benchmark "$BENCHMARK"
+        run_eval "$BENCHMARK"
         ;;
     *)
-        echo "Error: Unknown benchmark '$BENCHMARK'"
-        echo ""
-        echo "Usage: $0 [benchmark]"
-        echo ""
-        echo "Available benchmarks:"
-        echo "  all              - Run all benchmarks (default)"
-        echo "  beans            - BEANS Classification + Detection"
-        echo "  birdset          - BirdSet Detection"
-        echo "  individual_id    - Individual ID Classification"
-        echo "  vocal_repertoire - Vocal Repertoire Classification"
+        echo "Usage: $0 [all|beans|birdset|individual_id|vocal_repertoire]"
         exit 1
         ;;
 esac
 
-echo "=============================================="
-echo "All evaluations completed!"
-echo "End time: $(date)"
-echo "=============================================="
 echo ""
-echo "Results saved to: evaluation_results/"
-echo "Combined CSV: evaluation_results/openbeats_all_benchmarks.csv"
+echo "════════════════════════════════════════"
+echo "Done! Results: evaluation_results/"
+echo "End: $(date)"
+echo "════════════════════════════════════════"

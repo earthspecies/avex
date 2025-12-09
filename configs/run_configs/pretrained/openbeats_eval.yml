@@ -5,7 +5,7 @@
 model_spec:
   name: openbeats
   pretrained: true
-  model_id: "openbeats-large-i2"  # HuggingFace checkpoint to load
+  model_id: "openbeats-large-i3"  # HuggingFace checkpoint to load (best performing)
   model_size: "large"             # base (~90M), large (~317M), giant (~1B), titan (~1.9B)
   use_flash_attn: false           # Disabled for multiprocessing stability
   device: cuda

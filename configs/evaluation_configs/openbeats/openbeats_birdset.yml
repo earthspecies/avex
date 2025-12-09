@@ -20,8 +20,8 @@ training_params:
   amp_dtype: bf16
 
 experiments:
-  # OpenBEATs Large i2 (best performing checkpoint)
-  - run_name: openbeats_large_i2
+  # OpenBEATs Large i3 (best performing checkpoint)
+  - run_name: openbeats_large_i3
     run_config: configs/run_configs/pretrained/openbeats_eval.yml
     pretrained: true
     probe_config:
@@ -37,7 +37,7 @@ results_csv_path: evaluation_results/openbeats_birdset_results.csv
 
 device: cuda
 seed: 42
-num_workers: 8
+num_workers: 4
 
 eval_modes:
   - probe
