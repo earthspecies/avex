@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 
 import torch
 import torch.utils.checkpoint
-from torchvision.models import efficientnet_b0, efficientnet_b1
+from torchvision.models import EfficientNet_B0_Weights, EfficientNet_B1_Weights, efficientnet_b0, efficientnet_b1
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
@@ -50,10 +50,13 @@ class Model(ModelBase):
         self.audio_config = audio_config
 
         # Load the appropriate EfficientNet variant based on configuration
+        # Use weights parameter instead of deprecated pretrained parameter
         if efficientnet_variant == "b0":
-            self.model = efficientnet_b0(pretrained=pretrained)
+            weights = EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
+            self.model = efficientnet_b0(weights=weights)
         elif efficientnet_variant == "b1":
-            self.model = efficientnet_b1(pretrained=pretrained)
+            weights = EfficientNet_B1_Weights.IMAGENET1K_V1 if pretrained else None
+            self.model = efficientnet_b1(weights=weights)
         else:
             raise ValueError(f"Unsupported EfficientNet variant: {efficientnet_variant}")
 

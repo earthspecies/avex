@@ -133,9 +133,11 @@ class AveragePrecision:
 
     def reset(self) -> None:
         """Resets the meter with empty member variables"""
-        self.scores = torch.tensor(torch.FloatStorage(), dtype=torch.float32, requires_grad=False)
-        self.targets = torch.tensor(torch.LongStorage(), dtype=torch.int64, requires_grad=False)
-        self.weights = torch.tensor(torch.FloatStorage(), dtype=torch.float32, requires_grad=False)
+        # Create empty tensors directly instead of using deprecated TypedStorage
+        # The storage will be dynamically resized in update() method
+        self.scores = torch.empty(0, 0, dtype=torch.float32, requires_grad=False)
+        self.targets = torch.empty(0, 0, dtype=torch.int64, requires_grad=False)
+        self.weights = torch.empty(0, dtype=torch.float32, requires_grad=False)
 
     def update(
         self,
@@ -192,13 +194,14 @@ class AveragePrecision:
             )
 
         # make sure storage is of sufficient size
-        if self.scores.storage().size() < self.scores.numel() + output.numel():
-            new_size = math.ceil(self.scores.storage().size() * 1.5)
-            new_weight_size = math.ceil(self.weights.storage().size() * 1.5)
-            self.scores.storage().resize_(int(new_size + output.numel()))
-            self.targets.storage().resize_(int(new_size + output.numel()))
+        # Use untyped_storage() instead of deprecated storage() method
+        if self.scores.untyped_storage().size() < self.scores.numel() + output.numel():
+            new_size = math.ceil(self.scores.untyped_storage().size() * 1.5)
+            new_weight_size = math.ceil(self.weights.untyped_storage().size() * 1.5)
+            self.scores.untyped_storage().resize_(int(new_size + output.numel()))
+            self.targets.untyped_storage().resize_(int(new_size + output.numel()))
             if weight is not None:
-                self.weights.storage().resize_(int(new_weight_size + output.size(0)))
+                self.weights.untyped_storage().resize_(int(new_weight_size + output.size(0)))
 
         # store scores and targets
         offset = self.scores.size(0) if self.scores.dim() > 0 else 0

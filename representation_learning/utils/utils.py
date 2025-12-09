@@ -76,6 +76,11 @@ def universal_torch_load(
         f = path
 
     with fs.open(str(f), "rb") as opened_file:
+        # Explicitly set weights_only=False for model checkpoints
+        # Model checkpoints contain state dicts and other objects, not just weights
+        # This suppresses the FutureWarning while maintaining functionality
+        if "weights_only" not in kwargs:
+            kwargs["weights_only"] = False
         return torch.load(io.BytesIO(opened_file.read()), **kwargs)
 
 
