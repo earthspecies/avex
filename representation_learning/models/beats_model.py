@@ -211,7 +211,7 @@ class Model(ModelBase):
         # Store parameters
         self.disable_layerdrop = disable_layerdrop
         self.model_variant = model_variant
-        self.model_size = model_size.lower()
+        self.model_size = (model_size or "base").lower()  # Default to base if None
         self.use_naturelm = use_naturelm
         self.fine_tuned = fine_tuned
         self._return_features_only = return_features_only

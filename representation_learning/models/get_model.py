@@ -144,7 +144,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
 
         # Unified options (for both beats and openbeats)
         model_variant = getattr(model_config, "model_variant", None)
-        model_size = getattr(model_config, "model_size", "base")
+        model_size = getattr(model_config, "model_size", None) or "base"
         model_id = getattr(model_config, "model_id", None)
         checkpoint_path = getattr(model_config, "checkpoint_path", None)
 
