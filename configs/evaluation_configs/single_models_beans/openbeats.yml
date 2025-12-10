@@ -6,13 +6,15 @@
 dataset_config: configs/data_configs/benchmark_beans.yml
 
 training_params:
-  train_epochs: 900
-  lr: 0.001
+  train_epochs: 200              # Max epochs (early stopping will terminate earlier)
+  lr: 0.01                       # Higher LR for faster convergence with linear probes
   batch_size: 32
   optimizer: adamw
   weight_decay: 0.01
   amp: false
   amp_dtype: bf16
+  early_stopping_patience: 20    # Stop if no improvement for 20 epochs
+  early_stopping_min_delta: 0.001
 
 # Which experiments to evaluate
 experiments:

@@ -1,17 +1,16 @@
 ---
-# OpenBEATs backbone for evaluation (pretrained, frozen encoder)
+# BEATs/OpenBEATs backbone for evaluation (pretrained, frozen encoder)
 # Uses HuggingFace pretrained checkpoints for linear probe evaluation
 
 model_spec:
-  name: openbeats
+  name: openbeats                   # Uses unified BEATs implementation with openbeats variant
   pretrained: true
-  model_id: "openbeats-large-i3"  # HuggingFace checkpoint to load (best performing)
-  model_size: "large"             # base (~90M), large (~317M), giant (~1B), titan (~1.9B)
-  use_flash_attn: false           # Disabled for multiprocessing stability
+  model_id: "openbeats-large-i3"    # HuggingFace checkpoint to load (best performing)
+  model_size: "large"               # base (~90M) or large (~317M)
   device: cuda
   audio_config:
     sample_rate: 16000
-    representation: raw             # OpenBEATs expects raw waveform
+    representation: raw             # BEATs expects raw waveform
     normalize: false
     target_length_seconds: 10
     window_selection: random

@@ -1,37 +1,36 @@
-"""Tests for OpenBEATs model embedding extraction functionality."""
+"""Tests for OpenBEATs model embedding extraction functionality.
+
+Tests the unified BEATs model with model_variant='openbeats'.
+"""
 
 import pytest
 import torch
 
-from representation_learning.models.openbeats_model import Model
-from representation_learning.models.openbeats.openbeats import (
-    OpenBEATs,
-    OpenBEATsConfig,
-    OPENBEATS_BASE_CONFIG,
-    OPENBEATS_LARGE_CONFIG,
-    OPENBEATS_GIANT_CONFIG,
-    OPENBEATS_TITAN_CONFIG,
+from representation_learning.models.beats_model import Model
+from representation_learning.models.beats.beats import (
+    BEATs,
+    BEATsConfig,
+    BEATS_BASE_CONFIG,
+    BEATS_LARGE_CONFIG,
 )
 
 
-class TestOpenBEATsConfig:
-    """Test OpenBEATs configuration class."""
+class TestBEATsConfig:
+    """Test BEATs configuration class."""
 
     def test_default_config(self) -> None:
         """Test default configuration values."""
-        config = OpenBEATsConfig()
+        config = BEATsConfig()
 
-        assert config.input_patch_size == 16
         assert config.embed_dim == 512
         assert config.encoder_layers == 12
         assert config.encoder_embed_dim == 768
         assert config.encoder_attention_heads == 12
         assert config.activation_fn == "gelu"
-        assert config.use_flash_attn is False
 
     def test_config_update(self) -> None:
         """Test configuration update from dictionary."""
-        config = OpenBEATsConfig()
+        config = BEATsConfig()
         config.update({"encoder_layers": 24, "encoder_embed_dim": 1024})
 
         assert config.encoder_layers == 24
@@ -39,14 +38,13 @@ class TestOpenBEATsConfig:
 
     def test_config_from_dict(self) -> None:
         """Test configuration initialization from dictionary."""
-        config = OpenBEATsConfig({"encoder_layers": 6, "use_flash_attn": True})
+        config = BEATsConfig({"encoder_layers": 6})
 
         assert config.encoder_layers == 6
-        assert config.use_flash_attn is True
 
     def test_config_to_dict(self) -> None:
         """Test configuration conversion to dictionary."""
-        config = OpenBEATsConfig()
+        config = BEATsConfig()
         config_dict = config.to_dict()
 
         assert isinstance(config_dict, dict)
@@ -54,14 +52,14 @@ class TestOpenBEATsConfig:
         assert config_dict["encoder_layers"] == 12
 
 
-class TestOpenBEATsBackbone:
-    """Test OpenBEATs backbone model."""
+class TestBEATsBackbone:
+    """Test BEATs backbone model."""
 
     @pytest.fixture
-    def base_config(self) -> OpenBEATsConfig:
+    def base_config(self) -> BEATsConfig:
         """Create a small base configuration for testing."""
         # Use smaller config for faster testing
-        return OpenBEATsConfig({
+        return BEATsConfig({
             "input_patch_size": 16,
             "embed_dim": 64,
             "encoder_layers": 2,
@@ -78,37 +76,37 @@ class TestOpenBEATsBackbone:
         })
 
     @pytest.fixture
-    def openbeats_backbone(self, base_config: OpenBEATsConfig) -> OpenBEATs:
-        """Create an OpenBEATs backbone for testing."""
-        return OpenBEATs(base_config)
+    def beats_backbone(self, base_config: BEATsConfig) -> BEATs:
+        """Create a BEATs backbone for testing."""
+        return BEATs(base_config)
 
     @pytest.fixture
     def sample_audio(self) -> torch.Tensor:
         """Create sample audio tensor."""
         return torch.randn(2, 16000)  # 1 second at 16kHz
 
-    def test_backbone_initialization(self, openbeats_backbone: OpenBEATs) -> None:
+    def test_backbone_initialization(self, beats_backbone: BEATs) -> None:
         """Test backbone initialization."""
-        assert openbeats_backbone is not None
-        assert hasattr(openbeats_backbone, "patch_embedding")
-        assert hasattr(openbeats_backbone, "encoder")
-        assert hasattr(openbeats_backbone, "layer_norm")
+        assert beats_backbone is not None
+        assert hasattr(beats_backbone, "patch_embedding")
+        assert hasattr(beats_backbone, "encoder")
+        assert hasattr(beats_backbone, "layer_norm")
 
     def test_backbone_forward(
-        self, openbeats_backbone: OpenBEATs, sample_audio: torch.Tensor
+        self, beats_backbone: BEATs, sample_audio: torch.Tensor
     ) -> None:
         """Test backbone forward pass."""
-        features, padding_mask = openbeats_backbone(sample_audio)
+        features, padding_mask = beats_backbone(sample_audio)
 
         assert features.dim() == 3  # (batch, time, features)
         assert features.shape[0] == 2  # batch size
         assert features.shape[2] == 128  # encoder_embed_dim
 
     def test_backbone_preprocess(
-        self, openbeats_backbone: OpenBEATs, sample_audio: torch.Tensor
+        self, beats_backbone: BEATs, sample_audio: torch.Tensor
     ) -> None:
         """Test audio preprocessing."""
-        fbank = openbeats_backbone.preprocess(sample_audio)
+        fbank = beats_backbone.preprocess(sample_audio)
 
         assert fbank.dim() == 3  # (batch, time, mel_bins)
         assert fbank.shape[0] == 2  # batch size
@@ -116,28 +114,30 @@ class TestOpenBEATsBackbone:
 
 
 class TestOpenBEATsModelWrapper:
-    """Test OpenBEATs model wrapper for the training loop."""
+    """Test BEATs model wrapper with openbeats variant for the training loop."""
 
     @pytest.fixture
     def openbeats_model(self) -> Model:
-        """Create an OpenBEATs model wrapper for testing (no pretrained)."""
+        """Create a BEATs model wrapper with openbeats variant for testing (no pretrained)."""
         return Model(
             num_classes=10,
             pretrained=False,  # Don't load pretrained weights for unit tests
             return_features_only=True,
             device="cpu",
+            model_variant="openbeats",
             model_size="base",  # Use smaller model for testing
             disable_layerdrop=True,
         )
 
     @pytest.fixture
     def openbeats_model_with_classifier(self) -> Model:
-        """Create an OpenBEATs model with classifier for testing."""
+        """Create a BEATs model with classifier for testing."""
         return Model(
             num_classes=10,
             pretrained=False,
             return_features_only=False,
             device="cpu",
+            model_variant="openbeats",
             model_size="base",
             disable_layerdrop=True,
         )
@@ -234,12 +234,12 @@ class TestOpenBEATsModelWrapper:
             )
 
 
-class TestOpenBEATsModelConfigurations:
-    """Test different OpenBEATs model configurations."""
+class TestBEATsModelConfigurations:
+    """Test different BEATs model configurations."""
 
     def test_large_config_values(self) -> None:
         """Test large model configuration values."""
-        config = OpenBEATsConfig(OPENBEATS_LARGE_CONFIG)
+        config = BEATsConfig(BEATS_LARGE_CONFIG)
 
         assert config.encoder_layers == 24
         assert config.encoder_embed_dim == 1024
@@ -247,54 +247,25 @@ class TestOpenBEATsModelConfigurations:
 
     def test_base_config_values(self) -> None:
         """Test base model configuration values."""
-        config = OpenBEATsConfig(OPENBEATS_BASE_CONFIG)
+        config = BEATsConfig(BEATS_BASE_CONFIG)
 
         assert config.encoder_layers == 12
         assert config.encoder_embed_dim == 768
         assert config.encoder_attention_heads == 12
 
-    def test_giant_config_values(self) -> None:
-        """Test giant model configuration values (~1B parameters).
-        
-        Giant is a new model size introduced in OpenBEATs, not available in original BEATs.
-        """
-        config = OpenBEATsConfig(OPENBEATS_GIANT_CONFIG)
-
-        assert config.encoder_layers == 48
-        assert config.encoder_embed_dim == 1408
-        assert config.encoder_attention_heads == 22
-        assert config.encoder_ffn_embed_dim == 6144
-
-    def test_titan_config_values(self) -> None:
-        """Test titan model configuration values (~1.9B parameters).
-        
-        Titan is a new model size introduced in OpenBEATs, not available in original BEATs.
-        """
-        config = OpenBEATsConfig(OPENBEATS_TITAN_CONFIG)
-
-        assert config.encoder_layers == 64
-        assert config.encoder_embed_dim == 1664
-        assert config.encoder_attention_heads == 26
-        assert config.encoder_ffn_embed_dim == 6656
-
-    def test_flash_attention_config(self) -> None:
-        """Test flash attention configuration."""
-        config = OpenBEATsConfig({"use_flash_attn": True})
-
-        assert config.use_flash_attn is True
-
 
 class TestOpenBEATsEdgeCases:
-    """Test edge cases for OpenBEATs model."""
+    """Test edge cases for BEATs model with openbeats variant."""
 
     @pytest.fixture
     def openbeats_model(self) -> Model:
-        """Create an OpenBEATs model for testing."""
+        """Create a BEATs model with openbeats variant for testing."""
         return Model(
             num_classes=10,
             pretrained=False,
             return_features_only=True,
             device="cpu",
+            model_variant="openbeats",
             model_size="base",
             disable_layerdrop=True,
         )

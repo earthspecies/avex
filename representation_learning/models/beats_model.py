@@ -1,28 +1,144 @@
 """BEATs model implementation for audio representation learning.
 
-This module provides BEATs Bidirectional Encoder representation from Audio Transformers
+This module provides BEATs (Bidirectional Encoder representation from Audio Transformers)
 model implementation for audio representation learning tasks.
+
+Supports both original BEATs and OpenBEATs checkpoints:
+- BEATs: Original Microsoft checkpoints (base size only)
+- OpenBEATs: Open-source checkpoints from HuggingFace (base and large sizes)
+
+Based on:
+- BEATs Paper: https://arxiv.org/abs/2212.09058
+- OpenBEATs Paper: https://arxiv.org/abs/2507.14129
+- HuggingFace Collection: https://huggingface.co/collections/shikhar7ssu/openbeats
 """
 
 import logging
-from typing import List, Optional, Union
+import os
+from typing import Dict, List, Literal, Optional, Union
 
 import torch
 import torch.nn as nn
+from huggingface_hub import hf_hub_download
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.beats.beats import BEATs, BEATsConfig
+from representation_learning.models.beats.beats import (
+    BEATS_OUTPUT_DIMS,
+    BEATS_SIZE_CONFIGS,
+    BEATs,
+    BEATsConfig,
+)
 from representation_learning.utils import universal_torch_load
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================ #
+#  Checkpoint paths for original BEATs (GCS)
+# ============================================================================ #
 BEATS_PRETRAINED_PATH_FT = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
 BEATS_PRETRAINED_PATH_SSL = "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
-
 BEATS_PRETRAINED_PATH_NATURELM = (
     "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 )
+
+# ============================================================================ #
+#  HuggingFace model IDs for OpenBEATs
+# ============================================================================ #
+OPENBEATS_HF_MODELS: Dict[str, str] = {
+    "openbeats-large-i3": "shikhar7ssu/OpenBEATs-Large-i3",
+    "openbeats-base-i3": "shikhar7ssu/OpenBEATs-Base-i3",
+}
+
+
+def load_weights_from_huggingface(
+    model_id: str,
+    cache_dir: Optional[str] = None,
+) -> Dict[str, torch.Tensor]:
+    """Load BEATs/OpenBEATs weights from HuggingFace.
+
+    Args:
+        model_id: HuggingFace model ID or short name (e.g., 'openbeats-large-i3')
+        cache_dir: Optional cache directory for downloaded files
+
+    Returns:
+        State dict with weights
+    """
+    # Map short names to full model IDs
+    if model_id.lower() in OPENBEATS_HF_MODELS:
+        model_id = OPENBEATS_HF_MODELS[model_id.lower()]
+
+    logger.info(f"Loading BEATs from HuggingFace: {model_id}")
+
+    try:
+        # Try different potential checkpoint locations
+        checkpoint_path = None
+        potential_paths = ["epoch_latest.pt", "model.pth", "work/exp/epoch_latest.pt"]
+
+        for path in potential_paths:
+            try:
+                checkpoint_path = hf_hub_download(
+                    repo_id=model_id,
+                    filename=path,
+                    cache_dir=cache_dir,
+                )
+                break
+            except Exception:
+                continue
+
+        if checkpoint_path is None:
+            # Try to find the checkpoint by listing files
+            from huggingface_hub import list_repo_files
+
+            files = list_repo_files(model_id)
+            for f in files:
+                if f.endswith(".pt") or f.endswith(".pth"):
+                    if "epoch" in f or "model" in f or "best" in f:
+                        try:
+                            checkpoint_path = hf_hub_download(
+                                repo_id=model_id,
+                                filename=f,
+                                cache_dir=cache_dir,
+                            )
+                            break
+                        except Exception:
+                            continue
+
+        if checkpoint_path is None:
+            raise ValueError(f"Could not find checkpoint in {model_id}")
+
+        logger.info(f"Downloaded checkpoint from: {checkpoint_path}")
+
+        # Load the checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+
+        # Handle different checkpoint structures
+        if isinstance(checkpoint, dict):
+            if "model" in checkpoint:
+                state_dict = checkpoint["model"]
+            elif "state_dict" in checkpoint:
+                state_dict = checkpoint["state_dict"]
+            else:
+                state_dict = checkpoint
+        else:
+            state_dict = checkpoint
+
+        # Handle encoder prefix (ESPnet checkpoints)
+        new_state_dict = {}
+        for key, value in state_dict.items():
+            if key.startswith("encoder."):
+                new_key = key[8:]  # Remove "encoder."
+            elif key.startswith("model.encoder."):
+                new_key = key[14:]  # Remove "model.encoder."
+            else:
+                new_key = key
+            new_state_dict[new_key] = value
+
+        return new_state_dict
+
+    except Exception as e:
+        logger.error(f"Error loading from HuggingFace: {e}")
+        raise
 
 
 class Model(ModelBase):
@@ -37,10 +153,14 @@ class Model(ModelBase):
     from :pymeth:`ModelBase.process_audio` unless an ``audio_config`` is
     explicitly supplied.
 
+    Supports two variants:
+    - "beats": Original Microsoft BEATs (base size only, loads from GCS)
+    - "openbeats": Open-source OpenBEATs (base/large sizes, loads from HuggingFace)
+
     Notes
     -----
     1.  BEATs extracts a sequence of frame-level embeddings with dimension
-        ``cfg.encoder_embed_dim`` (default: ``768``).  We convert this
+        ``cfg.encoder_embed_dim`` (768 for base, 1024 for large).  We convert this
         variable-length sequence into a fixed-dimensional vector via masked
         mean-pooling before feeding it to a linear classifier.
     2.  When ``return_features_only=True`` the classifier layer is skipped and
@@ -56,55 +176,167 @@ class Model(ModelBase):
         device: str = "cuda",
         audio_config: Optional[AudioConfig] = None,
         return_features_only: bool = False,
+        # Original BEATs options (variant="beats")
         use_naturelm: bool = False,
         fine_tuned: bool = False,
+        # New unified options
+        model_variant: Literal["beats", "openbeats"] = "beats",
+        model_size: Literal["base", "large"] = "base",
+        model_id: Optional[str] = None,
+        checkpoint_path: Optional[str] = None,
         disable_layerdrop: bool = False,
     ) -> None:
+        """Initialize BEATs model.
+
+        Args:
+            num_classes: Number of output classes (required if return_features_only=False)
+            pretrained: Whether to load pretrained weights
+            device: Device to run on ('cuda' or 'cpu')
+            audio_config: Optional audio processing configuration
+            return_features_only: If True, return embeddings instead of class predictions
+            use_naturelm: (beats variant only) Use NatureLM checkpoint
+            fine_tuned: (beats variant only) Use fine-tuned checkpoint
+            model_variant: Which variant to use ('beats' or 'openbeats')
+            model_size: Model size ('base' or 'large'). Only 'large' available for openbeats.
+            model_id: HuggingFace model ID (e.g., 'openbeats-large-i3') for openbeats variant
+            checkpoint_path: Optional local path to a checkpoint file
+            disable_layerdrop: Whether to disable layer dropout during forward pass
+        """
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
+        # Validate num_classes
         if not return_features_only and num_classes is None:
             raise ValueError("num_classes must be provided when return_features_only=False")
 
-        # Store disable_layerdrop parameter
+        # Store parameters
         self.disable_layerdrop = disable_layerdrop
+        self.model_variant = model_variant
+        self.model_size = model_size.lower()
+        self.use_naturelm = use_naturelm
+        self.fine_tuned = fine_tuned
+        self._return_features_only = return_features_only
+
+        # Determine output dimension based on model size
+        self._output_dim = BEATS_OUTPUT_DIMS.get(self.model_size, 768)
 
         # ------------------------------------------------------------------
-        # 1.  Build the BEATs backbone
+        # Build the BEATs backbone based on variant
         # ------------------------------------------------------------------
+        if model_variant == "openbeats" or model_id is not None:
+            # OpenBEATs: Use size configs and load from HuggingFace or local
+            self._init_openbeats(
+                pretrained=pretrained,
+                model_id=model_id,
+                checkpoint_path=checkpoint_path,
+                device=device,
+            )
+        else:
+            # Original BEATs: Load from GCS checkpoints
+            self._init_beats(
+                pretrained=pretrained,
+                fine_tuned=fine_tuned,
+                use_naturelm=use_naturelm,
+                device=device,
+            )
 
+        # ------------------------------------------------------------------
+        # Optional classifier for supervised training
+        # ------------------------------------------------------------------
+        if not return_features_only:
+            self.classifier = nn.Linear(self._output_dim, num_classes)
+        else:
+            self.register_module("classifier", None)
+
+    def _init_beats(
+        self,
+        pretrained: bool,
+        fine_tuned: bool,
+        use_naturelm: bool,
+        device: str,
+    ) -> None:
+        """Initialize original BEATs model from GCS checkpoints."""
         if fine_tuned:
             beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
         else:
             beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
 
         beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
-        self.use_naturelm = use_naturelm
-        self.fine_tuned = fine_tuned
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
-        print(beats_cfg)
-        if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
-            beats_ckpt_naturelm = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+        logger.info(f"BEATs Config: {beats_cfg.__dict__}")
+
+        if use_naturelm:
+            # BEATs-NatureLM has no config, load from regular ckpt first
+            state_dict = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
         else:
-            beats_ckpt_naturelm = beats_ckpt["model"]
-        # beats_ckpt_naturelm = beats_ckpt
+            state_dict = beats_ckpt["model"]
+
         self.backbone = BEATs(beats_cfg)
         self.backbone.to(device)
-        self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
+        self.backbone.load_state_dict(state_dict, strict=False)
 
-        # ------------------------------------------------------------------
-        # 2.  Optional classifier for supervised training
-        # ------------------------------------------------------------------
-        self._return_features_only = return_features_only
-        if not return_features_only:
-            self.classifier = nn.Linear(768, num_classes)
-        else:
-            self.register_module("classifier", None)  # type: ignore[arg-type]
+        # Update output dim based on loaded config
+        self._output_dim = beats_cfg.encoder_embed_dim
 
-        # ------------------------------------------------------------------
-        # 3.  Pre-discover MLP (fc1, fc2) layers for efficient hook management
-        # ------------------------------------------------------------------
-        # MLP layers will be discovered in _discover_linear_layers override
+    def _init_openbeats(
+        self,
+        pretrained: bool,
+        model_id: Optional[str],
+        checkpoint_path: Optional[str],
+        device: str,
+    ) -> None:
+        """Initialize OpenBEATs model from HuggingFace or local checkpoint."""
+        # Get config for model size
+        if self.model_size not in BEATS_SIZE_CONFIGS:
+            raise ValueError(f"Unknown model size: {self.model_size}. Supported: {list(BEATS_SIZE_CONFIGS.keys())}")
+
+        config_dict = BEATS_SIZE_CONFIGS[self.model_size].copy()
+        beats_cfg = BEATsConfig(config_dict)
+        logger.info(f"OpenBEATs Config ({self.model_size}): {beats_cfg.__dict__}")
+
+        # Build backbone
+        self.backbone = BEATs(beats_cfg)
+        self.backbone.to(device)
+
+        # Load weights
+        if checkpoint_path is not None:
+            # Load from local checkpoint
+            logger.info(f"Loading BEATs from local checkpoint: {checkpoint_path}")
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+
+            if isinstance(checkpoint, dict) and "model" in checkpoint:
+                state_dict = checkpoint["model"]
+            elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+                state_dict = checkpoint["state_dict"]
+            else:
+                state_dict = checkpoint
+
+            # Handle prefix
+            new_state_dict = {}
+            for key, value in state_dict.items():
+                if key.startswith("encoder."):
+                    new_key = key[8:]
+                elif key.startswith("model.encoder."):
+                    new_key = key[14:]
+                else:
+                    new_key = key
+                new_state_dict[new_key] = value
+
+            load_info = self.backbone.load_state_dict(new_state_dict, strict=False)
+            logger.info(f"Loaded checkpoint. Missing keys: {load_info.missing_keys}")
+            logger.info(f"Unexpected keys: {load_info.unexpected_keys}")
+
+        elif pretrained or model_id is not None:
+            # Default model ID if pretrained but no specific model specified
+            if model_id is None:
+                model_id = f"openbeats-{self.model_size}-i3"
+
+            state_dict = load_weights_from_huggingface(model_id)
+            load_info = self.backbone.load_state_dict(state_dict, strict=False)
+            logger.info(f"Loaded from HuggingFace. Missing keys: {load_info.missing_keys}")
+            logger.info(f"Unexpected keys: {load_info.unexpected_keys}")
+
+        # Update output dim
+        self._output_dim = beats_cfg.encoder_embed_dim
 
     def _discover_linear_layers(self) -> None:
         """

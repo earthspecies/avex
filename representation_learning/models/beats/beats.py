@@ -273,3 +273,74 @@ class BEATs(nn.Module):
                 Model output (features or predictions)
         """
         return self.extract_features(source, padding_mask, feature_only=True, disable_layerdrop=disable_layerdrop)
+
+
+# ============================================================================ #
+#  Model Size Configurations
+# ============================================================================ #
+# These configs support both original BEATs and OpenBEATs checkpoints.
+# OpenBEATs uses layer_norm_first=True and different dropout/position settings.
+
+# Base model configuration (~90M parameters, encoder_embed_dim=768)
+BEATS_BASE_CONFIG: Dict[str, Any] = {
+    "input_patch_size": 16,
+    "embed_dim": 512,
+    "conv_bias": False,
+    "encoder_layers": 12,
+    "encoder_embed_dim": 768,
+    "encoder_ffn_embed_dim": 3072,
+    "encoder_attention_heads": 12,
+    "activation_fn": "gelu",
+    "layer_norm_first": True,
+    "deep_norm": False,
+    "dropout": 0.0,
+    "attention_dropout": 0.0,
+    "activation_dropout": 0.0,
+    "encoder_layerdrop": 0.0,
+    "dropout_input": 0.0,
+    "conv_pos": 128,
+    "conv_pos_groups": 16,
+    "relative_position_embedding": True,
+    "num_buckets": 320,
+    "max_distance": 800,
+    "gru_rel_pos": True,
+    "finetuned_model": False,
+}
+
+# Large model configuration (~317M parameters, encoder_embed_dim=1024)
+BEATS_LARGE_CONFIG: Dict[str, Any] = {
+    "input_patch_size": 16,
+    "embed_dim": 512,
+    "conv_bias": False,
+    "encoder_layers": 24,
+    "encoder_embed_dim": 1024,
+    "encoder_ffn_embed_dim": 4096,
+    "encoder_attention_heads": 16,
+    "activation_fn": "gelu",
+    "layer_norm_first": True,
+    "deep_norm": False,
+    "dropout": 0.0,
+    "attention_dropout": 0.0,
+    "activation_dropout": 0.0,
+    "encoder_layerdrop": 0.0,
+    "dropout_input": 0.0,
+    "conv_pos": 128,
+    "conv_pos_groups": 16,
+    "relative_position_embedding": True,
+    "num_buckets": 320,
+    "max_distance": 800,
+    "gru_rel_pos": True,
+    "finetuned_model": False,
+}
+
+# Mapping from size string to config
+BEATS_SIZE_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "base": BEATS_BASE_CONFIG,
+    "large": BEATS_LARGE_CONFIG,
+}
+
+# Output dimensions for each model size
+BEATS_OUTPUT_DIMS: Dict[str, int] = {
+    "base": 768,
+    "large": 1024,
+}
