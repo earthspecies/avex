@@ -127,6 +127,21 @@ class TrainingParams(BaseModel):
         description="Type of learning rate scheduler to use",
     )
 
+    # Early stopping parameters
+    early_stopping_patience: Optional[int] = Field(
+        None,
+        ge=1,
+        description=(
+            "Number of epochs with no improvement after which training will be stopped. "
+            "If None, early stopping is disabled."
+        ),
+    )
+    early_stopping_min_delta: float = Field(
+        0.0,
+        ge=0,
+        description="Minimum change in validation metric to qualify as an improvement.",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
 

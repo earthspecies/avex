@@ -116,6 +116,15 @@ class FineTuneTrainer:
             self.primary_metric_name: 0.0,
         }
 
+        # Early stopping parameters
+        self.early_stopping_patience = getattr(
+            cfg.training_params, "early_stopping_patience", None
+        )
+        self.early_stopping_min_delta = getattr(
+            cfg.training_params, "early_stopping_min_delta", 0.0
+        )
+        self.epochs_without_improvement = 0
+
     def _create_scheduler(self) -> Optional[torch.optim.lr_scheduler._LRScheduler]:
         """Create learning rate scheduler based on configuration.
 
@@ -233,8 +242,9 @@ class FineTuneTrainer:
                 split="val",
             )
 
-            # Save best model (higher is better for all our metrics)
-            if val_metric > self.best_val_metric:
+            # Save best model and check for early stopping
+            improvement = val_metric - self.best_val_metric
+            if improvement > self.early_stopping_min_delta:
                 self.best_val_metric = val_metric
                 self._save_checkpoint("best.pt")
                 # Update best metrics
@@ -246,6 +256,22 @@ class FineTuneTrainer:
                     "loss": val_loss,
                     self.primary_metric_name: val_metric,
                 }
+                self.epochs_without_improvement = 0
+            else:
+                self.epochs_without_improvement += 1
+
+            # Early stopping check
+            if (
+                self.early_stopping_patience is not None
+                and self.epochs_without_improvement >= self.early_stopping_patience
+            ):
+                logger.info(
+                    f"Early stopping triggered after {epoch} epochs. "
+                    f"No improvement in validation {self.primary_metric_name} "
+                    f"for {self.early_stopping_patience} epochs. "
+                    f"Best val_{self.primary_metric_name}={self.best_val_metric:.4f}"
+                )
+                break
 
         # Load the best model after training is complete
         self._load_best_checkpoint()
