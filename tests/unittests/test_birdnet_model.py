@@ -11,10 +11,14 @@ import pytest
 import torch
 
 from representation_learning.models.birdnet import Model as BirdNetModel
+from tests.utils.test_utils import create_cleanup_hooks_fixture
 
 
 class TestBirdNetModel:
     """Test suite for BirdNET model."""
+
+    # Cleanup hooks after each test for model fixtures
+    cleanup_hooks = create_cleanup_hooks_fixture(model_fixture_name="birdnet_model")
 
     @pytest.fixture(scope="session")
     def _base_model(self) -> BirdNetModel:

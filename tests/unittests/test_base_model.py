@@ -39,9 +39,12 @@ def test_extract_embeddings_basic() -> None:
     seq_length = 10
     x = torch.randn(batch_size, seq_length).to(device)
 
-    # Extract embeddings from both layers
+    # Register hooks for both layers
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers=layers)
+    model.register_hooks_for_layers(layers)
+
+    # Extract embeddings from both layers (use mean aggregation to get tensor)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Check output shape
     expected_shape = (batch_size, 20 + 30)  # Concatenated embeddings from both layers
@@ -63,9 +66,12 @@ def test_extract_embeddings_dict_input() -> None:
         "padding_mask": torch.ones(batch_size, seq_length).to(device),
     }
 
-    # Extract embeddings from both layers
+    # Register hooks for both layers
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers=layers)
+    model.register_hooks_for_layers(layers)
+
+    # Extract embeddings from both layers (use mean aggregation to get tensor)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Check output shape
     expected_shape = (batch_size, 20 + 30)  # Concatenated embeddings from both layers
@@ -79,12 +85,9 @@ def test_extract_embeddings_invalid_layers() -> None:
     model = MockModel(device)
     model.prepare_inference()
 
-    # Create dummy input
-    x = torch.randn(2, 10).to(device)
-
-    # Try to extract embeddings from non-existent layer
-    with pytest.raises(ValueError, match="No layers found matching"):
-        model.extract_embeddings(x, layers=["nonexistent_layer"])
+    # Try to register hooks for non-existent layer
+    with pytest.raises(ValueError, match="Layer.*not found in model"):
+        model.register_hooks_for_layers(["nonexistent_layer"])
 
 
 def test_extract_embeddings_gradient_propagation() -> None:
@@ -97,9 +100,12 @@ def test_extract_embeddings_gradient_propagation() -> None:
     x = torch.randn(2, 10).to(device)
     x.requires_grad = True
 
-    # Extract embeddings
+    # Register hooks for both layers
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
-    embeddings = model.extract_embeddings(x, layers=layers)
+    model.register_hooks_for_layers(layers)
+
+    # Extract embeddings (use mean aggregation to get tensor)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     # Compute loss and backpropagate
     loss = embeddings.sum()
@@ -121,9 +127,12 @@ def test_extract_embeddings_main() -> None:
     seq_length = 10
     x = torch.randn(batch_size, seq_length).to(device)
 
-    # Extract embeddings from both layers
+    # Register hooks for both layers
     layers = ["model.0", "model.1"]
-    embeddings = model.extract_embeddings(x, layers=layers)
+    model.register_hooks_for_layers(layers)
+
+    # Extract embeddings from both layers (use mean aggregation to get tensor)
+    embeddings = model.extract_embeddings(x, aggregation="mean")
 
     print("\nExtract Embeddings Test Results:")
     print(f"Input shape: {x.shape}")
