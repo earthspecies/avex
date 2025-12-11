@@ -933,12 +933,28 @@ def run_experiment(
                         for i in range(len(test_ds_retrieval))
                     ]
                 )
+                # Extract labels from the dataset
+                # Labels may be tensors or scalars, handle both cases
+                label_list = [
+                    test_ds_retrieval[i]["label"] for i in range(len(test_ds_retrieval))
+                ]
+                if isinstance(label_list[0], torch.Tensor):
+                    test_labels = torch.stack(label_list)
+                else:
+                    test_labels = torch.tensor(label_list)
                 logger.info(f"Using layer '{last_layer_name}' for test evaluation")
             else:
                 # Single tensor case
                 test_embeds = torch.stack(
                     [test_ds_retrieval[i] for i in range(len(test_ds_retrieval))]
                 )
+                # For single tensor case, labels should come from test_src_retrieval
+                test_labels = getattr(test_src_retrieval, "labels", None)
+                if test_labels is None:
+                    raise ValueError(
+                        "Could not extract labels from test dataset. "
+                        "Ensure the dataset returns labels."
+                    )
 
         num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 
