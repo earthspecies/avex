@@ -46,6 +46,12 @@ warnings.filterwarnings(
     message=".*torch.load.*weights_only.*",
     category=FutureWarning,
 )
+# Suppress torch.cuda.amp.autocast deprecation warning
+warnings.filterwarnings(
+    "ignore",
+    message=".*torch.cuda.amp.autocast.*is deprecated.*",
+    category=FutureWarning,
+)
 
 # ============================================================================ #
 #  Checkpoint paths for original BEATs (GCS)
