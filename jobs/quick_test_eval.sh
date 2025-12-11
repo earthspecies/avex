@@ -63,20 +63,21 @@ echo "============================================================"
 
 # Sync environment
 echo "Syncing environment..."
-uv sync# Run quick test evaluation
+uv sync
+
+# Run quick test evaluation
 echo ""
 echo "Running quick evaluation (1 epoch, minimal data)..."
 echo ""
 
-uv run python -m representation_learning.run_evaluate \
+uv run python -m representation_learning.cli evaluate \
     --config configs/run_configs/pretrained/openbeats_quick_test.yml \
-    --model_spec.model_id "$MODEL_ID" \
-    --model_spec.model_size "$MODEL_SIZE" \
-    --model_spec.device "$DEVICE" \
-    --run_name "quick_test_${MODEL_ID}" \
-    2>&1 | tee /tmp/quick_test_eval.log
+    --patch "model_spec.model_id=$MODEL_ID" \
+    --patch "model_spec.model_size=$MODEL_SIZE" \
+    --patch "model_spec.device=$DEVICE" \
+    --patch "run_name=quick_test_${MODEL_ID}"
 
-EXIT_CODE=${PIPESTATUS[0]}
+EXIT_CODE=$?
 
 echo ""
 echo "============================================================"
@@ -91,12 +92,13 @@ if [ $EXIT_CODE -eq 0 ]; then
 else
     echo "❌ QUICK TEST FAILED - Check logs above for errors"
     echo "============================================================"
-    echo "Log saved to: /tmp/quick_test_eval.log"
     echo ""
     echo "Common issues:"
     echo "  - Model loading errors: Check MODEL_ID and MODEL_SIZE"
     echo "  - Data loading errors: Check dataset paths and BEANS access"
     echo "  - CUDA errors: Try --cpu flag"
 fi
+
+exit $EXIT_CODE
 
 exit $EXIT_CODE
