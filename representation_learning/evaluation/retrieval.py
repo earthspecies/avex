@@ -35,9 +35,28 @@ def eval_retrieval(
     -------
     Dict[str, float]
         ``{"retrieval_roc_auc": value, "retrieval_precision_at_1": value}``.
+
+    Raises
+    ------
+    ValueError
+        If embeddings or labels are None or empty
     """
-    roc_auc = evaluate_auc_roc_batched(embeds.numpy(), labels.numpy(), batch_size=batch_size)
-    precision_at_1 = evaluate_precision_batched(embeds.numpy(), labels.numpy(), k=1, batch_size=batch_size)
+    # Input validation
+    if embeds is None:
+        raise ValueError("Embeddings cannot be None. Check embedding extraction.")
+    if labels is None:
+        raise ValueError("Labels cannot be None. Check label loading.")
+    if embeds.numel() == 0:
+        raise ValueError("Embeddings tensor is empty.")
+    if labels.numel() == 0:
+        raise ValueError("Labels tensor is empty.")
+
+    roc_auc = evaluate_auc_roc_batched(
+        embeds.numpy(), labels.numpy(), batch_size=batch_size
+    )
+    precision_at_1 = evaluate_precision_batched(
+        embeds.numpy(), labels.numpy(), k=1, batch_size=batch_size
+    )
 
     return {
         "retrieval_roc_auc": roc_auc,
@@ -152,7 +171,9 @@ def _binary_relevance_matrix(labels: np.ndarray, i: int) -> np.ndarray:
     return np.logical_and(labels, labels[i]).any(axis=1).astype(int)
 
 
-def _binary_relevance_matrix_cross_set(query_labels: np.ndarray, db_labels: np.ndarray, i: int) -> np.ndarray:
+def _binary_relevance_matrix_cross_set(
+    query_labels: np.ndarray, db_labels: np.ndarray, i: int
+) -> np.ndarray:
     """Return binary relevance vector for query *i* against database labels.
 
     The function supports the same label formats as _binary_relevance_matrix
@@ -285,7 +306,9 @@ def evaluate_auc_roc_batched(
     return float(np.mean(aucs)) if aucs else 0.0
 
 
-def evaluate_auc_roc(embeddings: np.ndarray, labels: Sequence[int] | np.ndarray) -> float:
+def evaluate_auc_roc(
+    embeddings: np.ndarray, labels: Sequence[int] | np.ndarray
+) -> float:
     """Compute average ROC-AUC for *instance-level* retrieval.
 
     For every query embedding *q* we rank *all* database embeddings by cosine
@@ -388,10 +411,14 @@ def evaluate_auc_roc_cross_set(
     if query_labels.shape[0] != query_embeds.shape[0]:
         raise ValueError("query labels length must match number of query embeddings")
     if db_labels.shape[0] != db_embeds.shape[0]:
-        raise ValueError("database labels length must match number of database embeddings")
+        raise ValueError(
+            "database labels length must match number of database embeddings"
+        )
 
     # Compute cosine similarity between query and database embeddings
-    query_normed = query_embeds / np.linalg.norm(query_embeds, axis=1, keepdims=True).clip(1e-12)
+    query_normed = query_embeds / np.linalg.norm(
+        query_embeds, axis=1, keepdims=True
+    ).clip(1e-12)
     db_normed = db_embeds / np.linalg.norm(db_embeds, axis=1, keepdims=True).clip(1e-12)
     sim = np.matmul(query_normed, db_normed.T)  # Shape: (n_queries, n_db)
 
@@ -626,14 +653,18 @@ def evaluate_precision_cross_set(
     if query_labels.shape[0] != query_embeds.shape[0]:
         raise ValueError("query labels length must match number of query embeddings")
     if db_labels.shape[0] != db_embeds.shape[0]:
-        raise ValueError("database labels length must match number of database embeddings")
+        raise ValueError(
+            "database labels length must match number of database embeddings"
+        )
 
     n_db = db_embeds.shape[0]
     if n_db == 0:
         return 0.0
 
     # Compute cosine similarity between query and database embeddings
-    query_normed = query_embeds / np.linalg.norm(query_embeds, axis=1, keepdims=True).clip(1e-12)
+    query_normed = query_embeds / np.linalg.norm(
+        query_embeds, axis=1, keepdims=True
+    ).clip(1e-12)
     db_normed = db_embeds / np.linalg.norm(db_embeds, axis=1, keepdims=True).clip(1e-12)
     sim = np.matmul(query_normed, db_normed.T)  # Shape: (n_queries, n_db)
 
