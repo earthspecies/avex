@@ -221,14 +221,6 @@ class ModelBase(nn.Module):
         except Exception:
             pass  # Ignore errors during cleanup
 
-    def prepare_inference(self) -> None:
-        self.model.eval()
-        self.model = self.model.to(self.device)
-
-    def prepare_train(self) -> None:
-        self.model.train()
-        self.model = self.model.to(self.device)
-
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """
         Process audio input using the configured audio processor.
