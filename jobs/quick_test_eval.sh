@@ -9,7 +9,6 @@
 #   ./jobs/quick_test_eval.sh                    # Run directly (interactive)
 #   sbatch jobs/quick_test_eval.sh               # Submit to SLURM
 #   ./jobs/quick_test_eval.sh --cpu              # Run on CPU (slower but no GPU needed)
-#   MODEL_SIZE=large ./jobs/quick_test_eval.sh   # Test with large model
 #
 # Expected runtime: 1-3 minutes on GPU, 5-10 minutes on CPU
 # ==============================================================================
@@ -44,38 +43,30 @@ for arg in "$@"; do
 done
 
 # Configuration
-MODEL_ID="${MODEL_ID:-openbeats-base-i3}"
-MODEL_SIZE="${MODEL_SIZE:-base}"
 DEVICE="cuda"
-
 if [ "$USE_CPU" = true ]; then
     DEVICE="cpu"
-    echo "Running on CPU (this will be slower)..."
 fi
 
 echo "============================================================"
 echo "QUICK TEST: Evaluation Pipeline Validation"
 echo "============================================================"
-echo "Model ID:    $MODEL_ID"
-echo "Model Size:  $MODEL_SIZE"
 echo "Device:      $DEVICE"
+echo "Config:      configs/evaluation_configs/quick_test.yml"
 echo "============================================================"
 
 # Sync environment
 echo "Syncing environment..."
 uv sync
 
-# Run quick test evaluation
+# Run quick test evaluation using proper evaluation config
 echo ""
 echo "Running quick evaluation (1 epoch, minimal data)..."
 echo ""
 
 uv run python -m representation_learning.cli evaluate \
-    --config configs/run_configs/pretrained/openbeats_quick_test.yml \
-    --patch "model_spec.model_id=$MODEL_ID" \
-    --patch "model_spec.model_size=$MODEL_SIZE" \
-    --patch "model_spec.device=$DEVICE" \
-    --patch "run_name=quick_test_${MODEL_ID}"
+    --config configs/evaluation_configs/quick_test.yml \
+    --patch "device=$DEVICE"
 
 EXIT_CODE=$?
 
@@ -94,11 +85,9 @@ else
     echo "============================================================"
     echo ""
     echo "Common issues:"
-    echo "  - Model loading errors: Check MODEL_ID and MODEL_SIZE"
+    echo "  - Model loading errors: Check HuggingFace access"
     echo "  - Data loading errors: Check dataset paths and BEANS access"
     echo "  - CUDA errors: Try --cpu flag"
 fi
-
-exit $EXIT_CODE
 
 exit $EXIT_CODE

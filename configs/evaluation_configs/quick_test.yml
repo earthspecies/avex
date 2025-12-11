@@ -1,0 +1,53 @@
+# Quick Test Evaluation Configuration
+# ====================================
+# Fast structural validation of evaluation pipeline.
+# Uses minimal data and 1 epoch to verify everything works.
+#
+# Usage:
+#   uv run repr-learn evaluate --config configs/evaluation_configs/quick_test.yml
+#
+# Expected runtime: 1-3 minutes on GPU
+
+# Minimal test dataset (5% of data, single task)
+dataset_config: configs/data_configs/benchmark_quick_test.yml
+
+training_params:
+  train_epochs: 1                  # Single epoch for quick validation
+  lr: 0.01                         # Higher LR for faster convergence
+  batch_size: 16                   # Smaller batch for faster iterations
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  early_stopping_patience: null    # Disable early stopping for 1 epoch
+
+# OpenBEATs Base model (smaller, faster to load)
+experiments:
+  - run_name: quick_test_openbeats_base
+    run_config: configs/run_configs/pretrained/openbeats_base_eval.yml
+    pretrained: true
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+# Output directory
+save_dir: evaluation_results/quick_test
+
+device: cuda
+
+seed: 42
+
+num_workers: 4
+
+# Run all eval modes to verify they work
+eval_modes:
+  - probe
+  - retrieval
+  - clustering
+
+offline_embeddings:
+  overwrite_embeddings: true
