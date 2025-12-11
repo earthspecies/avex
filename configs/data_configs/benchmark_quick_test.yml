@@ -1,7 +1,7 @@
 benchmark_name: "quick_test_benchmark"
 
 # Minimal benchmark config for quick structural validation
-# Uses smallest possible dataset splits and minimal samples
+# Uses smallest possible dataset splits with enough samples to test pipeline
 # Purpose: Verify evaluation pipeline works before running full benchmarks
 
 evaluation_sets:
@@ -23,7 +23,7 @@ evaluation_sets:
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
         - type: uniform_sample
           property: label
-          ratio: 0.05  # Only 5% of data for quick testing
+          ratio: 0.2  # 20% of data - enough samples for training
       sample_rate: 16000
     validation:
       <<: *dogs_base
@@ -33,9 +33,7 @@ evaluation_sets:
           feature: label
           override: true
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
-        - type: uniform_sample
-          property: label
-          ratio: 0.1
+        # No sampling for validation - use all samples (small set already)
     test:
       <<: *dogs_base
       split: dogs_test
@@ -44,7 +42,5 @@ evaluation_sets:
           feature: label
           override: true
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
-        - type: uniform_sample
-          property: label
-          ratio: 0.1
+        # No sampling for test - use all samples (small set already)
     metrics: [accuracy, balanced_accuracy, clustering_ari]

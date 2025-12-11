@@ -31,7 +31,7 @@ sr: 16000
 debug_mode: true
 
 # Disable wandb for quick tests
-logging: null
+logging: none
 
 # No checkpoint to resume
 resume_from_checkpoint: null
