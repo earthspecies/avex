@@ -242,24 +242,26 @@ class FineTuneTrainer:
             )
 
             # Log epoch-level metrics
-            self.log.log_metrics(
-                {
-                    "loss": train_loss,
-                    self.primary_metric_name: train_metric,
-                    "epoch_duration": epoch_duration,
-                },
-                step=epoch,
-                split="train",
+            train_metrics_dict = {
+                "loss": train_loss,
+                self.primary_metric_name: train_metric,
+                "epoch_duration": epoch_duration,
+            }
+            val_metrics_dict = {
+                "loss": val_loss,
+                self.primary_metric_name: val_metric,
+                "epoch_duration": epoch_duration,
+            }
+
+            logger.info(
+                f"Logging train metrics to {self.log.backend}: {train_metrics_dict}"
             )
-            self.log.log_metrics(
-                {
-                    "loss": val_loss,
-                    self.primary_metric_name: val_metric,
-                    "epoch_duration": epoch_duration,
-                },
-                step=epoch,
-                split="val",
+            self.log.log_metrics(train_metrics_dict, step=epoch, split="train")
+
+            logger.info(
+                f"Logging val metrics to {self.log.backend}: {val_metrics_dict}"
             )
+            self.log.log_metrics(val_metrics_dict, step=epoch, split="val")
 
             # Save best model and check for early stopping
             improvement = val_metric - self.best_val_metric

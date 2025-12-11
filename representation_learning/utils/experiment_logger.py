@@ -138,7 +138,11 @@ class ExperimentLogger:
         cls._handle_wandb_auth(wandb)
 
         handle = wandb.init(project=project, name=run_name, config={})
-        logger.info("Weights & Biases run initialised (%s).", run_name)
+        logger.info(
+            "Weights & Biases run initialised (project=%s, run_name=%s).",
+            project,
+            run_name,
+        )
         return cls(backend="wandb", handle=handle)
 
     @classmethod
@@ -179,7 +183,11 @@ class ExperimentLogger:
                 self.handle.log_metric(f"{split}_{k}", v, step=step)  # type: ignore[attr-defined]
 
         elif self.backend == "wandb":
-            self.handle.log({f"{split}/{k}": v for k, v in metrics.items()}, step=step)  # type: ignore[attr-defined]
+            formatted_metrics = {f"{split}/{k}": v for k, v in metrics.items()}
+            logger.debug(
+                f"Logging to wandb ({split}, step={step}): {formatted_metrics}"
+            )
+            self.handle.log(formatted_metrics, step=step)  # type: ignore[attr-defined]
 
     def log_artifact(
         self,

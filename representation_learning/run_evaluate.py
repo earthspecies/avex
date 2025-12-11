@@ -1086,6 +1086,10 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     torch.manual_seed(42)
 
     # 3. Setup experiment logging (wandb, mlflow, etc.)
+    logger.info(
+        f"Eval config logging: logging={eval_cfg.logging}, "
+        f"wandb_project={eval_cfg.wandb_project}, run_name={eval_cfg.run_name}"
+    )
     eval_logger = ExperimentLogger.from_config(eval_cfg)
 
     # 4. Run experiments - OPTIMIZED: group by experiment to reuse models
@@ -1211,7 +1215,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
                             for k, v in res.result.clustering_metrics.items()
                         }
                     )
-                eval_logger.log_metrics(metrics)
+                eval_logger.log_metrics(metrics, step=0)
 
     # 5. Create and save summary CSV files
     create_experiment_summary_csvs(
