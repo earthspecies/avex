@@ -1095,6 +1095,7 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
 
     # 4. Run experiments - OPTIMIZED: group by experiment to reuse models
     all_results: List[ExperimentResult] = []
+    summary_step_base = 1_000_000  # ensure final logs have higher steps than any epoch
 
     for eval_set_name, _eval_set_data_cfg in evaluation_sets:
         logger.info(f"Evaluating benchmark set: {eval_set_name}")
@@ -1216,7 +1217,8 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
                             for k, v in res.result.clustering_metrics.items()
                         }
                     )
-                eval_logger.log_metrics(metrics, step=0)
+                summary_step = summary_step_base + len(all_results)
+                eval_logger.log_metrics(metrics, step=summary_step)
 
     # 5. Create and save summary CSV files
     create_experiment_summary_csvs(
