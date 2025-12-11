@@ -137,6 +137,15 @@ class ExperimentLogger:
         # Handle authentication before initializing run
         cls._handle_wandb_auth(wandb)
 
+        # Reuse existing run if already initialised to avoid no-op fallbacks
+        if getattr(wandb, "run", None) is not None:
+            logger.info(
+                "Reusing existing Weights & Biases run (project=%s, run_name=%s).",
+                project,
+                getattr(wandb.run, "name", run_name),
+            )
+            return cls(backend="wandb", handle=wandb.run)
+
         handle = wandb.init(project=project, name=run_name, config={})
         logger.info(
             "Weights & Biases run initialised (project=%s, run_name=%s).",

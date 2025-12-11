@@ -57,7 +57,7 @@ device: cuda
 
 seed: 42
 
-num_workers: 4
+num_workers: 2
 
 # Evaluation modes matching the paper:
 # - probe: Linear probe accuracy (for classification) or mAP (for detection)
