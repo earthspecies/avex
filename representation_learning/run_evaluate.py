@@ -14,12 +14,26 @@ from __future__ import annotations
 import logging
 import os
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
 # Seems to prevent a cloudpathlib error
 os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "okapi-274503")
+
+# Suppress known non-actionable warnings
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    module="google.api_core._python_version_support",
+)
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=".*Your application has authenticated using end user credentials.*",
+)
+warnings.filterwarnings("ignore", category=UserWarning, message=".*quota project.*")
 
 import pandas as pd
 import torch

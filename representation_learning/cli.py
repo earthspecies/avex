@@ -6,9 +6,23 @@ This module provides a unified CLI for both training and evaluation tasks.
 
 import logging
 import os
+import warnings
 from pathlib import Path
 
 import click
+
+# Suppress known non-actionable warnings early
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    module="google.api_core._python_version_support",
+)
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=".*Your application has authenticated using end user credentials.*",
+)
+warnings.filterwarnings("ignore", category=UserWarning, message=".*quota project.*")
 
 # Get log level from environment variable, default to INFO
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
