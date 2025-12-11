@@ -647,7 +647,8 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     #  Experiment logger
     # ------------------------------------------------------------------ #
-    exp_logger = ExperimentLogger.from_config(experiment_cfg)
+    # Use eval_cfg for logging settings, not experiment_cfg
+    exp_logger = ExperimentLogger.from_config(eval_cfg)
     log_dir_name = evaluation_dataset_name or dataset_name
     exp_logger.log_dir = save_dir / experiment_name / log_dir_name
     exp_logger.log_dir.mkdir(parents=True, exist_ok=True)
