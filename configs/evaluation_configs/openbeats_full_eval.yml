@@ -18,6 +18,11 @@
 # Change via --patch to run other benchmarks
 dataset_config: configs/data_configs/beans.yml
 
+# Experiment logging configuration
+logging: wandb
+wandb_project: representation-learning-eval
+run_name: openbeats_eval
+
 training_params:
   train_epochs: 200              # Max epochs (early stopping will terminate earlier)
   lr: 0.01                       # Higher LR for faster convergence with linear probes

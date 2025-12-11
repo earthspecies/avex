@@ -1085,7 +1085,10 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
 
-    # 3. Run experiments - OPTIMIZED: group by experiment to reuse models
+    # 3. Setup experiment logging (wandb, mlflow, etc.)
+    eval_logger = ExperimentLogger.from_config(eval_cfg)
+
+    # 4. Run experiments - OPTIMIZED: group by experiment to reuse models
     all_results: List[ExperimentResult] = []
 
     for eval_set_name, _eval_set_data_cfg in evaluation_sets:
@@ -1187,6 +1190,28 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
                 res.result.retrieval_metrics or "n/a",
                 res.result.clustering_metrics or "n/a",
             )
+
+            # Log results to wandb if enabled
+            if eval_cfg.logging == "wandb":
+                metrics = {
+                    f"{eval_set_name}/{k}": v
+                    for k, v in res.result.probe_test_metrics.items()
+                }
+                if res.result.retrieval_metrics:
+                    metrics.update(
+                        {
+                            f"{eval_set_name}/retrieval/{k}": v
+                            for k, v in res.result.retrieval_metrics.items()
+                        }
+                    )
+                if res.result.clustering_metrics:
+                    metrics.update(
+                        {
+                            f"{eval_set_name}/clustering/{k}": v
+                            for k, v in res.result.clustering_metrics.items()
+                        }
+                    )
+                eval_logger.log_metrics(metrics)
 
     # 5. Create and save summary CSV files
     create_experiment_summary_csvs(

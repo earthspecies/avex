@@ -656,7 +656,9 @@ class BaseCLIConfig(BaseSettings):
     """
 
     @classmethod
-    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> "RunConfig":
+    def from_sources(
+        cls, yaml_file: str | Path, cli_args: tuple[str, ...]
+    ) -> "RunConfig":
         """
         Create a RunConfig object from a YAML file and CLI arguments. If there are any
         conflicts, the CLI arguments will take precedence over the YAML file.
@@ -1291,6 +1293,27 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             "Useful for reducing output verbosity in automated runs or when logging "
             "to files."
         ),
+    )
+
+    # Experiment logging configuration
+    logging: Literal["mlflow", "wandb", "none"] = Field(
+        "none",
+        description=(
+            "Logging backend for evaluation experiments: 'mlflow' for MLflow, "
+            "'wandb' for Weights & Biases, or 'none' for no logging"
+        ),
+    )
+    logging_uri: Optional[str] = Field(
+        None,
+        description="MLflow tracking URI (default: http://127.0.0.1:5000/)",
+    )
+    wandb_project: str = Field(
+        "audio-experiments",
+        description="Weights & Biases project name for logging evaluation results",
+    )
+    run_name: Optional[str] = Field(
+        None,
+        description="Custom run name for experiment logging (default: auto-generated)",
     )
 
     model_config = ConfigDict(extra="forbid")

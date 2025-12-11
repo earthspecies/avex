@@ -37,6 +37,7 @@
 #SBATCH --cpus-per-gpu=12
 
 set -e
+source ~/slurm_env
 
 # ==============================================================================
 # Configuration

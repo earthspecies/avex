@@ -11,6 +11,9 @@
 # Minimal test dataset (5% of data, single task)
 dataset_config: configs/data_configs/benchmark_quick_test.yml
 
+# Logging configuration (optional - set to "none" to disable)
+logging: none
+
 training_params:
   train_epochs: 1                  # Single epoch for quick validation
   lr: 0.01                         # Higher LR for faster convergence
