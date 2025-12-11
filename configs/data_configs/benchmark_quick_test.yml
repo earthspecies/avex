@@ -1,13 +1,13 @@
 benchmark_name: "quick_test_benchmark"
 
 # Minimal benchmark config for quick structural validation
-# Uses smallest possible dataset splits with enough samples to test pipeline
+# Uses dogs dataset (smallest in BEANS) without subsampling
 # Purpose: Verify evaluation pipeline works before running full benchmarks
 
 evaluation_sets:
-  # Single classification task with minimal data
+  # Single classification task - dogs is the smallest dataset
   - name: "dog_classification_quick"
-    train: &dogs_base
+    train:
       dataset_name: beans
       split: dogs_train
       type: classification
@@ -15,32 +15,41 @@ evaluation_sets:
       audio_path_col: path
       multi_label: false
       label_type: supervised
-      audio_max_length_seconds: 5  # Shorter clips for faster processing
+      audio_max_length_seconds: 5
       transformations:
         - type: label_from_feature
           feature: label
           override: true
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
-        - type: uniform_sample
-          property: label
-          ratio: 0.2  # 20% of data - enough samples for training
       sample_rate: 16000
     validation:
-      <<: *dogs_base
+      dataset_name: beans
       split: dogs_validation
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 5
       transformations:
         - type: label_from_feature
           feature: label
           override: true
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
-        # No sampling for validation - use all samples (small set already)
+      sample_rate: 16000
     test:
-      <<: *dogs_base
+      dataset_name: beans
       split: dogs_test
+      type: classification
+      label_column: label
+      audio_path_col: path
+      multi_label: false
+      label_type: supervised
+      audio_max_length_seconds: 5
       transformations:
         - type: label_from_feature
           feature: label
           override: true
           label_map: {'Farley': 0, 'Freid': 1, 'Keri': 2, 'Louie': 3, 'Luke': 4, 'Mac': 5, 'Roodie': 6, 'Rudy': 7, 'Siggy': 8, 'Zoe': 9}
-        # No sampling for test - use all samples (small set already)
+      sample_rate: 16000
     metrics: [accuracy, balanced_accuracy, clustering_ari]
