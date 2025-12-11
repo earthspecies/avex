@@ -15,6 +15,7 @@ Based on:
 
 import logging
 import os
+import warnings
 from typing import Dict, List, Literal, Optional, Union
 
 import torch
@@ -33,14 +34,29 @@ from representation_learning.utils import universal_torch_load
 
 logger = logging.getLogger(__name__)
 
+# Suppress torch.nn.utils.weight_norm deprecation warning
+warnings.filterwarnings(
+    "ignore",
+    message=".*torch.nn.utils.weight_norm.*",
+    category=FutureWarning,
+)
+# Suppress torch.load weights_only deprecation warning
+warnings.filterwarnings(
+    "ignore",
+    message=".*torch.load.*weights_only.*",
+    category=FutureWarning,
+)
+
 # ============================================================================ #
 #  Checkpoint paths for original BEATs (GCS)
 # ============================================================================ #
-BEATS_PRETRAINED_PATH_FT = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
-BEATS_PRETRAINED_PATH_SSL = "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
-BEATS_PRETRAINED_PATH_NATURELM = (
-    "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
+BEATS_PRETRAINED_PATH_FT = (
+    "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
 )
+BEATS_PRETRAINED_PATH_SSL = (
+    "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
+)
+BEATS_PRETRAINED_PATH_NATURELM = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 
 # ============================================================================ #
 #  HuggingFace model IDs for OpenBEATs
@@ -206,7 +222,9 @@ class Model(ModelBase):
 
         # Validate num_classes
         if not return_features_only and num_classes is None:
-            raise ValueError("num_classes must be provided when return_features_only=False")
+            raise ValueError(
+                "num_classes must be provided when return_features_only=False"
+            )
 
         # Store parameters
         self.disable_layerdrop = disable_layerdrop
@@ -260,13 +278,17 @@ class Model(ModelBase):
         else:
             beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
 
-        beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
+        beats_ckpt = universal_torch_load(
+            beats_checkpoint_path, cache_mode="use", map_location="cpu"
+        )
         beats_cfg = BEATsConfig(beats_ckpt["cfg"])
         logger.info(f"BEATs Config: {beats_cfg.__dict__}")
 
         if use_naturelm:
             # BEATs-NatureLM has no config, load from regular ckpt first
-            state_dict = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+            state_dict = universal_torch_load(
+                BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu"
+            )
         else:
             state_dict = beats_ckpt["model"]
 
@@ -287,7 +309,9 @@ class Model(ModelBase):
         """Initialize OpenBEATs model from HuggingFace or local checkpoint."""
         # Get config for model size
         if self.model_size not in BEATS_SIZE_CONFIGS:
-            raise ValueError(f"Unknown model size: {self.model_size}. Supported: {list(BEATS_SIZE_CONFIGS.keys())}")
+            raise ValueError(
+                f"Unknown model size: {self.model_size}. Supported: {list(BEATS_SIZE_CONFIGS.keys())}"
+            )
 
         config_dict = BEATS_SIZE_CONFIGS[self.model_size].copy()
         beats_cfg = BEATsConfig(config_dict)
@@ -322,8 +346,12 @@ class Model(ModelBase):
                 new_state_dict[new_key] = value
 
             load_info = self.backbone.load_state_dict(new_state_dict, strict=False)
-            logger.info(f"Loaded checkpoint. Missing keys: {load_info.missing_keys}")
-            logger.info(f"Unexpected keys: {load_info.unexpected_keys}")
+            if load_info.missing_keys or load_info.unexpected_keys:
+                logger.debug(
+                    f"Loaded checkpoint. "
+                    f"Missing keys: {len(load_info.missing_keys)}, "
+                    f"Unexpected keys: {len(load_info.unexpected_keys)}"
+                )
 
         elif pretrained or model_id is not None:
             # Default model ID if pretrained but no specific model specified
@@ -332,8 +360,12 @@ class Model(ModelBase):
 
             state_dict = load_weights_from_huggingface(model_id)
             load_info = self.backbone.load_state_dict(state_dict, strict=False)
-            logger.info(f"Loaded from HuggingFace. Missing keys: {load_info.missing_keys}")
-            logger.info(f"Unexpected keys: {load_info.unexpected_keys}")
+            if load_info.missing_keys or load_info.unexpected_keys:
+                logger.debug(
+                    f"Loaded from HuggingFace. "
+                    f"Missing keys: {len(load_info.missing_keys)}, "
+                    f"Unexpected keys: {len(load_info.unexpected_keys)}"
+                )
 
         # Update output dim
         self._output_dim = beats_cfg.encoder_embed_dim
@@ -359,7 +391,9 @@ class Model(ModelBase):
                 elif name.endswith(".fc2") and "backbone.encoder.layers." in name:
                     self._layer_names.append(name)
 
-            logger.info(f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}")
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}"
+            )
 
     def _discover_embedding_layers(self) -> None:
         """
@@ -387,7 +421,9 @@ class Model(ModelBase):
                     if name not in self._layer_names:
                         self._layer_names.append(name)
 
-            logger.info(f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}")
+            logger.info(
+                f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}"
+            )
 
     # ----------------------------------------------------------------------
     #  Public API
@@ -418,7 +454,9 @@ class Model(ModelBase):
         # Optional audio pre-processing
         x = self.process_audio(x)
 
-        features, frame_padding = self.backbone(x, padding_mask, disable_layerdrop=self.disable_layerdrop)
+        features, frame_padding = self.backbone(
+            x, padding_mask, disable_layerdrop=self.disable_layerdrop
+        )
 
         # features: (B, T', D)
         # frame_padding: (B, T') or None
@@ -534,7 +572,9 @@ class Model(ModelBase):
             else:
                 self.forward(wav, mask)
 
-            logger.debug(f"Forward pass completed. Hook outputs: {list(self._hook_outputs.keys())}")
+            logger.debug(
+                f"Forward pass completed. Hook outputs: {list(self._hook_outputs.keys())}"
+            )
 
             # Collect embeddings from hook outputs
             embeddings = []
@@ -547,7 +587,9 @@ class Model(ModelBase):
 
             # Check if we got any embeddings
             if not embeddings:
-                raise ValueError(f"No layers found matching: {self._hook_outputs.keys()}")
+                raise ValueError(
+                    f"No layers found matching: {self._hook_outputs.keys()}"
+                )
 
             # First, ensure all embeddings are in batch-first format
             for i in range(len(embeddings)):
@@ -570,13 +612,19 @@ class Model(ModelBase):
                         if aggregation == "mean":
                             embeddings[i] = torch.mean(embeddings[i], dim=1)
                         elif aggregation == "max":
-                            embeddings[i] = torch.max(embeddings[i], dim=1)[0]  # max returns (values, indices)
+                            embeddings[i] = torch.max(embeddings[i], dim=1)[
+                                0
+                            ]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:
-                            raise ValueError(f"Unsupported aggregation method: {aggregation}")
+                            raise ValueError(
+                                f"Unsupported aggregation method: {aggregation}"
+                            )
                     else:
-                        raise ValueError(f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2 or 3.")
+                        raise ValueError(
+                            f"Unexpected embedding dimension: {embeddings[i].dim()}. Expected 2 or 3."
+                        )
 
                 # Concatenate all embeddings
                 if len(embeddings) == 1:
