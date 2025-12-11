@@ -16,12 +16,21 @@
 
 #SBATCH --partition=a100-40
 #SBATCH --gpus=1
-#SBATCH --time=00:30:00
+#SBATCH --time=00:15:00
 #SBATCH --output="/home/%u/logs/quick_test_%j.log"
 #SBATCH --job-name="quick-test"
 #SBATCH --cpus-per-gpu=4
+#SBATCH --mem=32G
 
 set -e
+
+# Source environment (for SLURM jobs)
+if [ -f ~/slurm_env ]; then
+    source ~/slurm_env
+fi
+
+# Navigate to repo root (works for both interactive and SLURM)
+cd ~/representation-learning
 
 # Parse arguments
 USE_CPU=false
@@ -44,9 +53,6 @@ if [ "$USE_CPU" = true ]; then
     echo "Running on CPU (this will be slower)..."
 fi
 
-# Navigate to repo root
-cd "$(dirname "$0")/.."
-
 echo "============================================================"
 echo "QUICK TEST: Evaluation Pipeline Validation"
 echo "============================================================"
@@ -57,9 +63,7 @@ echo "============================================================"
 
 # Sync environment
 echo "Syncing environment..."
-uv sync
-
-# Run quick test evaluation
+uv sync# Run quick test evaluation
 echo ""
 echo "Running quick evaluation (1 epoch, minimal data)..."
 echo ""
