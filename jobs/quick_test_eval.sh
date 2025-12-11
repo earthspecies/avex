@@ -6,12 +6,20 @@
 # Runs 1 epoch with minimal data to verify everything works before full runs.
 #
 # Usage:
-#   ./jobs/quick_test_eval.sh                    # Run quick test with default settings
+#   ./jobs/quick_test_eval.sh                    # Run directly (interactive)
+#   sbatch jobs/quick_test_eval.sh               # Submit to SLURM
 #   ./jobs/quick_test_eval.sh --cpu              # Run on CPU (slower but no GPU needed)
 #   MODEL_SIZE=large ./jobs/quick_test_eval.sh   # Test with large model
 #
 # Expected runtime: 1-3 minutes on GPU, 5-10 minutes on CPU
 # ==============================================================================
+
+#SBATCH --partition=a100-40
+#SBATCH --gpus=1
+#SBATCH --time=00:30:00
+#SBATCH --output="/home/%u/logs/quick_test_%j.log"
+#SBATCH --job-name="quick-test"
+#SBATCH --cpus-per-gpu=4
 
 set -e
 
