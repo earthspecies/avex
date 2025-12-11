@@ -17,22 +17,13 @@ class MockModel(ModelBase):
     def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
-    def prepare_inference(self) -> None:
-        """Override to handle our direct layer structure."""
-        self.eval()
-        self.to(self.device)
-
-    def prepare_train(self) -> None:
-        """Override to handle our direct layer structure."""
-        self.train()
-        self.to(self.device)
-
 
 def test_extract_embeddings_basic() -> None:
     """Test basic functionality of extract_embeddings."""
     device = torch.device("cpu")
     model = MockModel(device)
-    model.prepare_inference()
+    model.eval()
+    model.to(device)
 
     # Create dummy input
     batch_size = 2
@@ -56,7 +47,8 @@ def test_extract_embeddings_dict_input() -> None:
     """Test extract_embeddings with dictionary input."""
     device = torch.device("cpu")
     model = MockModel(device)
-    model.prepare_inference()
+    model.eval()
+    model.to(device)
 
     # Create dummy input dictionary
     batch_size = 2
@@ -83,7 +75,8 @@ def test_extract_embeddings_invalid_layers() -> None:
     """Test extract_embeddings with invalid layer names."""
     device = torch.device("cpu")
     model = MockModel(device)
-    model.prepare_inference()
+    model.eval()
+    model.to(device)
 
     # Try to register hooks for non-existent layer
     with pytest.raises(ValueError, match="Layer.*not found in model"):
@@ -94,7 +87,8 @@ def test_extract_embeddings_gradient_propagation() -> None:
     """Test that gradients can propagate through extract_embeddings."""
     device = torch.device("cpu")
     model = MockModel(device)
-    model.prepare_train()  # Set to training mode
+    model.train()  # Set to training mode
+    model.to(device)
 
     # Create dummy input
     x = torch.randn(2, 10).to(device)
@@ -120,7 +114,8 @@ def test_extract_embeddings_main() -> None:
     """Main test function that demonstrates extract_embeddings functionality."""
     device = torch.device("cpu")
     model = MockModel(device)
-    model.prepare_inference()
+    model.eval()
+    model.to(device)
 
     # Create dummy input
     batch_size = 4

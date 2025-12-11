@@ -54,7 +54,7 @@ class Model(ModelBase):
     Thin wrapper around *birdnetlib* that exposes:
         • forward()  – returns clip-level class probabilities (rarely needed)
         • extract_embeddings() – 1024-d BirdNET feature vectors
-    Everything else (batching, .prepare_train(), …) comes from ModelBase.
+    Everything else (batching, device placement, …) comes from ModelBase.
     """
 
     SAMPLE_RATE = 48_000

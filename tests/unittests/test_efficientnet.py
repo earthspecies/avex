@@ -9,8 +9,9 @@ def test_efficientnet() -> None:
     # Create an instance of your EfficientNet model.
     model = EfficientNet(num_classes=1000, pretrained=True, device=device)
 
-    # Prepare the model for inference or training.
-    model.prepare_inference()  # or model.prepare_train()
+    # Prepare the model for inference.
+    model.eval()
+    model.to(device)
 
     # Create a dummy input (e.g., a batch of images with appropriate size)
     # EfficientNet B0 expects images of at least 224x224 in size.
