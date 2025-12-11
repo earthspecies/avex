@@ -1,0 +1,61 @@
+---
+# Quick Test Config for BEATs/OpenBEATs evaluation pipeline validation
+# Runs 1 epoch with minimal settings to verify structural correctness
+# Usage: uv run python -m representation_learning.run_evaluate --config configs/run_configs/pretrained/openbeats_quick_test.yml
+
+model_spec:
+  name: openbeats
+  pretrained: true
+  model_id: "openbeats-base-i3"     # Use base model for faster loading
+  model_size: "base"                # Smaller model for quick tests
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 5        # Shorter clips
+    window_selection: random
+
+# Quick test dataset config
+dataset_config: configs/data_configs/benchmark_quick_test.yml
+
+# Output directory
+output_dir: "./runs/quick_test"
+run_name: quick_test
+label_type: supervised
+
+# Audio preprocessing
+preprocessing: null
+
+# Sample rate
+sr: 16000
+debug_mode: true  # Enable debug mode for verbose output
+
+# Disable wandb for quick tests
+logging: null
+
+# No checkpoint to resume
+resume_from_checkpoint: null
+
+# Minimal training params for quick validation
+training_params:
+  train_epochs: 1           # Single epoch
+  lr: 0.001                 # Faster learning for quick convergence check
+  batch_size: 16            # Smaller batch for faster iterations
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+# No warmup needed for single epoch
+scheduler:
+  name: cosine
+  warmup_steps: 0
+  min_lr: 1e-6
+
+# Loss for classification
+loss_function: cross_entropy
+
+# General settings
+seed: 42
+num_workers: 4              # Fewer workers for quick tests
