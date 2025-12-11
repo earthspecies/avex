@@ -26,7 +26,7 @@ run_name: openbeats_eval
 training_params:
   train_epochs: 200              # Max epochs (early stopping will terminate earlier)
   lr: 0.01                       # Higher LR for faster convergence with linear probes
-  batch_size: 32
+  batch_size: 128
   optimizer: adamw
   weight_decay: 0.01
   amp: false
@@ -57,7 +57,6 @@ device: cuda
 
 seed: 42
 
-# Reduced from 8 to avoid DataLoader worker crashes with OpenBEATs
 num_workers: 4
 
 # Evaluation modes matching the paper:
