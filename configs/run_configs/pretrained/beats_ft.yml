@@ -28,7 +28,7 @@ sr: 16000
 debug_mode: false
 
 # Log training runs to MLflow
-logging: mlflow
+logging: wandb
 
 # Path to checkpoint to resume from (set to null or a path)
 resume_from_checkpoint: null
