@@ -11,7 +11,7 @@ set -euo pipefail
 source ~/slurm_env
 
 cd ~/representation-learning
-uv sync
+uv sync --group project-dev
 
 # Default values (can be overridden by args)
 CHECKPOINT=${1:-"gs://representation-learning/models/sl_beats_all.pt"}
