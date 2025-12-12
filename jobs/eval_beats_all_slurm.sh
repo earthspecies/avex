@@ -10,7 +10,7 @@
 set -euo pipefail
 source ~/slurm_env
 
-cd ~/code/representation-learning
+cd ~/representation-learning
 uv sync
 
 # Default values (can be overridden by args)
