@@ -205,12 +205,15 @@ class Model(ModelBase):
             self.backbone.to(device)
             self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
 
+        # Cache encoder dimension for heads/probes
+        self._encoder_dim = beats_cfg.encoder_embed_dim
+
         # ------------------------------------------------------------------
         # 2.  Optional classifier for supervised training
         # ------------------------------------------------------------------
         self._return_features_only = return_features_only
         if not return_features_only:
-            self.classifier = nn.Linear(768, num_classes)
+            self.classifier = nn.Linear(self._encoder_dim, num_classes)
         else:
             self.register_module("classifier", None)  # type: ignore[arg-type]
 
