@@ -259,18 +259,6 @@ class ModelSpec(BaseModel):
         None,
         description="Select between the original BEATs checkpoints and OpenBEATs HuggingFace checkpoints",
     )
-    openbeats_repo_id: Optional[str] = Field(
-        None,
-        description="HuggingFace repo id for OpenBEATs (e.g. 'espnet/OpenBEATS-Base-i3-as2m')",
-    )
-    openbeats_revision: Optional[str] = Field(
-        None,
-        description="Optional revision/commit for the OpenBEATs repo",
-    )
-    openbeats_checkpoint_file: Optional[str] = Field(
-        None,
-        description="Optional filename to load from the OpenBEATs repo (defaults to pytorch_model.bin/model.safetensors)",
-    )
     openbeats_size: Optional[Literal["base", "large"]] = Field(
         "base",
         description="Convenience selector for default OpenBEATs repo ids",

@@ -5,7 +5,6 @@ model_spec:
   pretrained: true
   beats_variant: openbeats
   openbeats_size: base
-  openbeats_repo_id: shikhar7ssu/OpenBEATs-Base-i2
   device: cuda
   audio_config:  # BEATs/OpenBEATs expect raw waveform
     sample_rate: 16000

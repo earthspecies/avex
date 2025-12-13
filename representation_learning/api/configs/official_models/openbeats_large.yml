@@ -5,7 +5,6 @@ model_spec:
   pretrained: true
   beats_variant: openbeats
   openbeats_size: large
-  openbeats_repo_id: shikhar7ssu/OpenBEATs-Large-i2
   device: cuda
   audio_config:
     sample_rate: 16000

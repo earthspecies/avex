@@ -26,20 +26,27 @@ BEATS_PRETRAINED_PATH_NATURELM = (
     "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 )
 
-OPENBEATS_DEFAULT_REPOS: Dict[str, str] = {
-    "base": "shikhar7ssu/OpenBEATs-Base-i2",
-    "large": "shikhar7ssu/OpenBEATs-Large-i2",
+OPENBEATS_CHECKPOINTS: Dict[str, Dict[str, str]] = {
+    "base": {"repo": "shikhar7ssu/OpenBEATs-Base-i2", "filename": "model.safetensors"},
+    "large": {"repo": "shikhar7ssu/OpenBEATs-Large-i2", "filename": "model.safetensors"},
 }
 
 
 def _load_openbeats_from_hub(
     repo_id: str,
+    checkpoint_file: str,
     *,
-    revision: Optional[str] = None,
-    checkpoint_file: Optional[str] = None,
     map_location: str | torch.device = "cpu",
 ) -> Tuple[Dict[str, torch.Tensor], Optional[Dict]]:
-    """Download an OpenBEATs checkpoint from Hugging Face and return state + cfg."""
+    """Download an OpenBEATs checkpoint from Hugging Face and return state + cfg.
+
+    Returns:
+        (state_dict, cfg_dict) where cfg_dict may be None if missing.
+
+    Raises:
+        ImportError: if huggingface_hub or safetensors are unavailable.
+        FileNotFoundError: if no checkpoint file is found in the repo snapshot.
+    """
     try:
         from huggingface_hub import snapshot_download
     except Exception as e:  # pragma: no cover - optional dependency path
@@ -50,27 +57,24 @@ def _load_openbeats_from_hub(
 
     cache_dir = snapshot_download(
         repo_id,
-        revision=revision,
-        allow_patterns=[checkpoint_file, "config.json"] if checkpoint_file else None,
+        allow_patterns=[checkpoint_file, "config.json"],
     )
     cache_dir = Path(cache_dir)
 
-    candidates: List[Path] = []
-    if checkpoint_file:
-        candidates.append(cache_dir / checkpoint_file)
-    # preferred defaults
-    candidates.extend(
-        [
-            cache_dir / "model.safetensors",
-            cache_dir / "pytorch_model.bin",
-        ]
-    )
-    # fallbacks
+    candidates: List[Path] = [cache_dir / checkpoint_file]
+    # shallow fallbacks
     candidates.extend(cache_dir.glob("*.safetensors"))
     candidates.extend(cache_dir.glob("*.bin"))
     candidates.extend(cache_dir.glob("*.pt"))
 
     checkpoint_path: Optional[Path] = next((p for p in candidates if p.exists()), None)
+
+    # If nothing matched in the root, search recursively (HF repos sometimes nest files)
+    if checkpoint_path is None:
+        recursive = []
+        for pattern in ("*.safetensors", "*.bin", "*.pt"):
+            recursive.extend(sorted(cache_dir.rglob(pattern)))
+        checkpoint_path = recursive[0] if recursive else None
     if checkpoint_path is None:
         raise FileNotFoundError(
             f"No checkpoint file found in {cache_dir}. "
@@ -151,9 +155,6 @@ class Model(ModelBase):
         fine_tuned: bool = False,
         disable_layerdrop: bool = False,
         beats_variant: Optional[str] = None,
-        openbeats_repo_id: Optional[str] = None,
-        openbeats_revision: Optional[str] = None,
-        openbeats_checkpoint_file: Optional[str] = None,
         openbeats_size: str = "base",
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
@@ -172,17 +173,16 @@ class Model(ModelBase):
         variant = (beats_variant or "beats").lower()
 
         if variant == "openbeats":
-            repo_id = openbeats_repo_id or OPENBEATS_DEFAULT_REPOS.get(openbeats_size, OPENBEATS_DEFAULT_REPOS["base"])
+            ckpt_info = OPENBEATS_CHECKPOINTS.get(openbeats_size, OPENBEATS_CHECKPOINTS["base"])
             state_dict, cfg_dict = _load_openbeats_from_hub(
-                repo_id,
-                revision=openbeats_revision,
-                checkpoint_file=openbeats_checkpoint_file,
+                ckpt_info["repo"],
+                ckpt_info["filename"],
                 map_location="cpu",
             )
             beats_cfg = BEATsConfig(cfg_dict or {})
             self.use_naturelm = False
             self.fine_tuned = False
-            logger.info(f"Loaded OpenBEATs weights from {repo_id}")
+            logger.info(f"Loaded OpenBEATs weights from {ckpt_info['repo']}")
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
             self.backbone.load_state_dict(state_dict, strict=False)
