@@ -1,0 +1,52 @@
+---
+# OpenBEATs Base (i2) pretrained backbone for evaluation
+model_spec:
+  name: beats
+  pretrained: true
+  beats_variant: openbeats
+  openbeats_size: base
+  openbeats_repo_id: shikhar7ssu/OpenBEATs-Base-i2
+  device: cuda
+  audio_config:  # BEATs/OpenBEATs expect raw waveform
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_base.yml
+
+output_dir: "./runs/openbeats_base_i2"
+run_name: openbeats_base_i2
+label_type: supervised
+
+preprocessing: null
+sr: 16000
+debug_mode: false
+
+logging: mlflow
+resume_from_checkpoint: null
+
+training_params:
+  train_epochs: 20
+  lr: 0.0001
+  batch_size: 64
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+scheduler:
+  name: cosine
+  warmup_steps: 500
+  min_lr: 1e-6
+
+loss_function: cross_entropy
+
+seed: 42
+num_workers: 10
+
+wandb_project: representation_learning
+
+augmentations: []
+
