@@ -140,6 +140,11 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         use_naturelm = getattr(model_config, "use_naturelm", False)
         fine_tuned = getattr(model_config, "fine_tuned", False)
         disable_layerdrop = getattr(model_config, "disable_layerdrop", False)
+        beats_variant = getattr(model_config, "beats_variant", None)
+        openbeats_repo_id = getattr(model_config, "openbeats_repo_id", None)
+        openbeats_revision = getattr(model_config, "openbeats_revision", None)
+        openbeats_checkpoint_file = getattr(model_config, "openbeats_checkpoint_file", None)
+        openbeats_size = getattr(model_config, "openbeats_size", "base")
 
         return BeatsModel(
             num_classes=num_classes,
@@ -149,6 +154,11 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             use_naturelm=use_naturelm,
             fine_tuned=fine_tuned,
             disable_layerdrop=disable_layerdrop,
+            beats_variant=beats_variant,
+            openbeats_repo_id=openbeats_repo_id,
+            openbeats_revision=openbeats_revision,
+            openbeats_checkpoint_file=openbeats_checkpoint_file,
+            openbeats_size=openbeats_size,
         )
     elif model_name == "eat_hf":
         from representation_learning.models.eat_hf import (

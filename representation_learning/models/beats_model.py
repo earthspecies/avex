@@ -4,8 +4,10 @@ This module provides BEATs Bidirectional Encoder representation from Audio Trans
 model implementation for audio representation learning tasks.
 """
 
+import json
 import logging
-from typing import List, Optional, Union
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -23,6 +25,95 @@ BEATS_PRETRAINED_PATH_SSL = "gs://representation-learning/pretrained/BEATs_iter3
 BEATS_PRETRAINED_PATH_NATURELM = (
     "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 )
+
+OPENBEATS_DEFAULT_REPOS: Dict[str, str] = {
+    "base": "shikhar7ssu/OpenBEATs-Base-i2",
+    "large": "shikhar7ssu/OpenBEATs-Large-i2",
+}
+
+
+def _load_openbeats_from_hub(
+    repo_id: str,
+    *,
+    revision: Optional[str] = None,
+    checkpoint_file: Optional[str] = None,
+    map_location: str | torch.device = "cpu",
+) -> Tuple[Dict[str, torch.Tensor], Optional[Dict]]:
+    """Download an OpenBEATs checkpoint from Hugging Face and return state + cfg."""
+    try:
+        from huggingface_hub import snapshot_download
+    except Exception as e:  # pragma: no cover - optional dependency path
+        raise ImportError(
+            "huggingface-hub is required to load OpenBEATs checkpoints. "
+            "Install via `pip install huggingface-hub`."
+        ) from e
+
+    cache_dir = snapshot_download(
+        repo_id,
+        revision=revision,
+        allow_patterns=[checkpoint_file, "config.json"] if checkpoint_file else None,
+    )
+    cache_dir = Path(cache_dir)
+
+    candidates: List[Path] = []
+    if checkpoint_file:
+        candidates.append(cache_dir / checkpoint_file)
+    # preferred defaults
+    candidates.extend(
+        [
+            cache_dir / "model.safetensors",
+            cache_dir / "pytorch_model.bin",
+        ]
+    )
+    # fallbacks
+    candidates.extend(cache_dir.glob("*.safetensors"))
+    candidates.extend(cache_dir.glob("*.bin"))
+    candidates.extend(cache_dir.glob("*.pt"))
+
+    checkpoint_path: Optional[Path] = next((p for p in candidates if p.exists()), None)
+    if checkpoint_path is None:
+        raise FileNotFoundError(
+            f"No checkpoint file found in {cache_dir}. "
+            "Pass `openbeats_checkpoint_file` to point at a specific file."
+        )
+
+    if checkpoint_path.suffix == ".safetensors":
+        try:
+            from safetensors.torch import load_file as safe_load
+        except Exception as e:  # pragma: no cover - optional dependency path
+            raise ImportError(
+                "safetensors is required to load safetensors OpenBEATs checkpoints. "
+                "Install via `pip install safetensors`."
+            ) from e
+
+        state = safe_load(checkpoint_path, device=map_location)
+    else:
+        state = torch.load(checkpoint_path, map_location=map_location)
+
+    cfg_dict: Optional[Dict] = None
+    state_dict: Dict[str, torch.Tensor]
+
+    if isinstance(state, dict):
+        cfg_dict = state.get("cfg") or state.get("config")
+        if "model" in state:
+            state_dict = state["model"]
+        elif "state_dict" in state:
+            state_dict = state["state_dict"]
+        else:
+            # assume the dict itself is already a state dict
+            state_dict = {k: v for k, v in state.items() if isinstance(v, torch.Tensor)}
+    else:
+        state_dict = state
+
+    if cfg_dict is None:
+        config_json = cache_dir / "config.json"
+        if config_json.exists():
+            try:
+                cfg_dict = json.loads(config_json.read_text())
+            except Exception:
+                logger.warning("Failed to parse OpenBEATs config.json; using defaults.")
+
+    return state_dict, cfg_dict
 
 
 class Model(ModelBase):
@@ -59,6 +150,11 @@ class Model(ModelBase):
         use_naturelm: bool = False,
         fine_tuned: bool = False,
         disable_layerdrop: bool = False,
+        beats_variant: Optional[str] = None,
+        openbeats_repo_id: Optional[str] = None,
+        openbeats_revision: Optional[str] = None,
+        openbeats_checkpoint_file: Optional[str] = None,
+        openbeats_size: str = "base",
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
@@ -73,24 +169,41 @@ class Model(ModelBase):
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
 
-        if fine_tuned:
-            beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
-        else:
-            beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
+        variant = (beats_variant or "beats").lower()
 
-        beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
-        self.use_naturelm = use_naturelm
-        self.fine_tuned = fine_tuned
-        beats_cfg = BEATsConfig(beats_ckpt["cfg"])
-        print(beats_cfg)
-        if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
-            beats_ckpt_naturelm = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+        if variant == "openbeats":
+            repo_id = openbeats_repo_id or OPENBEATS_DEFAULT_REPOS.get(openbeats_size, OPENBEATS_DEFAULT_REPOS["base"])
+            state_dict, cfg_dict = _load_openbeats_from_hub(
+                repo_id,
+                revision=openbeats_revision,
+                checkpoint_file=openbeats_checkpoint_file,
+                map_location="cpu",
+            )
+            beats_cfg = BEATsConfig(cfg_dict or {})
+            self.use_naturelm = False
+            self.fine_tuned = False
+            logger.info(f"Loaded OpenBEATs weights from {repo_id}")
+            self.backbone = BEATs(beats_cfg)
+            self.backbone.to(device)
+            self.backbone.load_state_dict(state_dict, strict=False)
         else:
-            beats_ckpt_naturelm = beats_ckpt["model"]
-        # beats_ckpt_naturelm = beats_ckpt
-        self.backbone = BEATs(beats_cfg)
-        self.backbone.to(device)
-        self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
+            if fine_tuned:
+                beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
+            else:
+                beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
+
+            beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
+            self.use_naturelm = use_naturelm
+            self.fine_tuned = fine_tuned
+            beats_cfg = BEATsConfig(beats_ckpt["cfg"])
+            print(beats_cfg)
+            if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
+                beats_ckpt_naturelm = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+            else:
+                beats_ckpt_naturelm = beats_ckpt["model"]
+            self.backbone = BEATs(beats_cfg)
+            self.backbone.to(device)
+            self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
 
         # ------------------------------------------------------------------
         # 2.  Optional classifier for supervised training
@@ -164,6 +277,8 @@ class Model(ModelBase):
         self,
         x: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
+        *,
+        framewise: bool = False,
     ) -> torch.Tensor:  # noqa: D401 – keep signature consistent
         """Forward pass.
 
@@ -180,8 +295,9 @@ class Model(ModelBase):
         torch.Tensor
             • When *return_features_only* is **False**: logits of shape
               ``(batch, num_classes)``
-            • Otherwise: unpooled frame-level features of shape
-              ``(batch, num_frames, encoder_embed_dim)``
+            • Otherwise: pooled features of shape ``(batch, encoder_embed_dim)`` by
+              default, or frame-level features ``(batch, num_frames, encoder_embed_dim)``
+              when ``framewise=True``.
         """
         # Optional audio pre-processing
         x = self.process_audio(x)
@@ -192,7 +308,16 @@ class Model(ModelBase):
         # frame_padding: (B, T') or None
 
         if self._return_features_only:
-            return features
+            if framewise:
+                return features
+
+            if frame_padding is not None and frame_padding.any():
+                masked_features = features.clone()
+                masked_features[frame_padding] = 0.0  # Zero-out padded frames
+                valid_counts = (~frame_padding).sum(dim=1, keepdim=True).clamp(min=1)
+                return masked_features.sum(dim=1) / valid_counts
+
+            return features.mean(dim=1)
 
         # ------------------------------------------------------------------
         # 3.  Masked mean-pooling over the temporal dimension

@@ -1,0 +1,17 @@
+---
+# OpenBEATs base model (pretrained) loaded from Hugging Face
+# Default repo id can be overridden via openbeats_repo_id
+model_spec:
+  name: beats
+  pretrained: true
+  beats_variant: openbeats
+  openbeats_size: base
+  openbeats_repo_id: shikhar7ssu/OpenBEATs-Base-i2
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw  # OpenBEATs expects raw waveform
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+

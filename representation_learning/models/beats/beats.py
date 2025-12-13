@@ -41,7 +41,10 @@ class BEATsConfig:
         Args:
             cfg: Optional dictionary containing configuration parameters
         """
-        self.input_patch_size: int = -1  # path size of patch embedding
+        # The original BEATs and OpenBEATs checkpoints use a 16x16 patch embed.
+        # Keep this as a sensible default so that loading HF OpenBEATs works
+        # even if the checkpoint config omits the field.
+        self.input_patch_size: int = 16  # path size of patch embedding
         self.embed_dim: int = 512  # patch embedding dimension
         self.conv_bias: bool = False  # include bias in conv encoder
 
