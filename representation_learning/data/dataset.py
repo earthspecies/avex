@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import multiprocessing
 import random
+from pathlib import Path
 from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
@@ -132,12 +133,24 @@ def _build_one_dataset_split(
     try:
         ds_list = []
         for ds_cfg in cfg_list:
+            # Check if data_root is specified but doesn't exist
+            if hasattr(ds_cfg, "data_root") and ds_cfg.data_root:
+                data_root_path = Path(str(ds_cfg.data_root))
+                if not data_root_path.exists():
+                    logger.warning(
+                        f"data_root '{ds_cfg.data_root}' not found for dataset '{ds_cfg.dataset_name}'. "
+                        f"Using default cloud path."
+                    )
+                    ds_cfg.data_root = None
+
             ds, metadata = dataset_from_config(ds_cfg)
             ds_list.append((ds, metadata))
 
         if concatenate and len(ds_list) > 1:
             # Concatenate all training datasets into one
-            ds = ConcatenatedDataset([d[0] for d in ds_list], merge_level=concatenate_method)
+            ds = ConcatenatedDataset(
+                [d[0] for d in ds_list], merge_level=concatenate_method
+            )
 
             return ds, ds_list[0][1]  # return first metadata as representative
 
@@ -145,7 +158,9 @@ def _build_one_dataset_split(
         else:
             return ds_list[0]
     except Exception as e:
-        raise ValueError(f"Failed to load training datasets.Error: {e}\nCheck your dataset configurations.") from e
+        raise ValueError(
+            f"Failed to load training datasets.Error: {e}\nCheck your dataset configurations."
+        ) from e
 
 
 def _build_datasets(
@@ -177,10 +192,14 @@ def _build_datasets(
             train_metadata.update(additional_metadata)
 
     # Build validation
-    val_ds, _ = _build_one_dataset_split(cfg.val_datasets, cfg.concatenate_val, cfg.concatenate_method)
+    val_ds, _ = _build_one_dataset_split(
+        cfg.val_datasets, cfg.concatenate_val, cfg.concatenate_method
+    )
 
     # Build test
-    test_ds, _ = _build_one_dataset_split(cfg.test_datasets, cfg.concatenate_test, cfg.concatenate_method)
+    test_ds, _ = _build_one_dataset_split(
+        cfg.test_datasets, cfg.concatenate_test, cfg.concatenate_method
+    )
 
     # Extract label information from transform metadata
     label_map = {}
@@ -190,7 +209,10 @@ def _build_datasets(
     if "labels_from_features" in train_metadata:
         label_transform_metadata = train_metadata["labels_from_features"]
         label_map = label_transform_metadata.get("label_map", {})
-        if "num_classes" in label_transform_metadata and label_transform_metadata["num_classes"] > 0:
+        if (
+            "num_classes" in label_transform_metadata
+            and label_transform_metadata["num_classes"] > 0
+        ):
             num_classes = label_transform_metadata["num_classes"]
         else:
             num_classes = len(label_map)
@@ -205,7 +227,10 @@ def _build_datasets(
     elif "label_from_feature" in train_metadata:
         label_transform_metadata = train_metadata["label_from_feature"]
         label_map = label_transform_metadata.get("label_map", {})
-        if "num_classes" in label_transform_metadata and label_transform_metadata["num_classes"] > 0:
+        if (
+            "num_classes" in label_transform_metadata
+            and label_transform_metadata["num_classes"] > 0
+        ):
             num_classes = label_transform_metadata["num_classes"]
         else:
             num_classes = len(label_map)
@@ -294,7 +319,9 @@ class Collater:
 
             # Handle rare corrupted audio without crashing
             if torch.isnan(wav).any() or torch.isinf(wav).any():
-                logger.warning(f"Corrupted audio detected (NaN/Inf), replacing with zeros. Shape: {wav.shape}")
+                logger.warning(
+                    f"Corrupted audio detected (NaN/Inf), replacing with zeros. Shape: {wav.shape}"
+                )
                 wav = torch.zeros_like(wav)
 
             # Handle multichannel audio by taking mean across channels
@@ -307,7 +334,9 @@ class Collater:
                 if wav.size(-1) > dataset_max_samples:
                     # Apply dataset constraint truncation with same window
                     # selection strategy
-                    wav, _ = pad_or_window(wav, dataset_max_samples, self.window_selection)
+                    wav, _ = pad_or_window(
+                        wav, dataset_max_samples, self.window_selection
+                    )
 
             # Step 2: Apply model requirement (pad/truncate to target length)
             wav, pad_mask = pad_or_window(
@@ -488,7 +517,9 @@ def build_dataloaders(
     if data_config is None:
         data_config = cfg.dataset_config
 
-    ds_train, ds_val, ds_test = _build_datasets(data_config, postprocessors=postprocessors, label_type=cfg.label_type)
+    ds_train, ds_val, ds_test = _build_datasets(
+        data_config, postprocessors=postprocessors, label_type=cfg.label_type
+    )
 
     num_labels = ds_train.metadata.get("num_labels", 0)
 
@@ -503,7 +534,9 @@ def build_dataloaders(
         else:
             # For classification tasks (or unknown task types), require multiple classes
             if num_labels <= 1:
-                raise ValueError("Dataset must have more than one label for classification tasks.")
+                raise ValueError(
+                    "Dataset must have more than one label for classification tasks."
+                )
     # For CLAP/CLIP models (label_type="text"), numeric labels are not required
 
     logger.info(f"Train data size : {len(ds_train)} samples")

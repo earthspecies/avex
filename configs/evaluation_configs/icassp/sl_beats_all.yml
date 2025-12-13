@@ -1,10 +1,6 @@
 # On which datasets to run the evaluation and which metrics to use
 dataset_config: configs/data_configs/benchmark.yml
 
-# Enable wandb logging for evaluation results
-logging: wandb
-wandb_project: representation_learning_eval
-
 training_params:
   train_epochs: 50
   lr: 0.001

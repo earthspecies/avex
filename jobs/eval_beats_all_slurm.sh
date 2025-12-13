@@ -5,7 +5,6 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-eval-beats-all"
 #SBATCH --cpus-per-gpu=9
-#SBATCH --nodelist=slurm-8x-a100-40gb-1
 
 set -euo pipefail
 source ~/slurm_env

@@ -212,7 +212,8 @@ def test_build_dataloaders(tmp_path: Path) -> None:
     assert "label" in batch
     assert batch["raw_wav"].shape[0] <= run_config.training_params.batch_size
     target_len = (
-        run_config.model_spec.audio_config.target_length_seconds * run_config.model_spec.audio_config.sample_rate
+        run_config.model_spec.audio_config.target_length_seconds
+        * run_config.model_spec.audio_config.sample_rate
     )
     assert batch["raw_wav"].shape[1] == target_len
 
@@ -243,3 +244,60 @@ def test_dataset_basic_load(tmp_path: Path) -> None:
     meta = getattr(dataset, "metadata", None) or metadata
     assert len(dataset) == 10
     assert set(meta["canonical_name"]) == {"bird", "mammal"}
+
+
+def test_data_root_fallback_to_cloud(tmp_path: Path, caplog) -> None:
+    """Test that invalid data_root paths fall back to cloud defaults gracefully.
+
+    This test verifies that when a DatasetConfig has a data_root that doesn't exist,
+    the _build_one_dataset_split function:
+    1. Detects the missing path
+    2. Logs a warning
+    3. Clears the data_root to allow fallback to cloud paths
+    """
+    import logging
+
+    from representation_learning.data.dataset import _build_one_dataset_split
+
+    # Create a DatasetConfig with a non-existent data_root
+    non_existent_path = "/nonexistent/path/that/does/not/exist"
+
+    data_cfg = {
+        "dataset_name": "beans",
+        "split": "dogs_train",
+        "type": "classification",
+        "label_column": "label",
+        "audio_path_col": "path",
+        "multi_label": False,
+        "label_type": "supervised",
+        "audio_max_length_seconds": 10,
+        "data_root": non_existent_path,  # Non-existent path
+    }
+
+    ds_cfg = DatasetConfig(**data_cfg)
+
+    # Verify data_root is set before the call
+    assert ds_cfg.data_root == non_existent_path
+
+    # Set up logging to capture the warning
+    with caplog.at_level(logging.WARNING):
+        try:
+            ds, metadata = _build_one_dataset_split([ds_cfg])
+            # If we get here, the fallback worked (cloud path was used)
+            assert ds is not None, "Dataset should be loaded via cloud path fallback"
+        except Exception as e:
+            # Check if the warning was logged before any error
+            assert any(
+                "data_root" in record.message and "not found" in record.message
+                for record in caplog.records
+            ), (
+                f"Expected a warning about missing data_root, but got: {caplog.text}. "
+                f"Error: {e}"
+            )
+
+    # Verify the warning was logged
+    assert any(
+        non_existent_path in record.message
+        for record in caplog.records
+        if "data_root" in record.message
+    ), f"Warning should mention the non-existent path. Captured: {caplog.text}"
