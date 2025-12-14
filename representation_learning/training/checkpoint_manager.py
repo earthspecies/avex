@@ -151,6 +151,31 @@ class CheckpointManager:
         # Save metadata
         self._save_metadata(base_dir, filename, is_best, is_final)
 
+        # Optionally log to wandb as an artifact
+        if (
+            self.experiment_logger is not None
+            and getattr(self.experiment_logger, "backend", None) == "wandb"
+            and getattr(self.run_config, "log_checkpoints_to_wandb", False)
+        ):
+            try:
+                run_handle = self.experiment_logger.handle
+                artifact = run_handle.Artifact  # type: ignore[attr-defined]
+            except Exception:
+                artifact = None
+
+            try:
+                if artifact is not None:
+                    art = artifact(
+                        name=f"{self.run_config.run_name}-{filename}",  # type: ignore[union-attr]
+                        type="model",
+                        metadata={"is_best": is_best, "is_final": is_final, "epoch": epoch},
+                    )
+                    art.add_file(str(ckpt_path))
+                    run_handle.log_artifact(art)  # type: ignore[attr-defined]
+                    logger.info("Logged checkpoint to wandb artifact: %s", filename)
+            except Exception as e:  # pragma: no cover - best-effort logging
+                logger.warning("Failed to log checkpoint to wandb: %s", e)
+
     def load_checkpoint(
         self,
         checkpoint_path: str | AnyPathT,

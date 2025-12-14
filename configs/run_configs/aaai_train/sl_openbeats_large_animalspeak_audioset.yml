@@ -23,6 +23,7 @@ preprocessing: null
 sr: 16000
 debug_mode: false
 logging: wandb
+log_checkpoints_to_wandb: true
 resume_from_checkpoint: null
 
 training_params:

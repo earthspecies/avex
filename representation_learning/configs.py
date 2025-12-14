@@ -707,6 +707,7 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     num_workers: int = 4
     run_name: Optional[str] = None
     wandb_project: str = "audio‑experiments"
+    log_checkpoints_to_wandb: bool = False
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     # Clustering evaluation configuration
     clustering_eval: Optional[ClusteringEvalConfig] = Field(
