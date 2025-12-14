@@ -163,6 +163,47 @@ def _build_one_dataset_split(
         ) from e
 
 
+def _coerce_transformations(transforms: list | None):
+    """Coerce raw dict transforms into esp-data config objects."""
+    if not transforms:
+        return None
+    try:
+        from esp_data.transforms.deduplicate import DeduplicateConfig
+        from esp_data.transforms.filter import FilterConfig
+        from esp_data.transforms.label_from_feature import LabelFromFeatureConfig
+        from esp_data.transforms.multilabel_from_features import (
+            MultiLabelFromFeaturesConfig,
+        )
+        from esp_data.transforms.subsample import SubsampleConfig
+        from esp_data.transforms.uniform_sample import UniformSampleConfig
+    except Exception:
+        # If esp_data is not available, just return original (fail later in apply_transformations)
+        return transforms
+
+    mapping = {
+        "deduplicate": DeduplicateConfig,
+        "filter": FilterConfig,
+        "label_from_feature": LabelFromFeatureConfig,
+        "labels_from_features": MultiLabelFromFeaturesConfig,
+        "subsample": SubsampleConfig,
+        "uniform_sample": UniformSampleConfig,
+    }
+
+    coerced = []
+    for t in transforms:
+        if isinstance(t, tuple(mapping.values())):
+            coerced.append(t)
+        elif isinstance(t, dict):
+            t_type = t.get("type")
+            cls = mapping.get(t_type)
+            if cls is None:
+                raise ValueError(f"Unknown transform type: {t_type}")
+            coerced.append(cls(**t))
+        else:
+            raise ValueError(f"Unsupported transform spec: {t}")
+    return coerced
+
+
 def _build_datasets(
     cfg: DatasetCollectionConfig,
     postprocessors: list[Callable],
@@ -185,8 +226,10 @@ def _build_datasets(
         cfg.train_datasets, cfg.concatenate_train, cfg.concatenate_method
     )
 
-    if cfg.transformations:
-        additional_metadata = train_ds.apply_transformations(cfg.transformations)
+    coerced_transforms = _coerce_transformations(cfg.transformations)
+
+    if coerced_transforms:
+        additional_metadata = train_ds.apply_transformations(coerced_transforms)
         if additional_metadata:
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
@@ -218,10 +261,10 @@ def _build_datasets(
             num_classes = len(label_map)
 
         # Apply same transformations to val/test datasets to ensure consistency
-        if val_ds and cfg.transformations:
-            val_ds.apply_transformations(cfg.transformations)
-        if test_ds and cfg.transformations:
-            test_ds.apply_transformations(cfg.transformations)
+        if val_ds and coerced_transforms:
+            val_ds.apply_transformations(coerced_transforms)
+        if test_ds and coerced_transforms:
+            test_ds.apply_transformations(coerced_transforms)
 
     # Handle single-label case - check for label_from_feature transform metadata
     elif "label_from_feature" in train_metadata:
@@ -236,10 +279,10 @@ def _build_datasets(
             num_classes = len(label_map)
 
         # Apply same transformations to val/test datasets to ensure consistency
-        if val_ds and cfg.transformations:
-            val_ds.apply_transformations(cfg.transformations)
-        if test_ds and cfg.transformations:
-            test_ds.apply_transformations(cfg.transformations)
+        if val_ds and coerced_transforms:
+            val_ds.apply_transformations(coerced_transforms)
+        if test_ds and coerced_transforms:
+            test_ds.apply_transformations(coerced_transforms)
 
     train_ds = AudioDataset(
         train_ds,
