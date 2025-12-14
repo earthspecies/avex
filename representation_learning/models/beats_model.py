@@ -55,10 +55,8 @@ def _load_openbeats_from_hub(
             "Install via `pip install huggingface-hub`."
         ) from e
 
-    cache_dir = snapshot_download(
-        repo_id,
-        allow_patterns=[checkpoint_file, "config.json"],
-    )
+    # Download the full snapshot; we search for the checkpoint locally.
+    cache_dir = snapshot_download(repo_id)
     cache_dir = Path(cache_dir)
 
     candidates: List[Path] = [cache_dir / checkpoint_file]
