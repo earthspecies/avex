@@ -23,8 +23,8 @@ experiments:
       input_processing: "pooled"
       target_layers: ["last_layer"]
       freeze_backbone: true
-      online_training: true
-    pretrained: true
+      online_training: false
+    pretrained: false
 
 save_dir: evaluation_results/icassp/openbeats_base_i2
 results_csv_path: evaluation_results/icassp/all_models_results.csv
