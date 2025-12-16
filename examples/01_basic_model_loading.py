@@ -24,8 +24,8 @@ import argparse
 import torch
 
 from representation_learning import describe_model, get_model_spec, list_models, load_model
-from representation_learning.api import build_probe_from_config
 from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 
 

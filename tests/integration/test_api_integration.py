@@ -13,8 +13,8 @@ from representation_learning import (
     list_models,
     load_model,
 )
-from representation_learning.api import build_probe_from_config
 from representation_learning.configs import ModelSpec, ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 
 

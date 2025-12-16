@@ -30,14 +30,12 @@ import torch
 
 from representation_learning import (
     get_checkpoint_path,
-    get_model_spec,
     list_models,
     load_label_mapping,
     load_model,
 )
-from representation_learning.api import build_probe_from_config
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.utils.factory import build_model_from_spec
+from representation_learning.models.probes.utils import build_probe_from_config
 
 
 def main(device: str = "cpu") -> None:
@@ -69,13 +67,26 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: Load Model with Default Checkpoint")
     print("-" * 50)
 
-    model_spec = get_model_spec("efficientnet_animalspeak")
+    # Load model with default checkpoint from YAML
+    # load_model() automatically loads the checkpoint specified in the YAML config
+    model = load_model("efficientnet_animalspeak", device=device)
+    model.eval()
 
-    # Build backbone-only model from spec
-    backbone = build_model_from_spec(model_spec, device=device).to(device)
+    print(f"Loaded model: {type(model).__name__}")
+    print(f"   Has classifier: {hasattr(model, 'classifier') and model.classifier is not None}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    # Test forward pass
+    dummy_input = torch.randn(1, 16000 * 5, device=device)
+    with torch.no_grad():
+        output = model(dummy_input, padding_mask=None)
+    print(f"   Output shape: {output.shape}")
+
+    # Load backbone-only and attach a new probe
+    print("\n   Alternative: Load backbone-only and attach new probe")
+    backbone = load_model("efficientnet_animalspeak", device=device, return_features_only=True)
     backbone.eval()
 
-    # Attach a linear probe for a 10-class task
     probe_cfg = ProbeConfig(
         probe_type="linear",
         target_layers=["last_layer"],
@@ -83,20 +94,14 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model = build_probe_from_config(
+    model_with_probe = build_probe_from_config(
         probe_config=probe_cfg,
         base_model=backbone,
         num_classes=10,
         device=device,
     ).to(device)
 
-    print(f"Loaded backbone: {type(backbone).__name__}")
-    print(f"   Parameters (backbone + probe): {sum(p.numel() for p in model.parameters()):,}")
-
-    dummy_input = torch.randn(1, 16000 * 5, device=device)
-    with torch.no_grad():
-        output = model(dummy_input, padding_mask=None)
-    print(f"   Output shape: {output.shape}")
+    print(f"   Backbone + probe parameters: {sum(p.numel() for p in model_with_probe.parameters()):,}")
 
     # =========================================================================
     # Part 3: Load model with custom checkpoint
@@ -127,44 +132,9 @@ def main(device: str = "cpu") -> None:
     print(f"   Feature shape: {feats.shape}")
 
     # =========================================================================
-    # Part 4: Load model with explicit num_classes
+    # Part 4: Class mapping for models with classifier heads
     # =========================================================================
-    print("\nPart 4: Linear Probe for a New Task (Replacing num_classes)")
-    print("-" * 50)
-    print("Note: Instead of passing num_classes to load_model, attach a new probe head.")
-
-    # Load backbone with default checkpoint
-    backbone_new_task = load_model("efficientnet_animalspeak", device=device)
-    backbone_new_task.eval()
-
-    # Attach a new linear probe with 20 classes
-    new_task_classes = 20
-    probe_cfg_new = ProbeConfig(
-        probe_type="linear",
-        target_layers=["last_layer"],
-        aggregation="mean",
-        freeze_backbone=True,
-        online_training=True,
-    )
-    model_new_task = build_probe_from_config(
-        probe_config=probe_cfg_new,
-        base_model=backbone_new_task,
-        num_classes=new_task_classes,
-        device=device,
-    ).to(device)
-
-    print(f"Loaded backbone for new task: {type(backbone_new_task).__name__}")
-
-    dummy_input = torch.randn(2, 16000 * 3, device=device)
-    with torch.no_grad():
-        output = model_new_task(dummy_input, padding_mask=None)
-    print(f"   Output shape: {output.shape}")
-    print(f"   num_classes (probe): {output.shape[-1]}")
-
-    # =========================================================================
-    # Part 5: Class mapping for models with classifier heads
-    # =========================================================================
-    print("\nPart 5: Class Mapping")
+    print("\nPart 4: Class Mapping")
     print("-" * 50)
 
     model_name = "sl_beats_animalspeak"

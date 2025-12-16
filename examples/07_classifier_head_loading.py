@@ -24,12 +24,19 @@ from pathlib import Path
 import torch
 
 from representation_learning import load_model
-from representation_learning.api import build_probe_from_config
 from representation_learning.configs import ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
 
 
 def main(device: str = "cpu") -> None:
-    """Demonstrate classifier head and probe behavior."""
+    """Demonstrate classifier head and probe behavior.
+
+    Args:
+        device: Device to use for model and data.
+
+    Raises:
+        ValueError: If model does not have a classifier when expected.
+    """
     print("Example 7: Classifier Head and Probe Behavior")
     print("=" * 60)
 
@@ -47,6 +54,14 @@ def main(device: str = "cpu") -> None:
     print("\nLoading BEATs model with classifier from checkpoint ...")
     model = load_model("sl_beats_animalspeak", device=device)
     model = model.to(device)
+
+    # Check if model has a classifier (it should if loaded from checkpoint with classifier weights)
+    if not hasattr(model, "classifier") or model.classifier is None:
+        raise ValueError(
+            "Model does not have a classifier. This might happen if the checkpoint "
+            "doesn't contain classifier weights or if the model was loaded in "
+            "return_features_only mode."
+        )
 
     # Store the original classifier weights from the checkpoint
     original_classifier_weight = model.classifier.weight.clone()

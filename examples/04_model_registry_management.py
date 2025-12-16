@@ -31,8 +31,8 @@ from representation_learning import (
     list_models,
     register_model,
 )
-from representation_learning.api import build_probe_from_config
 from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 from representation_learning.models.utils.registry import load_model_spec_from_yaml
 
@@ -131,7 +131,7 @@ def main(device: str = "cpu") -> None:
     # Attach a simple linear probe for classification
     probe_config = ProbeConfig(
         probe_type="linear",
-        target_layers=["backbone"],
+        target_layers=["last_layer"],
         aggregation="mean",
         freeze_backbone=True,
         online_training=True,
@@ -198,7 +198,7 @@ def main(device: str = "cpu") -> None:
 
     probe_config = ProbeConfig(
         probe_type="linear",
-        target_layers=["backbone"],
+        target_layers=["last_layer"],
         aggregation="mean",
         freeze_backbone=True,
         online_training=True,

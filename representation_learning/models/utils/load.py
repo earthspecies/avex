@@ -235,9 +235,50 @@ def _load_from_modelspec(
         kwargs["return_features_only"] = True
         logger.info(f"Loading {model_type} model in embedding extraction mode (return_features_only=True)")
 
-    # If no checkpoint and not in embedding mode, we no longer support creating
+    # Extract num_classes from checkpoint if not provided and checkpoint exists
+    # This must happen BEFORE building the model so the model is created with the correct classifier
+    if checkpoint_path and "num_classes" not in kwargs and not return_features_only:
+        extracted_num_classes = _extract_num_classes_from_checkpoint(checkpoint_path, device)
+        if extracted_num_classes is not None:
+            kwargs["num_classes"] = extracted_num_classes
+            logger.info(f"Extracted num_classes={extracted_num_classes} from checkpoint")
+        elif registry_key is not None:
+            # Fallback: try to get num_classes from label mapping
+            label_mapping = load_label_mapping(registry_key)
+            if label_mapping and "label_to_index" in label_mapping:
+                num_classes = len(label_mapping["label_to_index"])
+                kwargs["num_classes"] = num_classes
+                logger.info(f"Extracted num_classes={num_classes} from label mapping")
+        else:
+            # Checkpoint exists but no num_classes found - likely a backbone-only checkpoint
+            # Automatically enable embedding mode for models that support it
+            if supports_return_features_only:
+                return_features_only = True
+                kwargs["return_features_only"] = True
+                logger.info(
+                    f"Checkpoint found but no classifier detected; loading {model_type} in embedding extraction mode"
+                )
+
+    # If pretrained=True, pretrained weights are typically backbone-only (no classifier)
+    # Automatically enable embedding mode for models that support it
+    if model_spec.pretrained and not checkpoint_path and supports_return_features_only and not return_features_only:
+        return_features_only = True
+        kwargs["return_features_only"] = True
+        logger.info(
+            f"Model '{registry_key or model_type}' has pretrained=True (backbone-only); "
+            "automatically enabling embedding extraction mode"
+        )
+
+    # If no checkpoint and not in embedding mode and not pretrained, we no longer support creating
     # new classifier heads via load_model. Use backbones + probes instead.
-    if not checkpoint_path and not return_features_only and not model_spec.pretrained:
+    # Exception: If the model supports return_features_only, let it handle num_classes=None
+    # (e.g., BEATs automatically sets return_features_only=True when num_classes=None)
+    if (
+        not checkpoint_path
+        and not return_features_only
+        and not model_spec.pretrained
+        and not supports_return_features_only
+    ):
         raise ValueError(
             "load_model() without a checkpoint no longer creates new classifier heads. "
             "Build a backbone with build_model()/build_model_from_spec() and attach "
@@ -331,15 +372,27 @@ def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> O
                 logger.warning("Could not find classifier/head weights in checkpoint")
                 return None
 
-            for key in classifier_keys:
+            # Find the final output layer (typically the last classifier layer with smallest output dim)
+            # Sort keys to process in order, and prefer the last one (final output layer)
+            classifier_keys_sorted = sorted(classifier_keys)
+            for key in reversed(classifier_keys_sorted):  # Process from last to first
                 if "weight" in key and len(processed_state_dict[key].shape) == 2:
-                    num_classes = processed_state_dict[key].shape[0]
-                    logger.info(f"Found num_classes={num_classes} from {key}")
-                    return num_classes
+                    # For 2D weight matrices, the first dimension is typically the output size
+                    # But for the final layer, we want the smallest output dimension
+                    output_dim = processed_state_dict[key].shape[0]
+                    # Heuristic: final output layer usually has output_dim < 1000 (reasonable num_classes)
+                    # and is one of the last layers
+                    if output_dim < 10000:  # Reasonable upper bound for num_classes
+                        num_classes = output_dim
+                        logger.info(f"Found num_classes={num_classes} from {key}")
+                        return num_classes
                 elif "bias" in key and len(processed_state_dict[key].shape) == 1:
-                    num_classes = processed_state_dict[key].shape[0]
-                    logger.info(f"Found num_classes={num_classes} from {key}")
-                    return num_classes
+                    # For bias vectors, the length is the output size
+                    output_dim = processed_state_dict[key].shape[0]
+                    if output_dim < 10000:  # Reasonable upper bound for num_classes
+                        num_classes = output_dim
+                        logger.info(f"Found num_classes={num_classes} from {key}")
+                        return num_classes
 
             # Look for metadata in original checkpoint
             if "num_classes" in checkpoint:
