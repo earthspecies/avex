@@ -17,6 +17,7 @@ from .models.utils.registry import (
     get_model_class,
     get_model_spec,
     list_model_classes,
+    list_model_layers,
     list_models,
     register_model,
     register_model_class,
@@ -38,6 +39,7 @@ __all__ = [
     "get_model_spec",
     "list_models",
     "describe_model",
+    "list_model_layers",
     # Model class management
     "register_model_class",
     "get_model_class",
