@@ -633,10 +633,14 @@ def list_model_layers(
         ValueError: If model name is not found in registry or model doesn't support layer discovery
 
     Example:
-        >>> layers_info = list_model_layers("beats_naturelm")
-        >>> print(layers_info["layers"])  # List of all probe-available layer names
-        >>> print(layers_info["last_layer"])  # What "last_layer" resolves to
-        >>> print(layers_info["special_options"])  # ["last_layer", "all"]
+        >>> # Note: Loading a model may print config information
+        >>> layers_info = list_model_layers("beats_naturelm")  # doctest: +SKIP
+        >>> "layers" in layers_info  # doctest: +SKIP
+        True
+        >>> "last_layer" in layers_info  # doctest: +SKIP
+        True
+        >>> layers_info["special_options"]  # doctest: +SKIP
+        ['last_layer', 'all']
     """
     from .load import load_model  # Avoid circular import
 
