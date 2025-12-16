@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 
 def load_model(
     model: Union[str, Path, ModelSpec],
-    num_classes: Optional[int] = None,
     device: str = "cpu",
     checkpoint_path: Optional[str] = None,
+    return_features_only: bool = False,
     **kwargs: object,
 ) -> object:
     """Load a complete model (architecture + optionally pre-trained weights).
@@ -66,10 +66,9 @@ def load_model(
 
     Args:
         model: Model identifier, config file path, or ModelSpec object
-        num_classes: Number of output classes (optional - extracted from
-            checkpoint if available)
         device: Device to load the model on ("cpu", "cuda", etc.)
         checkpoint_path: Optional path to checkpoint weights (supports gs:// paths)
+        return_features_only: If True, force embedding extraction mode when supported
         **kwargs: Additional arguments passed to model creation
 
     Returns:
@@ -105,10 +104,10 @@ def load_model(
             logger.info(f"Loading registered model: {model}")
             return _load_from_modelspec(
                 model_spec,
-                num_classes,
-                device,
-                checkpoint_path,
+                device=device,
+                checkpoint_path=checkpoint_path,
                 registry_key=model,
+                return_features_only=return_features_only,
                 **kwargs,
             )
 
@@ -121,10 +120,10 @@ def load_model(
             register_model(model_name, spec)
             return _load_from_modelspec(
                 spec,
-                num_classes,
-                device,
-                checkpoint_path,
+                device=device,
+                checkpoint_path=checkpoint_path,
                 registry_key=model_name,
+                return_features_only=return_features_only,
                 **kwargs,
             )
 
@@ -138,11 +137,23 @@ def load_model(
 
     elif isinstance(model, Path):
         # Handle Path objects by converting to string
-        return load_model(str(model), num_classes, device, checkpoint_path, **kwargs)
+        return load_model(
+            str(model),
+            device=device,
+            checkpoint_path=checkpoint_path,
+            return_features_only=return_features_only,
+            **kwargs,
+        )
 
     elif isinstance(model, ModelSpec):
         logger.info("Loading model from ModelSpec object")
-        return _load_from_modelspec(model, num_classes, device, checkpoint_path, **kwargs)
+        return _load_from_modelspec(
+            model,
+            device=device,
+            checkpoint_path=checkpoint_path,
+            return_features_only=return_features_only,
+            **kwargs,
+        )
 
     else:
         raise TypeError(f"Unsupported model type: {type(model)}. Expected str, Path, or ModelSpec.")
@@ -150,10 +161,10 @@ def load_model(
 
 def _load_from_modelspec(
     model_spec: ModelSpec,
-    num_classes: Optional[int],
     device: str,
     checkpoint_path: Optional[str],
     registry_key: Optional[str] = None,
+    return_features_only: bool = False,
     **kwargs: object,
 ) -> object:
     """Load from ModelSpec object using factory + checkpoint loading.
@@ -166,13 +177,6 @@ def _load_from_modelspec(
     """
     # Override device
     model_spec.device = device
-
-    # Check if return_features_only is explicitly requested
-    return_features_only = kwargs.get("return_features_only", False)
-
-    # Track if num_classes was originally None (means we want to keep classifier)
-    # But only if return_features_only is False
-    num_classes_was_none = num_classes is None and not return_features_only
 
     # Determine checkpoint path with priority:
     # 1. User-provided checkpoint_path parameter (highest priority - already handled)
@@ -218,7 +222,7 @@ def _load_from_modelspec(
     if checkpoint_path:
         model_spec.pretrained = False
 
-    # Determine return_features_only and num_classes logic
+    # Determine model type (string) for conditional behavior
     model_type = model_spec.name
     model_class = get_model_class(model_type)
     supports_return_features_only = False
@@ -226,62 +230,22 @@ def _load_from_modelspec(
         sig = inspect.signature(model_class.__init__)
         supports_return_features_only = "return_features_only" in sig.parameters
 
-    # Logic for return_features_only and num_classes:
-    # 1. If return_features_only=True (explicit or inferred): strip classifier, return embeddings
-    # 2. If num_classes=None with checkpoint: extract classes, keep classifier
-    # 3. If num_classes is explicit: create new classifier
-    # 4. If num_classes=None without checkpoint: try embedding extraction if supported
-
-    if return_features_only:
-        # Explicit embedding extraction mode
-        # Always strip classifier from checkpoint, return embeddings
+    # If return_features_only is requested and supported, ensure the flag is set
+    if return_features_only and supports_return_features_only:
         kwargs["return_features_only"] = True
-        num_classes = None  # Not needed for embedding extraction
-        logger.info(f"Building {model_type} model for embedding extraction (return_features_only=True)")
-    elif num_classes is None and checkpoint_path:
-        # Extract num_classes from checkpoint and keep the classifier
-        num_classes = _extract_num_classes_from_checkpoint(checkpoint_path, device)
-        if num_classes is None:
-            raise ValueError(f"Could not determine num_classes from checkpoint: {checkpoint_path}")
-        logger.info(f"Extracted num_classes={num_classes} from checkpoint")
-        # Don't set return_features_only - we want the classifier
-    elif num_classes is None:
-        # No checkpoint, no explicit num_classes
-        # Check if model has pretrained=True (checkpoint embedded in model class)
-        if model_spec.pretrained:
-            # Model has pretrained weights embedded (e.g., BEATs with hardcoded pretrained paths)
-            # Pretrained models typically don't have classifier heads, so use return_features_only
-            if supports_return_features_only:
-                kwargs["return_features_only"] = True
-                num_classes = None
-                logger.info(
-                    f"Building {model_type} model with pretrained=True (embedded checkpoint). "
-                    f"Using return_features_only=True for embedding extraction."
-                )
-            else:
-                # Model has pretrained weights but doesn't support return_features_only
-                # This shouldn't happen for most models, but handle gracefully
-                raise ValueError(
-                    f"num_classes must be provided for {model_type} model "
-                    f"(model has pretrained=True but doesn't support return_features_only=True)"
-                )
-        elif supports_return_features_only:
-            # No pretrained weights, model supports embedding extraction
-            kwargs["return_features_only"] = True
-            num_classes = None
-            logger.info(
-                f"Building {model_type} model without classifier (return_features_only=True) for embedding extraction"
-            )
-        else:
-            # Model doesn't support return_features_only and no pretrained weights, need num_classes
-            raise ValueError(
-                f"num_classes must be provided for {model_type} model "
-                f"(model does not support return_features_only=True and pretrained=False)"
-            )
-    # else: num_classes is explicitly provided - create new classifier
+        logger.info(f"Loading {model_type} model in embedding extraction mode (return_features_only=True)")
 
-    # Create model using factory
-    backbone = build_model_from_spec(model_spec, device, num_classes, **kwargs)
+    # If no checkpoint and not in embedding mode, we no longer support creating
+    # new classifier heads via load_model. Use backbones + probes instead.
+    if not checkpoint_path and not return_features_only and not model_spec.pretrained:
+        raise ValueError(
+            "load_model() without a checkpoint no longer creates new classifier heads. "
+            "Build a backbone with build_model()/build_model_from_spec() and attach "
+            "a probe head via build_probe_from_config() instead."
+        )
+
+    # Create model using factory (backbone; classifier, if any, is defined by the class or checkpoint)
+    backbone = build_model_from_spec(model_spec, device, **kwargs)
 
     # Load label mapping if available (only for models with classifier heads)
     # Don't load label mapping if return_features_only=True
@@ -295,105 +259,18 @@ def _load_from_modelspec(
             )
 
     # Load checkpoint if provided
-    # When return_features_only=True: always strip classifier (keep_classifier=False)
-    # When return_features_only=False and num_classes was None: keep classifier (keep_classifier=True)
-    # When return_features_only=False and num_classes is explicit: strip classifier (keep_classifier=False)
     if checkpoint_path:
         if return_features_only:
             # For embedding extraction, always strip the classifier from checkpoint
             keep_classifier = False
             logger.info("Loading checkpoint for embedding extraction (classifier will be stripped)")
         else:
-            # For classification mode, keep classifier only if num_classes was originally None
-            keep_classifier = num_classes_was_none
+            # For classification mode, always keep whatever classifier is in the checkpoint
+            keep_classifier = True
+            logger.info("Loading checkpoint and keeping classifier head from checkpoint when present")
         _load_checkpoint(backbone, checkpoint_path, device, keep_classifier=keep_classifier)
 
     return backbone.to(device)
-
-
-def create_model(
-    model: Union[str, Path, ModelSpec],
-    num_classes: int,
-    device: str = "cpu",
-    **kwargs: object,
-) -> object:
-    """Create a new model instance without loading any pre-trained weights.
-
-    **When to use this function:**
-    - ✅ Creating new models for training from scratch
-    - ✅ When you don't need pre-trained weights
-    - ✅ Using custom model classes (plugin architecture)
-    - ✅ Building models for fine-tuning
-
-    **When to use load_model() instead:**
-    - ❌ Loading pre-trained models with weights
-    - ❌ Loading models from checkpoints
-    - ❌ Loading models for inference/evaluation
-
-    Args:
-        model: Model identifier, config file path, or ModelSpec object
-        num_classes: Number of output classes (required)
-        device: Device to create the model on ("cpu", "cuda", etc.)
-        **kwargs: Additional arguments passed to model creation
-
-    Returns:
-        New model instance ready for training
-
-    Raises:
-        ValueError: If model identifier is unknown or invalid
-        TypeError: If model type is not supported
-
-    Examples:
-        >>> # Create new model for training
-        >>> # Note: This requires the model class to be registered first
-        >>> # model = create_model("efficientnet_animalspeak", num_classes=100)
-
-        >>> # Create custom model using plugin architecture
-        >>> # model = create_model("my_custom_model", num_classes=50)
-
-        >>> # Create from config file
-        >>> # model = create_model("experiments/my_model.yml", num_classes=10)
-    """
-    if isinstance(model, str):
-        # Case 1: Registered model class (plugin architecture)
-        model_class = get_model_class(model)
-        if model_class is not None:
-            logger.info(f"Creating model using plugin architecture: {model}")
-            return model_class(device=device, num_classes=num_classes, **kwargs)
-
-        # Case 2: Registered model spec
-        model_spec = get_model_spec(model)
-        if model_spec is not None:
-            logger.info(f"Creating registered model: {model}")
-            return build_model_from_spec(model_spec, device, num_classes, **kwargs)
-
-        # Case 3: YAML path
-        if model.endswith((".yml", ".yaml")) or Path(model).exists():
-            logger.info(f"Creating model from config file: {model}")
-            spec = load_model_spec_from_yaml(model)
-            # Auto-register the model for future use
-            model_name = Path(model).stem
-            register_model(model_name, spec)
-            return build_model_from_spec(spec, device, num_classes, **kwargs)
-
-        # Case 4: Unknown model identifier
-        available_models = list(list_models().keys())
-        raise ValueError(
-            f"Unknown model identifier: '{model}'. "
-            f"Available models: {available_models}. "
-            f"Or provide a path to a YAML config file."
-        )
-
-    elif isinstance(model, Path):
-        # Handle Path objects by converting to string
-        return create_model(str(model), num_classes, device, **kwargs)
-
-    elif isinstance(model, ModelSpec):
-        logger.info("Creating model from ModelSpec object")
-        return build_model_from_spec(model, device, num_classes, **kwargs)
-
-    else:
-        raise TypeError(f"Unsupported model type: {type(model)}. Expected str, Path, or ModelSpec.")
 
 
 def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> Optional[int]:

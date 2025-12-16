@@ -195,12 +195,19 @@ def initialize_registry() -> None:
     Checkpoint paths are automatically registered from ModelSpec.checkpoint_path
     in the YAML files. Model classes are also automatically registered.
     """
-    if _MODEL_REGISTRY:  # Already initialized
+    # Check both registries - either could be cleared independently (e.g., in tests)
+    if _MODEL_REGISTRY and _MODEL_CLASSES:  # Already initialized
         return
 
     logger.info(f"Initializing model registry from package: {_OFFICIAL_MODELS_PKG}")
-    _auto_register_from_yaml()
-    _auto_register_model_classes()
+
+    # Only register YAML configs if registry is empty
+    if not _MODEL_REGISTRY:
+        _auto_register_from_yaml()
+
+    # Always ensure model classes are registered (they might have been cleared)
+    if not _MODEL_CLASSES:
+        _auto_register_model_classes()
 
     logger.info(f"Model registry initialized with {len(_MODEL_REGISTRY)} models: {list(_MODEL_REGISTRY.keys())}")
 
@@ -598,5 +605,5 @@ def list_model_classes() -> list[str]:
     return list(_MODEL_CLASSES.keys())
 
 
-# Initialize registry at module import time (after all functions are defined)
+# Initialize the registry at import time
 initialize_registry()

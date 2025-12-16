@@ -11,11 +11,21 @@ from representation_learning.models.probes.transformer_probe import (
     TransformerProbe,
 )
 
+# Import probe utilities
+from representation_learning.models.probes.utils import (
+    build_probe_from_config,
+    load_probe_config_from_yaml,
+)
+
 __all__ = [
-    "LinearProbe",
-    "MLPProbe",
-    "LSTMProbe",
-    "AttentionProbe",
-    "TransformerProbe",
+    # Legacy factory (public API)
     "get_probe",
+    # Utility functions
+    "build_probe_from_config",
+    "load_probe_config_from_yaml",
+    "AttentionProbe",
+    "LinearProbe",
+    "LSTMProbe",
+    "MLPProbe",
+    "TransformerProbe",
 ]

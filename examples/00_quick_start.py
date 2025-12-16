@@ -23,7 +23,9 @@ import argparse
 import torch
 
 from representation_learning import describe_model, get_model_spec, list_models
-from representation_learning.models.get_model import get_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import ProbeConfig
+from representation_learning.models.utils.factory import build_model_from_spec
 
 
 def main(device: str = "cpu") -> None:
@@ -57,12 +59,30 @@ def main(device: str = "cpu") -> None:
     print("-" * 50)
 
     model_spec = get_model_spec(model_name)
-    model = get_model(model_spec, num_classes=10)
-    model = model.to(device)
+
+    # Build backbone-only model
+    backbone = build_model_from_spec(model_spec, device=device).to(device)
+    backbone.eval()
+
+    # Attach a simple linear probe for a 10-class task
+    probe_config = ProbeConfig(
+        probe_type="linear",
+        target_layers=["backbone"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model = build_probe_from_config(
+        probe_config=probe_config,
+        base_model=backbone,
+        num_classes=10,
+        device=device,
+    ).to(device)
     model.eval()
 
-    print(f"Created model: {type(model).__name__}")
-    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"Created backbone: {type(backbone).__name__}")
+    print(f"Created probe model: {type(model).__name__}")
+    print(f"   Total parameters (backbone + probe): {sum(p.numel() for p in model.parameters()):,}")
 
     # Test forward pass (BEATs expects 16kHz audio)
     dummy_input = torch.randn(1, 16000 * 5, device=device)
@@ -81,8 +101,9 @@ def main(device: str = "cpu") -> None:
 - list_models(): List all available models with details
 - describe_model(name): Get detailed model information
 - get_model_spec(name): Get model specification
-- get_model(spec, num_classes): Create model from spec
-- load_model(name, ...): Load model with optional checkpoint
+- build_model_from_spec(spec, device): Create backbone model from ModelSpec via registry
+- build_probe_from_config(probe_config, base_model, num_classes, device): Attach task-specific heads
+- load_model(name, ...): Load full models or backbones with optional checkpoint
 """)
 
 

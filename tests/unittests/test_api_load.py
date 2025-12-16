@@ -19,7 +19,7 @@ from representation_learning.models.base_model import ModelBase
 from representation_learning.models.utils.load import (
     _extract_num_classes_from_checkpoint,
     _load_checkpoint,
-    create_model,
+    _load_from_modelspec,
     load_label_mapping,
 )
 from representation_learning.models.utils.registry import (
@@ -97,10 +97,11 @@ class TestLoadModel:
 
     def test_loads_registered_model(self) -> None:
         """Test loading a registered model."""
-        model = load_model("test_model", num_classes=5, device="cpu")
+        model = load_model("test_model", device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
+        assert getattr(model, "return_features_only", False) is True
+        assert model.num_classes is None
 
     def test_loads_model_from_yaml_path(self, tmp_path: Path) -> None:
         """Test loading model from YAML file."""
@@ -116,10 +117,11 @@ class TestLoadModel:
         yaml_file = tmp_path / "test_model.yml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
 
-        model = load_model(str(yaml_file), num_classes=10, device="cpu")
+        model = load_model(str(yaml_file), device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 10
+        assert getattr(model, "return_features_only", False) is True
+        assert model.num_classes is None
 
     def test_loads_model_from_path_object(self, tmp_path: Path) -> None:
         """Test loading model from Path object."""
@@ -131,10 +133,11 @@ class TestLoadModel:
         yaml_file = tmp_path / "test_model.yml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
 
-        model = load_model(yaml_file, num_classes=5, device="cpu")
+        model = load_model(yaml_file, device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
+        assert getattr(model, "return_features_only", False) is True
+        assert model.num_classes is None
 
     def test_loads_model_from_modelspec(self) -> None:
         """Test loading model from ModelSpec object."""
@@ -144,24 +147,25 @@ class TestLoadModel:
             device="cpu",
         )
 
-        model = load_model(model_spec, num_classes=8, device="cpu")
+        model = load_model(model_spec, device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 8
+        assert getattr(model, "return_features_only", False) is True
+        assert model.num_classes is None
 
     def test_raises_value_error_for_unknown_model(self) -> None:
         """Test that ValueError is raised for unknown model identifier."""
         with pytest.raises(ValueError, match="Unknown model identifier"):
-            load_model("nonexistent_model", num_classes=10, device="cpu")
+            load_model("nonexistent_model", device="cpu")
 
     def test_raises_type_error_for_invalid_type(self) -> None:
         """Test that TypeError is raised for invalid model type."""
         with pytest.raises(TypeError, match="Unsupported model type"):
-            load_model(123, num_classes=10, device="cpu")  # type: ignore[arg-type]
+            load_model(123, device="cpu")  # type: ignore[arg-type]
 
 
 class TestCreateModel:
-    """Test create_model function."""
+    """Legacy create_model tests (kept for historical context)."""
 
     @pytest.fixture(autouse=True)
     def setup_registry(self) -> None:
@@ -216,40 +220,6 @@ class TestCreateModel:
         # Clean up
         registry._MODEL_REGISTRY.clear()
         registry._MODEL_CLASSES.clear()
-
-    def test_creates_model_from_registered_class(self) -> None:
-        """Test creating model from registered class (plugin architecture)."""
-        model = create_model("test_model_type", num_classes=5, device="cpu")
-
-        assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
-
-    def test_creates_model_from_registered_spec(self) -> None:
-        """Test creating model from registered spec."""
-        model = create_model("test_model", num_classes=10, device="cpu")
-
-        assert isinstance(model, ModelBase)
-        assert model.num_classes == 10
-
-    def test_creates_model_from_yaml_path(self, tmp_path: Path) -> None:
-        """Test creating model from YAML file."""
-        yaml_content = """model_spec:
-            name: test_model_type
-            pretrained: false
-            device: cpu
-            """
-        yaml_file = tmp_path / "test_model.yml"
-        yaml_file.write_text(yaml_content, encoding="utf-8")
-
-        model = create_model(str(yaml_file), num_classes=15, device="cpu")
-
-        assert isinstance(model, ModelBase)
-        assert model.num_classes == 15
-
-    def test_raises_value_error_for_unknown_model(self) -> None:
-        """Test that ValueError is raised for unknown model identifier."""
-        with pytest.raises(ValueError, match="Unknown model identifier"):
-            create_model("nonexistent_model", num_classes=10, device="cpu")
 
 
 class TestExtractNumClassesFromCheckpoint:
@@ -589,48 +559,8 @@ class TestLoadFromModelSpec:
         assert model.return_features_only is True
         assert model.num_classes is None
 
-    def test_extracts_num_classes_from_checkpoint(self, tmp_path: Path) -> None:
-        """Test extracting num_classes from checkpoint when num_classes=None."""
-        checkpoint_path = tmp_path / "checkpoint.pt"
-        checkpoint = {
-            "classifier.weight": torch.randn(15, 128),
-            "classifier.bias": torch.randn(15),
-        }
-        torch.save(checkpoint, checkpoint_path)
-
-        model = load_model(
-            "test_model",
-            num_classes=None,
-            device="cpu",
-            checkpoint_path=str(checkpoint_path),
-        )
-
-        assert isinstance(model, ModelBase)
-        assert model.num_classes == 15
-        assert hasattr(model, "classifier")
-
-    def test_loads_with_explicit_num_classes(self, tmp_path: Path) -> None:
-        """Test loading with explicit num_classes (should not load classifier from checkpoint)."""
-        checkpoint_path = tmp_path / "checkpoint.pt"
-        checkpoint = {
-            "classifier.weight": torch.randn(20, 128),
-            "classifier.bias": torch.randn(20),
-        }
-        torch.save(checkpoint, checkpoint_path)
-
-        model = load_model(
-            "test_model",
-            num_classes=10,  # Different from checkpoint
-            device="cpu",
-            checkpoint_path=str(checkpoint_path),
-        )
-
-        assert isinstance(model, ModelBase)
-        assert model.num_classes == 10  # Should use explicit value, not checkpoint
-        assert model.classifier.weight.shape[0] == 10  # New classifier
-
     def test_loads_with_pretrained_true(self) -> None:
-        """Test loading model with pretrained=True (should use return_features_only)."""
+        """Test loading model with pretrained=True (no checkpoint)."""
         from representation_learning.models.utils import registry
 
         # Register model spec with pretrained=True
@@ -641,15 +571,15 @@ class TestLoadFromModelSpec:
         )
         register_model("test_pretrained_model", model_spec)
 
-        model = load_model("test_pretrained_model", device="cpu")
+        model = load_model("test_pretrained_model", device="cpu", return_features_only=True)
 
         assert isinstance(model, ModelBase)
-        assert model.return_features_only is True
+        assert getattr(model, "return_features_only", False) is True
 
         registry._MODEL_REGISTRY.clear()
 
     def test_raises_error_when_num_classes_required(self) -> None:
-        """Test that ValueError is raised when num_classes is required but not provided."""
+        """Test that ValueError is raised when classifier creation is requested without checkpoint."""
         from representation_learning.models.utils import registry
 
         # Register a model class that doesn't support return_features_only
@@ -680,8 +610,17 @@ class TestLoadFromModelSpec:
         )
         register_model("no_features_test", model_spec)
 
-        with pytest.raises(ValueError, match="num_classes must be provided"):
-            load_model("no_features_test", num_classes=None, device="cpu")
+        with pytest.raises(
+            ValueError,
+            match="no longer creates new classifier heads",
+        ):
+            _load_from_modelspec(
+                model_spec,
+                device="cpu",
+                checkpoint_path=None,
+                registry_key="no_features_test",
+                return_features_only=False,
+            )
 
         registry._MODEL_CLASSES.clear()
         registry._MODEL_REGISTRY.clear()

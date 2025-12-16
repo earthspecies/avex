@@ -31,6 +31,12 @@ def get_probe(
     """
     Factory function to obtain a probe instance based on configuration.
 
+    .. deprecated::
+        This function is deprecated and will be removed in a future version.
+        Please use :func:`build_probe_from_config` from
+        ``representation_learning.models.probes.utils.factory`` instead,
+        which provides a registry-based, more maintainable approach.
+
     This function creates the appropriate probe type based on the probe_config
     and returns an initialized probe model.
 
@@ -58,6 +64,11 @@ def get_probe(
         NotImplementedError: If the probe_type is not supported.
         ValueError: If required parameters are missing for the probe type.
     """
+    logger.warning(
+        "get_probe() is deprecated and will be removed in a future version. "
+        "Use build_probe_from_config() from representation_learning.models.probes.utils.factory instead."
+    )
+
     probe_type = probe_config.probe_type.lower()
     layers = probe_config.target_layers
     aggregation = probe_config.aggregation

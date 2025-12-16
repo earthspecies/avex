@@ -24,8 +24,9 @@ import argparse
 import torch
 
 from representation_learning import describe_model, get_model_spec, list_models, load_model
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.get_model import get_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
+from representation_learning.models.utils.factory import build_model_from_spec
 
 
 def main(device: str = "cpu") -> None:
@@ -80,11 +81,29 @@ def main(device: str = "cpu") -> None:
     print("-" * 50)
 
     model_spec = get_model_spec("sl_beats_animalspeak")
-    model = get_model(model_spec, num_classes=50)
-    model = model.to(device)
 
-    print(f"Created model: {type(model).__name__}")
-    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    # Build backbone-only model from spec
+    backbone = build_model_from_spec(model_spec, device=device).to(device)
+    backbone.eval()
+
+    # Attach a linear probe for a 50-class task
+    probe_cfg = ProbeConfig(
+        probe_type="linear",
+        target_layers=["last_layer"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model = build_probe_from_config(
+        probe_config=probe_cfg,
+        base_model=backbone,
+        num_classes=50,
+        device=device,
+    ).to(device)
+
+    print(f"Created backbone: {type(backbone).__name__}")
+    print(f"Created probe model: {type(model).__name__}")
+    print(f"   Parameters (backbone + probe): {sum(p.numel() for p in model.parameters()):,}")
 
     # Test forward pass
     dummy_input = torch.randn(2, 16000 * 3, device=device)
@@ -112,12 +131,27 @@ def main(device: str = "cpu") -> None:
         efficientnet_variant="b1",
     )
 
-    model = get_model(custom_spec, num_classes=25)
-    model = model.to(device)
+    # Build backbone-only model from custom spec
+    backbone_custom = build_model_from_spec(custom_spec, device=device).to(device)
+    backbone_custom.eval()
+
+    probe_cfg_custom = ProbeConfig(
+        probe_type="linear",
+        target_layers=["last_layer"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model = build_probe_from_config(
+        probe_config=probe_cfg_custom,
+        base_model=backbone_custom,
+        num_classes=25,
+        device=device,
+    ).to(device)
 
     print(f"Created model with custom parameters: {type(model).__name__}")
     print("   Variant: b1")
-    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"   Parameters (backbone + probe): {sum(p.numel() for p in model.parameters()):,}")
 
     # =========================================================================
     # Part 5: Get detailed model information
@@ -133,10 +167,11 @@ def main(device: str = "cpu") -> None:
     print("Key Takeaways")
     print("=" * 50)
     print("""
-- load_model(): Loads model with checkpoint, extracts num_classes automatically
-- get_model(): Creates model from ModelSpec, requires explicit num_classes
+- load_model(): Loads full models or backbones, extracts num_classes automatically when checkpoints include classifiers
+- build_model_from_spec(): Creates backbone models from ModelSpec via the registry
+- Probes (build_probe_from_config): Attach task-specific heads with arbitrary num_classes
 - label_mapping: Available for models with trained classifiers
-- Custom ModelSpec: Override architecture parameters for specific needs
+- Custom ModelSpec: Override backbone architecture parameters for specific needs
 """)
 
 

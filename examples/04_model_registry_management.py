@@ -31,8 +31,9 @@ from representation_learning import (
     list_models,
     register_model,
 )
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.get_model import get_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
+from representation_learning.models.utils.factory import build_model_from_spec
 from representation_learning.models.utils.registry import load_model_spec_from_yaml
 
 
@@ -123,11 +124,26 @@ def main(device: str = "cpu") -> None:
     print(f"   Model type: {model_spec.name}")
     print(f"   Sample rate: {model_spec.audio_config.sample_rate}")
 
-    # Create model from registered spec
+    # Create backbone model from registered spec
     model_spec = get_model_spec("custom_beats")
-    model = get_model(model_spec, num_classes=25)
-    model = model.cpu()
-    print(f"\nCreated model from custom_beats: {type(model).__name__}")
+    backbone = build_model_from_spec(model_spec, device=device)
+
+    # Attach a simple linear probe for classification
+    probe_config = ProbeConfig(
+        probe_type="linear",
+        target_layers=["backbone"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model = build_probe_from_config(
+        probe_config=probe_config,
+        base_model=backbone,
+        num_classes=25,
+        device=device,
+    ).cpu()
+
+    print(f"\nCreated model with linear probe from custom_beats: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # =========================================================================
@@ -178,9 +194,23 @@ def main(device: str = "cpu") -> None:
     print(f"Created YAML config: {yaml_path}")
 
     model_spec = load_model_spec_from_yaml(yaml_path)
-    model = get_model(model_spec, num_classes=30)
-    model = model.cpu()
-    print(f"Created model from YAML: {type(model).__name__}")
+    backbone = build_model_from_spec(model_spec, device=device)
+
+    probe_config = ProbeConfig(
+        probe_type="linear",
+        target_layers=["backbone"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model = build_probe_from_config(
+        probe_config=probe_config,
+        base_model=backbone,
+        num_classes=30,
+        device=device,
+    ).cpu()
+
+    print(f"Created model with linear probe from YAML: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Clean up

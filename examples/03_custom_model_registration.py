@@ -25,13 +25,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from representation_learning import (
-    build_model,
-    create_model,
-    get_model_class,
-    list_model_classes,
-    register_model_class,
-)
+from representation_learning import get_model_class, list_model_classes, register_model_class
 from representation_learning.models.base_model import ModelBase
 
 # =============================================================================
@@ -272,7 +266,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: Simple Audio CNN")
     print("-" * 50)
 
-    model = create_model("simple_audio_cnn", num_classes=10, device=device)
+    model = SimpleAudioCNN(device=device, num_classes=10)
     print(f"Created: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
     print(f"   Embedding dim: {model.get_embedding_dim()}")
@@ -288,10 +282,9 @@ def main(device: str = "cpu") -> None:
     print("\nPart 3: Simple Audio Transformer")
     print("-" * 50)
 
-    model = create_model(
-        "simple_audio_transformer",
-        num_classes=15,
+    model = SimpleAudioTransformer(
         device=device,
+        num_classes=15,
         d_model=64,
         nhead=4,
         num_layers=2,
@@ -311,10 +304,9 @@ def main(device: str = "cpu") -> None:
     print("\nPart 4: Simple Audio MLP")
     print("-" * 50)
 
-    model = create_model(
-        "simple_audio_mlp",
-        num_classes=20,
+    model = SimpleAudioMLP(
         device=device,
+        num_classes=20,
         hidden_dims=[256, 128, 64],
         dropout=0.3,
     )
@@ -338,9 +330,17 @@ def main(device: str = "cpu") -> None:
     print(f"simple_audio_cnn registered: {model_class is not None}")
     print(f"   Class: {model_class.__name__ if model_class else 'N/A'}")
 
-    # Alternative: build_model
-    model = build_model("simple_audio_cnn", device=device, num_classes=5)
-    print(f"\nUsing build_model(): {type(model).__name__}")
+    # Note: build_model() requires a ModelSpec to be registered, not just a model class.
+    # For custom models without ModelSpecs, instantiate directly.
+    # Custom models can be used standalone or with probes attached via build_probe_from_config()
+    model = SimpleAudioCNN(device=device, num_classes=5)
+    print(f"\nDirect instantiation example: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    dummy_input = torch.randn(1, 16000, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
 
     # =========================================================================
     # Summary
@@ -352,8 +352,9 @@ def main(device: str = "cpu") -> None:
 - Use @register_model_class decorator to register custom models
 - Models must inherit from ModelBase
 - Define 'name' class attribute for registration
-- create_model() and build_model() work with registered classes
-- Custom parameters passed through **kwargs
+- build_model() works with registered ModelSpecs (official models)
+- For custom models without ModelSpecs, instantiate directly and attach probes
+- Custom parameters can still be passed through **kwargs
 """)
 
 

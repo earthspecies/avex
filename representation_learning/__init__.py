@@ -10,7 +10,7 @@ from .models.utils.factory import (
     build_model,
     build_model_from_spec,
 )
-from .models.utils.load import create_model, load_label_mapping, load_model
+from .models.utils.load import load_label_mapping, load_model
 from .models.utils.registry import (
     describe_model,
     get_checkpoint_path,
@@ -33,7 +33,6 @@ except Exception:
 __all__ = [
     # Model loading
     "load_model",
-    "create_model",
     # Registry management
     "register_model",
     "get_model_spec",

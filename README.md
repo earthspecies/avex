@@ -205,6 +205,33 @@ model = load_model("beats_naturelm", return_features_only=True, device="cpu")
 # Returns (batch, time_steps, 768) for BEATs instead of classification logits
 ```
 
+#### Probes (Heads on Top of Backbones)
+
+```python
+from representation_learning import load_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import ProbeConfig
+
+# Load backbone for feature extraction
+base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+
+# Define a simple linear probe on the backbone features
+probe_config = ProbeConfig(
+    probe_type="linear",
+    target_layers=["backbone"],
+    aggregation="mean",
+    freeze_backbone=True,
+    online_training=True,
+)
+
+probe = build_probe_from_config(
+    probe_config=probe_config,
+    base_model=base,
+    num_classes=10,
+    device="cpu",
+)
+```
+
 > **Note**: Each model expects a specific sample rate (e.g., 16 kHz for BEATs, 32 kHz for Perch). Use `describe_model()` to check, and resample with `librosa.resample()` if needed. See [Audio Requirements](#audio-requirements) for details.
 
 For more examples, see the `examples/` directory:
@@ -299,31 +326,11 @@ model = load_model("beats", pretrained=True)  # BEATs loads SSL weights
 model = load_model("efficientnet_animalspeak")  # Uses checkpoint, pretrained=False
 ```
 
-#### `create_model()` - Create New Models
+#### Training New Models
 
-**When to use:**
-- ✅ Creating new models for training from scratch
-- ✅ When you don't need pre-trained weights
-- ✅ Using custom model classes (plugin architecture)
-- ✅ Building models for fine-tuning
-
-**When NOT to use:**
-- ❌ Loading pre-trained models with weights
-- ❌ Loading models from checkpoints
-- ❌ Loading models for inference/evaluation
-
-```python
-from representation_learning import create_model
-
-# Create new model for training
-model = create_model("efficientnet", num_classes=100)
-
-# Create custom model using plugin architecture
-model = create_model("my_custom_model", num_classes=50)
-
-# Create from config file
-model = create_model("experiments/my_model.yml", num_classes=10)
-```
+**Recommended pattern:**
+- Define a custom model class (subclassing `ModelBase`) with its own classifier head, or
+- Build a backbone via `build_model` / `build_model_from_spec` and attach a probe head with `build_probe_from_config`.
 
 #### `build_model()` - Plugin Architecture
 
@@ -331,10 +338,6 @@ model = create_model("experiments/my_model.yml", num_classes=10)
 - ✅ Using the plugin architecture for new custom models
 - ✅ When you have registered new model classes
 - ✅ Building new models from ModelSpec objects
-
-**When NOT to use:**
-- ❌ Loading pre-trained models with weights (use `load_model`)
-- ❌ Simple model creation (use `create_model`)
 
 ```python
 from representation_learning import build_model, register_model_class
@@ -499,8 +502,8 @@ class MyCustomModel(ModelBase):
     def get_embedding_dim(self):
         return 512
 
-# Now you can use it with any of the loading functions
-model = create_model("my_custom_model", num_classes=10)
+# Now you can use it directly or via the registry/backbone+probe APIs
+model = MyCustomModel(num_classes=10, device="cpu")
 ```
 
 ## 🎯 Supported Models
@@ -689,10 +692,10 @@ audio_config = AudioConfig(
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from representation_learning import create_model
+from representation_learning import build_model
 
-# Create a model for training
-model = create_model("efficientnet", num_classes=100, device="cpu")
+# Create a backbone for training (attach your own head or use a probe)
+model = build_model("efficientnet", device="cpu")
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -938,7 +941,7 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 import torch
 import torch.nn as nn
 from representation_learning.models.base_model import ModelBase
-from representation_learning import register_model_class, create_model
+from representation_learning import register_model_class
 
 @register_model_class
 class MyAudioCNN(ModelBase):
@@ -970,7 +973,7 @@ class MyAudioCNN(ModelBase):
         return 128
 
 # Use the custom model
-model = create_model("my_audio_cnn", num_classes=10, device="cpu")
+model = MyAudioCNN(device="cpu", num_classes=10)
 ```
 
 ### Loading Pre-trained Models

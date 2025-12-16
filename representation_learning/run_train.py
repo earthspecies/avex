@@ -99,8 +99,12 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
         # Pydantic models are immutable by default – use copy(update=...)
         config.model_spec = config.model_spec.model_copy(update={"pretraining_mode": True})
 
-    # Build the model
-    model = get_model(config.model_spec, num_classes=num_labels).to(device)
+    # Build the model using the legacy get_model factory for backwards compatibility
+    config.model_spec.device = str(device)
+    model = get_model(
+        config.model_spec,
+        num_classes=num_labels,
+    ).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
 
     # --------------------------------------------------------------

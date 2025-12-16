@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 from representation_learning.configs import RunConfig
 from representation_learning.data.audio_utils import pad_or_window
 from representation_learning.data.dataset import build_dataloaders
-from representation_learning.models.get_model import get_model
+from representation_learning.models.utils.factory import build_model_from_spec
 from representation_learning.utils import universal_torch_load
 
 
@@ -76,7 +76,7 @@ def test_clip_mini_inference() -> None:
     run_cfg.model_spec.audio_config.window_selection = "center"
 
     run_cfg.model_spec.device = "cpu"
-    model = get_model(run_cfg.model_spec, num_classes=1)
+    model = build_model_from_spec(run_cfg.model_spec, device="cpu")
     model.eval()
     model.to(device)
 

@@ -1,9 +1,10 @@
 """
-Example 7: Classifier Head Loading Behavior
+Example 7: Classifier Head and Probe Behavior
 
-This example demonstrates how load_model handles classifier head weights:
-- When num_classes=None: classifier weights are loaded from checkpoint
-- When num_classes is explicit: classifier weights are NOT loaded (random init)
+This example demonstrates how load_model and probe heads interact:
+- How classifier weights are preserved when loading from checkpoints
+- How to use return_features_only for embedding extraction
+- How to attach a new linear probe head on top of a backbone
 
 Audio Requirements:
 - Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
@@ -22,13 +23,14 @@ from pathlib import Path
 
 import torch
 
-from representation_learning import get_model_spec, load_model
-from representation_learning.models.get_model import get_model
+from representation_learning import load_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import ProbeConfig
 
 
 def main(device: str = "cpu") -> None:
-    """Demonstrate classifier head loading behavior."""
-    print("Example 7: Classifier Head Loading Behavior")
+    """Demonstrate classifier head and probe behavior."""
+    print("Example 7: Classifier Head and Probe Behavior")
     print("=" * 60)
 
     # Ensure checkpoints directory exists
@@ -38,22 +40,19 @@ def main(device: str = "cpu") -> None:
     # =========================================================================
     # Part 1: Demonstrating classifier loading with checkpoints
     # =========================================================================
-    print("\nPart 1: Checkpoint-based Classifier Loading")
+    print("\nPart 1: Checkpoint-based classifier loading")
     print("-" * 60)
 
-    # Use the registered sl_beats_animalspeak model
-    print("\nCreating BEATs model with classifier...")
-    model_spec = get_model_spec("sl_beats_animalspeak")
-    model_spec.device = device
-
-    original_num_classes = 15
-    model = get_model(model_spec, num_classes=original_num_classes)
+    # Use the registered sl_beats_animalspeak model with its checkpoint classifier
+    print("\nLoading BEATs model with classifier from checkpoint ...")
+    model = load_model("sl_beats_animalspeak", device=device)
     model = model.to(device)
 
-    # Store the original classifier weights
+    # Store the original classifier weights from the checkpoint
     original_classifier_weight = model.classifier.weight.clone()
     original_classifier_bias = model.classifier.bias.clone()
-    print(f"Created model with {original_num_classes} classes")
+    original_num_classes = original_classifier_weight.shape[0]
+    print(f"Loaded model with {original_num_classes} classes")
     print(f"   Classifier weight shape: {original_classifier_weight.shape}")
 
     # Save checkpoint
@@ -61,8 +60,8 @@ def main(device: str = "cpu") -> None:
     torch.save(model.state_dict(), checkpoint_path)
     print(f"Saved checkpoint to: {checkpoint_path}")
 
-    # Demo 1: Load with num_classes=None (keeps classifier weights from checkpoint)
-    print("\nDemo 1: Loading with num_classes=None (default)")
+    # Demo 1: Load from explicit checkpoint (keeps classifier weights)
+    print("\nDemo 1: Loading from explicit checkpoint")
     print("   Behavior: Classifier weights loaded from checkpoint")
     loaded_model_1 = load_model(
         "sl_beats_animalspeak",
@@ -70,46 +69,29 @@ def main(device: str = "cpu") -> None:
         device=device,
     )
 
-    weights_match = torch.allclose(loaded_model_1.classifier.weight, original_classifier_weight, atol=1e-6)
-    bias_match = torch.allclose(loaded_model_1.classifier.bias, original_classifier_bias, atol=1e-6)
+    weights_match = torch.allclose(
+        loaded_model_1.classifier.weight,
+        original_classifier_weight,
+        atol=1e-6,
+    )
+    bias_match = torch.allclose(
+        loaded_model_1.classifier.bias,
+        original_classifier_bias,
+        atol=1e-6,
+    )
     print(f"   Classifier weights match checkpoint: {weights_match and bias_match}")
-
-    # Demo 2: Load with explicit num_classes (random initialization)
-    print("\nDemo 2: Loading with explicit num_classes={original_num_classes}")
-    print("   Behavior: Classifier weights randomly initialized (not loaded)")
-    loaded_model_2 = load_model(
-        "sl_beats_animalspeak",
-        num_classes=original_num_classes,
-        checkpoint_path=str(checkpoint_path),
-        device=device,
-    )
-
-    weights_different = not torch.allclose(loaded_model_2.classifier.weight, original_classifier_weight, atol=1e-6)
-    print(f"   Classifier weights are new (random): {weights_different}")
-
-    # Demo 3: Load with different num_classes
-    print("\nDemo 3: Loading with different num_classes=20")
-    print("   Behavior: New classifier created with specified size")
-    new_num_classes = 20
-    loaded_model_3 = load_model(
-        "sl_beats_animalspeak",
-        num_classes=new_num_classes,
-        checkpoint_path=str(checkpoint_path),
-        device=device,
-    )
-    print(f"   Classifier output classes: {loaded_model_3.classifier.weight.shape[0]}")
 
     # =========================================================================
     # Part 2: Self-supervised model (beats_naturelm) use cases
     # =========================================================================
     print("\n" + "=" * 60)
-    print("Part 2: Self-Supervised Model (beats_naturelm)")
+    print("Part 2: Self-supervised model (beats_naturelm)")
     print("=" * 60)
     print("\nbeats_naturelm is a self-supervised model without a trained classifier.")
-    print("This demonstrates the different ways to use such models.\n")
+    print("This demonstrates different ways to use such models.\n")
 
     # Use case 1: Embedding extraction mode (default for models without classifier)
-    print("Use Case 1: Embedding Extraction (default behavior)")
+    print("Use case 1: Embedding extraction (default behavior)")
     print("-" * 60)
     model = load_model("beats_naturelm", device=device)
     model.eval()
@@ -126,22 +108,36 @@ def main(device: str = "cpu") -> None:
         output = model(dummy_input, padding_mask=None)
     print(f"   Output shape: {output.shape} (batch, time_steps, features)")
 
-    # Use case 2: Add a new classification head
-    print("\nUse Case 2: Adding a New Classification Head")
+    # Use case 2: Add a new classification head via linear probe
+    print("\nUse case 2: Adding a new classification head with linear probe")
     print("-" * 60)
     num_classes = 10
-    model = load_model("beats_naturelm", num_classes=num_classes, device=device)
-    model.eval()
 
-    print(f"   Classifier weight shape: {model.classifier.weight.shape}")
+    backbone = load_model("beats_naturelm", device=device, return_features_only=True)
+    backbone.eval()
+
+    probe_config = ProbeConfig(
+        probe_type="linear",
+        target_layers=["backbone"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    probe = build_probe_from_config(
+        probe_config=probe_config,
+        base_model=backbone,
+        num_classes=num_classes,
+        device=device,
+    )
+    probe.eval()
 
     dummy_input = torch.randn(1, 16000 * 5, device=device)
     with torch.no_grad():
-        output = model(dummy_input, padding_mask=None)
-    print(f"   Output shape: {output.shape} (batch, num_classes)")
+        logits = probe(dummy_input)
+    print(f"   Probe output shape: {logits.shape} (batch, num_classes)")
 
     # Use case 3: Explicit embedding extraction with return_features_only
-    print("\nUse Case 3: Explicit Embedding Extraction Mode")
+    print("\nUse case 3: Explicit embedding extraction mode")
     print("-" * 60)
     model = load_model("beats_naturelm", return_features_only=True, device=device)
     model.eval()
@@ -155,25 +151,22 @@ def main(device: str = "cpu") -> None:
     # Summary
     # =========================================================================
     print("\n" + "=" * 60)
-    print("Key Takeaways")
+    print("Key takeaways")
     print("=" * 60)
     print("""
-1. num_classes=None (default):
-   - Loads classifier weights from checkpoint if available
-   - Otherwise uses embedding extraction mode
+1. Supervised models with checkpoint classifiers:
+   - load_model keeps the classifier weights from the checkpoint
 
-2. num_classes=N (explicit):
-   - Creates a new randomly initialized classifier
-   - Backbone weights still loaded from checkpoint
+2. Self-supervised models (like beats_naturelm):
+   - No trained classifier exists, so they default to embedding extraction mode
 
 3. return_features_only=True:
    - Explicitly requests embedding extraction mode
    - Returns unpooled features (batch, time_steps, features)
 
-4. Self-supervised models (like beats_naturelm):
-   - No trained classifier exists
-   - Default to embedding extraction mode
-   - Add classifier via num_classes parameter for fine-tuning
+4. Probe heads:
+   - You can attach a simple linear probe via build_probe_from_config
+   - Backbones stay reusable across tasks and heads
 """)
 
 

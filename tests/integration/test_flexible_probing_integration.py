@@ -11,6 +11,19 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def setup_model_registry() -> None:
+    """Ensure model registry is initialized before running the test.
+
+    This fixture ensures that both _MODEL_REGISTRY and _MODEL_CLASSES
+    are populated, even if they were cleared by previous tests.
+    """
+    from representation_learning.models.utils import registry
+
+    # Initialize registry to ensure model classes are registered
+    registry.initialize_registry()
+
+
 def test_flexible_probing_integration() -> None:
     """Test the flexible probing system with a minimal configuration."""
 
