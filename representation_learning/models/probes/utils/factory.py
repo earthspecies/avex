@@ -89,16 +89,19 @@ def build_probe_from_config(
 
     Example:
         >>> from representation_learning.configs import ProbeConfig
+        >>> # Offline mode: build probe without base model (for pre-computed embeddings)
         >>> probe_config = ProbeConfig(
         ...     probe_type="linear",
-        ...     target_layers=["layer_12"],
+        ...     target_layers=["last_layer"],
         ...     aggregation="mean"
         ... )
         >>> probe = build_probe_from_config(
         ...     probe_config,
-        ...     base_model=base_model,
+        ...     base_model=None,
         ...     num_classes=50,
-        ...     device="cuda"
+        ...     device="cpu",
+        ...     feature_mode=True,
+        ...     input_dim=768
         ... )
     """
     # Validate probe type
