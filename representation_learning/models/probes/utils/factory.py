@@ -64,7 +64,8 @@ def build_probe_from_config_online(
     """Build a probe instance for online training (attached to a base model).
 
     This function builds a probe that is attached to a base model for end-to-end
-    training. The frozen state is inferred from probe_config.freeze_backbone.
+    training. The frozen state is inferred from probe_config.freeze_backbone and
+    applied by the probe class during initialization.
 
     Args:
         probe_config: ProbeConfig configuration object
@@ -106,19 +107,8 @@ def build_probe_from_config_online(
     ]:
         raise ValueError(f"Sequence input processing is not compatible with {probe_type} probe")
 
-    # Handle base model freezing/unfreezing
-    if not frozen:
-        # Enable training mode
-        base_model.train()
-        for p in base_model.parameters():
-            p.requires_grad = True
-    else:
-        # Freeze the base model
-        base_model.eval()
-        for p in base_model.parameters():
-            p.requires_grad = False
-
-    # Register hooks AFTER setting model mode to ensure they work correctly
+    # Register hooks on the base model
+    # Note: Freezing/unfreezing is handled by the probe class during initialization
     if hasattr(base_model, "register_hooks_for_layers"):
         layers = base_model.register_hooks_for_layers(layers)
     else:

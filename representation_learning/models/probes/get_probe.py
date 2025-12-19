@@ -89,18 +89,8 @@ def get_probe(
     ]:
         raise ValueError(f"Sequence input processing is not compatible with {probe_type} probe")
 
-    if not frozen and base_model is not None:
-        # Enable training mode
-        base_model.train()
-        for p in base_model.parameters():
-            p.requires_grad = True
-    elif frozen and base_model is not None:
-        # Freeze the base model
-        base_model.eval()
-        for p in base_model.parameters():
-            p.requires_grad = False
-
-    # Register hooks AFTER setting model mode to ensure they work correctly
+    # Register hooks on the base model
+    # Note: Freezing/unfreezing is handled by the probe class during initialization
     if base_model is not None and not feature_mode:
         layers = base_model.register_hooks_for_layers(layers)
 
