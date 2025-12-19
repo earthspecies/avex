@@ -3,9 +3,22 @@ Example 3: Custom Model Registration and Plugin Architecture
 
 This example demonstrates:
 - Creating custom model classes
-- Registering them with the plugin architecture
+- When and why to register custom models
 - Using custom models with the API
 - Model class management functions
+
+**When Do You Need to Register?**
+
+Registration is ONLY required if you want to use the plugin architecture:
+- Using build_model() or build_model_from_spec() with ModelSpecs
+- Loading models from YAML configuration files
+- Dynamic model selection based on configuration
+
+Registration is NOT required if:
+- You're instantiating models directly: MyModel(device="cpu", num_classes=10)
+- You're using models standalone or attaching probes directly
+
+See docs/custom_model_registration.md for detailed guidance.
 
 Audio Requirements:
 - Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
@@ -350,12 +363,22 @@ def main(device: str = "cpu") -> None:
     print("Key Takeaways")
     print("=" * 50)
     print("""
+When to Register:
+- ✅ Required: Using build_model() or build_model_from_spec() with ModelSpecs
+- ✅ Required: Loading models from YAML configuration files
+- ❌ NOT needed: Direct instantiation (MyModel(device="cpu", num_classes=10))
+- ❌ NOT needed: Standalone usage or attaching probes directly
+
+Registration Process:
 - Use @register_model_class decorator to register custom models
 - Models must inherit from ModelBase
 - Define 'name' class attribute for registration
-- build_model() works with registered ModelSpecs (official models)
-- For custom models without ModelSpecs, instantiate directly and attach probes
-- Custom parameters can still be passed through **kwargs
+- build_model() requires both a registered ModelSpec AND a registered model class
+
+Alternative (No Registration):
+- For custom models without ModelSpecs, instantiate directly
+- Attach probes using build_probe_from_config_online() or build_probe_from_config_offline()
+- See docs/custom_model_registration.md for more details
 """)
 
 

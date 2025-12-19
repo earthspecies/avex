@@ -481,7 +481,11 @@ if class_mapping:
 
 ### Plugin Architecture
 
-The framework supports a plugin architecture that allows users to register custom model classes without modifying the core library:
+The framework supports a plugin architecture that allows users to register custom model classes without modifying the core library.
+
+**Important**: Registration is only required if you want to use `build_model()` or `build_model_from_spec()` with ModelSpecs. For direct instantiation, registration is not needed.
+
+See [docs/custom_model_registration.md](docs/custom_model_registration.md) for detailed guidance on when and why to register custom models.
 
 ```python
 from representation_learning.models.base_model import ModelBase
@@ -502,7 +506,8 @@ class MyCustomModel(ModelBase):
     def get_embedding_dim(self):
         return 512
 
-# Now you can use it directly or via the registry/backbone+probe APIs
+# Now you can use it with build_model() if you also register a ModelSpec
+# Or use it directly without registration: MyCustomModel(device="cpu", num_classes=10)
 model = MyCustomModel(num_classes=10, device="cpu")
 ```
 
