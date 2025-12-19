@@ -68,6 +68,10 @@ class Model(ModelBase):
             # We'll determine this dynamically during first forward pass
             self.classifier = None
             self._embedding_dim = None
+        else:
+            # When return_features_only=True or num_classes==1000, no classifier needed
+            self.classifier = None
+            self._embedding_dim = None
 
     def _ensure_classifier(self, embedding_dim: int, num_classes: int) -> None:
         """Create classifier head if it doesn't exist yet."""
