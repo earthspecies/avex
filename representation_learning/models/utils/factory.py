@@ -8,7 +8,7 @@ ModelSpec configurations with registered model classes.
 import inspect
 import logging
 
-from representation_learning.configs import AudioConfig
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
 
 from .registry import get_model_class, get_model_spec, list_model_classes, list_models
@@ -16,7 +16,7 @@ from .registry import get_model_class, get_model_spec, list_model_classes, list_
 logger = logging.getLogger(__name__)
 
 
-def _add_model_spec_params(init_kwargs: dict, model_spec: object) -> None:
+def _add_model_spec_params(init_kwargs: dict, model_spec: ModelSpec) -> None:
     """Add model-specific parameters from ModelSpec to init_kwargs.
 
     This function dynamically extracts all non-None parameters from ModelSpec
@@ -104,7 +104,7 @@ def build_model(model_name: str, device: str, **kwargs: object) -> ModelBase:
         raise
 
 
-def build_model_from_spec(model_spec: object, device: str, **kwargs: object) -> ModelBase:
+def build_model_from_spec(model_spec: ModelSpec, device: str, **kwargs: object) -> ModelBase:
     """
     Build a model instance directly from a ModelSpec object.
 
