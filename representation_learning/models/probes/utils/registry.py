@@ -12,17 +12,14 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Type
 
+import yaml
+
 from representation_learning.configs import ProbeConfig
 from representation_learning.models.probes.attention_probe import AttentionProbe
 from representation_learning.models.probes.linear_probe import LinearProbe
 from representation_learning.models.probes.lstm_probe import LSTMProbe
 from representation_learning.models.probes.mlp_probe import MLPProbe
 from representation_learning.models.probes.transformer_probe import TransformerProbe
-
-try:
-    import yaml
-except Exception:  # pragma: no cover - yaml is a standard dep in this repo
-    yaml = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +51,8 @@ def load_probe_config_from_yaml(yaml_path: str | Path) -> ProbeConfig:
         A validated ProbeConfig instance
 
     Raises:
-        ValueError: If YAML cannot be parsed into a ProbeConfig
+        ValueError: If YAML structure is invalid
     """
-    if yaml is None:
-        raise ValueError("PyYAML not available to parse YAML files")
-
     path = Path(yaml_path)
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
@@ -71,10 +65,7 @@ def load_probe_config_from_yaml(yaml_path: str | Path) -> ProbeConfig:
     if not isinstance(probe_dict, dict):
         raise ValueError("Invalid probe specification structure in YAML")
 
-    try:
-        return ProbeConfig(**probe_dict)
-    except Exception as e:
-        raise ValueError(f"Failed to build ProbeConfig from YAML: {e}") from e
+    return ProbeConfig(**probe_dict)
 
 
 def get_probe_class(name: str) -> Optional[Type]:
