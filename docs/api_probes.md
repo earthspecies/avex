@@ -16,7 +16,7 @@ you define your own `ProbeConfig` objects (in code or YAML) and pass them direct
 ### Build and Use a Probe (Online Mode)
 
 ```python
-from representation_learning.api import load_model, build_probe_from_config
+from representation_learning.api import load_model, build_probe_from_config_online
 from representation_learning.configs import ProbeConfig
 
 # 1. Load a backbone model that returns features
@@ -32,7 +32,7 @@ probe_config = ProbeConfig(
 )
 
 # 3. Build the probe
-probe = build_probe_from_config(
+probe = build_probe_from_config_online(
     probe_config=probe_config,
     base_model=base,
     num_classes=50,
@@ -43,7 +43,7 @@ probe = build_probe_from_config(
 ### Offline Mode (Pre-computed Embeddings)
 
 ```python
-from representation_learning.api import build_probe_from_config
+from representation_learning.api import build_probe_from_config_online
 from representation_learning.configs import ProbeConfig
 
 # For pre-computed embeddings (no base model needed)
@@ -55,7 +55,7 @@ probe_config = ProbeConfig(
     online_training=False,
 )
 
-probe = build_probe_from_config(
+probe = build_probe_from_config_online(
     probe_config=probe_config,
     base_model=None,              # offline mode
     num_classes=50,
@@ -126,48 +126,67 @@ online_training: true
 ```python
 from representation_learning.models.probes.utils import (
     load_probe_config_from_yaml,
-    build_probe_from_config,
+    build_probe_from_config_online,
 )
 from representation_learning.api import load_model
 
 config = load_probe_config_from_yaml("my_linear_probe.yml")
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
-probe = build_probe_from_config(config, base_model=base, num_classes=50, device="cpu")
+probe = build_probe_from_config_online(config, base_model=base, num_classes=50, device="cpu")
 ```
 
 ## API Reference
 
 ### Factory Functions
 
-#### `build_probe_from_config()`
-Main factory function for building probe instances from a `ProbeConfig`.
+#### `build_probe_from_config_online()`
+Factory function for building **online** probe instances from a `ProbeConfig`.
 
 ```python
-from representation_learning.api import build_probe_from_config
+from representation_learning.api import build_probe_from_config_online
 from representation_learning.configs import ProbeConfig
 
-def build_probe_from_config(
+def build_probe_from_config_online(
     probe_config: ProbeConfig,
-    base_model: Optional[torch.nn.Module],
+    base_model: torch.nn.Module,
     num_classes: int,
     device: str,
-    feature_mode: bool = False,
-    input_dim: Optional[int] = None,
-    frozen: bool = True,
     target_length: Optional[int] = None,
     **kwargs,
 ) -> torch.nn.Module:
     ...
 ```
 
-**Key parameters:**
-- `probe_config`: The `ProbeConfig` object (from code or YAML).
-- `base_model`: The backbone model (or `None` for offline mode).
+**Key parameters (online):**
+- `probe_config`: The `ProbeConfig` object.
+- `base_model`: The backbone model to attach the probe to.
 - `num_classes`: Number of output classes.
 - `device`: `"cpu"` or `"cuda"`, etc.
-- `feature_mode`: `True` when inputs are pre-computed embeddings (offline).
-- `input_dim`: Required when `base_model is None` (embedding dimension).
-- `frozen`: Whether to freeze the backbone parameters.
+- `target_length`: Optional audio target length override.
+
+#### `build_probe_from_config_offline()`
+Factory function for building **offline** probes that operate on pre-computed embeddings.
+
+```python
+from representation_learning.api import build_probe_from_config_offline
+from representation_learning.configs import ProbeConfig
+
+def build_probe_from_config_offline(
+    probe_config: ProbeConfig,
+    input_dim: int,
+    num_classes: int,
+    device: str,
+    target_length: Optional[int] = None,
+    **kwargs,
+) -> torch.nn.Module:
+    ...
+```
+
+**Key parameters (offline):**
+- `probe_config`: The `ProbeConfig` object.
+- `input_dim`: Embedding dimension.
+- `num_classes`: Number of output classes.
+- `device`: `"cpu"` or `"cuda"`, etc.
 - `target_length`: Optional audio target length override.
 
 **Returns:** A `torch.nn.Module` probe ready for training/inference.
@@ -207,7 +226,7 @@ All probe configs include:
 ### Comparing Different Probe Architectures
 
 ```python
-from representation_learning.api import build_probe_from_config, load_model
+from representation_learning.api import build_probe_from_config_online, load_model
 from representation_learning.configs import ProbeConfig
 
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -226,7 +245,7 @@ for probe_type, extra_cfg in probe_types:
         online_training=True,
         **extra_cfg,
     )
-    probe = build_probe_from_config(
+    probe = build_probe_from_config_online(
         probe_config=cfg,
         base_model=base,
         num_classes=10,
@@ -244,19 +263,22 @@ for probe_type, extra_cfg in probe_types:
 # aggregation: mean
 # hidden_dims: [1024, 512]
 
-from representation_learning.models.probes.utils import build_probe_from_config, load_probe_config_from_yaml
+from representation_learning.models.probes.utils import (
+    build_probe_from_config_online,
+    load_probe_config_from_yaml,
+)
 from representation_learning.api import load_model
 
 config = load_probe_config_from_yaml("custom_probe.yml")
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
-probe = build_probe_from_config(config, base_model=base, num_classes=50, device="cpu")
+probe = build_probe_from_config_online(config, base_model=base, num_classes=50, device="cpu")
 ```
 
 ### Using ProbeConfig Programmatically
 
 ```python
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from representation_learning.models.probes.utils import build_probe_from_config_online
 
 # Create config programmatically
 config = ProbeConfig(
@@ -270,7 +292,7 @@ config = ProbeConfig(
 )
 
 # Use it
-probe = build_probe_from_config(config, base_model=my_model, num_classes=50, device="cpu")
+probe = build_probe_from_config_online(config, base_model=my_model, num_classes=50, device="cpu")
 ```
 
 ## Implementation Details
@@ -285,7 +307,7 @@ representation_learning/
 │   ├── utils/                          # Probe utilities (parallel to models/utils/)
 │   │   ├── __init__.py
 │   │   ├── registry.py                 # Probe class discovery + YAML helpers
-│   │   └── factory.py                  # build_probe_from_config
+│   │   └── factory.py                  # build_probe_from_config_online/offline
 │   ├── get_probe.py                    # Legacy public factory (deprecated internally)
 │   └── [probe implementations]
 └── examples/
@@ -300,8 +322,8 @@ representation_learning/
 - **YAML Helpers**: `load_probe_config_from_yaml()` for loading `ProbeConfig` from disk
 
 #### `factory.py`
-- **build_probe_from_config()**: Core factory for building probes from `ProbeConfig`
-- Handles parameter filtering and base-model interaction (freezing, hooks)
+- **build_probe_from_config_online() / build_probe_from_config_offline()**: Core factories for building probes from `ProbeConfig`
+- Handle parameter filtering and base-model interaction (freezing, hooks, feature-mode)
 
 ## Best Practices
 
@@ -309,7 +331,7 @@ representation_learning/
 Begin with a simple linear probe on the backbone’s last layer:
 
 ```python
-from representation_learning.api import build_probe_from_config, load_model
+from representation_learning.api import build_probe_from_config_online, load_model
 from representation_learning.configs import ProbeConfig
 
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -320,7 +342,7 @@ cfg = ProbeConfig(
     freeze_backbone=True,
     online_training=True,
 )
-probe = build_probe_from_config(cfg, base_model=base, num_classes=50, device="cpu")
+probe = build_probe_from_config_online(cfg, base_model=base, num_classes=50, device="cpu")
 ```
 
 ### 2. Increase Complexity If Needed
@@ -388,7 +410,7 @@ Computational:    FAST ───────────────────
 
 ### Verify Installation
 ```python
-from representation_learning.api import build_probe_from_config
+from representation_learning.api import build_probe_from_config_offline
 from representation_learning.configs import ProbeConfig
 import torch
 
@@ -400,13 +422,11 @@ cfg = ProbeConfig(
     freeze_backbone=True,
     online_training=False,
 )
-probe = build_probe_from_config(
+probe = build_probe_from_config_offline(
     cfg,
-    base_model=None,
+    input_dim=768,
     num_classes=10,
     device="cpu",
-    feature_mode=True,
-    input_dim=768,
 )
 
 # Test forward pass
@@ -425,7 +445,7 @@ python examples/08_probe_training.py
 
 ✅ **Probe Discovery**: Automatically finds all probe classes
 ✅ **Config Loading**: `load_probe_config_from_yaml()` builds `ProbeConfig` from YAML
-✅ **Factory Usage**: `build_probe_from_config()` builds probes from `ProbeConfig`
+✅ **Factory Usage**: `build_probe_from_config_online()` / `build_probe_from_config_offline()` build probes from `ProbeConfig`
 ✅ **Offline Mode**: Creates probes for pre-computed embeddings
 ✅ **Online Mode**: Loads and attaches to base models
 ✅ **Forward Pass**: Correct output shapes with dummy data
