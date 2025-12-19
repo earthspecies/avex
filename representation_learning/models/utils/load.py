@@ -10,7 +10,9 @@ from __future__ import annotations
 import inspect
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Dict, Optional, Union
+
+import torch
 
 from representation_learning.configs import ModelSpec
 from representation_learning.io import anypath, exists, filesystem_from_path
@@ -276,7 +278,7 @@ def _load_from_modelspec(
         raise ValueError(
             "load_model() without a checkpoint no longer creates new classifier heads. "
             "Build a backbone with build_model()/build_model_from_spec() and attach "
-            "a probe head via build_probe_from_config() instead."
+            "a probe head via build_probe_from_config_online() or build_probe_from_config_offline() instead."
         )
 
     # Create model using factory (backbone; classifier, if any, is defined by the class or checkpoint)
@@ -310,6 +312,71 @@ def _load_from_modelspec(
     return backbone.to(device)
 
 
+def _get_classification_layer_dim_from_state_dict(state_dict: Dict[str, torch.Tensor]) -> Optional[int]:
+    """Get the classification layer dimension from a state dict.
+
+    This function extracts the classification layer dimension from a state dict,
+    typically loaded from a checkpoint.
+
+    Args:
+        state_dict: State dictionary to analyze (usually from a checkpoint).
+
+    Returns:
+        Number of classes (output dimension of classification layer) if found,
+        None otherwise
+    """
+
+    # Look for classifier/head layer weights in state dict
+    # Prioritize classifier-specific keys (avoid matching backbone layers)
+    classifier_keys = [
+        key
+        for key in state_dict.keys()
+        if any(
+            term in key.lower()
+            for term in [
+                "classifier",
+                "head",
+                "classification",
+                "classification_head",
+            ]
+        )
+        and not any(
+            exclude in key.lower()
+            for exclude in [
+                "backbone",
+                "encoder",
+                "fc1",
+                "fc2",
+                "fc3",
+                "projection",
+                "dense",
+            ]
+        )
+    ]
+
+    if len(classifier_keys) == 0:
+        logger.warning("Could not find classifier/head weights in state dict")
+        return None
+
+    # Take the last layer matching the classifier keys
+    classifier_keys_sorted = sorted(classifier_keys)
+    last_key = classifier_keys_sorted[-1]
+
+    # Extract dimension from the last classifier key
+    if last_key in state_dict:
+        tensor = state_dict[last_key]
+        if "weight" in last_key and tensor.dim() == 2:
+            num_classes = tensor.shape[0]
+            logger.info(f"Found num_classes={num_classes} from {last_key}")
+            return num_classes
+        elif "bias" in last_key and tensor.dim() == 1:
+            num_classes = tensor.shape[0]
+            logger.info(f"Found num_classes={num_classes} from {last_key}")
+            return num_classes
+
+    return None
+
+
 def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> Optional[int]:
     """Extract num_classes from checkpoint file.
 
@@ -335,66 +402,16 @@ def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> O
             # Keep classifier layers since we need them to extract num_classes
             processed_state_dict = _process_state_dict(checkpoint, keep_classifier=True)
 
-            # Look for classifier/head layer weights in processed state dict
-            # Prioritize classifier-specific keys
-            # (avoid matching backbone layers)
-            classifier_keys = [
-                key
-                for key in processed_state_dict.keys()
-                if any(
-                    term in key.lower()
-                    for term in [
-                        "classifier",
-                        "head",
-                        "classification",
-                        "classification_head",
-                    ]
-                )
-                and not any(
-                    exclude in key.lower()
-                    for exclude in [
-                        "backbone",
-                        "encoder",
-                        "fc1",
-                        "fc2",
-                        "fc3",
-                        "projection",
-                        "dense",
-                    ]
-                )
-            ]
-
-            if len(classifier_keys) == 0:
-                logger.warning("Could not find classifier/head weights in checkpoint")
-                return None
-
-            # Find the final output layer (typically the last classifier layer with smallest output dim)
-            # Sort keys to process in order, and prefer the last one (final output layer)
-            classifier_keys_sorted = sorted(classifier_keys)
-            for key in reversed(classifier_keys_sorted):  # Process from last to first
-                if "weight" in key and len(processed_state_dict[key].shape) == 2:
-                    # For 2D weight matrices, the first dimension is typically the output size
-                    # But for the final layer, we want the smallest output dimension
-                    output_dim = processed_state_dict[key].shape[0]
-                    # Heuristic: final output layer usually has output_dim < 1000 (reasonable num_classes)
-                    # and is one of the last layers
-                    if output_dim < 10000:  # Reasonable upper bound for num_classes
-                        num_classes = output_dim
-                        logger.info(f"Found num_classes={num_classes} from {key}")
-                        return num_classes
-                elif "bias" in key and len(processed_state_dict[key].shape) == 1:
-                    # For bias vectors, the length is the output size
-                    output_dim = processed_state_dict[key].shape[0]
-                    if output_dim < 10000:  # Reasonable upper bound for num_classes
-                        num_classes = output_dim
-                        logger.info(f"Found num_classes={num_classes} from {key}")
-                        return num_classes
-
             # Look for metadata in original checkpoint
             if "num_classes" in checkpoint:
                 return checkpoint["num_classes"]
             if "model_config" in checkpoint and "num_classes" in checkpoint["model_config"]:
                 return checkpoint["model_config"]["num_classes"]
+
+            # Try to get num_classes from classification layer dimension
+            num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+            if num_classes is not None:
+                return num_classes
 
         logger.warning("Could not determine num_classes from checkpoint")
         return None

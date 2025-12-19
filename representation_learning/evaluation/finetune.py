@@ -17,7 +17,10 @@ from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, ExperimentConfig
 from representation_learning.metrics.metric_factory import get_metric_class
-from representation_learning.models.probes.utils.factory import build_probe_from_config
+from representation_learning.models.probes.utils.factory import (
+    build_probe_from_config_offline,
+    build_probe_from_config_online,
+)
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.utils import ExperimentLogger, universal_torch_load
 
@@ -495,13 +498,11 @@ def train_and_eval_offline(
         f"Creating offline probe: type={probe_config.probe_type}, input_dim={input_dim}, target_length={target_length}"
     )
 
-    probe = build_probe_from_config(
+    probe = build_probe_from_config_offline(
         probe_config=probe_config,
-        base_model=None,
+        input_dim=input_dim,
         num_classes=num_labels,
         device=device,
-        feature_mode=True,
-        input_dim=input_dim,
         target_length=target_length,
     )
     # Count parameters for offline probe
@@ -691,12 +692,11 @@ def train_and_eval_online(
         f"frozen={probe_config.freeze_backbone}, target_length={target_length}"
     )
 
-    sft_model = build_probe_from_config(
+    sft_model = build_probe_from_config_online(
         probe_config=probe_config,
         base_model=base_model,
         num_classes=num_labels,
         device=device,
-        feature_mode=False,
         input_dim=None,
         frozen=probe_config.freeze_backbone,
         target_length=target_length,

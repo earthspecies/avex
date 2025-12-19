@@ -332,7 +332,8 @@ def main(device: str = "cpu") -> None:
 
     # Note: build_model() requires a ModelSpec to be registered, not just a model class.
     # For custom models without ModelSpecs, instantiate directly.
-    # Custom models can be used standalone or with probes attached via build_probe_from_config()
+    # Custom models can be used standalone or with probes attached via
+    # build_probe_from_config_online() or build_probe_from_config_offline()
     model = SimpleAudioCNN(device=device, num_classes=5)
     print(f"\nDirect instantiation example: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")

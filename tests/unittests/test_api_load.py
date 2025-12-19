@@ -18,6 +18,7 @@ from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.utils.load import (
     _extract_num_classes_from_checkpoint,
+    _get_classification_layer_dim_from_state_dict,
     _load_checkpoint,
     _load_from_modelspec,
     load_label_mapping,
@@ -25,6 +26,7 @@ from representation_learning.models.utils.load import (
 from representation_learning.models.utils.registry import (
     register_model_class,
 )
+from representation_learning.utils.utils import _process_state_dict
 
 
 class TestLoadModel:
@@ -220,6 +222,192 @@ class TestCreateModel:
         # Clean up
         registry._MODEL_REGISTRY.clear()
         registry._MODEL_CLASSES.clear()
+
+
+class TestGetClassificationLayerDim:
+    """Test _get_classification_layer_dim_from_state_dict function."""
+
+    def test_extracts_from_classifier_weight(self) -> None:
+        """Test extracting num_classes from classifier.weight."""
+        state_dict = {
+            "classifier.weight": torch.randn(25, 128),
+            "classifier.bias": torch.randn(25),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes == 25
+
+    def test_extracts_from_classifier_bias(self) -> None:
+        """Test extracting num_classes from classifier.bias when weight not present."""
+        state_dict = {
+            "classifier.bias": torch.randn(30),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes == 30
+
+    def test_extracts_from_head_weight(self) -> None:
+        """Test extracting num_classes from head.weight."""
+        state_dict = {
+            "head.weight": torch.randn(42, 256),
+            "head.bias": torch.randn(42),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes == 42
+
+    def test_extracts_from_classification_head(self) -> None:
+        """Test extracting num_classes from classification_head."""
+        state_dict = {
+            "classification_head.weight": torch.randn(100, 512),
+            "classification_head.bias": torch.randn(100),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes == 100
+
+    def test_prefers_last_classifier_when_multiple(self) -> None:
+        """Test that the function prefers the last classifier when multiple exist."""
+        state_dict = {
+            "classifier.weight": torch.randn(10, 128),
+            "classifier.bias": torch.randn(10),
+            "head.weight": torch.randn(20, 256),
+            "head.bias": torch.randn(20),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        # Should prefer "head" over "classifier" (alphabetically last)
+        assert num_classes == 20
+
+    def test_handles_prefixed_keys(self) -> None:
+        """Test extracting from state dict with module. or model. prefixes."""
+        state_dict = {
+            "model.classifier.weight": torch.randn(15, 64),
+            "model.classifier.bias": torch.randn(15),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes == 15
+
+    def test_excludes_backbone_classifier(self) -> None:
+        """Test that backbone.classifier is excluded."""
+        state_dict = {
+            "backbone.classifier.weight": torch.randn(50, 128),
+            "classifier.weight": torch.randn(25, 128),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        # Should use classifier, not backbone.classifier
+        assert num_classes == 25
+
+    def test_excludes_encoder_head(self) -> None:
+        """Test that encoder.head is excluded."""
+        state_dict = {
+            "encoder.head.weight": torch.randn(50, 128),
+            "head.weight": torch.randn(30, 128),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        # Should use head, not encoder.head
+        assert num_classes == 30
+
+    def test_excludes_fc_layers(self) -> None:
+        """Test that fc1, fc2, fc3 layers are excluded."""
+        state_dict = {
+            "fc1.weight": torch.randn(100, 128),
+            "fc2.weight": torch.randn(50, 100),
+            "classifier.weight": torch.randn(25, 50),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        # Should use classifier, not fc1 or fc2
+        assert num_classes == 25
+
+    def test_returns_none_when_no_classifier(self) -> None:
+        """Test that None is returned when no classifier keys exist."""
+        state_dict = {
+            "backbone.layer1.weight": torch.randn(64, 3, 3, 3),
+            "backbone.layer2.weight": torch.randn(128, 64, 3, 3),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes is None
+
+    def test_returns_none_when_classifier_wrong_shape(self) -> None:
+        """Test that None is returned when classifier has wrong shape."""
+        state_dict = {
+            "classifier.weight": torch.randn(10, 64, 3),  # 3D tensor (wrong shape)
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes is None
+
+    def test_returns_none_when_bias_wrong_shape(self) -> None:
+        """Test that None is returned when bias has wrong shape."""
+        state_dict = {
+            "classifier.bias": torch.randn(10, 5),  # 2D tensor (wrong shape for bias)
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes is None
+
+    def test_returns_dimension_even_when_large(self) -> None:
+        """Test that dimension is returned even when large (no size limit)."""
+        state_dict = {
+            "classifier.weight": torch.randn(50000, 128),  # Large dimension
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        # Should return the dimension regardless of size
+        assert num_classes == 50000
+
+    def test_handles_empty_state_dict(self) -> None:
+        """Test that None is returned for empty state dict."""
+        state_dict = {}
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        assert num_classes is None
+
+    def test_prefers_weight_over_bias(self) -> None:
+        """Test that weight is preferred over bias when both exist."""
+        state_dict = {
+            "classifier.weight": torch.randn(40, 128),
+            "classifier.bias": torch.randn(40),
+        }
+        processed_state_dict = _process_state_dict(state_dict, keep_classifier=True)
+
+        num_classes = _get_classification_layer_dim_from_state_dict(processed_state_dict)
+
+        # Should use weight (checked first in reversed sorted order)
+        assert num_classes == 40
 
 
 class TestExtractNumClassesFromCheckpoint:

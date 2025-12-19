@@ -25,7 +25,7 @@ from representation_learning.models.utils.registry import (
 
 
 class TestBuildProbeFromConfig:
-    """Test build_probe_from_config function."""
+    """Test build_probe_from_config_online and build_probe_from_config_offline functions."""
 
     @pytest.fixture(autouse=True)
     def setup_registry(self) -> None:

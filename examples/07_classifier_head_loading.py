@@ -25,7 +25,7 @@ import torch
 
 from representation_learning import load_model
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from representation_learning.models.probes.utils import build_probe_from_config_online
 
 
 def main(device: str = "cpu") -> None:
@@ -138,7 +138,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    probe = build_probe_from_config(
+    probe = build_probe_from_config_online(
         probe_config=probe_config,
         base_model=backbone,
         num_classes=num_classes,

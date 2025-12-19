@@ -35,7 +35,7 @@ from representation_learning import (
     load_model,
 )
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from representation_learning.models.probes.utils import build_probe_from_config_online
 
 
 def main(device: str = "cpu") -> None:
@@ -94,7 +94,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model_with_probe = build_probe_from_config(
+    model_with_probe = build_probe_from_config_online(
         probe_config=probe_cfg,
         base_model=backbone,
         num_classes=10,
@@ -174,7 +174,8 @@ def main(device: str = "cpu") -> None:
 - Default checkpoints defined in YAML files
 - Use checkpoint_path parameter to override
 - load_model(): Restores backbone (and classifier if checkpoint includes one)
-- Probes: Use build_probe_from_config() to attach new classifier heads instead of passing num_classes
+- Probes: Use build_probe_from_config_online() or build_probe_from_config_offline()
+  to attach new classifier heads instead of passing num_classes
 - Class mappings link logit indices to labels
 """)
 
