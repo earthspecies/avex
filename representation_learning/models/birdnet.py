@@ -69,12 +69,16 @@ class Model(ModelBase):
         language: str = "en_us",
         apply_sigmoid: bool = True,
         freeze_backbone: bool = True,
+        return_features_only: bool = False,
         **kwargs,  # Accept additional config parameters  # noqa: ANN003
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
+        # Handle return_features_only: if True, force feature extraction mode (num_classes=0)
+        if return_features_only:
+            num_classes = 0
         # Treat None as 0 (feature extraction only)
-        if num_classes is None:
+        elif num_classes is None:
             num_classes = 0
 
         # Preserve CUDA_VISIBLE_DEVICES before importing TensorFlow
@@ -98,6 +102,7 @@ class Model(ModelBase):
         self.num_species = len(self.species)
 
         self.num_classes = num_classes
+        self.return_features_only = return_features_only
         self.language = language
         self.apply_sigmoid = apply_sigmoid
         self.freeze_backbone = freeze_backbone

@@ -78,6 +78,7 @@ class PerchModel(ModelBase):
         target_sample_rate: int = 32_000,
         window_seconds: float = 5.0,
         freeze_backbone: bool = True,
+        return_features_only: bool = False,
     ) -> None:
         """Initialize PerchModel.
 
@@ -88,14 +89,19 @@ class PerchModel(ModelBase):
             target_sample_rate: Expected sample rate in Hz
             window_seconds: Duration of audio window in seconds
             freeze_backbone: Whether to freeze the backbone (currently unused)
+            return_features_only: If True, force feature extraction mode (num_classes=0)
         """
         super().__init__(device, audio_config)
 
+        # Handle return_features_only: if True, force feature extraction mode (num_classes=0)
+        if return_features_only:
+            num_classes = 0
         # Treat None as 0 (feature extraction only)
-        if num_classes is None:
+        elif num_classes is None:
             num_classes = 0
 
         self.num_classes = num_classes
+        self.return_features_only = return_features_only
         self.target_sr = target_sample_rate
         self.window_samples = int(window_seconds * self.target_sr)
 

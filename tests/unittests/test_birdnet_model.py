@@ -365,6 +365,64 @@ class TestBirdNetModel:
         assert not torch.isnan(result).any()
         assert not torch.isinf(result).any()
 
+    def test_return_features_only_true(self) -> None:
+        """Test BirdNET model with return_features_only=True."""
+        model = BirdNetModel(return_features_only=True, device="cpu")
+
+        assert model.return_features_only is True
+        assert model.num_classes == 0
+        assert model.classifier is None
+
+    def test_return_features_only_false_with_num_classes(self) -> None:
+        """Test BirdNET model with return_features_only=False and explicit num_classes."""
+        model = BirdNetModel(return_features_only=False, num_classes=20, device="cpu")
+
+        assert model.return_features_only is False
+        assert model.num_classes == 20
+        assert model.classifier is not None
+        assert model.classifier.out_features == 20
+
+    def test_return_features_only_false_without_num_classes(self) -> None:
+        """Test BirdNET model with return_features_only=False and num_classes=None (defaults to 0)."""
+        model = BirdNetModel(return_features_only=False, device="cpu")
+
+        assert model.return_features_only is False
+        assert model.num_classes == 0  # None defaults to 0
+        assert model.classifier is None
+
+    def test_return_features_only_overrides_num_classes(self) -> None:
+        """Test that return_features_only=True overrides num_classes parameter."""
+        # Even if num_classes is provided, return_features_only=True should set it to 0
+        model = BirdNetModel(return_features_only=True, num_classes=50, device="cpu")
+
+        assert model.return_features_only is True
+        assert model.num_classes == 0  # Should be overridden
+        assert model.classifier is None
+
+    def test_return_features_only_forward_pass(self, audio_input: torch.Tensor) -> None:
+        """Test forward pass with return_features_only=True."""
+        model = BirdNetModel(return_features_only=True, device="cpu")
+
+        with torch.no_grad():
+            result = model.forward(audio_input)
+
+        # Should return species logits (no classifier)
+        assert isinstance(result, torch.Tensor)
+        assert result.shape == (2, model.num_species)
+        assert not torch.isnan(result).any()
+        assert not torch.isinf(result).any()
+
+    def test_return_features_only_extract_embeddings(self, audio_input: torch.Tensor) -> None:
+        """Test extract_embeddings with return_features_only=True."""
+        model = BirdNetModel(return_features_only=True, device="cpu")
+
+        result = model.extract_embeddings(x=audio_input, aggregation="mean")
+
+        assert isinstance(result, torch.Tensor)
+        assert result.shape == (2, 1024)
+        assert not torch.isnan(result).any()
+        assert not torch.isinf(result).any()
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
