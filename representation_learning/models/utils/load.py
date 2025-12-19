@@ -35,7 +35,6 @@ def load_model(
     device: str = "cpu",
     checkpoint_path: Optional[str] = None,
     return_features_only: bool = False,
-    **kwargs: object,
 ) -> object:
     """Load a complete model (architecture + optionally pre-trained weights).
 
@@ -69,7 +68,6 @@ def load_model(
         device: Device to load the model on ("cpu", "cuda", etc.)
         checkpoint_path: Optional path to checkpoint weights (supports gs:// paths)
         return_features_only: If True, force embedding extraction mode when supported
-        **kwargs: Additional arguments passed to model creation
 
     Returns:
         Loaded model ready for training/inference
@@ -79,23 +77,17 @@ def load_model(
         TypeError: If model type is not supported
 
     Examples:
-        >>> # Load with explicit num_classes (for new model)
-        >>> # Note: This requires the model class to be registered first
-        >>> # model = load_model("efficientnet_animalspeak", num_classes=100)
+        >>> # Load with default checkpoint (num_classes extracted automatically)
+        >>> # model = load_model("efficientnet_animalspeak")
 
         >>> # Load with custom checkpoint
         >>> # model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-bucket/checkpoint.pt")
 
-        >>> # Load with default checkpoint (if registered)
-        >>> # from representation_learning import register_checkpoint
-        >>> # register_checkpoint("beats_naturelm", "gs://my-bucket/beats_naturelm.pt")
-        >>> # model = load_model("beats_naturelm")  # Uses default checkpoint
-
-        >>> # Load from config file (num_classes from config)
+        >>> # Load from config file
         >>> # model = load_model("experiments/my_model.yml")
 
-        >>> # Load with custom parameters
-        >>> # model = load_model("efficientnet_animalspeak", num_classes=50)
+        >>> # Load for embedding extraction (no classifier)
+        >>> # model = load_model("beats_naturelm", return_features_only=True)
     """
     if isinstance(model, str):
         # Case 1: Registered model
@@ -108,7 +100,6 @@ def load_model(
                 checkpoint_path=checkpoint_path,
                 registry_key=model,
                 return_features_only=return_features_only,
-                **kwargs,
             )
 
         # Case 2: YAML path
@@ -124,7 +115,6 @@ def load_model(
                 checkpoint_path=checkpoint_path,
                 registry_key=model_name,
                 return_features_only=return_features_only,
-                **kwargs,
             )
 
         # Case 3: Unknown model identifier
@@ -142,7 +132,6 @@ def load_model(
             device=device,
             checkpoint_path=checkpoint_path,
             return_features_only=return_features_only,
-            **kwargs,
         )
 
     elif isinstance(model, ModelSpec):
@@ -152,7 +141,6 @@ def load_model(
             device=device,
             checkpoint_path=checkpoint_path,
             return_features_only=return_features_only,
-            **kwargs,
         )
 
     else:
@@ -165,7 +153,6 @@ def _load_from_modelspec(
     checkpoint_path: Optional[str],
     registry_key: Optional[str] = None,
     return_features_only: bool = False,
-    **kwargs: object,
 ) -> object:
     """Load from ModelSpec object using factory + checkpoint loading.
 
@@ -230,31 +217,38 @@ def _load_from_modelspec(
         sig = inspect.signature(model_class.__init__)
         supports_return_features_only = "return_features_only" in sig.parameters
 
+    # Build internal kwargs dict for model initialization
+    # These are runtime-determined values that cannot be in ModelSpec:
+    # - num_classes: extracted from checkpoint (varies by checkpoint, not model spec)
+    # - return_features_only: user's runtime choice (not static configuration)
+    # All other model configuration comes from ModelSpec via build_model_from_spec()
+    model_kwargs: dict[str, object] = {}
+
     # If return_features_only is requested and supported, ensure the flag is set
     if return_features_only and supports_return_features_only:
-        kwargs["return_features_only"] = True
+        model_kwargs["return_features_only"] = True
         logger.info(f"Loading {model_type} model in embedding extraction mode (return_features_only=True)")
 
     # Extract num_classes from checkpoint if not provided and checkpoint exists
     # This must happen BEFORE building the model so the model is created with the correct classifier
-    if checkpoint_path and "num_classes" not in kwargs and not return_features_only:
+    if checkpoint_path and not return_features_only:
         extracted_num_classes = _extract_num_classes_from_checkpoint(checkpoint_path, device)
         if extracted_num_classes is not None:
-            kwargs["num_classes"] = extracted_num_classes
+            model_kwargs["num_classes"] = extracted_num_classes
             logger.info(f"Extracted num_classes={extracted_num_classes} from checkpoint")
         elif registry_key is not None:
             # Fallback: try to get num_classes from label mapping
             label_mapping = load_label_mapping(registry_key)
             if label_mapping and "label_to_index" in label_mapping:
                 num_classes = len(label_mapping["label_to_index"])
-                kwargs["num_classes"] = num_classes
+                model_kwargs["num_classes"] = num_classes
                 logger.info(f"Extracted num_classes={num_classes} from label mapping")
         else:
             # Checkpoint exists but no num_classes found - likely a backbone-only checkpoint
             # Automatically enable embedding mode for models that support it
             if supports_return_features_only:
                 return_features_only = True
-                kwargs["return_features_only"] = True
+                model_kwargs["return_features_only"] = True
                 logger.info(
                     f"Checkpoint found but no classifier detected; loading {model_type} in embedding extraction mode"
                 )
@@ -263,7 +257,7 @@ def _load_from_modelspec(
     # Automatically enable embedding mode for models that support it
     if model_spec.pretrained and not checkpoint_path and supports_return_features_only and not return_features_only:
         return_features_only = True
-        kwargs["return_features_only"] = True
+        model_kwargs["return_features_only"] = True
         logger.info(
             f"Model '{registry_key or model_type}' has pretrained=True (backbone-only); "
             "automatically enabling embedding extraction mode"
@@ -286,7 +280,9 @@ def _load_from_modelspec(
         )
 
     # Create model using factory (backbone; classifier, if any, is defined by the class or checkpoint)
-    backbone = build_model_from_spec(model_spec, device, **kwargs)
+    # ModelSpec contains all static configuration; model_kwargs only contains runtime-determined values
+    # (num_classes from checkpoint, return_features_only from user choice - these cannot be in ModelSpec)
+    backbone = build_model_from_spec(model_spec, device, **model_kwargs)
 
     # Load label mapping if available (only for models with classifier heads)
     # Don't load label mapping if return_features_only=True
