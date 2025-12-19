@@ -183,3 +183,78 @@ def build_probe_from_config(
     except Exception as e:
         logger.error(f"Failed to build probe '{probe_type}': {e}")
         raise
+
+
+def build_probe_from_config_online(
+    probe_config: ProbeConfig,
+    base_model: torch.nn.Module,
+    num_classes: int,
+    device: str,
+    target_length: Optional[int] = None,
+    **kwargs: object,
+) -> torch.nn.Module:
+    """Build a probe instance for online training (attached to a base model).
+
+    This function builds a probe that is attached to a base model for end-to-end
+    training. The frozen state is inferred from probe_config.freeze_backbone.
+
+    Args:
+        probe_config: ProbeConfig configuration object
+        base_model: Base model to attach probe to
+        num_classes: Number of output classes
+        device: Device for probe
+        target_length: Optional target length in samples
+        **kwargs: Additional args passed to probe __init__
+
+    Returns:
+        Instantiated probe module attached to base_model
+    """
+    frozen = probe_config.freeze_backbone
+    return build_probe_from_config(
+        probe_config=probe_config,
+        base_model=base_model,
+        num_classes=num_classes,
+        device=device,
+        feature_mode=False,
+        input_dim=None,
+        frozen=frozen,
+        target_length=target_length,
+        **kwargs,
+    )
+
+
+def build_probe_from_config_offline(
+    probe_config: ProbeConfig,
+    input_dim: int,
+    num_classes: int,
+    device: str,
+    target_length: Optional[int] = None,
+    **kwargs: object,
+) -> torch.nn.Module:
+    """Build a probe instance for offline training (on pre-computed embeddings).
+
+    This function builds a probe that operates on pre-computed embeddings,
+    without requiring a base model. feature_mode is automatically set to True.
+
+    Args:
+        probe_config: ProbeConfig configuration object
+        input_dim: Input dimension of pre-computed embeddings
+        num_classes: Number of output classes
+        device: Device for probe
+        target_length: Optional target length in samples
+        **kwargs: Additional args passed to probe __init__
+
+    Returns:
+        Instantiated probe module for offline training
+    """
+    return build_probe_from_config(
+        probe_config=probe_config,
+        base_model=None,
+        num_classes=num_classes,
+        device=device,
+        feature_mode=True,
+        input_dim=input_dim,
+        frozen=True,  # Not applicable for offline mode, but required by build_probe_from_config
+        target_length=target_length,
+        **kwargs,
+    )

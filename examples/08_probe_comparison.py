@@ -24,7 +24,10 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from representation_learning import get_model_spec, load_model
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from representation_learning.models.probes.utils import (
+    build_probe_from_config_offline,
+    build_probe_from_config_online,
+)
 
 
 def create_dummy_dataset(
@@ -198,7 +201,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        linear_probe = build_probe_from_config(
+        linear_probe = build_probe_from_config_online(
             probe_config=linear_config,
             base_model=backbone,
             num_classes=num_classes,
@@ -224,7 +227,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        mlp_probe = build_probe_from_config(
+        mlp_probe = build_probe_from_config_online(
             probe_config=mlp_config,
             base_model=mlp_backbone,
             num_classes=num_classes,
@@ -262,7 +265,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        last_layer_probe = build_probe_from_config(
+        last_layer_probe = build_probe_from_config_online(
             probe_config=last_layer_config,
             base_model=backbone,
             num_classes=num_classes,
@@ -287,7 +290,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        all_layers_probe = build_probe_from_config(
+        all_layers_probe = build_probe_from_config_online(
             probe_config=all_layers_config,
             base_model=all_layers_backbone,
             num_classes=num_classes,
@@ -349,13 +352,11 @@ Offline training is useful when:
         hidden_dims=[256, 128],
     )
 
-    offline_probe = build_probe_from_config(
+    offline_probe = build_probe_from_config_offline(
         probe_config=offline_probe_config,
-        base_model=None,  # No base model for offline mode
+        input_dim=embedding_dim,
         num_classes=num_classes,
         device=device,
-        feature_mode=True,  # Enable feature mode
-        input_dim=embedding_dim,  # Required when base_model is None
     )
     print(f"  ✓ Offline probe built: {type(offline_probe).__name__}")
     print(f"  Parameters: {sum(p.numel() for p in offline_probe.parameters()):,}")
