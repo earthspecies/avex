@@ -1,27 +1,55 @@
-# Custom Model Registration
+# Custom Model Registration Guide
 
-This guide explains when and why you need to register custom model classes with the framework.
+This guide walks you through using custom models with the representation learning framework, starting with the simplest approach and building up to more advanced use cases.
 
-## Quick Answer: Do I Need to Register?
-
-**You only need to register your model class if:**
-- ✅ You want to use `build_model()` or `build_model_from_spec()` with a `ModelSpec` that references your custom model
-- ✅ You want to use the plugin architecture where models are built from configuration files (YAML)
-
-**You do NOT need to register if:**
-- ❌ You're just instantiating your model directly: `MyModel(device="cpu", num_classes=10)`
-- ❌ You're using your model standalone or attaching probes directly
-
-## When Registration is Required
-
-Registration is required when you want to use the **plugin architecture** - building models from `ModelSpec` configurations:
+**Most of the time, you don't need to register your custom model.** You can use it directly:
 
 ```python
-from representation_learning import build_model, register_model_class
-from representation_learning.configs import ModelSpec, AudioConfig
+from representation_learning.models.base_model import ModelBase
+from representation_learning.models.probes.utils import build_probe_from_config
+from representation_learning.configs import ProbeConfig
+
+# Define your model
+class MyCustomModel(ModelBase):
+    def __init__(self, device: str, num_classes: int):
+        super().__init__(device=device)
+        # Your model implementation
+        pass
+
+# Use it directly - no registration needed!
+model = MyCustomModel(device="cpu", num_classes=10)
+
+```
+
+**This simple approach works for:**
+- Standalone model usage
+- Direct instantiation
+- One-off experiments
+
+## Quick Reference
+
+**Do I need to register?**
+
+```
+How do you want to use your custom model?
+│
+├─ (1) Direct instantiation: MyModel(device="cpu", num_classes=10)
+│   └─ No registration needed
+│
+└─ (2) Plugin architecture: build_model() or build_model_from_spec()
+    └─ Registration required: Use @register_model_class decorator
+```
+
+## Tutorial: Using the Plugin Architecture
+
+If you want to use the plugin system, follow these steps:
+
+### Step 1: Register Your Model Class
+
+```python
+from representation_learning import register_model_class
 from representation_learning.models.base_model import ModelBase
 
-# 1. Register your custom model class
 @register_model_class
 class MyCustomModel(ModelBase):
     name = "my_custom_model"  # This name is used for lookup
@@ -30,99 +58,51 @@ class MyCustomModel(ModelBase):
         super().__init__(device=device)
         # Your model implementation
         pass
+```
 
-# 2. Register a ModelSpec that references your model class
-from representation_learning import register_model
+### Step 2: Create and Use a ModelSpec
+
+```python
+from representation_learning.configs import ModelSpec, AudioConfig
+from representation_learning.models.utils.factory import build_model_from_spec
+
+# Create a ModelSpec that references your model class
 model_spec = ModelSpec(
     name="my_custom_model",  # Must match the class name above
     pretrained=False,
     device="cpu",
     audio_config=AudioConfig(sample_rate=16000)
 )
+
+# Use the ModelSpec to build your model
+model = build_model_from_spec(model_spec, device="cpu", num_classes=10)
+```
+
+**Note:** Creating a `ModelSpec` doesn't validate that the model class exists. The check happens when you call `build_model_from_spec()`, which will raise a `KeyError` if the model class isn't registered.
+
+### Step 3 (Optional): Register the ModelSpec for Reuse
+
+If you want to reuse the same configuration, you can register it:
+
+```python
+from representation_learning import register_model, build_model
+
 register_model("my_model_config", model_spec)
 
-# 3. Now you can use build_model() with the ModelSpec
+# Now you can use the registered name
 model = build_model("my_model_config", device="cpu", num_classes=10)
 ```
 
-**Why this is useful:**
-- Allows building models from YAML configuration files
-- Enables dynamic model selection based on configuration
-- Supports the full plugin architecture workflow
-- Makes models discoverable via `list_model_classes()`
+## Key Concepts
 
-## When Registration is NOT Required
+- **Model Class**: Your PyTorch model implementation (inherits from `ModelBase`)
+- **ModelSpec**: Configuration object (architecture params, audio config, etc.)
+- **Registration**: Links your model class to the plugin system so it can be found by name
 
-If you're just using your custom model directly, you don't need to register it:
+## Advanced: Loading from YAML
 
-```python
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+If you want to load models from YAML configuration files:
 
-# Define your model (no registration needed)
-class MyCustomModel(ModelBase):
-    def __init__(self, device: str, num_classes: int):
-        super().__init__(device=device)
-        # Your model implementation
-        pass
-
-# Use it directly
-model = MyCustomModel(device="cpu", num_classes=10)
-
-# Attach a probe if needed
-probe_config = ProbeConfig(
-    probe_type="linear",
-    target_layers=["last_layer"],
-    aggregation="mean",
-    freeze_backbone=True,
-)
-model_with_probe = build_probe_from_config(
-    probe_config=probe_config,
-    base_model=model,
-    num_classes=10,
-    device="cpu",
-)
-```
-
-**This approach is simpler and sufficient for:**
-- Standalone model usage
-- Direct instantiation
-- Attaching probes to custom models
-- One-off experiments
-
-## Summary: Registration Decision Tree
-
-```
-Do you want to use build_model() or build_model_from_spec()?
-│
-├─ YES → Do you have a ModelSpec that references your model?
-│   │
-│   ├─ YES → Register your model class (required)
-│   │   └─ Use: @register_model_class decorator
-│   │
-│   └─ NO → Create a ModelSpec first, then register both
-│
-└─ NO → Registration not needed
-    └─ Just instantiate your model directly
-```
-
-## Key Points
-
-1. **Registration enables the plugin architecture**: It allows `build_model()` and `build_model_from_spec()` to find and instantiate your model class by name.
-
-2. **Direct instantiation is always possible**: You can always create your model directly without registration - registration is only needed for the plugin system.
-
-3. **ModelSpec vs Model Class**:
-   - `ModelSpec` = configuration (architecture params, audio config, etc.)
-   - Model Class = the actual PyTorch model implementation
-   - Registration links them together so `build_model()` can find your class when given a ModelSpec
-
-4. **Probes work with both**: Whether you register or not, you can always attach probes to your custom models using `build_probe_from_config()` with `base_model` for online mode or `input_dim` for offline mode.
-
-## Example: When to Register
-
-**Scenario 1: Building from YAML config (registration required)**
 ```python
 # config.yaml
 name: my_custom_model
@@ -136,18 +116,7 @@ class MyCustomModel(ModelBase):
     name = "my_custom_model"
     # ...
 
-# Now you can load from YAML
+# Load from YAML
 from representation_learning import load_model
 model = load_model("config.yaml", device="cpu")
 ```
-
-**Scenario 2: Direct usage (registration not needed)**
-```python
-# Just use your model directly
-class MyCustomModel(ModelBase):
-    # ...
-
-model = MyCustomModel(device="cpu", num_classes=10)
-# No registration needed!
-```
-
