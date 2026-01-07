@@ -405,7 +405,6 @@ representation_learning/
 │   │   ├── __init__.py
 │   │   ├── registry.py                 # Probe class discovery + YAML helpers
 │   │   └── factory.py                  # build_probe_from_config
-│   ├── get_probe.py                    # Legacy public factory (deprecated internally)
 │   └── [probe implementations]
 └── examples/
     └── 08_probe_training.py            # Usage examples
