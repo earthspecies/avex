@@ -33,12 +33,22 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
+        # Initialize classifier and embedding dim (will be created lazily if needed)
+        self.classifier = None
+        self._embedding_dim = None
+
+        # Handle return_features_only: if True, ignore num_classes
+        if return_features_only:
+            num_classes = None
         # Validate num_classes: required when return_features_only=False
-        if not return_features_only and num_classes is None:
+        elif num_classes is None:
             # Use default from BirdMAE (1000 classes)
+            # Classifier will be created lazily via _ensure_classifier when needed
+            # BirdMAE does not have a classifier head, so we use a default of 1000 classes
             num_classes = 1000
 
         # Store configuration
+        self.num_classes = num_classes
         self.return_features_only = return_features_only
         self.gradient_checkpointing = False
         self.model_id = model_id
@@ -61,17 +71,6 @@ class Model(ModelBase):
 
         # Move model to device
         self.model = self.model.to(device)
-
-        # Add classification head if needed
-        if not self.return_features_only and num_classes != 1000:
-            # Get the embedding dimension from the model
-            # We'll determine this dynamically during first forward pass
-            self.classifier = None
-            self._embedding_dim = None
-        else:
-            # When return_features_only=True or num_classes==1000, no classifier needed
-            self.classifier = None
-            self._embedding_dim = None
 
     def _ensure_classifier(self, embedding_dim: int, num_classes: int) -> None:
         """Create classifier head if it doesn't exist yet."""
