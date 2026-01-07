@@ -93,13 +93,6 @@ class PerchModel(ModelBase):
         """
         super().__init__(device, audio_config)
 
-        # Handle return_features_only: if True, force feature extraction mode (num_classes=0)
-        if return_features_only:
-            num_classes = 0
-        # Treat None as 0 (feature extraction only)
-        elif num_classes is None:
-            num_classes = 0
-
         self.num_classes = num_classes
         self.return_features_only = return_features_only
         self.target_sr = target_sample_rate
@@ -111,8 +104,17 @@ class PerchModel(ModelBase):
         emb_dim = int(self._tf_forward(dummy).shape[-1])
         self.embedding_dim = emb_dim
 
-        # Optional classification head (learnable in PyTorch)
-        self.classifier: Optional[nn.Linear] = nn.Linear(self.embedding_dim, num_classes) if num_classes > 0 else None
+        # Handle return_features_only: if True, force num_classes to None
+        if return_features_only:
+            self.num_classes = None
+
+        if not return_features_only and self.num_classes is not None and self.num_classes > 0:
+            self.classifier = nn.Linear(self.embedding_dim, self.num_classes)
+            # Move classifier to the specified device
+            if device != "cpu" and torch.cuda.is_available():
+                self.classifier = self.classifier.to(device)
+        else:
+            self.classifier = None
 
         self.to(device)
 
