@@ -7,7 +7,6 @@ repos:
         types: [file, text]
       - id: end-of-file-fixer
         types: [python]
-      - id: requirements-txt-fixer
       - id: mixed-line-ending
         types: [python]
         args: [--fix=no]
