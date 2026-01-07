@@ -1,5 +1,5 @@
 """
-Example 6: Embedding Extraction Mode
+Example 5: Embedding Extraction Mode
 
 This example demonstrates loading models without a classification head
 for embedding extraction, which is useful for representation learning tasks.
@@ -36,7 +36,7 @@ from representation_learning.models.efficientnet import Model as EfficientNetMod
 
 def main(device: str = "cpu") -> None:
     """Demonstrate embedding extraction mode."""
-    print("Example 6: Embedding Extraction Mode")
+    print("Example 5: Embedding Extraction Mode")
     print("=" * 50)
 
     # =========================================================================

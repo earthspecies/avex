@@ -38,8 +38,16 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from representation_learning import get_model_class, list_model_classes, register_model_class
+from representation_learning import (
+    get_model_class,
+    get_model_spec,
+    list_model_classes,
+    register_model,
+    register_model_class,
+)
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
+from representation_learning.models.utils.factory import build_model_from_spec
 
 # =============================================================================
 # Custom Model Definitions
@@ -357,6 +365,36 @@ def main(device: str = "cpu") -> None:
     print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
 
     # =========================================================================
+    # Part 6: Register and use ModelSpec (for plugin architecture)
+    # =========================================================================
+    print("\nPart 6: Register ModelSpec for Plugin Architecture")
+    print("-" * 50)
+
+    # Create a ModelSpec for our custom model
+    model_spec = ModelSpec(
+        name="simple_audio_cnn",  # Must match the registered class name
+        pretrained=False,
+        device=device,
+        audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=5),
+    )
+
+    # Register the ModelSpec
+    register_model("my_custom_cnn", model_spec)
+    print("Registered ModelSpec: my_custom_cnn")
+    print(f"   Model type: {model_spec.name}")
+    print(f"   Sample rate: {model_spec.audio_config.sample_rate}")
+
+    # Retrieve and use the registered ModelSpec
+    retrieved_spec = get_model_spec("my_custom_cnn")
+    print(f"\nRetrieved ModelSpec: {retrieved_spec.name}")
+
+    # Now we can use build_model_from_spec() with the registered ModelSpec
+    # This requires both the model class AND the ModelSpec to be registered
+    model_from_spec = build_model_from_spec(retrieved_spec, device=device, num_classes=10)
+    print(f"Built model from spec: {type(model_from_spec).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model_from_spec.parameters()):,}")
+
+    # =========================================================================
     # Summary
     # =========================================================================
     print("\n" + "=" * 50)
@@ -370,9 +408,10 @@ When to Register:
 - ❌ NOT needed: Standalone usage or attaching probes directly
 
 Registration Process:
-- Use @register_model_class decorator to register custom models
+- Use @register_model_class decorator to register custom model classes
 - Models must inherit from ModelBase
 - Define 'name' class attribute for registration
+- Use register_model(name, spec) to register ModelSpec configurations
 - build_model() requires both a registered ModelSpec AND a registered model class
 
 Alternative (No Registration):

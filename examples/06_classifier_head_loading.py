@@ -1,5 +1,5 @@
 """
-Example 7: Classifier Head and Probe Behavior
+Example 6: Classifier Head and Probe Behavior
 
 This example demonstrates how load_model and probe heads interact:
 - How classifier weights are preserved when loading from checkpoints
@@ -37,7 +37,7 @@ def main(device: str = "cpu") -> None:
     Raises:
         ValueError: If model does not have a classifier when expected.
     """
-    print("Example 7: Classifier Head and Probe Behavior")
+    print("Example 6: Classifier Head and Probe Behavior")
     print("=" * 60)
 
     # Ensure checkpoints directory exists

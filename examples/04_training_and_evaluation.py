@@ -1,5 +1,5 @@
 """
-Example 5: Training and Evaluation Workflows
+Example 4: Training and Evaluation Workflows
 
 This example demonstrates:
 - Complete training workflow with custom models
@@ -211,7 +211,7 @@ def main(device: str = "cpu") -> None:
     ValueError
         If an unknown model name is encountered in the comparison section.
     """
-    print("Example 5: Training and Evaluation Workflows")
+    print("Example 4: Training and Evaluation Workflows")
     print("=" * 60)
     print(f"Using device: {device}")
 

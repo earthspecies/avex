@@ -238,11 +238,10 @@ For more examples, see the `examples/` directory:
 - `00_quick_start.py` - Basic model loading and testing
 - `01_basic_model_loading.py` - Loading models with different configurations
 - `02_checkpoint_loading.py` - Working with checkpoints and class mappings
-- `03_custom_model_registration.py` - Creating and registering custom models
-- `04_model_registry_management.py` - Managing model configurations and registrations
-- `05_training_and_evaluation.py` - Full training loop and evaluation examples
-- `06_embedding_extraction.py` - Feature extraction with `return_features_only=True` (unpooled features)
-- `07_classifier_head_loading.py` - Understanding classifier head behavior
+- `03_custom_model_registration.py` - Creating and registering custom models and ModelSpecs
+- `04_training_and_evaluation.py` - Full training loop and evaluation examples
+- `05_embedding_extraction.py` - Feature extraction with `return_features_only=True` (unpooled features)
+- `06_classifier_head_loading.py` - Understanding classifier head behavior
 
 ## 📚 API Reference
 
@@ -725,7 +724,7 @@ for epoch in range(num_epochs):
 torch.save(model.state_dict(), "checkpoints/my_model.pt")
 ```
 
-For complete training examples with data loading and evaluation, see `examples/05_training_and_evaluation.py`.
+For complete training examples with data loading and evaluation, see `examples/04_training_and_evaluation.py`.
 
 ### Evaluation
 
@@ -752,7 +751,7 @@ with torch.no_grad():
             print(f"{label}: {prob.item():.4f}")
 ```
 
-For complete evaluation examples, see `examples/05_training_and_evaluation.py`.
+For complete evaluation examples, see `examples/04_training_and_evaluation.py`.
 
 ## 🎨 Embedding Extraction and Feature Representations
 
@@ -880,7 +879,7 @@ flattened = features.flatten(1)  # (batch, 1280*4*5)
 ```
 
 
-See `examples/06_embedding_extraction.py` for comprehensive examples of embedding extraction with different models.
+See `examples/05_embedding_extraction.py` for comprehensive examples of embedding extraction with different models.
 
 ## 📦 Package Structure
 
@@ -933,11 +932,10 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 | `00_quick_start.py` | Basic model loading and testing |
 | `01_basic_model_loading.py` | Loading pre-trained models with checkpoints and class mappings |
 | `02_checkpoint_loading.py` | Working with default and custom checkpoints from YAML configs |
-| `03_custom_model_registration.py` | Creating and registering custom model classes |
-| `04_model_registry_management.py` | Managing model configurations and registrations |
-| `05_training_and_evaluation.py` | Full training loop and evaluation examples |
-| `06_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
-| `07_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
+| `03_custom_model_registration.py` | Creating and registering custom model classes and ModelSpecs |
+| `04_training_and_evaluation.py` | Full training loop and evaluation examples |
+| `05_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
+| `06_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
 | `colab_sl_beats_demo.ipynb` | Google Colab demo for the sl-beats model |
 
 ### Custom Model Registration

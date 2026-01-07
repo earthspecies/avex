@@ -7,7 +7,7 @@ This example demonstrates:
 - Offline training workflow with pre-computed embeddings
 - When to use online vs offline training
 
-This complements Example 7, which shows full online training workflow.
+This complements Example 7 (probe training and inference), which shows full online training workflow.
 
 Audio Requirements:
 - Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
@@ -241,7 +241,7 @@ def main(device: str = "cpu") -> None:
         print(f"{'MLP':<15} {'ERROR':<15} {str(e)[:40]:<20}")
 
     # Note: Attention and LSTM probes require sequence processing
-    # and may need specific configurations. See Example 7 for attention probe usage.
+    # and may need specific configurations. See Example 7 (probe training and inference) for attention probe usage.
     print(f"{'Attention':<15} {'See Ex. 7':<15} {'(sequence)':<20}")
     print(f"{'LSTM':<15} {'See docs':<15} {'(sequence)':<20}")
 
@@ -405,7 +405,7 @@ Offline training is useful when:
     print("-" * 60)
 
     print("""
-Online Training (Example 7):
+Online Training (Example 7 - probe training and inference):
   - Backbone and probe are connected
   - Embeddings computed on-the-fly during training
   - More memory usage (backbone + probe in memory)
