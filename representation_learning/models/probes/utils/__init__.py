@@ -12,11 +12,11 @@ Key components:
 from __future__ import annotations
 
 from .factory import build_probe_from_config
-from .registry import load_probe_config_from_yaml
+from .registry import load_probe_config
 
 __all__ = [
     # Factory functions
     "build_probe_from_config",
     # Config helpers
-    "load_probe_config_from_yaml",
+    "load_probe_config",
 ]

@@ -37,7 +37,7 @@ _PROBE_REGISTRY: Dict[str, Tuple[Type, Optional[ProbeConfig]]] = {
 _PROBE_CLASSES: Dict[str, Type] = {name: cls for name, (cls, _) in _PROBE_REGISTRY.items() if cls is not None}
 
 
-def load_probe_config_from_yaml(yaml_path: str | Path) -> ProbeConfig:
+def load_probe_config(yaml_path: str | Path) -> ProbeConfig:
     """Load a ProbeConfig directly from YAML.
 
     This function extracts the probe configuration from YAML files, supporting:
