@@ -6,7 +6,7 @@
 name: ESP Project CI
 
 # Runs on pushes to master and all pull requests
-on:    # yamllint disable-line rule:truthy
+on: # yamllint disable-line rule:truthy
     push:
         branches: [main]
     pull_request:
@@ -62,3 +62,44 @@ jobs:
             # - name: Integration tests with pytest
             #  run: |
             #      uv run pytest tests/integration
+
+    test-numpy-compatibility:
+        name: NumPy ${{ matrix.numpy-version }}
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                numpy-version:
+                    ["1.26.4", "2.0.0", "2.1.0", "2.2.6", "2.3.5", "2.4.0"]
+
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Authenticate to Google Cloud
+              uses: "google-github-actions/auth@v2"
+              with:
+                  workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
+                  service_account: ${{ secrets.GH_ACTIONS_SA }}
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+
+            - name: Install dependencies
+              run: |
+                  uv tool install keyring --with keyrings.google-artifactregistry-auth
+                  uv sync --group project-dev
+
+            - name: Run numpy compatibility test
+              run: |
+                  uv run --group project-dev --with numpy==${{ matrix.numpy-version }} pytest tests/unittests/test_audio_utils.py -v
