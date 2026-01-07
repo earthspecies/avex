@@ -91,14 +91,16 @@ def build_probe_from_config(
 
     Examples:
         Online mode (with base model):
-            >>> from representation_learning import load_model, ProbeConfig
-            >>> base = load_model("beats_naturelm", device="cpu")
-            >>> cfg = ProbeConfig(probe_type="linear", target_layers=["last_layer"])
-            >>> probe = build_probe_from_config(cfg, base_model=base, num_classes=50, device="cpu")
+            >>> from representation_learning import load_model  # doctest: +SKIP
+            >>> from representation_learning.configs import ProbeConfig  # doctest: +SKIP
+            >>> base = load_model("beats_naturelm", device="cpu")  # doctest: +SKIP
+            >>> cfg = ProbeConfig(probe_type="linear", target_layers=["last_layer"])  # doctest: +SKIP
+            >>> probe = build_probe_from_config(cfg, base_model=base, num_classes=50, device="cpu")  # doctest: +SKIP
 
         Offline mode (with pre-computed embeddings):
-            >>> cfg = ProbeConfig(probe_type="mlp", target_layers=["last_layer"])
-            >>> probe = build_probe_from_config(cfg, input_dim=768, num_classes=50, device="cpu")
+            >>> from representation_learning.configs import ProbeConfig  # doctest: +SKIP
+            >>> cfg = ProbeConfig(probe_type="mlp", target_layers=["last_layer"])  # doctest: +SKIP
+            >>> probe = build_probe_from_config(cfg, input_dim=768, num_classes=50, device="cpu")  # doctest: +SKIP
     """
     # Validate that exactly one of base_model or input_dim is provided
     if base_model is not None and input_dim is not None:
