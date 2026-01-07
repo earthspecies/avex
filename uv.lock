@@ -3562,7 +3562,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "s3fs", specifier = ">=2024.2.0" },
     { name = "soundfile", specifier = ">=0.13.1" },
-    { name = "tensorflow", specifier = "==2.17.0" },
+    { name = "tensorflow", specifier = ">=2.17.0" },
     { name = "tensorflow-hub", specifier = ">=0.16.1" },
     { name = "timm", specifier = ">=1.0.15" },
     { name = "torch", specifier = "==2.5.0" },
