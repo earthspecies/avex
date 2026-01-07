@@ -207,6 +207,62 @@ model = load_model("beats_naturelm", return_features_only=True, device="cpu")
 
 #### Probes (Heads on Top of Backbones)
 
+Probes are task-specific heads attached to pretrained backbones for transfer learning:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Audio Input                          │
+│              (batch, time_steps)                        │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Pretrained Backbone │
+         │   (e.g., BEATs)       │
+         │                       │
+         │  ┌─────────────────┐  │
+         │  │  Layer 1        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Layer 2        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  ...            │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Last Layer     │◄─┼── target_layers=["last_layer"]
+         │  └────────┬────────┘  │
+         └───────────┼───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Embeddings          │
+         │   (batch, dim)        │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Probe Head          │
+         │   (linear/MLP/etc.)   │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Task Predictions    │
+         │   (batch, num_classes)│
+         └───────────────────────┘
+```
+
+**Key Concepts:**
+- **Backbone**: Pretrained model (frozen or fine-tunable)
+- **Probe**: Task-specific head (trained for your task)
+- **Target Layers**: Which backbone layers to extract features from
+- **Online Training**: Backbone + probe trained together
+- **Offline Training**: Embeddings pre-computed, probe trained separately
+
 ```python
 from representation_learning import load_model
 from representation_learning.api import build_probe_from_config
@@ -218,7 +274,7 @@ base = load_model("beats_naturelm", return_features_only=True, device="cpu")
 # Define a simple linear probe on the backbone features
 probe_config = ProbeConfig(
     probe_type="linear",
-    target_layers=["backbone"],
+    target_layers=["last_layer"],
     aggregation="mean",
     freeze_backbone=True,
     online_training=True,
