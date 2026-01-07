@@ -204,7 +204,8 @@ class TestSurfPerchModel:
 
     def test_forward_method(self, surfperch_model: PerchModel, audio_input: torch.Tensor) -> None:
         """Test the forward method with classifier."""
-        result = surfperch_model.forward(audio_input)
+        with torch.no_grad():
+            result = surfperch_model.forward(audio_input)
 
         assert isinstance(result, torch.Tensor)
         assert result.shape == (2, 10)  # (batch_size, num_classes)
@@ -215,7 +216,8 @@ class TestSurfPerchModel:
         self, surfperch_model_no_classifier: PerchModel, audio_input: torch.Tensor
     ) -> None:
         """Test the forward method without classifier."""
-        result = surfperch_model_no_classifier.forward(audio_input)
+        with torch.no_grad():
+            result = surfperch_model_no_classifier.forward(audio_input)
 
         assert isinstance(result, torch.Tensor)
         assert result.shape == (2, 1280)  # (batch_size, embedding_dim)
@@ -227,13 +229,13 @@ class TestSurfPerchModel:
         # Test moving to CUDA
         if torch.cuda.is_available():
             model_cuda = surfperch_model.cuda()
-            assert model_cuda.device.type == "cpu"  # String attribute doesn't change
+            assert model_cuda.device == "cpu"  # String attribute doesn't change
             if model_cuda.classifier is not None:
                 assert next(model_cuda.classifier.parameters()).device.type == "cuda"
 
         # Test moving to CPU
         model_cpu = surfperch_model.cpu()
-        assert model_cpu.device.type == "cpu"
+        assert model_cpu.device == "cpu"
         if model_cpu.classifier is not None:
             assert next(model_cpu.classifier.parameters()).device.type == "cpu"
 
@@ -299,7 +301,8 @@ class TestSurfPerchModel:
 
     def test_forward_output_range(self, surfperch_model: PerchModel, audio_input: torch.Tensor) -> None:
         """Test that forward output values are reasonable."""
-        result = surfperch_model.forward(audio_input)
+        with torch.no_grad():
+            result = surfperch_model.forward(audio_input)
 
         # Output should be finite
         assert not torch.isnan(result).any()

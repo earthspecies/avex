@@ -196,7 +196,8 @@ class TestPerchModel:
 
     def test_forward_method(self, perch_model: PerchModel, audio_input: torch.Tensor) -> None:
         """Test the forward method with classifier."""
-        result = perch_model.forward(audio_input)
+        with torch.no_grad():
+            result = perch_model.forward(audio_input)
 
         assert isinstance(result, torch.Tensor)
         assert result.shape == (2, 10)  # (batch_size, num_classes)
@@ -207,7 +208,8 @@ class TestPerchModel:
         self, perch_model_no_classifier: PerchModel, audio_input: torch.Tensor
     ) -> None:
         """Test the forward method without classifier."""
-        result = perch_model_no_classifier.forward(audio_input)
+        with torch.no_grad():
+            result = perch_model_no_classifier.forward(audio_input)
 
         assert isinstance(result, torch.Tensor)
         assert result.shape == (2, 1280)  # (batch_size, embedding_dim)
@@ -219,13 +221,13 @@ class TestPerchModel:
         # Test moving to CUDA
         if torch.cuda.is_available():
             model_cuda = perch_model.cuda()
-            assert model_cuda.device.type == "cpu"  # String attribute doesn't change
+            assert model_cuda.device == "cpu"  # String attribute doesn't change
             if model_cuda.classifier is not None:
                 assert next(model_cuda.classifier.parameters()).device.type == "cuda"
 
         # Test moving to CPU
         model_cpu = perch_model.cpu()
-        assert model_cpu.device.type == "cpu"
+        assert model_cpu.device == "cpu"
         if model_cpu.classifier is not None:
             assert next(model_cpu.classifier.parameters()).device.type == "cpu"
 
@@ -291,7 +293,8 @@ class TestPerchModel:
 
     def test_forward_output_range(self, perch_model: PerchModel, audio_input: torch.Tensor) -> None:
         """Test that forward output values are reasonable."""
-        result = perch_model.forward(audio_input)
+        with torch.no_grad():
+            result = perch_model.forward(audio_input)
 
         # Output should be finite
         assert not torch.isnan(result).any()
