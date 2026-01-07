@@ -209,7 +209,7 @@ model = load_model("beats_naturelm", return_features_only=True, device="cpu")
 
 ```python
 from representation_learning import load_model
-from representation_learning.api import build_probe_from_config_online
+from representation_learning.api import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # Load backbone for feature extraction
@@ -224,7 +224,7 @@ probe_config = ProbeConfig(
     online_training=True,
 )
 
-probe = build_probe_from_config_online(
+probe = build_probe_from_config(
     probe_config=probe_config,
     base_model=base,
     num_classes=10,
@@ -330,7 +330,7 @@ model = load_model("efficientnet_animalspeak")  # Uses checkpoint, pretrained=Fa
 
 **Recommended pattern:**
 - Define a custom model class (subclassing `ModelBase`) with its own classifier head, or
-- Build a backbone via `build_model` / `build_model_from_spec` and attach a probe head with `build_probe_from_config_online` or `build_probe_from_config_offline`.
+- Build a backbone via `build_model` / `build_model_from_spec` and attach a probe head with `build_probe_from_config` (supports both online and offline modes).
 
 #### `build_model()` - Plugin Architecture
 

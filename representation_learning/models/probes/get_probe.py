@@ -33,8 +33,7 @@ def get_probe(
 
     .. deprecated::
         This function is deprecated and will be removed in a future version.
-        Please use :func:`build_probe_from_config_online` or
-        :func:`build_probe_from_config_offline` from
+        Please use :func:`build_probe_from_config` from
         ``representation_learning.models.probes.utils.factory`` instead,
         which provide a registry-based, more maintainable approach.
 
@@ -67,7 +66,7 @@ def get_probe(
     """
     logger.warning(
         "get_probe() is deprecated and will be removed in a future version. "
-        "Use build_probe_from_config_online()/build_probe_from_config_offline() "
+        "Use build_probe_from_config() "
         "from representation_learning.models.probes.utils.factory instead."
     )
 

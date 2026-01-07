@@ -32,7 +32,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from representation_learning import load_model, register_model_class
 from representation_learning.configs import ProbeConfig
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import build_probe_from_config_offline
+from representation_learning.models.probes.utils import build_probe_from_config
 
 # =============================================================================
 # Custom Training Model
@@ -366,7 +366,7 @@ def main(device: str = "cpu") -> None:
         online_training=False,
     )
 
-    probe = build_probe_from_config_offline(
+    probe = build_probe_from_config(
         probe_config=probe_config,
         input_dim=embedding_dim,
         num_classes=6,

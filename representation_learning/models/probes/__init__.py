@@ -13,8 +13,7 @@ from representation_learning.models.probes.transformer_probe import (
 
 # Import probe utilities
 from representation_learning.models.probes.utils import (
-    build_probe_from_config_offline,
-    build_probe_from_config_online,
+    build_probe_from_config,
     load_probe_config_from_yaml,
 )
 
@@ -22,8 +21,7 @@ __all__ = [
     # Legacy factory (public API)
     "get_probe",
     # Utility functions
-    "build_probe_from_config_online",
-    "build_probe_from_config_offline",
+    "build_probe_from_config",
     "load_probe_config_from_yaml",
     "AttentionProbe",
     "LinearProbe",

@@ -24,7 +24,7 @@ import torch
 
 from representation_learning import describe_model, get_model_spec, list_models
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config_online
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 
 
@@ -72,7 +72,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model = build_probe_from_config_online(
+    model = build_probe_from_config(
         probe_config=probe_config,
         base_model=backbone,
         num_classes=10,
@@ -102,7 +102,7 @@ def main(device: str = "cpu") -> None:
 - describe_model(name): Get detailed model information
 - get_model_spec(name): Get model specification
 - build_model_from_spec(spec, device): Create backbone model from ModelSpec via registry
-- build_probe_from_config_online/offline(...): Attach task-specific heads in online or offline mode
+- build_probe_from_config(...): Attach task-specific heads in online or offline mode
 - load_model(name, ...): Load full models or backbones with optional checkpoint
 """)
 

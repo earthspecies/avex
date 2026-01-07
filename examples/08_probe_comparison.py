@@ -25,8 +25,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from representation_learning import get_model_spec, load_model
 from representation_learning.configs import ProbeConfig
 from representation_learning.models.probes.utils import (
-    build_probe_from_config_offline,
-    build_probe_from_config_online,
+    build_probe_from_config,
 )
 
 
@@ -201,7 +200,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        linear_probe = build_probe_from_config_online(
+        linear_probe = build_probe_from_config(
             probe_config=linear_config,
             base_model=backbone,
             num_classes=num_classes,
@@ -227,7 +226,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        mlp_probe = build_probe_from_config_online(
+        mlp_probe = build_probe_from_config(
             probe_config=mlp_config,
             base_model=mlp_backbone,
             num_classes=num_classes,
@@ -265,7 +264,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        last_layer_probe = build_probe_from_config_online(
+        last_layer_probe = build_probe_from_config(
             probe_config=last_layer_config,
             base_model=backbone,
             num_classes=num_classes,
@@ -290,7 +289,7 @@ def main(device: str = "cpu") -> None:
             freeze_backbone=True,
             online_training=True,
         )
-        all_layers_probe = build_probe_from_config_online(
+        all_layers_probe = build_probe_from_config(
             probe_config=all_layers_config,
             base_model=all_layers_backbone,
             num_classes=num_classes,
@@ -352,7 +351,7 @@ Offline training is useful when:
         hidden_dims=[256, 128],
     )
 
-    offline_probe = build_probe_from_config_offline(
+    offline_probe = build_probe_from_config(
         probe_config=offline_probe_config,
         input_dim=embedding_dim,
         num_classes=num_classes,

@@ -25,7 +25,7 @@ import torch
 
 from representation_learning import describe_model, get_model_spec, list_models, load_model
 from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config_online
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 
 
@@ -94,7 +94,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model = build_probe_from_config_online(
+    model = build_probe_from_config(
         probe_config=probe_cfg,
         base_model=backbone,
         num_classes=50,
@@ -142,7 +142,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model = build_probe_from_config_online(
+    model = build_probe_from_config(
         probe_config=probe_cfg_custom,
         base_model=backbone_custom,
         num_classes=25,
@@ -169,7 +169,7 @@ def main(device: str = "cpu") -> None:
     print("""
 - load_model(): Loads full models or backbones, extracts num_classes automatically when checkpoints include classifiers
 - build_model_from_spec(): Creates backbone models from ModelSpec via the registry
-- Probes (build_probe_from_config_online/offline): Attach task-specific heads with arbitrary num_classes
+- Probes (build_probe_from_config): Attach task-specific heads with arbitrary num_classes
 - label_mapping: Available for models with trained classifiers
 - Custom ModelSpec: Override backbone architecture parameters for specific needs
 """)

@@ -53,34 +53,66 @@ def _add_probe_config_params(init_kwargs: dict, probe_config: ProbeConfig) -> No
                 init_kwargs[param_name] = value
 
 
-def build_probe_from_config_online(
+def build_probe_from_config(
     probe_config: ProbeConfig,
-    base_model: torch.nn.Module,
     num_classes: int,
     device: str,
+    base_model: Optional[torch.nn.Module] = None,
+    input_dim: Optional[int] = None,
     target_length: Optional[int] = None,
     **kwargs: object,
 ) -> torch.nn.Module:
-    """Build a probe instance for online training (attached to a base model).
+    """Build a probe instance from a ProbeConfig.
 
-    This function builds a probe that is attached to a base model for end-to-end
-    training. The frozen state is inferred from probe_config.freeze_backbone and
-    applied by the probe class during initialization.
+    This function builds a probe that can operate in two modes:
+    - **Online mode** (when `base_model` is provided): Probe is attached to a base model
+      for end-to-end training. The frozen state is inferred from `probe_config.freeze_backbone`
+      and applied by the probe class during initialization.
+    - **Offline mode** (when `input_dim` is provided): Probe operates on pre-computed
+      embeddings without requiring a base model. `feature_mode` is automatically set to True.
 
     Args:
         probe_config: ProbeConfig configuration object
-        base_model: Base model to attach probe to
         num_classes: Number of output classes
         device: Device for probe
-        target_length: Optional target length in samples
+        base_model: Optional base model to attach probe to (for online mode).
+            If provided, probe will be attached for end-to-end training.
+        input_dim: Optional input dimension of pre-computed embeddings (for offline mode).
+            Required if `base_model` is None.
+        target_length: Optional target length in samples. If None, uses `probe_config.target_length`.
         **kwargs: Additional args passed to probe __init__
 
     Returns:
-        Instantiated probe module attached to base_model
+        Instantiated probe module
 
     Raises:
-        ValueError: If probe configuration is invalid
+        ValueError: If probe configuration is invalid, or if both/neither `base_model`
+            and `input_dim` are provided.
+
+    Examples:
+        Online mode (with base model):
+            >>> from representation_learning import load_model, ProbeConfig
+            >>> base = load_model("beats_naturelm", device="cpu")
+            >>> cfg = ProbeConfig(probe_type="linear", target_layers=["last_layer"])
+            >>> probe = build_probe_from_config(cfg, base_model=base, num_classes=50, device="cpu")
+
+        Offline mode (with pre-computed embeddings):
+            >>> cfg = ProbeConfig(probe_type="mlp", target_layers=["last_layer"])
+            >>> probe = build_probe_from_config(cfg, input_dim=768, num_classes=50, device="cpu")
     """
+    # Validate that exactly one of base_model or input_dim is provided
+    if base_model is not None and input_dim is not None:
+        raise ValueError(
+            "Cannot specify both 'base_model' and 'input_dim'. "
+            "Use 'base_model' for online mode or 'input_dim' for offline mode."
+        )
+    if base_model is None and input_dim is None:
+        raise ValueError("Must specify either 'base_model' (for online mode) or 'input_dim' (for offline mode).")
+
+    # Determine mode
+    feature_mode = base_model is None
+    mode_str = "offline" if feature_mode else "online"
+
     # Validate probe type
     probe_type = probe_config.probe_type.lower()
     probe_class = get_probe_class(probe_type)
@@ -90,8 +122,8 @@ def build_probe_from_config_online(
         available_classes = list_probe_classes()
         raise ValueError(f"Probe class '{probe_type}' is not registered. Available classes: {available_classes}")
 
-    frozen = probe_config.freeze_backbone
-    logger.info(f"Building probe '{probe_type}' with num_classes={num_classes}, frozen={frozen}")
+    frozen = probe_config.freeze_backbone if not feature_mode else True
+    logger.info(f"Building probe '{probe_type}' with num_classes={num_classes} ({mode_str} mode), frozen={frozen}")
     logger.debug(f"Probe config: {probe_config.model_dump()}")
 
     # Extract common parameters
@@ -107,12 +139,13 @@ def build_probe_from_config_online(
     ]:
         raise ValueError(f"Sequence input processing is not compatible with {probe_type} probe")
 
-    # Register hooks on the base model
-    # Note: Freezing/unfreezing is handled by the probe class during initialization
-    if hasattr(base_model, "register_hooks_for_layers"):
-        layers = base_model.register_hooks_for_layers(layers)
-    else:
-        logger.warning("base_model does not have register_hooks_for_layers method")
+    # Register hooks on the base model (only for online mode)
+    if not feature_mode and base_model is not None:
+        # Note: Freezing/unfreezing is handled by the probe class during initialization
+        if hasattr(base_model, "register_hooks_for_layers"):
+            layers = base_model.register_hooks_for_layers(layers)
+        else:
+            logger.warning("base_model does not have register_hooks_for_layers method")
 
     # Use provided target_length if available, otherwise use probe_config.target_length
     final_target_length = target_length if target_length is not None else probe_config.target_length
@@ -123,8 +156,8 @@ def build_probe_from_config_online(
         "layers": layers,
         "num_classes": num_classes,
         "device": device,
-        "feature_mode": False,
-        "input_dim": None,
+        "feature_mode": feature_mode,
+        "input_dim": input_dim,
         "aggregation": aggregation,
         "target_length": final_target_length,
         "freeze_backbone": frozen,
@@ -144,96 +177,7 @@ def build_probe_from_config_online(
     # Instantiate the probe
     try:
         probe = probe_class(**filtered_kwargs)
-        logger.info(f"Successfully built probe '{probe_type}'")
-        return probe
-    except Exception as e:
-        logger.error(f"Failed to build probe '{probe_type}': {e}")
-        raise
-
-
-def build_probe_from_config_offline(
-    probe_config: ProbeConfig,
-    input_dim: int,
-    num_classes: int,
-    device: str,
-    target_length: Optional[int] = None,
-    **kwargs: object,
-) -> torch.nn.Module:
-    """Build a probe instance for offline training (on pre-computed embeddings).
-
-    This function builds a probe that operates on pre-computed embeddings,
-    without requiring a base model. feature_mode is automatically set to True.
-
-    Args:
-        probe_config: ProbeConfig configuration object
-        input_dim: Input dimension of pre-computed embeddings
-        num_classes: Number of output classes
-        device: Device for probe
-        target_length: Optional target length in samples
-        **kwargs: Additional args passed to probe __init__
-
-    Returns:
-        Instantiated probe module for offline training
-
-    Raises:
-        ValueError: If probe configuration is invalid
-    """
-    # Validate probe type
-    probe_type = probe_config.probe_type.lower()
-    probe_class = get_probe_class(probe_type)
-    if probe_class is None:
-        from .registry import list_probe_classes
-
-        available_classes = list_probe_classes()
-        raise ValueError(f"Probe class '{probe_type}' is not registered. Available classes: {available_classes}")
-
-    logger.info(f"Building probe '{probe_type}' with num_classes={num_classes} (offline mode)")
-    logger.debug(f"Probe config: {probe_config.model_dump()}")
-
-    # Extract common parameters
-    layers = probe_config.target_layers
-    aggregation = probe_config.aggregation
-    input_processing = probe_config.input_processing
-
-    # Validate input processing compatibility
-    if input_processing == "sequence" and probe_type not in [
-        "lstm",
-        "attention",
-        "transformer",
-    ]:
-        raise ValueError(f"Sequence input processing is not compatible with {probe_type} probe")
-
-    # Use provided target_length if available, otherwise use probe_config.target_length
-    final_target_length = target_length if target_length is not None else probe_config.target_length
-
-    # Prepare initialization arguments with common parameters
-    init_kwargs = {
-        "base_model": None,
-        "layers": layers,
-        "num_classes": num_classes,
-        "device": device,
-        "feature_mode": True,
-        "input_dim": input_dim,
-        "aggregation": aggregation,
-        "target_length": final_target_length,
-        "freeze_backbone": True,  # Not applicable for offline mode
-        **kwargs,
-    }
-
-    # Add probe-specific parameters from ProbeConfig dynamically
-    _add_probe_config_params(init_kwargs, probe_config)
-
-    # Filter init_kwargs to only include parameters accepted by the probe class
-    sig = inspect.signature(probe_class.__init__)
-    valid_params = set(sig.parameters.keys())
-    filtered_kwargs = {k: v for k, v in init_kwargs.items() if k in valid_params}
-
-    logger.debug(f"Filtered initialization kwargs: {filtered_kwargs}")
-
-    # Instantiate the probe
-    try:
-        probe = probe_class(**filtered_kwargs)
-        logger.info(f"Successfully built probe '{probe_type}'")
+        logger.info(f"Successfully built probe '{probe_type}' ({mode_str} mode)")
         return probe
     except Exception as e:
         logger.error(f"Failed to build probe '{probe_type}': {e}")

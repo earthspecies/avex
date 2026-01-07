@@ -57,7 +57,7 @@ If you're just using your custom model directly, you don't need to register it:
 
 ```python
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import build_probe_from_config_online
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # Define your model (no registration needed)
@@ -77,7 +77,7 @@ probe_config = ProbeConfig(
     aggregation="mean",
     freeze_backbone=True,
 )
-model_with_probe = build_probe_from_config_online(
+model_with_probe = build_probe_from_config(
     probe_config=probe_config,
     base_model=model,
     num_classes=10,
@@ -118,7 +118,7 @@ Do you want to use build_model() or build_model_from_spec()?
    - Model Class = the actual PyTorch model implementation
    - Registration links them together so `build_model()` can find your class when given a ModelSpec
 
-4. **Probes work with both**: Whether you register or not, you can always attach probes to your custom models using `build_probe_from_config_online()` or `build_probe_from_config_offline()`.
+4. **Probes work with both**: Whether you register or not, you can always attach probes to your custom models using `build_probe_from_config()` with `base_model` for online mode or `input_dim` for offline mode.
 
 ## Example: When to Register
 

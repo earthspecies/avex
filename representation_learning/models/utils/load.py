@@ -278,7 +278,7 @@ def _load_from_modelspec(
         raise ValueError(
             "load_model() without a checkpoint no longer creates new classifier heads. "
             "Build a backbone with build_model()/build_model_from_spec() and attach "
-            "a probe head via build_probe_from_config_online() or build_probe_from_config_offline() instead."
+            "a probe head via build_probe_from_config() instead."
         )
 
     # Create model using factory (backbone; classifier, if any, is defined by the class or checkpoint)

@@ -32,7 +32,7 @@ from representation_learning import (
     register_model,
 )
 from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config_online
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 from representation_learning.models.utils.registry import load_model_spec_from_yaml
 
@@ -136,7 +136,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model = build_probe_from_config_online(
+    model = build_probe_from_config(
         probe_config=probe_config,
         base_model=backbone,
         num_classes=25,
@@ -203,7 +203,7 @@ def main(device: str = "cpu") -> None:
         freeze_backbone=True,
         online_training=True,
     )
-    model = build_probe_from_config_online(
+    model = build_probe_from_config(
         probe_config=probe_config,
         base_model=backbone,
         num_classes=30,

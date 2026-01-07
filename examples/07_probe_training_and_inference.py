@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from representation_learning import load_model
 from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config_online
+from representation_learning.models.probes.utils import build_probe_from_config
 
 
 def create_dummy_dataset(
@@ -195,7 +195,7 @@ def main(device: str = "cpu") -> None:
     print(f"   Attention dimension: {probe_config.attention_dim}")
     print(f"   Number of layers: {probe_config.num_layers}")
     start_time = time.time()
-    model = build_probe_from_config_online(
+    model = build_probe_from_config(
         probe_config=probe_config,
         base_model=backbone,
         num_classes=num_classes,
@@ -332,7 +332,7 @@ def main(device: str = "cpu") -> None:
     # Rebuild the probe with the same configuration
     print("Rebuilding probe...")
     start_time = time.time()
-    loaded_model = build_probe_from_config_online(
+    loaded_model = build_probe_from_config(
         probe_config=probe_config,
         base_model=loaded_backbone,
         num_classes=num_classes,
@@ -389,7 +389,7 @@ def main(device: str = "cpu") -> None:
    - Use load_model() for backbone-only models (automatically loads in embedding mode)
 
 2. Attach probe head:
-   - Use build_probe_from_config_online() to attach a task-specific probe
+   - Use build_probe_from_config() to attach a task-specific probe
    - Probe can be linear, MLP, LSTM, attention, or transformer
    - Attention probes work well with "all" layers for richer representations
 

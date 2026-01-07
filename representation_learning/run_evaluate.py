@@ -470,7 +470,7 @@ def run_experiment(
                 logger.info("Loaded checkpoint from %s", ckpt_path)
 
         # Note: Base model parameter freezing/counting handled by
-        # build_probe_from_config_online()/build_probe_from_config_offline() functions
+        # build_probe_from_config() function
         # when creating the probe model, so we don't need to set it here
 
         # Update cached model metadata for next iteration

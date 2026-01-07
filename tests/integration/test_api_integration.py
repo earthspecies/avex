@@ -14,7 +14,7 @@ from representation_learning import (
     load_model,
 )
 from representation_learning.configs import ModelSpec, ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config_online
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.factory import build_model_from_spec
 
 
@@ -131,7 +131,7 @@ class TestAPIIntegration:
             freeze_backbone=True,
             online_training=True,
         )
-        probe = build_probe_from_config_online(
+        probe = build_probe_from_config(
             probe_config=probe_cfg,
             base_model=backbone,
             num_classes=3,

@@ -14,10 +14,7 @@ import torch
 from representation_learning import list_model_layers, load_model
 from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
 from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import (
-    build_probe_from_config_offline,
-    build_probe_from_config_online,
-)
+from representation_learning.models.probes.utils import build_probe_from_config
 from representation_learning.models.utils.registry import (
     register_model,
     register_model_class,
@@ -25,7 +22,7 @@ from representation_learning.models.utils.registry import (
 
 
 class TestBuildProbeFromConfig:
-    """Test build_probe_from_config_online and build_probe_from_config_offline functions."""
+    """Test build_probe_from_config function."""
 
     @pytest.fixture(autouse=True)
     def setup_registry(self) -> None:
@@ -200,7 +197,7 @@ class TestBuildProbeFromConfig:
             online_training=True,
         )
 
-        probe = build_probe_from_config_online(
+        probe = build_probe_from_config(
             probe_config=probe_config,
             base_model=base_model,
             num_classes=10,
@@ -229,7 +226,7 @@ class TestBuildProbeFromConfig:
             online_training=True,
         )
 
-        probe = build_probe_from_config_online(
+        probe = build_probe_from_config(
             probe_config=probe_config,
             base_model=base_model,
             num_classes=5,
@@ -256,7 +253,7 @@ class TestBuildProbeFromConfig:
             online_training=False,
         )
 
-        probe = build_probe_from_config_offline(
+        probe = build_probe_from_config(
             probe_config=probe_config,
             input_dim=128,
             num_classes=10,
@@ -284,7 +281,7 @@ class TestBuildProbeFromConfig:
             online_training=False,
         )
 
-        probe = build_probe_from_config_offline(
+        probe = build_probe_from_config(
             probe_config=probe_config,
             input_dim=256,
             num_classes=8,
@@ -310,7 +307,7 @@ class TestBuildProbeFromConfig:
             online_training=True,
         )
 
-        probe = build_probe_from_config_online(
+        probe = build_probe_from_config(
             probe_config=probe_config,
             base_model=base_model,
             num_classes=10,
@@ -354,7 +351,7 @@ class TestBuildProbeFromConfig:
             )
 
             with pytest.raises(ValueError, match="Probe class 'linear' is not registered"):
-                build_probe_from_config_online(
+                build_probe_from_config(
                     probe_config=probe_config,
                     base_model=base_model,
                     num_classes=10,
@@ -375,8 +372,8 @@ class TestBuildProbeFromConfig:
             online_training=False,
         )
 
-        with pytest.raises(ValueError, match="input_dim must be provided"):
-            build_probe_from_config_offline(
+        with pytest.raises(ValueError, match="Must specify either"):
+            build_probe_from_config(
                 probe_config=probe_config,
                 input_dim=None,  # This will cause a ValueError
                 num_classes=10,
@@ -395,7 +392,7 @@ class TestBuildProbeFromConfig:
         )
 
         with pytest.raises(ValueError, match="Sequence input processing is not compatible with linear probe"):
-            build_probe_from_config_online(
+            build_probe_from_config(
                 probe_config=probe_config,
                 base_model=base_model,
                 num_classes=10,
@@ -412,7 +409,7 @@ class TestBuildProbeFromConfig:
             online_training=True,
         )
 
-        probe = build_probe_from_config_online(
+        probe = build_probe_from_config(
             probe_config=probe_config,
             base_model=base_model,
             num_classes=10,
@@ -437,7 +434,7 @@ class TestBuildProbeFromConfig:
             online_training=True,
         )
 
-        build_probe_from_config_online(
+        build_probe_from_config(
             probe_config=probe_config,
             base_model=base_model,
             num_classes=10,
