@@ -1,6 +1,6 @@
 [project]
 name = "representation-learning"
-version = "0.2.0"
+version = "2.0.0"
 description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
