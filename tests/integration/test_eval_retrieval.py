@@ -5,14 +5,10 @@ from typing import Any, Tuple
 
 import pytest
 import torch
+from esp_data import DatasetConfig
 from torch.utils.data import DataLoader, Dataset
 
-from representation_learning.configs import (
-    DatasetConfig,
-    EvaluateConfig,
-    ExperimentConfig,
-    TrainingParams,
-)
+from representation_learning.configs import EvaluateConfig, ExperimentConfig, TrainingParams
 from representation_learning.run_evaluate import run_experiment
 
 

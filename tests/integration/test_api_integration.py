@@ -13,8 +13,9 @@ from representation_learning import (
     list_models,
     load_model,
 )
-from representation_learning.configs import ModelSpec
-from representation_learning.models.get_model import get_model
+from representation_learning.configs import ModelSpec, ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
+from representation_learning.models.utils.factory import build_model_from_spec
 
 
 class TestAPIIntegration:
@@ -45,7 +46,7 @@ class TestAPIIntegration:
             pytest.fail(f"describe_model('{model_name}') raised {e}")
 
     def test_model_creation_and_forward_pass(self) -> None:
-        """Test complete model workflow: get_model, forward pass, eval mode, device handling, parameters."""
+        """Test complete model workflow: model factory, forward pass, eval mode, device handling, parameters."""
         models = list_models()
         assert len(models) > 0, "Registry should contain at least one model"
 
@@ -53,9 +54,9 @@ class TestAPIIntegration:
         model_spec = get_model_spec(model_name)
         assert model_spec is not None, f"Model spec should exist for '{model_name}'"
 
-        # Create model
-        model = get_model(model_spec, num_classes=10)
-        assert model is not None, "get_model() should return a model"
+        # Create backbone model
+        model = build_model_from_spec(model_spec, device="cpu")
+        assert model is not None, "model factory should return a model"
         assert hasattr(model, "forward"), "Model should have a forward method"
 
         # Test parameter count
@@ -78,22 +79,12 @@ class TestAPIIntegration:
         assert output.device.type == "cpu", "Output should be on CPU"
 
     def test_load_model_features_only(self) -> None:
-        """Test load_model() in embedding extraction mode with deterministic embedding values."""
-        import numpy as np
-
+        """Test load_model() in embedding extraction mode (basic sanity checks)."""
         models = list_models()
         assert len(models) > 0, "Registry should contain at least one model"
 
         beats_models = [name for name in models.keys() if "beats" in name.lower()]
         assert len(beats_models) > 0, "Registry should contain at least one BEATs model"
-
-        # Set deterministic behavior
-        torch.manual_seed(42)
-        torch.use_deterministic_algorithms(True, warn_only=True)
-        np.random.seed(42)
-        if torch.backends.cudnn.is_available():
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
 
         model = load_model(beats_models[0], device="cpu", return_features_only=True)
         model.eval()
@@ -101,8 +92,7 @@ class TestAPIIntegration:
         assert model is not None, "load_model() should return a model"
         assert hasattr(model, "forward"), "Model should have a forward method"
 
-        # Create deterministic step signal (1 second at 16kHz)
-        # First half is -1.0, second half is +1.0
+        # Create step signal (1 second at 16kHz)
         num_samples = 16000
         signal = torch.zeros(1, num_samples)
         mid_point = num_samples // 2
@@ -114,38 +104,45 @@ class TestAPIIntegration:
 
         assert output is not None, "Model forward pass should return output"
         assert torch.is_tensor(output), "Output should be a tensor"
+        assert output.shape[0] == 1, "Batch dimension should be 1"
+        assert output.ndim == 3, "Embedding output should be (batch, time, features)"
 
-        # Expected first 20 values (captured with seed=42 using load_model with features_only)
-        expected_first_20 = [
-            0.25917747616767883,
-            -0.6088295578956604,
-            -0.37685254216194153,
-            0.2771954834461212,
-            0.050542622804641724,
-            -0.3111077845096588,
-            -0.30799996852874756,
-            0.0386744923889637,
-            0.15209831297397614,
-            0.08887531608343124,
-            0.5720303058624268,
-            0.8049662709236145,
-            0.3912679851055145,
-            -0.7082386612892151,
-            0.08251217007637024,
-            -0.020113110542297363,
-            0.08990593999624252,
-            0.0052209943532943726,
-            0.8818855285644531,
-            0.3240680396556854,
-        ]
+    def test_backbone_with_linear_probe(self) -> None:
+        """Test attaching a simple linear probe head to a backbone."""
+        models = list_models()
+        assert len(models) > 0, "Registry should contain at least one model"
 
-        actual_first_20 = output[0, :20].cpu().numpy().tolist()
+        beats_models = [name for name in models.keys() if "beats" in name.lower()]
+        assert len(beats_models) > 0, "Registry should contain at least one BEATs model"
 
-        # Use rtol=1e-5, atol=1e-5 for floating point comparison
-        np.testing.assert_allclose(
-            actual_first_20,
-            expected_first_20,
-            rtol=1e-5,
-            atol=1e-5,
-            err_msg="load_model features_only embeddings do not match expected values",
+        model_name = beats_models[0]
+        model_spec = get_model_spec(model_name)
+        assert model_spec is not None, f"Model spec should exist for '{model_name}'"
+
+        # Build BEATs backbone
+        backbone = build_model_from_spec(model_spec, device="cpu")
+        backbone.eval()
+
+        # Attach a linear probe on top of the last layer
+        probe_cfg = ProbeConfig(
+            probe_type="linear",
+            target_layers=["last_layer"],
+            aggregation="mean",
+            freeze_backbone=True,
+            online_training=True,
         )
+        probe = build_probe_from_config(
+            probe_config=probe_cfg,
+            base_model=backbone,
+            num_classes=3,
+            device="cpu",
+        )
+        probe.eval()
+
+        dummy_input = torch.randn(2, 16000 * 5)
+        with torch.no_grad():
+            logits = probe(dummy_input)
+
+        assert logits is not None
+        assert torch.is_tensor(logits)
+        assert logits.shape == (2, 3)

@@ -3,9 +3,22 @@ Example 3: Custom Model Registration and Plugin Architecture
 
 This example demonstrates:
 - Creating custom model classes
-- Registering them with the plugin architecture
+- When and why to register custom models
 - Using custom models with the API
 - Model class management functions
+
+**When Do You Need to Register?**
+
+Registration is ONLY required if you want to use the plugin architecture:
+- Using build_model() or build_model_from_spec() with ModelSpecs
+- Loading models from YAML configuration files
+- Dynamic model selection based on configuration
+
+Registration is NOT required if:
+- You're instantiating models directly: MyModel(device="cpu", num_classes=10)
+- You're using models standalone or attaching probes directly
+
+See docs/custom_model_registration.md for detailed guidance.
 
 Audio Requirements:
 - Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
@@ -26,13 +39,15 @@ import torch
 import torch.nn as nn
 
 from representation_learning import (
-    build_model,
-    create_model,
     get_model_class,
+    get_model_spec,
     list_model_classes,
+    register_model,
     register_model_class,
 )
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
+from representation_learning.models.utils.factory import build_model_from_spec
 
 # =============================================================================
 # Custom Model Definitions
@@ -272,7 +287,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: Simple Audio CNN")
     print("-" * 50)
 
-    model = create_model("simple_audio_cnn", num_classes=10, device=device)
+    model = SimpleAudioCNN(device=device, num_classes=10)
     print(f"Created: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
     print(f"   Embedding dim: {model.get_embedding_dim()}")
@@ -288,10 +303,9 @@ def main(device: str = "cpu") -> None:
     print("\nPart 3: Simple Audio Transformer")
     print("-" * 50)
 
-    model = create_model(
-        "simple_audio_transformer",
-        num_classes=15,
+    model = SimpleAudioTransformer(
         device=device,
+        num_classes=15,
         d_model=64,
         nhead=4,
         num_layers=2,
@@ -311,10 +325,9 @@ def main(device: str = "cpu") -> None:
     print("\nPart 4: Simple Audio MLP")
     print("-" * 50)
 
-    model = create_model(
-        "simple_audio_mlp",
-        num_classes=20,
+    model = SimpleAudioMLP(
         device=device,
+        num_classes=20,
         hidden_dims=[256, 128, 64],
         dropout=0.3,
     )
@@ -338,9 +351,48 @@ def main(device: str = "cpu") -> None:
     print(f"simple_audio_cnn registered: {model_class is not None}")
     print(f"   Class: {model_class.__name__ if model_class else 'N/A'}")
 
-    # Alternative: build_model
-    model = build_model("simple_audio_cnn", device=device, num_classes=5)
-    print(f"\nUsing build_model(): {type(model).__name__}")
+    # Note: build_model() requires a ModelSpec to be registered, not just a model class.
+    # For custom models without ModelSpecs, instantiate directly.
+    # Custom models can be used standalone or with probes attached via
+    # build_probe_from_config() with base_model or input_dim
+    model = SimpleAudioCNN(device=device, num_classes=5)
+    print(f"\nDirect instantiation example: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    dummy_input = torch.randn(1, 16000, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
+
+    # =========================================================================
+    # Part 6: Register and use ModelSpec (for plugin architecture)
+    # =========================================================================
+    print("\nPart 6: Register ModelSpec for Plugin Architecture")
+    print("-" * 50)
+
+    # Create a ModelSpec for our custom model
+    model_spec = ModelSpec(
+        name="simple_audio_cnn",  # Must match the registered class name
+        pretrained=False,
+        device=device,
+        audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=5),
+    )
+
+    # Register the ModelSpec
+    register_model("my_custom_cnn", model_spec)
+    print("Registered ModelSpec: my_custom_cnn")
+    print(f"   Model type: {model_spec.name}")
+    print(f"   Sample rate: {model_spec.audio_config.sample_rate}")
+
+    # Retrieve and use the registered ModelSpec
+    retrieved_spec = get_model_spec("my_custom_cnn")
+    print(f"\nRetrieved ModelSpec: {retrieved_spec.name}")
+
+    # Now we can use build_model_from_spec() with the registered ModelSpec
+    # This requires both the model class AND the ModelSpec to be registered
+    model_from_spec = build_model_from_spec(retrieved_spec, device=device, num_classes=10)
+    print(f"Built model from spec: {type(model_from_spec).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model_from_spec.parameters()):,}")
 
     # =========================================================================
     # Summary
@@ -349,11 +401,23 @@ def main(device: str = "cpu") -> None:
     print("Key Takeaways")
     print("=" * 50)
     print("""
-- Use @register_model_class decorator to register custom models
+When to Register:
+- ✅ Required: Using build_model() or build_model_from_spec() with ModelSpecs
+- ✅ Required: Loading models from YAML configuration files
+- ❌ NOT needed: Direct instantiation (MyModel(device="cpu", num_classes=10))
+- ❌ NOT needed: Standalone usage or attaching probes directly
+
+Registration Process:
+- Use @register_model_class decorator to register custom model classes
 - Models must inherit from ModelBase
 - Define 'name' class attribute for registration
-- create_model() and build_model() work with registered classes
-- Custom parameters passed through **kwargs
+- Use register_model(name, spec) to register ModelSpec configurations
+- build_model() requires both a registered ModelSpec AND a registered model class
+
+Alternative (No Registration):
+- For custom models without ModelSpecs, instantiate directly
+- Attach probes using build_probe_from_config() with base_model for online mode or input_dim for offline mode
+- See docs/custom_model_registration.md for more details
 """)
 
 

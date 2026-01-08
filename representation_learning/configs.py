@@ -347,6 +347,86 @@ class ProbeConfig(BaseModel):
 
     This class defines the configuration for various probe types including
     linear probes, MLPs, attention mechanisms, and sequence models.
+
+    **Core Parameters:**
+        probe_type: Type of probe to use ("linear", "mlp", "attention", "lstm", "transformer")
+        target_layers: List of layer names to extract embeddings from (required)
+            - Use "last_layer" for the final layer
+            - Use "all" for all discoverable layers
+            - Use specific layer names from list_model_layers()
+        aggregation: How to aggregate multiple dimensional embeddings
+            - "mean": Average pooling (default, good for most cases)
+            - "max": Max pooling
+            - "cls_token": Use CLS token (for transformer models)
+            - "none": No aggregation (for sequence-based probes)
+        freeze_backbone: Whether to freeze the backbone model during probing (default: True)
+        online_training: Whether to train online (raw audio) or offline (pre-computed embeddings)
+            - None: Auto-determined from aggregation method
+            - True: Online training (required for sequence probes)
+            - False: Offline training (requires freeze_backbone=True)
+
+    **MLP-Specific Parameters:**
+        hidden_dims: Hidden dimensions for MLP probe (e.g., [512, 256]) - required for MLP
+        dropout_rate: Dropout rate for non-linear probes (default: 0.1)
+        activation: Activation function ("relu", "gelu", "tanh", "swish", default: "relu")
+
+    **Attention/Transformer-Specific Parameters:**
+        num_heads: Number of attention heads (required for attention/transformer)
+        attention_dim: Dimension for attention mechanism (required for attention/transformer)
+        num_layers: Number of layers (required for transformer)
+
+    **LSTM-Specific Parameters:**
+        lstm_hidden_size: Hidden size for LSTM probe (required for LSTM)
+        num_layers: Number of layers (required for LSTM)
+        bidirectional: Whether to use bidirectional LSTM (default: False)
+
+    **Sequence Processing Parameters:**
+        input_processing: How to process input embeddings
+            - "pooled": Use pooled embeddings (default)
+            - "sequence": Keep sequence structure (for LSTM/attention/transformer)
+            - "flatten": Flatten embeddings
+            - "none": No processing
+        max_sequence_length: Maximum sequence length for sequence-based probes
+        use_positional_encoding: Whether to add positional encoding (default: False)
+
+    **Other Parameters:**
+        target_length: Target length in samples for audio processing (auto-computed if None)
+
+    **Examples:**
+        >>> # Simple linear probe
+        >>> cfg = ProbeConfig(
+        ...     probe_type="linear",
+        ...     target_layers=["last_layer"],
+        ...     aggregation="mean",
+        ...     freeze_backbone=True,
+        ... )
+        >>>
+        >>> # MLP probe with custom architecture
+        >>> cfg = ProbeConfig(
+        ...     probe_type="mlp",
+        ...     target_layers=["all"],
+        ...     hidden_dims=[512, 256, 128],
+        ...     dropout_rate=0.2,
+        ...     activation="gelu",
+        ... )
+        >>>
+        >>> # Attention probe for sequence data
+        >>> cfg = ProbeConfig(
+        ...     probe_type="attention",
+        ...     target_layers=["last_layer"],
+        ...     aggregation="none",
+        ...     num_heads=8,
+        ...     attention_dim=768,
+        ...     num_layers=2,
+        ...     input_processing="sequence",
+        ...     online_training=True,
+        ... )
+
+    **Viewing Field Descriptions:**
+        To see detailed descriptions of all parameters:
+        >>> import json
+        >>> schema = ProbeConfig.model_json_schema()  # doctest: +SKIP
+        >>> print(json.dumps(schema["properties"], indent=2))  # doctest: +SKIP
     """
 
     probe_type: Literal[

@@ -43,6 +43,20 @@ class _BaseProbe(ABC, nn.Module):
         self.target_length = target_length
         self.freeze_backbone = freeze_backbone
 
+        # Handle base model freezing/unfreezing if we have a base model
+        # This is the probe's responsibility, not the factory's
+        if base_model is not None and not feature_mode:
+            if freeze_backbone:
+                # Freeze the base model for feature extraction only
+                base_model.eval()
+                for p in base_model.parameters():
+                    p.requires_grad = False
+            else:
+                # Enable training mode for fine-tuning
+                base_model.train()
+                for p in base_model.parameters():
+                    p.requires_grad = True
+
         # Note: Do not predefine optional attributes; create them only if needed
 
         inferred_dim, num_embeddings = self._setup_projections_and_infer_dim(input_dim=input_dim)

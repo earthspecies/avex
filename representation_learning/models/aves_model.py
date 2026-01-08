@@ -62,7 +62,7 @@ class Model(ModelBase):
 
     This module follows the same conventions as the other model wrappers
     (e.g. ``efficientnet.py``) so that it can be selected via
-    ``representation_learning.models.get_model.get_model``.
+    ``representation_learning.models.utils.factory.build_model_from_spec``.
 
     The underlying AVES implementation operates directly on raw‐waveform
     inputs.  We therefore do *not* apply the optional :class:`AudioProcessor`

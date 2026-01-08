@@ -51,7 +51,7 @@ from representation_learning.evaluation.retrieval import (
     eval_retrieval,
     eval_retrieval_cross_set,
 )
-from representation_learning.models.get_model import get_model
+from representation_learning.models.utils.factory import build_model_from_spec
 from representation_learning.utils import ExperimentLogger
 from representation_learning.utils.experiment_tracking import (
     create_experiment_summary_csvs,
@@ -348,11 +348,19 @@ def run_experiment(
         need_recompute_embeddings_test_clustering,
     )
 
-    need_base_model = online_training or need_recompute_embeddings_train or need_recompute_embeddings_train_clustering
+    need_base_model = (
+        online_training
+        or need_recompute_embeddings_train
+        or need_recompute_embeddings_train_clustering
+        or need_recompute_embeddings_test_clustering
+    )
     logger.info(f"Need to load base model: {need_base_model}")
 
     need_raw_dataloaders = (
-        online_training or need_recompute_embeddings_train or need_recompute_embeddings_train_clustering
+        online_training
+        or need_recompute_embeddings_train
+        or need_recompute_embeddings_train_clustering
+        or need_recompute_embeddings_test_clustering
     )
     logger.info(f"Need to build raw dataloaders: {need_raw_dataloaders}")
 
@@ -439,7 +447,11 @@ def run_experiment(
             base_model = cached_model
         else:
             logger.info("Loading model (cache miss or first dataset)")
-            base_model = get_model(run_cfg.model_spec, num_classes=num_labels).to(device)
+            # Build backbone-only model; classifier heads are handled by probes
+            base_model = build_model_from_spec(
+                run_cfg.model_spec,
+                device=str(device),
+            ).to(device)
 
             if experiment_cfg.checkpoint_path:
                 ckpt_path = anypath(experiment_cfg.checkpoint_path)
@@ -457,7 +469,8 @@ def run_experiment(
                 base_model.load_state_dict(state, strict=False)
                 logger.info("Loaded checkpoint from %s", ckpt_path)
 
-        # Note: Base model parameter freezing/counting handled by get_probe() function
+        # Note: Base model parameter freezing/counting handled by
+        # build_probe_from_config() function
         # when creating the probe model, so we don't need to set it here
 
         # Update cached model metadata for next iteration
@@ -768,6 +781,7 @@ def run_experiment(
                 train_embeds = torch.stack([train_ds_retrieval[i] for i in range(len(train_ds_retrieval))])
 
     # ------------------- embeddings for retrieval and clustering -------- #
+    test_labels: Optional[torch.Tensor] = None
     if need_retrieval or need_clustering:
         # Use the regular test path - filename encoding handles different
         # aggregation methods
@@ -835,13 +849,24 @@ def run_experiment(
             if isinstance(sample, dict):
                 # Multi-layer case - use the last layer
                 last_layer_name = list(sample.keys())[-1] if sample else "embed"
+                # Exclude 'label' key when extracting layer names
+                layer_keys = [k for k in sample.keys() if k != "label"]
+                if last_layer_name == "label":
+                    last_layer_name = layer_keys[-1] if layer_keys else "embed"
                 test_embeds = torch.stack(
                     [test_ds_retrieval[i][last_layer_name] for i in range(len(test_ds_retrieval))]
                 )
+                # Extract labels from dataset
+                test_labels = torch.stack([test_ds_retrieval[i]["label"] for i in range(len(test_ds_retrieval))])
                 logger.info(f"Using layer '{last_layer_name}' for test evaluation")
             else:
-                # Single tensor case
+                # Single tensor case (shouldn't happen with EmbeddingDataset, but handle it)
                 test_embeds = torch.stack([test_ds_retrieval[i] for i in range(len(test_ds_retrieval))])
+                # Try to extract labels if available
+                if hasattr(test_ds_retrieval, "labels"):
+                    test_labels = test_ds_retrieval.labels
+                else:
+                    test_labels = None
 
         num_labels = len(test_labels.unique()) if num_labels is None else num_labels
 

@@ -205,17 +205,99 @@ model = load_model("beats_naturelm", return_features_only=True, device="cpu")
 # Returns (batch, time_steps, 768) for BEATs instead of classification logits
 ```
 
+#### Probes (Heads on Top of Backbones)
+
+Probes are task-specific heads attached to pretrained backbones for transfer learning:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Audio Input                          │
+│              (batch, time_steps)                        │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Pretrained Backbone │
+         │   (e.g., BEATs)       │
+         │                       │
+         │  ┌─────────────────┐  │
+         │  │  Layer 1        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Layer 2        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  ...            │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Last Layer     │◄─┼── target_layers=["last_layer"]
+         │  └────────┬────────┘  │
+         └───────────┼───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Embeddings          │
+         │   (batch, dim)        │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Probe Head          │
+         │   (linear/MLP/etc.)   │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Task Predictions    │
+         │   (batch, num_classes)│
+         └───────────────────────┘
+```
+
+**Key Concepts:**
+- **Backbone**: Pretrained model (frozen or fine-tunable)
+- **Probe**: Task-specific head (trained for your task)
+- **Target Layers**: Which backbone layers to extract features from
+- **Online Training**: Backbone + probe trained together
+- **Offline Training**: Embeddings pre-computed, probe trained separately
+
+```python
+from representation_learning import load_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import ProbeConfig
+
+# Load backbone for feature extraction
+base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+
+# Define a simple linear probe on the backbone features
+probe_config = ProbeConfig(
+    probe_type="linear",
+    target_layers=["last_layer"],
+    aggregation="mean",
+    freeze_backbone=True,
+    online_training=True,
+)
+
+probe = build_probe_from_config(
+    probe_config=probe_config,
+    base_model=base,
+    num_classes=10,
+    device="cpu",
+)
+```
+
 > **Note**: Each model expects a specific sample rate (e.g., 16 kHz for BEATs, 32 kHz for Perch). Use `describe_model()` to check, and resample with `librosa.resample()` if needed. See [Audio Requirements](#audio-requirements) for details.
 
 For more examples, see the `examples/` directory:
 - `00_quick_start.py` - Basic model loading and testing
 - `01_basic_model_loading.py` - Loading models with different configurations
 - `02_checkpoint_loading.py` - Working with checkpoints and class mappings
-- `03_custom_model_registration.py` - Creating and registering custom models
-- `04_model_registry_management.py` - Managing model configurations and registrations
-- `05_training_and_evaluation.py` - Full training loop and evaluation examples
-- `06_embedding_extraction.py` - Feature extraction with `return_features_only=True` (unpooled features)
-- `07_classifier_head_loading.py` - Understanding classifier head behavior
+- `03_custom_model_registration.py` - Creating and registering custom models and ModelSpecs
+- `04_training_and_evaluation.py` - Full training loop and evaluation examples
+- `05_embedding_extraction.py` - Feature extraction with `return_features_only=True` (unpooled features)
+- `06_classifier_head_loading.py` - Understanding classifier head behavior
 
 ## 📚 API Reference
 
@@ -299,31 +381,11 @@ model = load_model("beats", pretrained=True)  # BEATs loads SSL weights
 model = load_model("efficientnet_animalspeak")  # Uses checkpoint, pretrained=False
 ```
 
-#### `create_model()` - Create New Models
+#### Training New Models
 
-**When to use:**
-- ✅ Creating new models for training from scratch
-- ✅ When you don't need pre-trained weights
-- ✅ Using custom model classes (plugin architecture)
-- ✅ Building models for fine-tuning
-
-**When NOT to use:**
-- ❌ Loading pre-trained models with weights
-- ❌ Loading models from checkpoints
-- ❌ Loading models for inference/evaluation
-
-```python
-from representation_learning import create_model
-
-# Create new model for training
-model = create_model("efficientnet", num_classes=100)
-
-# Create custom model using plugin architecture
-model = create_model("my_custom_model", num_classes=50)
-
-# Create from config file
-model = create_model("experiments/my_model.yml", num_classes=10)
-```
+**Recommended pattern:**
+- Define a custom model class (subclassing `ModelBase`) with its own classifier head, or
+- Build a backbone via `build_model` / `build_model_from_spec` and attach a probe head with `build_probe_from_config` (supports both online and offline modes).
 
 #### `build_model()` - Plugin Architecture
 
@@ -331,10 +393,6 @@ model = create_model("experiments/my_model.yml", num_classes=10)
 - ✅ Using the plugin architecture for new custom models
 - ✅ When you have registered new model classes
 - ✅ Building new models from ModelSpec objects
-
-**When NOT to use:**
-- ❌ Loading pre-trained models with weights (use `load_model`)
-- ❌ Simple model creation (use `create_model`)
 
 ```python
 from representation_learning import build_model, register_model_class
@@ -478,7 +536,11 @@ if class_mapping:
 
 ### Plugin Architecture
 
-The framework supports a plugin architecture that allows users to register custom model classes without modifying the core library:
+The framework supports a plugin architecture that allows users to register custom model classes without modifying the core library.
+
+**Important**: Registration is only required if you want to use `build_model()` or `build_model_from_spec()` with ModelSpecs. For direct instantiation, registration is not needed.
+
+See [docs/custom_model_registration.md](docs/custom_model_registration.md) for detailed guidance on when and why to register custom models.
 
 ```python
 from representation_learning.models.base_model import ModelBase
@@ -499,8 +561,9 @@ class MyCustomModel(ModelBase):
     def get_embedding_dim(self):
         return 512
 
-# Now you can use it with any of the loading functions
-model = create_model("my_custom_model", num_classes=10)
+# Now you can use it with build_model() if you also register a ModelSpec
+# Or use it directly without registration: MyCustomModel(device="cpu", num_classes=10)
+model = MyCustomModel(num_classes=10, device="cpu")
 ```
 
 ## 🎯 Supported Models
@@ -689,10 +752,10 @@ audio_config = AudioConfig(
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from representation_learning import create_model
+from representation_learning import build_model
 
-# Create a model for training
-model = create_model("efficientnet", num_classes=100, device="cpu")
+# Create a backbone for training (attach your own head or use a probe)
+model = build_model("efficientnet", device="cpu")
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -717,7 +780,7 @@ for epoch in range(num_epochs):
 torch.save(model.state_dict(), "checkpoints/my_model.pt")
 ```
 
-For complete training examples with data loading and evaluation, see `examples/05_training_and_evaluation.py`.
+For complete training examples with data loading and evaluation, see `examples/04_training_and_evaluation.py`.
 
 ### Evaluation
 
@@ -744,7 +807,7 @@ with torch.no_grad():
             print(f"{label}: {prob.item():.4f}")
 ```
 
-For complete evaluation examples, see `examples/05_training_and_evaluation.py`.
+For complete evaluation examples, see `examples/04_training_and_evaluation.py`.
 
 ## 🎨 Embedding Extraction and Feature Representations
 
@@ -872,7 +935,7 @@ flattened = features.flatten(1)  # (batch, 1280*4*5)
 ```
 
 
-See `examples/06_embedding_extraction.py` for comprehensive examples of embedding extraction with different models.
+See `examples/05_embedding_extraction.py` for comprehensive examples of embedding extraction with different models.
 
 ## 📦 Package Structure
 
@@ -925,11 +988,10 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 | `00_quick_start.py` | Basic model loading and testing |
 | `01_basic_model_loading.py` | Loading pre-trained models with checkpoints and class mappings |
 | `02_checkpoint_loading.py` | Working with default and custom checkpoints from YAML configs |
-| `03_custom_model_registration.py` | Creating and registering custom model classes |
-| `04_model_registry_management.py` | Managing model configurations and registrations |
-| `05_training_and_evaluation.py` | Full training loop and evaluation examples |
-| `06_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
-| `07_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
+| `03_custom_model_registration.py` | Creating and registering custom model classes and ModelSpecs |
+| `04_training_and_evaluation.py` | Full training loop and evaluation examples |
+| `05_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
+| `06_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
 | `colab_sl_beats_demo.ipynb` | Google Colab demo for the sl-beats model |
 
 ### Custom Model Registration
@@ -938,7 +1000,7 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 import torch
 import torch.nn as nn
 from representation_learning.models.base_model import ModelBase
-from representation_learning import register_model_class, create_model
+from representation_learning import register_model_class
 
 @register_model_class
 class MyAudioCNN(ModelBase):
@@ -970,7 +1032,7 @@ class MyAudioCNN(ModelBase):
         return 128
 
 # Use the custom model
-model = create_model("my_audio_cnn", num_classes=10, device="cpu")
+model = MyAudioCNN(device="cpu", num_classes=10)
 ```
 
 ### Loading Pre-trained Models

@@ -163,23 +163,15 @@ class TestBuildModel:
         registry._MODEL_CLASSES.clear()
 
     def test_builds_model_successfully(self) -> None:
-        """Test successful model building."""
-        model = build_model("test_model", device="cpu", num_classes=5)
-
-        assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
-        assert model.device == "cpu"
-
-    def test_builds_model_without_num_classes(self) -> None:
-        """Test building model without num_classes."""
+        """Test successful model building (backbone-only)."""
         model = build_model("test_model", device="cpu")
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes is None
+        assert model.device == "cpu"
 
     def test_builds_model_with_additional_kwargs(self) -> None:
         """Test building model with additional kwargs."""
-        model = build_model("test_model", device="cpu", num_classes=5, custom_param="test_value")
+        model = build_model("test_model", device="cpu", custom_param="test_value")
 
         assert isinstance(model, ModelBase)
         assert model.custom_param == "test_value"
@@ -291,10 +283,9 @@ class TestBuildModelFromSpec:
             audio_config=audio_config,
         )
 
-        model = build_model_from_spec(model_spec, device="cpu", num_classes=5)
+        model = build_model_from_spec(model_spec, device="cpu")
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
         assert model.audio_config is not None
         assert model.audio_config.sample_rate == 16000
 
@@ -312,10 +303,9 @@ class TestBuildModelFromSpec:
             audio_config=audio_config_dict,  # type: ignore[arg-type]
         )
 
-        model = build_model_from_spec(model_spec, device="cpu", num_classes=5)
+        model = build_model_from_spec(model_spec, device="cpu")
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
         assert model.audio_config is not None
         assert model.audio_config.sample_rate == 22050
 
@@ -328,10 +318,9 @@ class TestBuildModelFromSpec:
             audio_config=None,
         )
 
-        model = build_model_from_spec(model_spec, device="cpu", num_classes=5)
+        model = build_model_from_spec(model_spec, device="cpu")
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
         assert model.audio_config is None
 
     def test_builds_model_from_spec_without_num_classes(self) -> None:
@@ -345,7 +334,6 @@ class TestBuildModelFromSpec:
         model = build_model_from_spec(model_spec, device="cpu")
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes is None
 
     def test_builds_model_from_spec_with_additional_kwargs(self) -> None:
         """Test building model from spec with additional kwargs.
@@ -361,13 +349,9 @@ class TestBuildModelFromSpec:
 
         # custom_param is passed via **kwargs, which should be preserved
         # because TestModelClass.__init__ has **kwargs in its signature
-        model = build_model_from_spec(model_spec, device="cpu", num_classes=5, custom_param="test_value")
+        model = build_model_from_spec(model_spec, device="cpu", custom_param="test_value")
 
         assert isinstance(model, ModelBase)
-        # Note: The filtering logic checks parameter names, not **kwargs.
-        # Since custom_param is not a parameter name, it gets filtered.
-        # This is expected behavior - the test verifies the model builds successfully.
-        assert model.num_classes == 5
 
     def test_filters_invalid_params(self) -> None:
         """Test that invalid params are filtered out before model instantiation."""
@@ -406,10 +390,9 @@ class TestBuildModelFromSpec:
         )
 
         # Should not raise an error even though efficientnet_variant is not accepted
-        model = build_model_from_spec(model_spec, device="cpu", num_classes=5, invalid_param="should_be_filtered")
+        model = build_model_from_spec(model_spec, device="cpu", invalid_param="should_be_filtered")
 
         assert isinstance(model, ModelBase)
-        assert model.num_classes == 5
 
         # Clean up
         from representation_learning.models.utils import registry
@@ -455,7 +438,7 @@ class TestBuildModelFromSpec:
             use_naturelm=True,
         )
 
-        model = build_model_from_spec(model_spec, device="cpu", num_classes=5)
+        model = build_model_from_spec(model_spec, device="cpu")
 
         assert isinstance(model, ModelBase)
         assert model.efficientnet_variant == "b1"
