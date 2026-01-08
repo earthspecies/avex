@@ -59,6 +59,6 @@ jobs:
             - name: Doctests with pytest
               run: |
                   uv run pytest --doctest-modules representation_learning
-            # - name: Integration tests with pytest
-            #  run: |
-            #      uv run pytest tests/integration
+            - name: Integration tests with pytest
+              run: |
+                  uv run pytest tests/integration
