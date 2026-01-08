@@ -104,17 +104,13 @@ class PerchModel(ModelBase):
         emb_dim = int(self._tf_forward(dummy).shape[-1])
         self.embedding_dim = emb_dim
 
-        # Handle return_features_only: if True, force num_classes to None
-        if return_features_only:
-            self.num_classes = None
-
-        if not return_features_only and self.num_classes is not None and self.num_classes > 0:
+        if not return_features_only and num_classes is not None and num_classes > 0:
             self.classifier = nn.Linear(self.embedding_dim, self.num_classes)
             # Move classifier to the specified device
-            if device != "cpu" and torch.cuda.is_available():
-                self.classifier = self.classifier.to(device)
+            self.classifier = self.classifier.to(device)
         else:
             self.classifier = None
+            self.num_classes = None
 
         self.to(device)
 

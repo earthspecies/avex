@@ -35,7 +35,7 @@ class Model(ModelBase):
 
         # Store configuration
         self.return_features_only = return_features_only
-        self._embedding_dim = None
+        self._embedding_dim = 1280
         self.num_classes = num_classes
 
         # Initialize classifier (None for now, will be created lazily if needed)
@@ -49,9 +49,9 @@ class Model(ModelBase):
         if not return_features_only and num_classes is not None and num_classes > 0:
             self.classifier = nn.Linear(1280, num_classes)
             self.classifier = self.classifier.to(self.device)
-            self._embedding_dim = 1280
         else:
             self.classifier = None
+            self.num_classes = None
 
         # Import transformers here to avoid import errors if not installed
         try:
