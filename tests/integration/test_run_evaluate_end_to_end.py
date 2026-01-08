@@ -245,18 +245,25 @@ class TestRunEvaluateEndToEnd:
         target_layers = ["last_layer"] if layers == "last_layer" else ["last_layer"]
 
         # Resolve run_config path relative to project root
-        # Use relative path since we'll ensure working directory is project root when loading
+        # Use an efficientnet config that's tracked in git
         project_root = Path(__file__).parent.parent.parent
-        run_config_relative = Path("configs/run_configs/pretrained/efficientnet_base.yml")
+        # Use sl_efficientnet_animalspeak.yml which is tracked in git
+        run_config_relative = Path("configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml")
         run_config_path = (project_root / run_config_relative).resolve()
 
         # Verify file exists
         if not run_config_path.exists():
-            raise FileNotFoundError(
-                f"Config file not found: {run_config_path}\n"
-                f"Project root: {project_root}\n"
-                f"Looking for: {run_config_relative}"
-            )
+            # Try efficientnet_base.yml as fallback (might exist locally but not in CI)
+            fallback = project_root / "configs" / "run_configs" / "pretrained" / "efficientnet_base.yml"
+            if fallback.exists():
+                run_config_path = fallback
+            else:
+                raise FileNotFoundError(
+                    f"Config file not found: {run_config_path}\n"
+                    f"Project root: {project_root}\n"
+                    f"Looking for: {run_config_relative}\n"
+                    f"Fallback also not found: {fallback}"
+                )
 
         # Use absolute path in the config to ensure it works in CI
         experiment = {

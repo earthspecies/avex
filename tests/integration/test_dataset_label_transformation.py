@@ -55,6 +55,11 @@ class TestDatasetLabelTransformation:
         -------
         EvaluateConfig
             Loaded and validated evaluation configuration.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the config file or referenced run_config files are not found.
         """
         import os
         import tempfile
@@ -76,14 +81,32 @@ class TestDatasetLabelTransformation:
                     if not run_config_path.is_absolute():
                         # Resolve relative to project root
                         resolved = (project_root / run_config_path).resolve()
+                        if not resolved.exists():
+                            # Try without resolve() in case of symlinks
+                            resolved = project_root / run_config_path
                         if resolved.exists():
                             exp["run_config"] = str(resolved)
                         else:
-                            # Try relative to config file's directory
-                            config_dir = config_path.parent.parent.parent  # project root
-                            resolved = (config_dir / run_config_path).resolve()
-                            if resolved.exists():
-                                exp["run_config"] = str(resolved)
+                            # File doesn't exist - try to find an alternative efficientnet config
+                            # Use sl_efficientnet_animalspeak.yml as fallback (it's tracked in git)
+                            fallback_config = (
+                                project_root
+                                / "configs"
+                                / "run_configs"
+                                / "aaai_train"
+                                / "sl_efficientnet_animalspeak.yml"
+                            )
+                            if fallback_config.exists():
+                                exp["run_config"] = str(fallback_config)
+                            else:
+                                # No fallback available - raise error
+                                raise FileNotFoundError(
+                                    f"Config file not found: {run_config_path}\n"
+                                    f"Tried: {resolved}\n"
+                                    f"Project root: {project_root}\n"
+                                    f"Current working directory: {os.getcwd()}\n"
+                                    f"Fallback also not found: {fallback_config}"
+                                )
 
         # Write modified config to temp file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
