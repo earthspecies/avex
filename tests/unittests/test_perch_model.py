@@ -1,29 +1,29 @@
-"""Tests for the SurfPerch model (TensorFlow wrapper)."""
+"""Tests for the Perch model (TensorFlow wrapper)."""
 
 from typing import Dict
 
 import pytest
 import torch
 
-from representation_learning.models.surfperch import PerchModel
+from representation_learning.models.perch import PerchModel
 
 
 @pytest.fixture(scope="session")
-def surfperch_model() -> PerchModel:
-    """Create a SurfPerch model for testing (session-scoped, shared across tests).
+def perch_model() -> PerchModel:
+    """Create a Perch model for testing (session-scoped, shared across tests).
 
     Returns:
-        PerchModel: A configured SurfPerch model for testing.
+        PerchModel: A configured Perch model for testing.
     """
     return PerchModel(num_classes=10, device="cpu")
 
 
 @pytest.fixture(scope="session")
-def surfperch_model_no_classifier() -> PerchModel:
-    """Create a SurfPerch model without classifier for testing (session-scoped).
+def perch_model_no_classifier() -> PerchModel:
+    """Create a Perch model without classifier for testing (session-scoped).
 
     Returns:
-        PerchModel: A configured SurfPerch model without classifier.
+        PerchModel: A configured Perch model without classifier.
     """
     return PerchModel(num_classes=None, device="cpu")
 
@@ -38,41 +38,41 @@ def audio_input() -> torch.Tensor:
     return torch.randn(2, 32000 * 5)
 
 
-def test_surfperch_model_initialization(surfperch_model: PerchModel) -> None:
-    """Test SurfPerch model initialization."""
-    assert surfperch_model.num_classes == 10
-    assert surfperch_model.embedding_dim == 1280
-    assert surfperch_model.classifier is not None
-    assert surfperch_model.classifier.in_features == 1280
-    assert surfperch_model.classifier.out_features == 10
-    assert surfperch_model.device == "cpu"
-    assert surfperch_model.target_sr == 32000
-    assert surfperch_model.window_samples == 160000
+def test_perch_model_initialization(perch_model: PerchModel) -> None:
+    """Test Perch model initialization."""
+    assert perch_model.num_classes == 10
+    assert perch_model.embedding_dim == 1280
+    assert perch_model.classifier is not None
+    assert perch_model.classifier.in_features == 1280
+    assert perch_model.classifier.out_features == 10
+    assert perch_model.device == "cpu"
+    assert perch_model.target_sr == 32000
+    assert perch_model.window_samples == 160000
 
 
-def test_surfperch_model_no_classifier(surfperch_model_no_classifier: PerchModel) -> None:
-    """Test SurfPerch model without classifier."""
-    assert surfperch_model_no_classifier.num_classes is None
-    assert surfperch_model_no_classifier.classifier is None
+def test_perch_model_no_classifier(perch_model_no_classifier: PerchModel) -> None:
+    """Test Perch model without classifier."""
+    assert perch_model_no_classifier.num_classes is None
+    assert perch_model_no_classifier.classifier is None
 
 
-def test_extract_embeddings_aggregations(surfperch_model: PerchModel, audio_input: torch.Tensor) -> None:
+def test_extract_embeddings_aggregations(perch_model: PerchModel, audio_input: torch.Tensor) -> None:
     """Test extract_embeddings with different aggregation methods."""
     # Test mean aggregation
-    result_mean = surfperch_model.extract_embeddings(x=audio_input, aggregation="mean")
+    result_mean = perch_model.extract_embeddings(x=audio_input, aggregation="mean")
     assert isinstance(result_mean, torch.Tensor)
     assert result_mean.shape == (2, 1280)
     assert not torch.isnan(result_mean).any()
     assert not torch.isinf(result_mean).any()
 
     # Test max aggregation
-    result_max = surfperch_model.extract_embeddings(x=audio_input, aggregation="max")
+    result_max = perch_model.extract_embeddings(x=audio_input, aggregation="max")
     assert isinstance(result_max, torch.Tensor)
     assert result_max.shape == (2, 1280)
     assert not torch.isnan(result_max).any()
 
     # Test none aggregation (for sequence probes)
-    result_none = surfperch_model.extract_embeddings(x=audio_input, aggregation="none")
+    result_none = perch_model.extract_embeddings(x=audio_input, aggregation="none")
     assert isinstance(result_none, list)
     assert len(result_none) == 1
     for item in result_none:
@@ -81,35 +81,35 @@ def test_extract_embeddings_aggregations(surfperch_model: PerchModel, audio_inpu
         assert not torch.isnan(item).any()
 
     # Test cls_token aggregation
-    result_cls = surfperch_model.extract_embeddings(x=audio_input, aggregation="cls_token")
+    result_cls = perch_model.extract_embeddings(x=audio_input, aggregation="cls_token")
     assert isinstance(result_cls, torch.Tensor)
     assert result_cls.shape == (2, 1280)
 
 
-def test_extract_embeddings_dict_input(surfperch_model: PerchModel) -> None:
+def test_extract_embeddings_dict_input(perch_model: PerchModel) -> None:
     """Test extract_embeddings with dictionary input."""
     dict_input: Dict[str, torch.Tensor] = {"raw_wav": torch.randn(2, 32000 * 5)}
-    result = surfperch_model.extract_embeddings(x=dict_input, aggregation="mean")
+    result = perch_model.extract_embeddings(x=dict_input, aggregation="mean")
     assert isinstance(result, torch.Tensor)
     assert result.shape == (2, 1280)
     assert not torch.isnan(result).any()
 
 
-def test_extract_embeddings_invalid_aggregation(surfperch_model: PerchModel, audio_input: torch.Tensor) -> None:
+def test_extract_embeddings_invalid_aggregation(perch_model: PerchModel, audio_input: torch.Tensor) -> None:
     """Test extract_embeddings with invalid aggregation method."""
     with pytest.raises(ValueError, match="Unsupported aggregation method"):
-        surfperch_model.extract_embeddings(x=audio_input, aggregation="invalid_method")
+        perch_model.extract_embeddings(x=audio_input, aggregation="invalid_method")
 
 
 def test_forward_method(
-    surfperch_model: PerchModel,
-    surfperch_model_no_classifier: PerchModel,
+    perch_model: PerchModel,
+    perch_model_no_classifier: PerchModel,
     audio_input: torch.Tensor,
 ) -> None:
     """Test the forward method with and without classifier."""
     # With classifier
     with torch.no_grad():
-        result = surfperch_model.forward(audio_input)
+        result = perch_model.forward(audio_input)
     assert isinstance(result, torch.Tensor)
     assert result.shape == (2, 10)
     assert not torch.isnan(result).any()
@@ -117,7 +117,7 @@ def test_forward_method(
 
     # Without classifier
     with torch.no_grad():
-        result_no_clf = surfperch_model_no_classifier.forward(audio_input)
+        result_no_clf = perch_model_no_classifier.forward(audio_input)
     assert isinstance(result_no_clf, torch.Tensor)
     assert result_no_clf.shape == (2, 1280)
     assert not torch.isnan(result_no_clf).any()
