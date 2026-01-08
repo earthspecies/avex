@@ -57,14 +57,47 @@ class TestDatasetLabelTransformation:
             Loaded and validated evaluation configuration.
         """
         import os
+        import tempfile
+
+        import yaml
 
         project_root = Path(__file__).parent.parent.parent
         original_cwd = os.getcwd()
+
+        # Read the config file
+        with config_path.open() as f:
+            config_data = yaml.safe_load(f)
+
+        # Resolve relative paths in experiments to absolute paths
+        if "experiments" in config_data:
+            for exp in config_data["experiments"]:
+                if "run_config" in exp and isinstance(exp["run_config"], str):
+                    run_config_path = Path(exp["run_config"])
+                    if not run_config_path.is_absolute():
+                        # Resolve relative to project root
+                        resolved = (project_root / run_config_path).resolve()
+                        if resolved.exists():
+                            exp["run_config"] = str(resolved)
+                        else:
+                            # Try relative to config file's directory
+                            config_dir = config_path.parent.parent.parent  # project root
+                            resolved = (config_dir / run_config_path).resolve()
+                            if resolved.exists():
+                                exp["run_config"] = str(resolved)
+
+        # Write modified config to temp file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
+            yaml.dump(config_data, tmp)
+            tmp_path = Path(tmp.name)
+
         try:
             os.chdir(project_root)
-            return EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+            return EvaluateConfig.from_sources(yaml_file=tmp_path, cli_args=())
         finally:
             os.chdir(original_cwd)
+            # Clean up temp file
+            if tmp_path.exists():
+                tmp_path.unlink()
 
     @pytest.fixture
     def minimal_run_config(self) -> Callable[..., RunConfig]:

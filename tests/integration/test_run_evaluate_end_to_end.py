@@ -11,6 +11,7 @@ This test:
 
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -243,12 +244,21 @@ class TestRunEvaluateEndToEnd:
 
         target_layers = ["last_layer"] if layers == "last_layer" else ["last_layer"]
 
-        # Resolve run_config path to absolute to ensure it works in CI
+        # Resolve run_config path relative to project root
+        # Use relative path since we'll ensure working directory is project root when loading
         project_root = Path(__file__).parent.parent.parent
-        run_config_path = (project_root / "configs" / "run_configs" / "pretrained" / "efficientnet_base.yml").resolve()
-        if not run_config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {run_config_path}")
+        run_config_relative = Path("configs/run_configs/pretrained/efficientnet_base.yml")
+        run_config_path = (project_root / run_config_relative).resolve()
 
+        # Verify file exists
+        if not run_config_path.exists():
+            raise FileNotFoundError(
+                f"Config file not found: {run_config_path}\n"
+                f"Project root: {project_root}\n"
+                f"Looking for: {run_config_relative}"
+            )
+
+        # Use absolute path in the config to ensure it works in CI
         experiment = {
             "run_name": f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}",
             "run_config": str(run_config_path),
@@ -287,6 +297,31 @@ class TestRunEvaluateEndToEnd:
 
         return config_path
 
+    def _load_eval_config(self, config_path: Path) -> Any:  # noqa: ANN401
+        """Helper to load EvaluateConfig with proper working directory.
+
+        Parameters
+        ----------
+        config_path : Path
+            Path to the evaluation configuration file.
+
+        Returns
+        -------
+        EvaluateConfig
+            Loaded and validated evaluation configuration.
+        """
+        import os
+
+        from representation_learning.configs import EvaluateConfig
+
+        project_root = Path(__file__).parent.parent.parent
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(project_root)
+            return EvaluateConfig.from_sources(yaml_file=config_path, cli_args=[])
+        finally:
+            os.chdir(original_cwd)
+
     @pytest.mark.parametrize(
         "probe_type,freeze_backbone,layers,training_mode",
         [("linear", True, "last_layer", "offline")],
@@ -299,11 +334,9 @@ class TestRunEvaluateEndToEnd:
         training_mode: str,
         temp_output_dir: Path,
     ) -> None:
-        from representation_learning.configs import EvaluateConfig
-
         config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=[])
+        eval_cfg = self._load_eval_config(config_path)
 
         assert len(eval_cfg.experiments) == 1
         experiment = eval_cfg.experiments[0]
@@ -340,6 +373,8 @@ class TestRunEvaluateEndToEnd:
         training_mode: str,
         temp_output_dir: Path,
     ) -> None:
+        import os
+
         from representation_learning.run_evaluate import main
 
         config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
@@ -358,7 +393,14 @@ class TestRunEvaluateEndToEnd:
             "offline_embeddings.cache_size_limit_gb=16",
         )
 
-        main(config_path, patches)
+        # Ensure we're in project root when running main (it loads configs)
+        project_root = Path(__file__).parent.parent.parent
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(project_root)
+            main(config_path, patches)
+        finally:
+            os.chdir(original_cwd)
 
         summary_csvs = list(test_output_dir.rglob("*summary*.csv"))
         assert summary_csvs, f"No summary CSVs found in {test_output_dir}"
