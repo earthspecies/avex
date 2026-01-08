@@ -216,6 +216,34 @@ def _build_datasets(
         if test_ds and cfg.transformations:
             test_ds.apply_transformations(cfg.transformations)
 
+    # If no label mapping transform, count unique labels from the dataset itself
+    if num_classes == 0 and label_type == "supervised" and train_ds is not None:
+        # Count unique labels from the actual data by iterating through all items
+        try:
+            labels_seen = set()
+            for i in range(len(train_ds)):
+                try:
+                    item = train_ds[i]
+                    # Check for label in various possible keys
+                    label_val = item.get("label") or item.get("labels")
+                    if label_val is not None:
+                        # Handle both single labels and lists
+                        if isinstance(label_val, (list, tuple)):
+                            labels_seen.update(str(v) for v in label_val)
+                        else:
+                            labels_seen.add(str(label_val))
+                except Exception:
+                    continue
+
+            if labels_seen:
+                num_classes = len(labels_seen)
+                # Create a label map from unique values (sorted for consistency)
+                label_map = {label: idx for idx, label in enumerate(sorted(labels_seen))}
+                logger.info(f"Auto-detected {num_classes} classes from dataset: {sorted(labels_seen)}")
+        except Exception as e:
+            logger.warning(f"Could not automatically count classes from dataset: {e}")
+            # num_classes stays 0, will be caught by validation later
+
     train_ds = AudioDataset(
         train_ds,
         metadata={
