@@ -21,6 +21,21 @@ from representation_learning.models.utils.factory import build_model_from_spec
 class TestAPIIntegration:
     """Integration tests for the main API functions."""
 
+    @pytest.fixture(scope="class")
+    def beats_model_name(self) -> str:
+        """Shared fixture to get a BEATs model name for resource sharing across tests.
+
+        Returns
+        -------
+        str
+            The name of a BEATs model from the registry.
+        """
+        models = list_models()
+        assert len(models) > 0, "Registry should contain at least one model"
+        beats_models = [name for name in models.keys() if "beats" in name.lower()]
+        assert len(beats_models) > 0, "Registry should contain at least one BEATs model"
+        return beats_models[0]
+
     def test_registry_api(self) -> None:
         """Test registry API: list_models, get_model_spec, describe_model, and error handling."""
         # Test list_models
@@ -45,14 +60,13 @@ class TestAPIIntegration:
         except Exception as e:
             pytest.fail(f"describe_model('{model_name}') raised {e}")
 
-    def test_model_creation_and_forward_pass(self) -> None:
-        """Test complete model workflow: model factory, forward pass, eval mode, device handling, parameters."""
-        models = list_models()
-        assert len(models) > 0, "Registry should contain at least one model"
+    def test_model_creation_and_forward_pass(self, beats_model_name: str) -> None:
+        """Test complete model workflow: model factory, forward pass, eval mode, device handling, parameters.
 
-        model_name = list(models.keys())[0]
-        model_spec = get_model_spec(model_name)
-        assert model_spec is not None, f"Model spec should exist for '{model_name}'"
+        Uses BEATs model to share resources with other tests in this class.
+        """
+        model_spec = get_model_spec(beats_model_name)
+        assert model_spec is not None, f"Model spec should exist for '{beats_model_name}'"
 
         # Create backbone model
         model = build_model_from_spec(model_spec, device="cpu")
@@ -107,17 +121,13 @@ class TestAPIIntegration:
         assert output.shape[0] == 1, "Batch dimension should be 1"
         assert output.ndim == 3, "Embedding output should be (batch, time, features)"
 
-    def test_backbone_with_linear_probe(self) -> None:
-        """Test attaching a simple linear probe head to a backbone."""
-        models = list_models()
-        assert len(models) > 0, "Registry should contain at least one model"
+    def test_backbone_with_linear_probe(self, beats_model_name: str) -> None:
+        """Test attaching a simple linear probe head to a backbone.
 
-        beats_models = [name for name in models.keys() if "beats" in name.lower()]
-        assert len(beats_models) > 0, "Registry should contain at least one BEATs model"
-
-        model_name = beats_models[0]
-        model_spec = get_model_spec(model_name)
-        assert model_spec is not None, f"Model spec should exist for '{model_name}'"
+        Uses BEATs model to share resources with other tests in this class.
+        """
+        model_spec = get_model_spec(beats_model_name)
+        assert model_spec is not None, f"Model spec should exist for '{beats_model_name}'"
 
         # Build BEATs backbone
         backbone = build_model_from_spec(model_spec, device="cpu")
