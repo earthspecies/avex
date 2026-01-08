@@ -37,7 +37,7 @@ dependencies = [
   "tqdm>=4.67.1",
   "transformers>=4.0.0",
   "h5py>=3.13.0",
-  "tensorflow==2.17.0",
+  "tensorflow>=2.17.0",
   "tensorflow-hub>=0.16.1",
   "einops>=0.8.1",
   "pydantic-settings>=2.9.1",
