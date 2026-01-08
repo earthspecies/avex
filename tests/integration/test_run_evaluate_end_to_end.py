@@ -199,6 +199,11 @@ class TestRunEvaluateEndToEnd:
         -------
         Path
             Path to the created configuration file.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the referenced run_config file (efficientnet_base.yml) is not found.
         """
         config_path = temp_output_dir / f"test_config_{probe_type}_{freeze_backbone}_{layers}_{training_mode}.yml"
 
@@ -238,9 +243,15 @@ class TestRunEvaluateEndToEnd:
 
         target_layers = ["last_layer"] if layers == "last_layer" else ["last_layer"]
 
+        # Resolve run_config path to absolute to ensure it works in CI
+        project_root = Path(__file__).parent.parent.parent
+        run_config_path = (project_root / "configs" / "run_configs" / "pretrained" / "efficientnet_base.yml").resolve()
+        if not run_config_path.exists():
+            raise FileNotFoundError(f"Config file not found: {run_config_path}")
+
         experiment = {
             "run_name": f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}",
-            "run_config": "configs/run_configs/pretrained/efficientnet_base.yml",
+            "run_config": str(run_config_path),
             "probe_config": {
                 "probe_type": probe_type,
                 "aggregation": "mean",

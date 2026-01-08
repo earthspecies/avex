@@ -31,7 +31,40 @@ from representation_learning.data.dataset import build_dataloaders
 class TestDatasetLabelTransformation:
     @pytest.fixture
     def config_path(self) -> Path:
-        return Path("configs/evaluation_configs/cpu_test.yml")
+        """Get the path to the CPU test config file, resolved to absolute path.
+
+        Returns
+        -------
+        Path
+            Absolute path to the CPU test configuration file.
+        """
+        # Resolve relative to project root to ensure relative paths in config work
+        project_root = Path(__file__).parent.parent.parent
+        config_file = project_root / "configs" / "evaluation_configs" / "cpu_test.yml"
+        return config_file.resolve()
+
+    def _load_eval_config(self, config_path: Path) -> EvaluateConfig:
+        """Helper to load EvaluateConfig with proper working directory.
+
+        Parameters
+        ----------
+        config_path : Path
+            Path to the evaluation configuration file.
+
+        Returns
+        -------
+        EvaluateConfig
+            Loaded and validated evaluation configuration.
+        """
+        import os
+
+        project_root = Path(__file__).parent.parent.parent
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(project_root)
+            return EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        finally:
+            os.chdir(original_cwd)
 
     @pytest.fixture
     def minimal_run_config(self) -> Callable[..., RunConfig]:
@@ -96,8 +129,7 @@ class TestDatasetLabelTransformation:
 
     def test_dataloader_creation_success(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that dataloaders can be created without errors."""
-        # Load evaluation config
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
 
         # Get dataset config
         benchmark_eval_cfg = eval_cfg.dataset_config
@@ -137,8 +169,7 @@ class TestDatasetLabelTransformation:
 
     def test_label_map_propagation(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that label maps are correctly propagated to all splits."""
-        # Load evaluation config
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
@@ -188,8 +219,7 @@ class TestDatasetLabelTransformation:
 
     def test_label_format_consistency(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that labels are in the correct format across all splits."""
-        # Load evaluation config and build dataloaders
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
@@ -231,8 +261,7 @@ class TestDatasetLabelTransformation:
 
     def test_batch_creation_no_overflow(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that batches can be created without overflow errors."""
-        # Load evaluation config and build dataloaders
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
@@ -288,8 +317,7 @@ class TestDatasetLabelTransformation:
 
     def test_no_nan_labels(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that no labels are NaN after transformation."""
-        # Load evaluation config and build dataloaders
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]

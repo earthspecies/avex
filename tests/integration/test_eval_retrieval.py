@@ -91,6 +91,16 @@ def test_run_experiment_small(
 
     monkeypatch.setattr(retrieval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
     monkeypatch.setattr(reval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
+
+    # Mock GCS writes to avoid permission issues in CI
+    from representation_learning.utils import experiment_tracking as et_mod
+
+    def _mock_save_evaluation_metadata(*args: object, **kwargs: object) -> None:
+        """Mock save_evaluation_metadata to avoid GCS writes in CI."""
+        pass
+
+    monkeypatch.setattr(et_mod, "save_evaluation_metadata", _mock_save_evaluation_metadata)
+
     # Minimal training params --------------------------------------------------
     train_params: TrainingParams = TrainingParams(
         train_epochs=1,
