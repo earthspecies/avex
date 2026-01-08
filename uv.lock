@@ -3553,7 +3553,7 @@ requires-dist = [
     { name = "h5py", specifier = ">=3.13.0" },
     { name = "librosa", specifier = ">=0.11.0" },
     { name = "mlflow", marker = "extra == 'dev'", specifier = ">=2.22.0" },
-    { name = "numpy", specifier = "==1.26.4" },
+    { name = "numpy", specifier = ">=1.26.4" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pydantic", specifier = ">=2.11.3" },
