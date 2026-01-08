@@ -6,7 +6,7 @@
 name: ESP Project CI
 
 # Runs on pushes to master and all pull requests
-on:    # yamllint disable-line rule:truthy
+on: # yamllint disable-line rule:truthy
     push:
         branches: [main]
     pull_request:
@@ -79,3 +79,56 @@ jobs:
             - name: Integration tests with pytest
               run: |
                   uv run pytest tests/integration -m "not slow" -vv --durations=20
+
+    test-numpy-compatibility:
+        name: NumPy ${{ matrix.numpy-version }}
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                # NumPy 2.3+ requires Python 3.11+
+                include:
+                    - numpy-version: "1.26.4"
+                      python-version: "3.10"
+                    - numpy-version: "2.0.0"
+                      python-version: "3.10"
+                    - numpy-version: "2.1.0"
+                      python-version: "3.10"
+                    - numpy-version: "2.2.6"
+                      python-version: "3.10"
+                    - numpy-version: "2.3.5"
+                      python-version: "3.11"
+                    - numpy-version: "2.4.0"
+                      python-version: "3.11"
+
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Authenticate to Google Cloud
+              uses: "google-github-actions/auth@v2"
+              with:
+                  workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
+                  service_account: ${{ secrets.GH_ACTIONS_SA }}
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v5
+              with:
+                  python-version: ${{ matrix.python-version }}
+
+            - name: Install dependencies
+              run: |
+                  uv tool install keyring --with keyrings.google-artifactregistry-auth
+                  uv sync --python ${{ matrix.python-version }} --group project-dev
+
+            - name: Run numpy compatibility test
+              run: |
+                  uv run --python ${{ matrix.python-version }} --with numpy==${{ matrix.numpy-version }} pytest tests/unittests/test_audio_utils.py -v
