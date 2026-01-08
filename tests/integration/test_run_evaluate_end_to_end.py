@@ -29,12 +29,16 @@ class TestRunEvaluateEndToEnd:
         return Path("configs/evaluation_configs/flexible_probing_minimal_test.yml")
 
     def _create_test_data_config(self, data_config_path: Path) -> None:
-        """Create a test data configuration without hardcoded data_root paths."""
+        """Create a minimal test data configuration with tiny dataset for fast testing.
+
+        Uses real beans dataset but with aggressive subsampling to only 3 classes
+        and very few samples for speed. No label mapping - uses original string labels.
+        """
         test_data_config = {
             "benchmark_name": "bioacoustic_benchmark_single_test",
             "evaluation_sets": [
                 {
-                    "name": "dog_classification",
+                    "name": "tiny_test",
                     "train": {
                         "dataset_name": "beans",
                         "split": "dogs_train",
@@ -43,41 +47,19 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 10,
+                        "audio_max_length_seconds": 5,  # Shorter audio for speed
                         "transformations": [
                             {
                                 "type": "subsample",
                                 "property": "label",
                                 "ratios": {
-                                    "Farley": 0.12,
-                                    "Freid": 0.14,
-                                    "Keri": 0.14,
-                                    "Louie": 0.16,
-                                    "Luke": 0.06,
-                                    "Mac": 0.08,
-                                    "Roodie": 0.05,
-                                    "Rudy": 0.30,
-                                    "Siggy": 0.09,
-                                    "Zoe": 0.08,
+                                    "Rudy": 1.0,  # Take all available from these 3 classes
+                                    "Zoe": 1.0,
+                                    "Louie": 1.0,  # Add third class to ensure at least 2 in each split
                                 },
+                                "max_samples": 30,  # Small but enough to get multiple classes
                             },
-                            {
-                                "type": "label_from_feature",
-                                "feature": "label",
-                                "override": True,
-                                "label_map": {
-                                    "Farley": 0,
-                                    "Freid": 1,
-                                    "Keri": 2,
-                                    "Louie": 3,
-                                    "Luke": 4,
-                                    "Mac": 5,
-                                    "Roodie": 6,
-                                    "Rudy": 7,
-                                    "Siggy": 8,
-                                    "Zoe": 9,
-                                },
-                            },
+                            # No label mapping - system should count classes from data
                         ],
                         "sample_rate": 16000,
                     },
@@ -89,41 +71,19 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 10,
+                        "audio_max_length_seconds": 5,
                         "transformations": [
                             {
                                 "type": "subsample",
                                 "property": "label",
                                 "ratios": {
-                                    "Farley": 0.10,
-                                    "Freid": 0.12,
-                                    "Keri": 0.12,
-                                    "Louie": 0.15,
-                                    "Luke": 0.08,
-                                    "Mac": 0.10,
-                                    "Roodie": 0.08,
-                                    "Rudy": 0.20,
-                                    "Siggy": 0.10,
-                                    "Zoe": 0.10,
+                                    "Rudy": 1.0,
+                                    "Zoe": 1.0,
+                                    "Louie": 1.0,  # Add third class
                                 },
+                                "max_samples": 15,  # Small validation set
                             },
-                            {
-                                "type": "label_from_feature",
-                                "feature": "label",
-                                "override": True,
-                                "label_map": {
-                                    "Farley": 0,
-                                    "Freid": 1,
-                                    "Keri": 2,
-                                    "Louie": 3,
-                                    "Luke": 4,
-                                    "Mac": 5,
-                                    "Roodie": 6,
-                                    "Rudy": 7,
-                                    "Siggy": 8,
-                                    "Zoe": 9,
-                                },
-                            },
+                            # No label mapping - system should count classes from data
                         ],
                         "sample_rate": 16000,
                     },
@@ -135,41 +95,19 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 10,
+                        "audio_max_length_seconds": 5,
                         "transformations": [
                             {
                                 "type": "subsample",
                                 "property": "label",
                                 "ratios": {
-                                    "Farley": 0.10,
-                                    "Freid": 0.12,
-                                    "Keri": 0.12,
-                                    "Louie": 0.15,
-                                    "Luke": 0.08,
-                                    "Mac": 0.10,
-                                    "Roodie": 0.08,
-                                    "Rudy": 0.20,
-                                    "Siggy": 0.10,
-                                    "Zoe": 0.10,
+                                    "Rudy": 1.0,
+                                    "Zoe": 1.0,
+                                    "Louie": 1.0,  # Add third class
                                 },
+                                "max_samples": 15,  # Small test set
                             },
-                            {
-                                "type": "label_from_feature",
-                                "feature": "label",
-                                "override": True,
-                                "label_map": {
-                                    "Farley": 0,
-                                    "Freid": 1,
-                                    "Keri": 2,
-                                    "Louie": 3,
-                                    "Luke": 4,
-                                    "Mac": 5,
-                                    "Roodie": 6,
-                                    "Rudy": 7,
-                                    "Siggy": 8,
-                                    "Zoe": 9,
-                                },
-                            },
+                            # No label mapping - system should count classes from data
                         ],
                         "sample_rate": 16000,
                     },
