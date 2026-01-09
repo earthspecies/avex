@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
@@ -32,6 +33,11 @@ def universal_torch_load(
     cloud storage paths (GCS, R2, etc.). For cloud paths, it can optionally cache the
     downloaded files locally to avoid repeated downloads.
 
+    Supports both PyTorch checkpoints (.pt, .pth) and safetensors files (.safetensors).
+    For safetensors files, automatically uses safetensors.torch.load_file() instead of
+    torch.load(). Safetensors files are loaded as state dictionaries (wrapped in
+    "model_state_dict" key for compatibility with checkpoint loading code).
+
     The cache location is determined by:
     1. The ESP_CACHE_HOME environment variable if set
     2. Otherwise defaults to ~/.cache/esp/
@@ -44,44 +50,113 @@ def universal_torch_load(
             "use": Use cache if available, download if not
             "force": Force redownload even if cache exists
             Defaults to "none".
-        **kwargs: Additional keyword arguments passed to torch.load().
+        **kwargs: Additional keyword arguments passed to torch.load() or safetensors.torch.load_file().
+                  For safetensors, supports 'device' parameter to load tensors on specific device.
 
     Returns:
-        The object loaded from the file using torch.load.g
+        The object loaded from the file. For safetensors files, returns a dict with
+        "model_state_dict" key containing the state dict. For PyTorch checkpoints,
+        returns the object as loaded by torch.load().
+
+    Raises:
+        ValueError: If safetensors file is provided without caching enabled
+            (safetensors files require a local file path)
     """
     path = anypath(f)
     fs = filesystem_from_path(path)
 
-    if isinstance(path, PureCloudPath):
-        if cache_mode in ["use", "force"]:
-            if "ESP_CACHE_HOME" in os.environ:
-                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
-            else:
-                cache_path = Path.home() / ".cache" / "esp" / path.name
+    # Check if this is a safetensors file (by extension)
+    path_str = str(path)
+    is_safetensors = path_str.endswith(".safetensors")
 
-            if not cache_path.exists() or cache_mode == "force":
-                download_msg = (
-                    "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
-                )
-                logger.info(f"{download_msg} to {cache_path}...")
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                fs.get(str(path), str(cache_path))
+    # Handle cloud paths
+    local_path: Path | None = None
+    is_cloud_path = isinstance(path, PureCloudPath)
+
+    try:
+        if is_cloud_path:
+            if cache_mode in ["use", "force"]:
+                if "ESP_CACHE_HOME" in os.environ:
+                    cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
+                else:
+                    cache_path = Path.home() / ".cache" / "esp" / path.name
+
+                if not cache_path.exists() or cache_mode == "force":
+                    download_msg = (
+                        "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
+                    )
+                    logger.info(f"{download_msg} to {cache_path}...")
+                    cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    fs.get(str(path), str(cache_path))
+                else:
+                    logger.debug(f"Found {cache_path}, using local cache.")
+                local_path = cache_path
             else:
-                logger.debug(f"Found {cache_path}, using local cache.")
-            f = cache_path
-            fs = filesystem_from_path(f)  # local filesystem
+                # No caching - download to temp file for safetensors (required for load_file)
+                # For torch.load, we can read directly from cloud, but safetensors needs a local file
+                if is_safetensors:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".safetensors") as tmp_file:
+                        tmp_path = Path(tmp_file.name)
+                    fs.get(str(path), str(tmp_path))
+                    local_path = tmp_path
+                else:
+                    # For regular PyTorch files, we can read directly from cloud
+                    local_path = None
         else:
-            f = path
-    else:
-        f = path
+            # Local path
+            local_path = Path(path)
 
-    with fs.open(str(f), "rb") as opened_file:
-        # Explicitly set weights_only=False for model checkpoints
-        # Model checkpoints contain state dicts and other objects, not just weights
-        # This suppresses the FutureWarning while maintaining functionality
-        if "weights_only" not in kwargs:
-            kwargs["weights_only"] = False
-        return torch.load(io.BytesIO(opened_file.read()), **kwargs)
+        # Load the file
+        if is_safetensors:
+            # Use safetensors loader
+            from safetensors.torch import load_file
+
+            if local_path is None:
+                raise ValueError(
+                    "Safetensors files require a local file path (cannot read directly from cloud without caching)"
+                )
+
+            # Extract device/map_location from kwargs if provided (for safetensors)
+            # map_location is the standard PyTorch parameter, device is for safetensors
+            # Priority: map_location > device > default "cpu"
+            map_location = kwargs.pop("map_location", None)
+            device = kwargs.pop("device", None)
+            if map_location is not None:
+                device = map_location
+            elif device is None:
+                device = "cpu"
+
+            logger.debug(f"Loading safetensors file: {local_path}")
+            state_dict = load_file(str(local_path), device=map_location)
+
+            # Wrap in "model_state_dict" for compatibility with checkpoint loading code
+            # This allows safetensors files to be used as drop-in replacements for .pt checkpoints
+            return {"model_state_dict": state_dict}
+        else:
+            # Use regular torch.load
+            if local_path is not None:
+                # Local file (cached or original)
+                with open(local_path, "rb") as opened_file:
+                    # Explicitly set weights_only=False for model checkpoints
+                    # Model checkpoints contain state dicts and other objects, not just weights
+                    # This suppresses the FutureWarning while maintaining functionality
+                    if "weights_only" not in kwargs:
+                        kwargs["weights_only"] = False
+                    return torch.load(opened_file, **kwargs)
+            else:
+                # Cloud path - read directly
+                with fs.open(str(path), "rb") as opened_file:
+                    if "weights_only" not in kwargs:
+                        kwargs["weights_only"] = False
+                    return torch.load(io.BytesIO(opened_file.read()), **kwargs)
+    finally:
+        # Clean up temp file for cloud paths without caching
+        if is_cloud_path and is_safetensors and local_path and cache_mode == "none":
+            if local_path.exists():
+                try:
+                    local_path.unlink()
+                except Exception as e:
+                    logger.debug(f"Could not clean up temp file {local_path}: {e}")
 
 
 # -------------------------------------------------------------------- #
