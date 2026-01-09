@@ -166,12 +166,12 @@ class TestRunEvaluateEndToEnd:
                 "overwrite_embeddings": True,
                 "use_streaming_embeddings": True,  # Use streaming for CI to avoid memory issues
                 "memory_limit_gb": 2,  # Lower limit for CI
-                "streaming_chunk_size": 50,  # Smaller chunks for CI
+                "streaming_chunk_size": 100,  # Minimum allowed value for CI
                 "hdf5_compression": "gzip",
                 "hdf5_compression_level": 4,
                 "auto_chunk_size": True,
                 "max_chunk_size": 200,
-                "min_chunk_size": 50,
+                "min_chunk_size": 100,  # Minimum allowed value
                 "batch_chunk_size": 5,
                 "cache_size_limit_gb": 1,  # Lower cache for CI
             },

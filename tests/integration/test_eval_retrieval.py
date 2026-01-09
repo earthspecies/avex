@@ -100,6 +100,8 @@ def test_run_experiment_small(
         pass
 
     monkeypatch.setattr(et_mod, "save_evaluation_metadata", _mock_save_evaluation_metadata)
+    # Also patch in run_evaluate module since it imports the function directly
+    monkeypatch.setattr(reval_mod, "save_evaluation_metadata", _mock_save_evaluation_metadata)
 
     # Minimal training params --------------------------------------------------
     train_params: TrainingParams = TrainingParams(
