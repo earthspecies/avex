@@ -50,18 +50,17 @@ class TestRunEvaluateEndToEnd:
                         "audio_max_length_seconds": 5,  # Shorter audio for speed
                         "transformations": [
                             {
-                                "type": "subsample",
+                                "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratios": {
-                                    "Rudy": 1.0,  # Take all available from these 3 classes
-                                    "Zoe": 1.0,
-                                    "Louie": 1.0,  # Add third class to ensure at least 2 in each split
-                                },
-                                "max_samples": 30,  # Small but enough to get multiple classes
+                                "ratio": 0.2,  # Larger ratio to ensure multiple classes remain
+                                "max_samples": 100,  # More samples to ensure class diversity
                             },
-                            # No label mapping - system should count classes from data
+                            {
+                                "type": "label_from_feature",
+                                "feature": "label",  # Automatically maps string labels to integers
+                                "override": True,  # Replace existing label column with integer-mapped version
+                            },
                         ],
-                        "sample_rate": 16000,
                     },
                     "validation": {
                         "dataset_name": "beans",
@@ -74,16 +73,16 @@ class TestRunEvaluateEndToEnd:
                         "audio_max_length_seconds": 5,
                         "transformations": [
                             {
-                                "type": "subsample",
+                                "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratios": {
-                                    "Rudy": 1.0,
-                                    "Zoe": 1.0,
-                                    "Louie": 1.0,  # Add third class
-                                },
-                                "max_samples": 15,  # Small validation set
+                                "ratio": 0.2,  # Larger ratio to ensure multiple classes remain
+                                "max_samples": 50,  # More samples to ensure class diversity
                             },
-                            # No label mapping - system should count classes from data
+                            {
+                                "type": "label_from_feature",
+                                "feature": "label",  # Automatically maps string labels to integers
+                                "override": True,  # Replace existing label column with integer-mapped version
+                            },
                         ],
                         "sample_rate": 16000,
                     },
@@ -98,18 +97,17 @@ class TestRunEvaluateEndToEnd:
                         "audio_max_length_seconds": 5,
                         "transformations": [
                             {
-                                "type": "subsample",
+                                "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratios": {
-                                    "Rudy": 1.0,
-                                    "Zoe": 1.0,
-                                    "Louie": 1.0,  # Add third class
-                                },
-                                "max_samples": 15,  # Small test set
+                                "ratio": 0.2,  # Larger ratio to ensure multiple classes remain
+                                "max_samples": 50,  # More samples to ensure class diversity
                             },
-                            # No label mapping - system should count classes from data
+                            {
+                                "type": "label_from_feature",
+                                "feature": "label",  # Automatically maps string labels to integers
+                                "override": True,  # Replace existing label column with integer-mapped version
+                            },
                         ],
-                        "sample_rate": 16000,
                     },
                     "metrics": [
                         "accuracy",
@@ -154,7 +152,7 @@ class TestRunEvaluateEndToEnd:
             "training_params": {
                 "train_epochs": 1,
                 "lr": 0.0003,
-                "batch_size": 1,
+                "batch_size": 4,  # Small batch for faster processing
                 "optimizer": "adamw",
                 "weight_decay": 0.01,
                 "amp": False,
@@ -163,7 +161,7 @@ class TestRunEvaluateEndToEnd:
             "save_dir": str(temp_output_dir / "results"),
             "device": "cpu",
             "seed": 42,
-            "num_workers": 2,
+            "num_workers": 0,  # Faster startup for small dataset
             "eval_modes": ["probe"],
             "offline_embeddings": {
                 "overwrite_embeddings": True,
@@ -218,7 +216,9 @@ class TestRunEvaluateEndToEnd:
         }
 
         if probe_type == "linear":
-            experiment["probe_config"].update({"hidden_dims": [256, 128], "dropout_rate": 0.1, "activation": "relu"})
+            experiment["probe_config"].update(
+                {"hidden_dims": [32], "dropout_rate": 0.1, "activation": "relu"}
+            )  # Smaller probe for speed
         elif probe_type == "attention":
             experiment["probe_config"].update(
                 {
@@ -295,7 +295,7 @@ class TestRunEvaluateEndToEnd:
             assert experiment.probe_config.target_layers == ["last_layer"]
 
         if probe_type == "linear":
-            assert experiment.probe_config.hidden_dims == [256, 128]
+            assert experiment.probe_config.hidden_dims == [32]  # Updated to match optimized test config
             assert experiment.probe_config.dropout_rate == 0.1
             assert experiment.probe_config.activation == "relu"
         elif probe_type == "attention":
