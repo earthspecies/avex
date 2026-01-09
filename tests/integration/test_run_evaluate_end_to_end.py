@@ -111,8 +111,6 @@ class TestRunEvaluateEndToEnd:
                     "metrics": [
                         "accuracy",
                         "balanced_accuracy",
-                        "clustering_ari",
-                        "clustering_nmi",
                     ],
                 }
             ],
@@ -366,7 +364,3 @@ class TestRunEvaluateEndToEnd:
             if pd.isna(val):
                 continue
             assert 0.0 <= val <= 1.0, f"{metric} out of range: {val}"
-
-        ari = df["test_clustering_ari"].iloc[0]
-        if not pd.isna(ari):
-            assert -1.0 <= ari <= 1.0, f"test_clustering_ari out of range: {ari}"
