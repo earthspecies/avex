@@ -162,9 +162,9 @@ class TestRunEvaluateEndToEnd:
             "eval_modes": ["probe"],
             "offline_embeddings": {
                 "overwrite_embeddings": True,
-                "use_streaming_embeddings": True,  # Use streaming for CI to avoid memory issues
+                "use_streaming_embeddings": False,  # Use in-memory for tiny dataset - much faster, no disk I/O
                 "memory_limit_gb": 2,  # Lower limit for CI
-                "streaming_chunk_size": 100,  # Minimum allowed value for CI
+                "streaming_chunk_size": 100,  # Not used when streaming is false, but required by schema
                 "hdf5_compression": "gzip",
                 "hdf5_compression_level": 4,
                 "auto_chunk_size": True,
@@ -330,7 +330,7 @@ class TestRunEvaluateEndToEnd:
             "seed=42",
             "training_params.train_epochs=1",
             "training_params.batch_size=1",
-            "offline_embeddings.use_streaming_embeddings=true",  # Use streaming for CI to avoid memory issues
+            "offline_embeddings.use_streaming_embeddings=false",  # Use in-memory for tiny dataset - much faster
             "offline_embeddings.memory_limit_gb=2",  # Lower limit for CI
             "offline_embeddings.cache_size_limit_gb=1",  # Lower cache for CI
         )
