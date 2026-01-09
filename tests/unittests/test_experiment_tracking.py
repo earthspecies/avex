@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from esp_data import DatasetConfig
 
-from representation_learning.configs import (
+from avex.configs import (
     AudioConfig,
     DatasetCollectionConfig,
     ModelSpec,
@@ -20,7 +20,7 @@ from representation_learning.configs import (
     SchedulerConfig,
     TrainingParams,
 )
-from representation_learning.utils.experiment_tracking import (
+from avex.utils.experiment_tracking import (
     create_initial_experiment_metadata,
     get_run_config_params_from_metadata,
     get_training_params_from_metadata,
@@ -145,7 +145,7 @@ def test_save_and_load_experiment_metadata(
     assert model_spec["audio_config"]["sample_rate"] == 16000
 
 
-@patch("representation_learning.utils.experiment_tracking._fs")
+@patch("avex.utils.experiment_tracking._fs")
 def test_save_and_load_evaluation_metadata(
     mock_fs: MagicMock,
     temp_dir: Path,
@@ -264,7 +264,7 @@ def test_append_to_existing_metadata(temp_dir: Path, mock_config: RunConfig, moc
     assert model_spec["audio_config"]["sample_rate"] == 16000
 
 
-@patch("representation_learning.utils.experiment_tracking._fs")
+@patch("avex.utils.experiment_tracking._fs")
 def test_evaluation_metadata_with_training_metadata(
     mock_fs: MagicMock,
     temp_dir: Path,

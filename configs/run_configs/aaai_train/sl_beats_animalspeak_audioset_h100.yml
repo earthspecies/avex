@@ -90,4 +90,4 @@ loss_function: bce
 seed: 42
 num_workers: 18
 
-wandb_project: representation_learning
+wandb_project: avex

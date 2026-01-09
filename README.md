@@ -52,8 +52,8 @@ url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pyp
 explicit = true
 
 [tool.uv.sources]
-representation-learning = { index = "esp-pypi" }
-# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+avex = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (avex[dev])
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
@@ -61,13 +61,13 @@ esp-sweep = { index = "esp-pypi" }
 keyring-provider = "subprocess"
 ```
 
-**Note:** If you plan to install `representation-learning[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
+**Note:** If you plan to install `avex[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
 4. Install the package (API dependencies only):
 
 ```bash
 # Option A: Add and install in one step
-uv add representation-learning
+uv add avex
 
 # Option B: If you've already added it to [project.dependencies] in pyproject.toml
 uv sync
@@ -87,7 +87,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 2. Install the package from the ESP index:
 
 ```bash
-pip install representation-learning \
+pip install avex \
   --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
@@ -105,7 +105,7 @@ uv add "representation-learning[dev]"
 uv sync
 
 # With pip
-pip install "representation-learning[dev]" \
+pip install "avex[dev]" \
   --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
@@ -184,7 +184,7 @@ Notes for development:
 ### Basic Usage
 
 ```python
-from representation_learning import list_models, load_model, describe_model
+from avex import list_models, load_model, describe_model
 
 # List available models (prints table and returns dict)
 models = list_models()  # Prints table + returns dict with detailed info
@@ -264,9 +264,9 @@ Probes are task-specific heads attached to pretrained backbones for transfer lea
 - **Offline Training**: Embeddings pre-computed, probe trained separately
 
 ```python
-from representation_learning import load_model
-from representation_learning.api import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex import load_model
+from avex.api import build_probe_from_config
+from avex.configs import ProbeConfig
 
 # Load backbone for feature extraction
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -319,7 +319,7 @@ The framework provides three main functions for working with models, each design
 - ❌ Using custom model classes (use `build_model` for plugin architecture)
 
 ```python
-from representation_learning import load_model
+from avex import load_model
 
 # Load with explicit num_classes (for new model with new classifier)
 model = load_model("efficientnet", num_classes=100)
@@ -395,8 +395,8 @@ model = load_model("efficientnet_animalspeak")  # Uses checkpoint, pretrained=Fa
 - ✅ Building new models from ModelSpec objects
 
 ```python
-from representation_learning import build_model, register_model_class
-from representation_learning.models.base_model import ModelBase
+from avex import build_model, register_model_class
+from avex.models.base_model import ModelBase
 
 # Register a custom model class
 @register_model_class
@@ -416,12 +416,12 @@ model = build_model("my_custom_model", device="cpu", num_classes=10)
 
 #### Registry Management
 ```python
-from representation_learning import (
+from avex import (
     register_model, get_model_spec, list_models, describe_model
 )
 
 # Register a new model configuration
-from representation_learning.configs import ModelSpec, AudioConfig
+from avex.configs import ModelSpec, AudioConfig
 model_spec = ModelSpec(
     name="my_model",
     pretrained=False,
@@ -463,7 +463,7 @@ else:
 
 #### Model Class Management (Plugin Architecture)
 ```python
-from representation_learning import (
+from avex import (
     register_model_class, get_model_class, list_model_classes
 )
 
@@ -483,7 +483,7 @@ model_class = get_model_class("my_model")
 
 #### Checkpoint Management
 ```python
-from representation_learning import get_checkpoint_path
+from avex import get_checkpoint_path
 
 # Get default checkpoint path from YAML config
 # Checkpoint paths are defined in api/configs/official_models/*.yml files
@@ -491,13 +491,13 @@ checkpoint = get_checkpoint_path("efficientnet_animalspeak")
 print(f"Default checkpoint: {checkpoint}")
 
 # Override default checkpoint by passing checkpoint_path parameter
-from representation_learning import load_model
+from avex import load_model
 model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
 ```
 
 #### Class Mapping Management
 ```python
-from representation_learning import load_class_mapping
+from avex import load_class_mapping
 
 # Load class mappings for a model
 # Class mappings define the relationship between class labels and indices
@@ -543,8 +543,8 @@ The framework supports a plugin architecture that allows users to register custo
 See [docs/custom_model_registration.md](docs/custom_model_registration.md) for detailed guidance on when and why to register custom models.
 
 ```python
-from representation_learning.models.base_model import ModelBase
-from representation_learning import register_model_class
+from avex.models.base_model import ModelBase
+from avex import register_model_class
 
 @register_model_class
 class MyCustomModel(ModelBase):
@@ -629,7 +629,7 @@ These configurations can be loaded directly with `load_model("path/to/config.yml
 The `ModelSpec` class supports various parameters for different model types:
 
 ```python
-from representation_learning.configs import ModelSpec, AudioConfig
+from avex.configs import ModelSpec, AudioConfig
 
 # Basic configuration
 model_spec = ModelSpec(
@@ -676,7 +676,7 @@ model_spec = ModelSpec(
 **Finding the expected sample rate:**
 
 ```python
-from representation_learning import describe_model, get_model_spec
+from avex import describe_model, get_model_spec
 
 # Option 1: Use describe_model() for a formatted overview
 describe_model("beats_naturelm", verbose=True)
@@ -694,7 +694,7 @@ For full reproducibility, use `librosa.resample` with `res_type="kaiser_best", s
 ```python
 import librosa
 import torch
-from representation_learning import get_model_spec, load_model
+from avex import get_model_spec, load_model
 
 # Get the model's expected sample rate
 spec = get_model_spec("beats_naturelm")
@@ -727,7 +727,7 @@ with torch.no_grad():
 ### Audio Configuration
 
 ```python
-from representation_learning.configs import AudioConfig
+from avex.configs import AudioConfig
 
 audio_config = AudioConfig(
     sample_rate=16000,
@@ -752,7 +752,7 @@ audio_config = AudioConfig(
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from representation_learning import build_model
+from avex import build_model
 
 # Create a backbone for training (attach your own head or use a probe)
 model = build_model("efficientnet", device="cpu")
@@ -786,7 +786,7 @@ For complete training examples with data loading and evaluation, see `examples/0
 
 ```python
 import torch
-from representation_learning import load_model
+from avex import load_model
 
 # Load pre-trained model with checkpoint
 model = load_model("sl_beats_animalspeak", device="cpu")
@@ -940,7 +940,7 @@ See `examples/05_embedding_extraction.py` for comprehensive examples of embeddin
 ## 📦 Package Structure
 
 ```
-representation_learning/
+avex/
 ├── __init__.py              # Main API exports and version
 ├── api/                     # Public API layer
 │   ├── configs/            # Official model configurations
@@ -976,7 +976,7 @@ uv run pytest tests/integration/
 uv run pytest tests/consistency/
 
 # Run with coverage
-uv run pytest --cov=representation_learning
+uv run pytest --cov=avex
 ```
 
 ## 📝 Examples
@@ -999,8 +999,8 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 ```python
 import torch
 import torch.nn as nn
-from representation_learning.models.base_model import ModelBase
-from representation_learning import register_model_class
+from avex.models.base_model import ModelBase
+from avex import register_model_class
 
 @register_model_class
 class MyAudioCNN(ModelBase):
@@ -1071,7 +1071,7 @@ model_spec:
 **Using Custom Configurations**
 
 ```python
-from representation_learning import load_model, get_checkpoint_path
+from avex import load_model, get_checkpoint_path
 
 # Load model from custom YAML file
 model = load_model("path/to/my_model.yml")

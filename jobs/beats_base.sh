@@ -10,4 +10,4 @@
 cd ~/representation-learning
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
-srun uv run representation_learning/run_train.py --config configs/run_configs/beats_base_beans.yml
+srun uv run avex/run_train.py --config configs/run_configs/beats_base_beans.yml

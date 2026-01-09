@@ -41,4 +41,4 @@ export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 uv sync
 
 # Run training
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/$config_file
+srun uv run avex/run_train.py --config configs/run_configs/aaai_train/$config_file

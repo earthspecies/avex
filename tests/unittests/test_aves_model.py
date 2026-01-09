@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from representation_learning.models.aves_model import Model as AVESModel
+from avex.models.aves_model import Model as AVESModel
 from tests.utils.test_utils import create_cleanup_hooks_fixture
 
 

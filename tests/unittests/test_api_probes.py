@@ -11,11 +11,11 @@ from typing import Any
 import pytest
 import torch
 
-from representation_learning import list_model_layers, load_model
-from representation_learning.configs import AudioConfig, ModelSpec, ProbeConfig
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import build_probe_from_config
-from representation_learning.models.utils.registry import (
+from avex import list_model_layers, load_model
+from avex.configs import AudioConfig, ModelSpec, ProbeConfig
+from avex.models.base_model import ModelBase
+from avex.models.probes.utils import build_probe_from_config
+from avex.models.utils.registry import (
     register_model,
     register_model_class,
 )
@@ -31,7 +31,7 @@ class TestBuildProbeFromConfig:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -334,7 +334,7 @@ class TestBuildProbeFromConfig:
         # Use a valid probe type but test that the factory handles missing registration
         # This is tested indirectly - ProbeConfig will reject invalid types at creation
         # The factory will handle unregistered but valid-looking types
-        from representation_learning.models.probes.utils.registry import _PROBE_CLASSES
+        from avex.models.probes.utils.registry import _PROBE_CLASSES
 
         # Temporarily clear probe classes to simulate unregistered type
         original_classes = _PROBE_CLASSES.copy()
@@ -456,7 +456,7 @@ class TestListModelLayers:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()

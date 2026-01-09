@@ -288,7 +288,7 @@ class TestRunEvaluateEndToEnd:
         training_mode: str,
         temp_output_dir: Path,
     ) -> None:
-        from representation_learning.configs import EvaluateConfig
+        from avex.configs import EvaluateConfig
 
         config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 
@@ -329,7 +329,7 @@ class TestRunEvaluateEndToEnd:
         training_mode: str,
         temp_output_dir: Path,
     ) -> None:
-        from representation_learning.run_evaluate import main
+        from avex.run_evaluate import main
 
         config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 

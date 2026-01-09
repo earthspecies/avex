@@ -13,20 +13,20 @@ from typing import Any
 import pytest
 import torch
 
-from representation_learning import load_model, register_model
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.utils.load import (
+from avex import load_model, register_model
+from avex.configs import AudioConfig, ModelSpec
+from avex.models.base_model import ModelBase
+from avex.models.utils.load import (
     _extract_num_classes_from_checkpoint,
     _get_classification_layer_dim_from_state_dict,
     _load_checkpoint,
     _load_from_modelspec,
     load_label_mapping,
 )
-from representation_learning.models.utils.registry import (
+from avex.models.utils.registry import (
     register_model_class,
 )
-from representation_learning.utils.utils import _process_state_dict
+from avex.utils.utils import _process_state_dict
 
 
 class TestLoadModel:
@@ -39,7 +39,7 @@ class TestLoadModel:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -176,7 +176,7 @@ class TestCreateModel:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -514,7 +514,7 @@ class TestLoadLabelMapping:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -597,7 +597,7 @@ class TestLoadCheckpoint:
         Yields:
             ModelBase: A test model instance.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
 
@@ -685,7 +685,7 @@ class TestLoadFromModelSpec:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -749,7 +749,7 @@ class TestLoadFromModelSpec:
 
     def test_loads_with_pretrained_true(self) -> None:
         """Test loading model with pretrained=True (no checkpoint)."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Register model spec with pretrained=True
         model_spec = ModelSpec(
@@ -768,7 +768,7 @@ class TestLoadFromModelSpec:
 
     def test_raises_error_when_num_classes_required(self) -> None:
         """Test that ValueError is raised when classifier creation is requested without checkpoint."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Register a model class that doesn't support return_features_only
         @register_model_class

@@ -52,13 +52,13 @@ jobs:
 
             - name: Consistency tests with pytest
               run: |
-                  uv run pytest tests/consistency --base_folder representation_learning
+                  uv run pytest tests/consistency --base_folder avex
             - name: Unittests with pytest
               run: |
                   uv run pytest tests/unittests
             - name: Doctests with pytest
               run: |
-                  uv run pytest --doctest-modules representation_learning
+                  uv run pytest --doctest-modules avex
             # - name: Integration tests with pytest
             #  run: |
             #      uv run pytest tests/integration

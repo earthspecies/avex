@@ -1,4 +1,4 @@
-"""Integration tests for the representation_learning API.
+"""Integration tests for the avex API.
 
 This test suite verifies the main API functions work correctly together,
 inspired by the examples in the examples/ directory.
@@ -7,15 +7,15 @@ inspired by the examples in the examples/ directory.
 import pytest
 import torch
 
-from representation_learning import (
+from avex import (
     describe_model,
     get_model_spec,
     list_models,
     load_model,
 )
-from representation_learning.configs import ModelSpec, ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
-from representation_learning.models.utils.factory import build_model_from_spec
+from avex.configs import ModelSpec, ProbeConfig
+from avex.models.probes.utils import build_probe_from_config
+from avex.models.utils.factory import build_model_from_spec
 
 
 class TestAPIIntegration:

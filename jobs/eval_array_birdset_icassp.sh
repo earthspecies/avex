@@ -44,7 +44,7 @@ fi
 
 echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
-cd ~/code/representation_learning
+cd ~/code/avex
 
 echo $UV_PROJECT_ENVIRONMENT
 uv sync

@@ -1,6 +1,6 @@
 import torch
 
-from representation_learning.models.efficientnet import Model as EfficientNet
+from avex.models.efficientnet import Model as EfficientNet
 
 
 def test_efficientnet() -> None:

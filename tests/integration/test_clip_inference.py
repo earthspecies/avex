@@ -10,11 +10,11 @@ import torch
 from esp_data.io import anypath, exists
 from torch.utils.data import Dataset
 
-from representation_learning.configs import RunConfig
-from representation_learning.data.audio_utils import pad_or_window
-from representation_learning.data.dataset import build_dataloaders
-from representation_learning.models.utils.factory import build_model_from_spec
-from representation_learning.utils import universal_torch_load
+from avex.configs import RunConfig
+from avex.data.audio_utils import pad_or_window
+from avex.data.dataset import build_dataloaders
+from avex.models.utils.factory import build_model_from_spec
+from avex.utils import universal_torch_load
 
 
 class MockDataset(Dataset[dict[str, Any]]):

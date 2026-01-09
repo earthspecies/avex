@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from sklearn.metrics import f1_score, precision_score, recall_score
 
-from representation_learning.metrics.sklearn_metrics import (
+from avex.metrics.sklearn_metrics import (
     Accuracy,
     AveragePrecision,
     BalancedAccuracy,

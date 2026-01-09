@@ -29,10 +29,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from representation_learning import load_model, register_model_class
-from representation_learning.configs import ProbeConfig
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import build_probe_from_config
+from avex import load_model, register_model_class
+from avex.configs import ProbeConfig
+from avex.models.base_model import ModelBase
+from avex.models.probes.utils import build_probe_from_config
 
 # =============================================================================
 # Custom Training Model
@@ -330,7 +330,7 @@ def main(device: str = "cpu") -> None:
     # Load model from checkpoint
     # Create a ModelSpec for the custom model
     # num_classes will be automatically extracted from checkpoint by load_model
-    from representation_learning.configs import AudioConfig, ModelSpec
+    from avex.configs import AudioConfig, ModelSpec
 
     model_spec = ModelSpec(
         name="training_example",

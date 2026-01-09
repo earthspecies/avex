@@ -8,4 +8,4 @@
 
 cd ~/representation-learning
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/perch_cpu.yml
+srun uv run avex/run_evaluate.py --config configs/evaluation_configs/perch_cpu.yml

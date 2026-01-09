@@ -5,7 +5,7 @@ from typing import Dict
 import pytest
 import torch
 
-from representation_learning.models.perch import PerchModel
+from avex.models.perch import PerchModel
 
 
 @pytest.fixture(scope="session")

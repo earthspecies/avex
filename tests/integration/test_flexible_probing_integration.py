@@ -18,7 +18,7 @@ def setup_model_registry() -> None:
     This fixture ensures that both _MODEL_REGISTRY and _MODEL_CLASSES
     are populated, even if they were cleared by previous tests.
     """
-    from representation_learning.models.utils import registry
+    from avex.models.utils import registry
 
     # Initialize registry to ensure model classes are registered
     registry.initialize_registry()
@@ -60,7 +60,7 @@ def test_flexible_probing_integration() -> None:
             start_time = time.time()
 
             # Import and run the main function
-            from representation_learning.run_evaluate import main
+            from avex.run_evaluate import main
 
             # Run the evaluation
             main(config_path, patches)

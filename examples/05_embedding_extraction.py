@@ -29,9 +29,9 @@ import argparse
 
 import torch
 
-from representation_learning import load_model
-from representation_learning.configs import AudioConfig
-from representation_learning.models.efficientnet import Model as EfficientNetModel
+from avex import load_model
+from avex.configs import AudioConfig
+from avex.models.efficientnet import Model as EfficientNetModel
 
 
 def main(device: str = "cpu") -> None:

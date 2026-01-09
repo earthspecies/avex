@@ -27,4 +27,4 @@ export CUDA_VISIBLE_DEVICES=0,1
 export PYTORCH_DISTRIBUTED_BACKEND=nccl
 
 # GPU binding with explicit task mapping
-srun --cpu-bind=verbose --gpu-bind=closest uv run representation_learning/run_train.py --config configs/run_configs/clip_base_beans.yml
+srun --cpu-bind=verbose --gpu-bind=closest uv run avex/run_train.py --config configs/run_configs/clip_base_beans.yml

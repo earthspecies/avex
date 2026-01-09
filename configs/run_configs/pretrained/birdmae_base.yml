@@ -40,7 +40,7 @@ device: cuda
 seed: 42
 num_workers: 4
 sr: 32000  # Target sample rate for BirdMAE
-wandb_project: representation_learning
+wandb_project: avex
 
 # Learning rate scheduler configuration
 scheduler:

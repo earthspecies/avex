@@ -44,4 +44,4 @@ esac
 
 echo "Launching training with config: $CONFIG"
 
-srun uv run representation_learning/run_train.py --config "$CONFIG"
+srun uv run avex/run_train.py --config "$CONFIG"

@@ -8,8 +8,8 @@ import torch
 from esp_data import DatasetConfig
 from torch.utils.data import DataLoader, Dataset
 
-from representation_learning.configs import EvaluateConfig, ExperimentConfig, TrainingParams
-from representation_learning.run_evaluate import run_experiment
+from avex.configs import EvaluateConfig, ExperimentConfig, TrainingParams
+from avex.run_evaluate import run_experiment
 
 
 # --------------------------------------------------------------------- #
@@ -68,16 +68,16 @@ def test_run_experiment_small(
     """Verify that `run_experiment` executes end-to-end with BEATs model and
     retrieval evaluation."""
     # Patch dataloader builders ------------------------------------------------
-    from representation_learning.data import dataset as dataset_mod
+    from avex.data import dataset as dataset_mod
 
     monkeypatch.setattr(dataset_mod, "build_dataloaders", _mock_build_dataloaders)
 
-    import representation_learning.run_evaluate as reval_mod
+    import avex.run_evaluate as reval_mod
 
     monkeypatch.setattr(reval_mod, "build_dataloaders", _mock_build_dataloaders)
 
     # Mock the retrieval evaluation to handle None labels issue
-    from representation_learning.evaluation import retrieval as retrieval_mod
+    from avex.evaluation import retrieval as retrieval_mod
 
     def _mock_eval_retrieval_cross_set(*args: object, **kwargs: object) -> dict[str, float]:
         """Mock retrieval evaluation that returns dummy metrics.
@@ -134,7 +134,7 @@ def test_run_experiment_small(
     )
 
     # Create a mock data collection config
-    from representation_learning.data.configs import DatasetCollectionConfig
+    from avex.data.configs import DatasetCollectionConfig
 
     data_collection_cfg = DatasetCollectionConfig(
         train_datasets=[DatasetConfig(dataset_name="dummy_train")],
@@ -146,7 +146,7 @@ def test_run_experiment_small(
     #  Execute experiment
     # ------------------------------------------------------------------------- #
     # Create a mock evaluation set with train_vs_test retrieval mode
-    from representation_learning.data.configs import EvaluationSet
+    from avex.data.configs import EvaluationSet
 
     evaluation_set = EvaluationSet(
         name="test_set",

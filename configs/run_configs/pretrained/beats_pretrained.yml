@@ -54,7 +54,7 @@ loss_function: cross_entropy
 seed: 42
 num_workers: 10
 
-wandb_project: representation_learning
+wandb_project: avex
 
 augmentations:
   # Add background noise at random SNRs

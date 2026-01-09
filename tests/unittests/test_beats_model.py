@@ -1,6 +1,6 @@
 import torch
 
-from representation_learning.models.beats_model import Model as BeatsModel
+from avex.models.beats_model import Model as BeatsModel
 
 # ---------------------------------------------------------------------------
 #  Now that stubs are in place, we can safely import the model under test.

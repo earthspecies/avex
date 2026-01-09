@@ -185,7 +185,7 @@ After installation, verify that everything works:
 
 ```python
 # Test the API
-from representation_learning import load_model, list_models
+from avex import load_model, list_models
 
 # List available models
 models = list_models()

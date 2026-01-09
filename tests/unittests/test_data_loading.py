@@ -8,14 +8,14 @@ import pandas as pd
 import pytest
 from esp_data import Dataset, DatasetConfig, dataset_from_config
 
-from representation_learning.configs import (
+from avex.configs import (
     AudioConfig,
     DatasetCollectionConfig,
     ModelSpec,
     RunConfig,
     TrainingParams,
 )
-from representation_learning.data.dataset import (
+from avex.data.dataset import (
     build_dataloaders,
 )
 

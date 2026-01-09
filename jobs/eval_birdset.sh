@@ -20,10 +20,10 @@ srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_model/efficientnet_beans.yml
 
 # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/eat_hf_48khz.yml
-# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/clap.yml
-# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/birdnet.yml
-# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/eat_hf.yml
-# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/beats.yml
+# srun uv run avex/run_evaluate.py --config configs/evaluation_configs/single_models_beans/clap.yml
+# srun uv run avex/run_evaluate.py --config configs/evaluation_configs/single_models_beans/birdnet.yml
+# srun uv run avex/run_evaluate.py --config configs/evaluation_configs/single_models_beans/eat_hf.yml
+# srun uv run avex/run_evaluate.py --config configs/evaluation_configs/single_models_beans/beats.yml
 # Alternative single_model configs:
-# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_model/efficientnet_beans.yml
-# srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/single_models_beans/eat_hf_48khz.yml
+# srun uv run avex/run_evaluate.py --config configs/evaluation_configs/single_model/efficientnet_beans.yml
+# srun uv run avex/run_evaluate.py --config configs/evaluation_configs/single_models_beans/eat_hf_48khz.yml

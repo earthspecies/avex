@@ -22,9 +22,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from representation_learning import get_model_spec, load_model
-from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import (
+from avex import get_model_spec, load_model
+from avex.configs import ProbeConfig
+from avex.models.probes.utils import (
     build_probe_from_config,
 )
 

@@ -1,5 +1,5 @@
 [project]
-name = "representation-learning"
+name = "avex"
 version = "0.2.0"
 description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
@@ -80,8 +80,8 @@ project-dev = [
 ]
 
 [project.scripts]
-repr-learn = "representation_learning.cli:cli"
-list-models = "representation_learning.api.list_models:main"
+repr-learn = "avex.cli:cli"
+list-models = "avex.api.list_models:main"
 
 [[tool.uv.index]]
 name = "esp-pypi"
@@ -108,7 +108,7 @@ requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "representation_learning"
+module-name = "avex"
 module-root = ""
 
 [tool.pytest.ini_options]

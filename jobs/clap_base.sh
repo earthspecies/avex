@@ -28,4 +28,4 @@ export DATASET_DEBUG_SAVE=true
 #keyring
 
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/clap_efficientnet_captions.yml
+srun uv run avex/run_train.py --config configs/run_configs/aaai_train/clap_efficientnet_captions.yml

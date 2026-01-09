@@ -42,7 +42,7 @@ fi
 
 echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
-cd ~/code/representation_learning
+cd ~/code/avex
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 export GOOGLE_APPLICATION_CREDENTIALS=/home/marius_miron_earthspecies_org/.config/gcloud/application_default_credentials.json

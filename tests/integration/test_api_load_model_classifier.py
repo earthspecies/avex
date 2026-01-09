@@ -10,11 +10,11 @@ from __future__ import annotations
 import pytest
 import torch
 
-from representation_learning import (
+from avex import (
     load_model,
     register_model,
 )
-from representation_learning.configs import AudioConfig, ModelSpec
+from avex.configs import AudioConfig, ModelSpec
 
 
 class TestLoadModelClassifierHead:
@@ -27,7 +27,7 @@ class TestLoadModelClassifierHead:
         Yields:
             None: Fixture yields nothing, just sets up the model registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry to ensure clean state
         registry._MODEL_REGISTRY.clear()
