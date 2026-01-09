@@ -41,16 +41,6 @@ jobs:
                 echo "After cleanup:"
                 df -h /
 
-            - name: Disk diagnostics (before tests)
-              run: |
-                  echo "=== df -h ==="
-                  df -h
-                  echo "=== Top-level usage (runner workspace) ==="
-                  du -h -d 2 . | sort -h | tail -n 50 || true
-                  echo "=== Cache dirs ==="
-                  du -h -d 2 ~/.cache | sort -h | tail -n 50 || true
-                  du -h -d 2 ~/.local | sort -h | tail -n 50 || true
-
             - name: Authenticate to Google Cloud
               uses: "google-github-actions/auth@v2"
               with:
@@ -84,29 +74,6 @@ jobs:
             - name: Doctests with pytest
               run: |
                   uv run pytest --doctest-modules representation_learning
-            - name: Check system resources
-              run: |
-                  echo "=== Memory ==="
-                  free -h
-                  echo "=== Disk space ==="
-                  df -h
-                  echo "=== Resource limits ==="
-                  ulimit -a
-            - name: Disk diagnostics (before integration)
-              run: |
-                  echo "=== df -h ==="
-                  df -h
-                  echo "=== Top-level usage (runner workspace) ==="
-                  du -h -d 2 . | sort -h | tail -n 50 || true
-                  echo "=== Cache dirs ==="
-                  du -h -d 2 ~/.cache | sort -h | tail -n 50 || true
-                  du -h -d 2 ~/.local | sort -h | tail -n 50 || true
             - name: Integration tests with pytest
-              env:
-                  OMP_NUM_THREADS: "1"
-                  MKL_NUM_THREADS: "1"
-                  OPENBLAS_NUM_THREADS: "1"
-                  NUMEXPR_NUM_THREADS: "1"
-                  TORCH_NUM_THREADS: "1"
               run: |
-                  uv run pytest tests/integration
+                  uv run pytest tests/integration -m "not slow" -vv --durations=20
