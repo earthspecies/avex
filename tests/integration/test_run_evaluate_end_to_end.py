@@ -130,11 +130,6 @@ class TestRunEvaluateEndToEnd:
         -------
         Path
             Path to the created configuration file.
-
-        Raises
-        ------
-        FileNotFoundError
-            If the referenced run_config file (efficientnet_base.yml) is not found.
         """
         config_path = temp_output_dir / f"test_config_{probe_type}_{freeze_backbone}_{layers}_{training_mode}.yml"
 
@@ -180,20 +175,6 @@ class TestRunEvaluateEndToEnd:
         # Use sl_efficientnet_animalspeak.yml which is tracked in git
         run_config_relative = Path("configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml")
         run_config_path = (project_root / run_config_relative).resolve()
-
-        # Verify file exists
-        if not run_config_path.exists():
-            # Try efficientnet_base.yml as fallback (might exist locally but not in CI)
-            fallback = project_root / "configs" / "run_configs" / "pretrained" / "efficientnet_base.yml"
-            if fallback.exists():
-                run_config_path = fallback
-            else:
-                raise FileNotFoundError(
-                    f"Config file not found: {run_config_path}\n"
-                    f"Project root: {project_root}\n"
-                    f"Looking for: {run_config_relative}\n"
-                    f"Fallback also not found: {fallback}"
-                )
 
         # Use absolute path in the config to ensure it works in CI
         experiment = {
