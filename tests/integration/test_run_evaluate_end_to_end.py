@@ -47,13 +47,13 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 5,  # Shorter audio for speed
+                        "audio_max_length_seconds": 3,  # Shorter audio for CI speed
                         "transformations": [
                             {
                                 "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratio": 0.2,  # Larger ratio to ensure multiple classes remain
-                                "max_samples": 100,  # More samples to ensure class diversity
+                                "ratio": 0.15,  # Smaller ratio for CI speed
+                                "max_samples": 30,  # Reduced for CI - still enough for multiple classes
                             },
                             {
                                 "type": "label_from_feature",
@@ -75,8 +75,8 @@ class TestRunEvaluateEndToEnd:
                             {
                                 "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratio": 0.2,  # Larger ratio to ensure multiple classes remain
-                                "max_samples": 50,  # More samples to ensure class diversity
+                                "ratio": 0.15,  # Smaller ratio for CI speed
+                                "max_samples": 20,  # Reduced for CI
                             },
                             {
                                 "type": "label_from_feature",
@@ -84,7 +84,6 @@ class TestRunEvaluateEndToEnd:
                                 "override": True,  # Replace existing label column with integer-mapped version
                             },
                         ],
-                        "sample_rate": 16000,
                     },
                     "test": {
                         "dataset_name": "beans",
@@ -99,8 +98,8 @@ class TestRunEvaluateEndToEnd:
                             {
                                 "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratio": 0.2,  # Larger ratio to ensure multiple classes remain
-                                "max_samples": 50,  # More samples to ensure class diversity
+                                "ratio": 0.15,  # Smaller ratio for CI speed
+                                "max_samples": 20,  # Reduced for CI
                             },
                             {
                                 "type": "label_from_feature",
@@ -152,7 +151,7 @@ class TestRunEvaluateEndToEnd:
             "training_params": {
                 "train_epochs": 1,
                 "lr": 0.0003,
-                "batch_size": 4,  # Small batch for faster processing
+                "batch_size": 2,  # Smaller batch for CI speed
                 "optimizer": "adamw",
                 "weight_decay": 0.01,
                 "amp": False,
@@ -165,16 +164,16 @@ class TestRunEvaluateEndToEnd:
             "eval_modes": ["probe"],
             "offline_embeddings": {
                 "overwrite_embeddings": True,
-                "use_streaming_embeddings": False,
-                "memory_limit_gb": 32,
-                "streaming_chunk_size": 1000,
+                "use_streaming_embeddings": True,  # Use streaming for CI to avoid memory issues
+                "memory_limit_gb": 2,  # Lower limit for CI
+                "streaming_chunk_size": 50,  # Smaller chunks for CI
                 "hdf5_compression": "gzip",
                 "hdf5_compression_level": 4,
                 "auto_chunk_size": True,
-                "max_chunk_size": 2000,
-                "min_chunk_size": 100,
-                "batch_chunk_size": 10,
-                "cache_size_limit_gb": 16,
+                "max_chunk_size": 200,
+                "min_chunk_size": 50,
+                "batch_chunk_size": 5,
+                "cache_size_limit_gb": 1,  # Lower cache for CI
             },
         }
 
@@ -333,9 +332,9 @@ class TestRunEvaluateEndToEnd:
             "seed=42",
             "training_params.train_epochs=1",
             "training_params.batch_size=1",
-            "offline_embeddings.use_streaming_embeddings=false",
-            "offline_embeddings.memory_limit_gb=32",
-            "offline_embeddings.cache_size_limit_gb=16",
+            "offline_embeddings.use_streaming_embeddings=true",  # Use streaming for CI to avoid memory issues
+            "offline_embeddings.memory_limit_gb=2",  # Lower limit for CI
+            "offline_embeddings.cache_size_limit_gb=1",  # Lower cache for CI
         )
 
         # Ensure we're in project root when running main (it loads configs)
