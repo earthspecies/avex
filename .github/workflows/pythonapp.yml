@@ -26,6 +26,16 @@ jobs:
         steps:
             - uses: actions/checkout@v2
 
+            - name: Disk diagnostics (before tests)
+              run: |
+                  echo "=== df -h ==="
+                  df -h
+                  echo "=== Top-level usage (runner workspace) ==="
+                  du -h -d 2 . | sort -h | tail -n 50 || true
+                  echo "=== Cache dirs ==="
+                  du -h -d 2 ~/.cache | sort -h | tail -n 50 || true
+                  du -h -d 2 ~/.local | sort -h | tail -n 50 || true
+
             - name: Authenticate to Google Cloud
               uses: "google-github-actions/auth@v2"
               with:
