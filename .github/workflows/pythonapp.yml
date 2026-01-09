@@ -67,6 +67,15 @@ jobs:
                   df -h
                   echo "=== Resource limits ==="
                   ulimit -a
+            - name: Disk diagnostics (before integration)
+              run: |
+                  echo "=== df -h ==="
+                  df -h
+                  echo "=== Top-level usage (runner workspace) ==="
+                  du -h -d 2 . | sort -h | tail -n 50 || true
+                  echo "=== Cache dirs ==="
+                  du -h -d 2 ~/.cache | sort -h | tail -n 50 || true
+                  du -h -d 2 ~/.local | sort -h | tail -n 50 || true
             - name: Integration tests with pytest
               env:
                   OMP_NUM_THREADS: "1"
