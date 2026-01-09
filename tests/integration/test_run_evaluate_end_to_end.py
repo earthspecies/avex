@@ -47,13 +47,13 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 2,  # Very short audio for CI speed
+                        "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
                         "transformations": [
                             {
                                 "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratio": 0.1,  # Very small ratio for CI speed
-                                "max_samples": 20,  # Minimal samples for CI - still enough for multiple classes
+                                "ratio": 0.05,  # Very small ratio for CI speed
+                                "max_samples": 10,  # Very minimal samples for CI - still enough for multiple classes
                             },
                             {
                                 "type": "label_from_feature",
@@ -70,13 +70,13 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 2,  # Very short audio for CI speed
+                        "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
                         "transformations": [
                             {
                                 "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratio": 0.1,  # Very small ratio for CI speed
-                                "max_samples": 15,  # Minimal samples for CI
+                                "ratio": 0.05,  # Very small ratio for CI speed
+                                "max_samples": 8,  # Very minimal samples for CI
                             },
                             {
                                 "type": "label_from_feature",
@@ -93,13 +93,13 @@ class TestRunEvaluateEndToEnd:
                         "audio_path_col": "path",
                         "multi_label": False,
                         "label_type": "supervised",
-                        "audio_max_length_seconds": 2,  # Very short audio for CI speed
+                        "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
                         "transformations": [
                             {
                                 "type": "rl_uniform_sample",
                                 "property": "label",
-                                "ratio": 0.1,  # Very small ratio for CI speed
-                                "max_samples": 15,  # Minimal samples for CI
+                                "ratio": 0.05,  # Very small ratio for CI speed
+                                "max_samples": 8,  # Very minimal samples for CI
                             },
                             {
                                 "type": "label_from_feature",
