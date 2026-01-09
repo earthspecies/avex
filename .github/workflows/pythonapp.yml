@@ -59,6 +59,20 @@ jobs:
             - name: Doctests with pytest
               run: |
                   uv run pytest --doctest-modules representation_learning
+            - name: Check system resources
+              run: |
+                  echo "=== Memory ==="
+                  free -h
+                  echo "=== Disk space ==="
+                  df -h
+                  echo "=== Resource limits ==="
+                  ulimit -a
             - name: Integration tests with pytest
+              env:
+                  OMP_NUM_THREADS: "1"
+                  MKL_NUM_THREADS: "1"
+                  OPENBLAS_NUM_THREADS: "1"
+                  NUMEXPR_NUM_THREADS: "1"
+                  TORCH_NUM_THREADS: "1"
               run: |
                   uv run pytest tests/integration
