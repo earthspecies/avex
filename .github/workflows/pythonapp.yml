@@ -77,3 +77,6 @@ jobs:
             - name: Integration tests with pytest
               run: |
                   uv run pytest tests/integration -m "not slow" -vv --durations=20
+            - name: Slow integration tests with pytest
+              run: |
+                  uv run pytest tests/integration -m "slow" -vv --durations=20

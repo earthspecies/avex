@@ -50,8 +50,7 @@ class TestRunEvaluateEndToEnd:
                         "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
                         "transformations": [
                             {
-                                "type": "rl_uniform_sample",
-                                "property": "label",
+                                "type": "rl_subsample",
                                 "ratio": 0.05,  # Very small ratio for CI speed
                                 "max_samples": 10,  # Very minimal samples for CI - still enough for multiple classes
                             },
@@ -73,8 +72,7 @@ class TestRunEvaluateEndToEnd:
                         "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
                         "transformations": [
                             {
-                                "type": "rl_uniform_sample",
-                                "property": "label",
+                                "type": "rl_subsample",
                                 "ratio": 0.05,  # Very small ratio for CI speed
                                 "max_samples": 8,  # Very minimal samples for CI
                             },
@@ -96,8 +94,7 @@ class TestRunEvaluateEndToEnd:
                         "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
                         "transformations": [
                             {
-                                "type": "rl_uniform_sample",
-                                "property": "label",
+                                "type": "rl_subsample",
                                 "ratio": 0.05,  # Very small ratio for CI speed
                                 "max_samples": 8,  # Very minimal samples for CI
                             },
