@@ -123,7 +123,7 @@ class Model(ModelBase):
 
     This module follows the same conventions as the other model wrappers
     (e.g. ``efficientnet.py``) so that it can be selected via
-    ``representation_learning.models.get_model.get_model``.
+    ``representation_learning.models.utils.factory.build_model_from_spec``.
 
     The underlying BEATs implementation operates directly on raw‐waveform
     inputs.  We therefore do *not* apply the optional :class:`AudioProcessor`
@@ -157,9 +157,15 @@ class Model(ModelBase):
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
-        if not return_features_only and num_classes is None:
-            raise ValueError("num_classes must be provided when return_features_only=False")
+        # If num_classes is not provided, always fall back to embedding mode.
+        # This keeps BEATs usable as a pure backbone without requiring a head.
+        if num_classes is None:
+            if not return_features_only:
+                logger.info(
+                    "num_classes is None for BEATs; falling back to return_features_only=True "
+                    "and disabling the classifier head."
+                )
+            return_features_only = True
 
         # Store disable_layerdrop parameter
         self.disable_layerdrop = disable_layerdrop

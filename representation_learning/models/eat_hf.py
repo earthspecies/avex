@@ -188,8 +188,12 @@ class EATHFModel(ModelBase):
             logger.info("Loading fairseq weights from '%s' …", fairseq_weights_path)
             load_fairseq_weights(self.backbone, fairseq_weights_path)
 
-        self.classifier = nn.Linear(768, num_classes)
-        self.classifier = self.classifier.to(self.device)
+        # Only create classifier when return_features_only=False and num_classes > 0
+        if not return_features_only and num_classes > 0:
+            self.classifier = nn.Linear(768, num_classes)
+            self.classifier = self.classifier.to(self.device)
+        else:
+            self.classifier = None
 
         # -------------------------------------------------------------- #
         #  Pre-discover MLP layers for efficient hook management        #

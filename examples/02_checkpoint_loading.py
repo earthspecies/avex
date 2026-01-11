@@ -30,12 +30,12 @@ import torch
 
 from representation_learning import (
     get_checkpoint_path,
-    get_model_spec,
     list_models,
     load_label_mapping,
     load_model,
 )
-from representation_learning.models.get_model import get_model
+from representation_learning.configs import ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
 
 
 def main(device: str = "cpu") -> None:
@@ -67,17 +67,41 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: Load Model with Default Checkpoint")
     print("-" * 50)
 
-    model_spec = get_model_spec("efficientnet_animalspeak")
-    model = get_model(model_spec, num_classes=10)
-    model = model.to(device)
+    # Load model with default checkpoint from YAML
+    # load_model() automatically loads the checkpoint specified in the YAML config
+    model = load_model("efficientnet_animalspeak", device=device)
+    model.eval()
 
     print(f"Loaded model: {type(model).__name__}")
+    print(f"   Has classifier: {hasattr(model, 'classifier') and model.classifier is not None}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
+    # Test forward pass
     dummy_input = torch.randn(1, 16000 * 5, device=device)
     with torch.no_grad():
         output = model(dummy_input, padding_mask=None)
     print(f"   Output shape: {output.shape}")
+
+    # Load backbone-only and attach a new probe
+    print("\n   Alternative: Load backbone-only and attach new probe")
+    backbone = load_model("efficientnet_animalspeak", device=device, return_features_only=True)
+    backbone.eval()
+
+    probe_cfg = ProbeConfig(
+        probe_type="linear",
+        target_layers=["last_layer"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model_with_probe = build_probe_from_config(
+        probe_config=probe_cfg,
+        base_model=backbone,
+        num_classes=10,
+        device=device,
+    ).to(device)
+
+    print(f"   Backbone + probe parameters: {sum(p.numel() for p in model_with_probe.parameters()):,}")
 
     # =========================================================================
     # Part 3: Load model with custom checkpoint
@@ -98,36 +122,19 @@ def main(device: str = "cpu") -> None:
     torch.save(dummy_state_dict, dummy_checkpoint_path)
     print(f"Created dummy checkpoint: {dummy_checkpoint_path}")
 
-    # Load with custom checkpoint
-    model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
-    print(f"Loaded model: {type(model).__name__}")
+    # Load with custom checkpoint (backbone only)
+    backbone_ckpt = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
+    print(f"Loaded backbone: {type(backbone_ckpt).__name__}")
 
     dummy_input = torch.randn(1, 16000 * 5, device=device)
     with torch.no_grad():
-        output = model(dummy_input)
-    print(f"   Output shape: {output.shape}")
-    print(f"   Extracted num_classes: {output.shape[-1]}")
+        feats = backbone_ckpt(dummy_input, padding_mask=None)
+    print(f"   Feature shape: {feats.shape}")
 
     # =========================================================================
-    # Part 4: Load model with explicit num_classes
+    # Part 4: Class mapping for models with classifier heads
     # =========================================================================
-    print("\nPart 4: Load Model with Explicit num_classes")
-    print("-" * 50)
-    print("Note: Explicit num_classes creates a new random classifier (ignores checkpoint classifier)")
-
-    model = load_model("efficientnet_animalspeak", num_classes=20, device=device)
-    print(f"Loaded model: {type(model).__name__}")
-
-    dummy_input = torch.randn(2, 16000 * 3, device=device)
-    with torch.no_grad():
-        output = model(dummy_input)
-    print(f"   Output shape: {output.shape}")
-    print(f"   num_classes: {output.shape[-1]}")
-
-    # =========================================================================
-    # Part 5: Class mapping for models with classifier heads
-    # =========================================================================
-    print("\nPart 5: Class Mapping")
+    print("\nPart 4: Class Mapping")
     print("-" * 50)
 
     model_name = "sl_beats_animalspeak"
@@ -166,8 +173,9 @@ def main(device: str = "cpu") -> None:
     print("""
 - Default checkpoints defined in YAML files
 - Use checkpoint_path parameter to override
-- num_classes=None: Extract from checkpoint
-- num_classes=N: Create new classifier (random init)
+- load_model(): Restores backbone (and classifier if checkpoint includes one)
+- Probes: Use build_probe_from_config() with base_model for online mode or input_dim for offline mode
+  to attach new classifier heads instead of passing num_classes
 - Class mappings link logit indices to labels
 """)
 

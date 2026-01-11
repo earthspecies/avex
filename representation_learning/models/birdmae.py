@@ -33,16 +33,25 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
-        if not return_features_only and num_classes is None:
-            # Use default from BirdMAE (1000 classes)
-            num_classes = 1000
-
         # Store configuration
         self.return_features_only = return_features_only
+        self._embedding_dim = 1280
+        self.num_classes = num_classes
+
+        # Initialize classifier (None for now, will be created lazily if needed)
         self.gradient_checkpointing = False
         self.model_id = model_id
         self.target_sample_rate = 32000  # BirdMAE expects 32kHz audio
+
+        # Create classifier if needed
+        # Note: BirdMAE embedding dimension is 1280 (not 768)
+        # We create it upfront if num_classes is provided and > 0
+        if not return_features_only and num_classes is not None and num_classes > 0:
+            self.classifier = nn.Linear(1280, num_classes)
+            self.classifier = self.classifier.to(self.device)
+        else:
+            self.classifier = None
+            self.num_classes = None
 
         # Import transformers here to avoid import errors if not installed
         try:
@@ -61,19 +70,6 @@ class Model(ModelBase):
 
         # Move model to device
         self.model = self.model.to(device)
-
-        # Add classification head if needed
-        if not self.return_features_only and num_classes != 1000:
-            # Get the embedding dimension from the model
-            # We'll determine this dynamically during first forward pass
-            self.classifier = None
-            self._embedding_dim = None
-
-    def _ensure_classifier(self, embedding_dim: int, num_classes: int) -> None:
-        """Create classifier head if it doesn't exist yet."""
-        if self.classifier is None and not self.return_features_only:
-            self.classifier = nn.Linear(embedding_dim, num_classes).to(self.device)
-            self._embedding_dim = embedding_dim
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """Process audio input using BirdMAE's feature extractor.
@@ -211,13 +207,12 @@ class Model(ModelBase):
             # Pool temporal/spatial dimensions for classification
             embeddings = embeddings.mean(dim=1)
 
-        # Ensure classifier exists if needed
-        if self.classifier is None:
-            # Determine number of classes from forward call context
-            # For now, we'll defer classification head creation
-            return embeddings
-        else:
+        # Apply classifier if it exists
+        if self.classifier is not None:
             return self.classifier(embeddings)
+        else:
+            # No classifier - return embeddings
+            return embeddings
 
     def extract_embeddings(
         self,

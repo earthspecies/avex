@@ -7,9 +7,8 @@ ModelSpec configurations with registered model classes.
 
 import inspect
 import logging
-from typing import Optional
 
-from representation_learning.configs import AudioConfig
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
 
 from .registry import get_model_class, get_model_spec, list_model_classes, list_models
@@ -17,7 +16,7 @@ from .registry import get_model_class, get_model_spec, list_model_classes, list_
 logger = logging.getLogger(__name__)
 
 
-def _add_model_spec_params(init_kwargs: dict, model_spec: object) -> None:
+def _add_model_spec_params(init_kwargs: dict, model_spec: ModelSpec) -> None:
     """Add model-specific parameters from ModelSpec to init_kwargs.
 
     This function dynamically extracts all non-None parameters from ModelSpec
@@ -53,14 +52,13 @@ def _add_model_spec_params(init_kwargs: dict, model_spec: object) -> None:
                 init_kwargs[param_name] = value
 
 
-def build_model(model_name: str, device: str, num_classes: Optional[int] = None, **kwargs: object) -> ModelBase:
+def build_model(model_name: str, device: str, **kwargs: object) -> ModelBase:
     """
     Build a model instance from a registered model class and ModelSpec.
 
     Args:
         model_name: Name of the model in the registry (ModelSpec)
         device: Device for model
-        num_classes: Number of output classes (optional)
         **kwargs: Additional args passed to model __init__
 
     Returns:
@@ -93,10 +91,6 @@ def build_model(model_name: str, device: str, num_classes: Optional[int] = None,
     # Add model-specific parameters from ModelSpec dynamically
     _add_model_spec_params(init_kwargs, model_spec)
 
-    # Add num_classes if provided
-    if num_classes is not None:
-        init_kwargs["num_classes"] = num_classes
-
     logger.info(f"Building model '{model_name}' with class '{model_type}'")
     logger.debug(f"Initialization kwargs: {init_kwargs}")
 
@@ -110,16 +104,13 @@ def build_model(model_name: str, device: str, num_classes: Optional[int] = None,
         raise
 
 
-def build_model_from_spec(
-    model_spec: object, device: str, num_classes: Optional[int] = None, **kwargs: object
-) -> ModelBase:
+def build_model_from_spec(model_spec: ModelSpec, device: str, **kwargs: object) -> ModelBase:
     """
     Build a model instance directly from a ModelSpec object.
 
     Args:
         model_spec: ModelSpec configuration object
         device: Device for model
-        num_classes: Number of output classes (optional)
         **kwargs: Additional args passed to model __init__
 
     Returns:
@@ -153,10 +144,6 @@ def build_model_from_spec(
 
     # Add model-specific parameters from ModelSpec dynamically
     _add_model_spec_params(init_kwargs, model_spec)
-
-    # Add num_classes if provided
-    if num_classes is not None:
-        init_kwargs["num_classes"] = num_classes
 
     # Filter init_kwargs to only include parameters accepted by the model class
     # This prevents passing model-specific parameters (e.g., eat_norm_mean) to

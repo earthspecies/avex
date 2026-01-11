@@ -69,13 +69,10 @@ class Model(ModelBase):
         language: str = "en_us",
         apply_sigmoid: bool = True,
         freeze_backbone: bool = True,
+        return_features_only: bool = False,
         **kwargs,  # Accept additional config parameters  # noqa: ANN003
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
-
-        # Treat None as 0 (feature extraction only)
-        if num_classes is None:
-            num_classes = 0
 
         # Preserve CUDA_VISIBLE_DEVICES before importing TensorFlow
         # TensorFlow sets it to "" which breaks PyTorch CUDA
@@ -97,13 +94,24 @@ class Model(ModelBase):
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
 
-        self.num_classes = num_classes
+        self.return_features_only = return_features_only
         self.language = language
         self.apply_sigmoid = apply_sigmoid
         self.freeze_backbone = freeze_backbone
 
-        if num_classes > 0 and num_classes != self.num_species:
-            self.classifier = nn.Linear(self.num_species, num_classes)
+        # Handle return_features_only: if True, force num_classes to None
+        if return_features_only:
+            self.num_classes = None
+        else:
+            self.num_classes = num_classes
+
+        if (
+            not return_features_only
+            and self.num_classes is not None
+            and self.num_classes > 0
+            and self.num_classes != self.num_species
+        ):
+            self.classifier = nn.Linear(self.num_species, self.num_classes)
             # Move classifier to the specified device
             if device != "cpu" and torch.cuda.is_available():
                 self.classifier = self.classifier.to(device)
@@ -111,9 +119,9 @@ class Model(ModelBase):
             self.classifier = None
 
         logger.info(
-            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • num_classes = %d • device = %s",
+            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • num_classes = %s • device = %s",
             self.num_species,
-            num_classes,
+            self.num_classes if self.num_classes is not None else "None",
             device,
         )
 

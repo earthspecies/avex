@@ -1,5 +1,5 @@
 """
-Example 5: Training and Evaluation Workflows
+Example 4: Training and Evaluation Workflows
 
 This example demonstrates:
 - Complete training workflow with custom models
@@ -29,8 +29,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from representation_learning import create_model, load_model, register_model_class
+from representation_learning import load_model, register_model_class
+from representation_learning.configs import ProbeConfig
 from representation_learning.models.base_model import ModelBase
+from representation_learning.models.probes.utils import build_probe_from_config
 
 # =============================================================================
 # Custom Training Model
@@ -196,8 +198,20 @@ def evaluate(
 
 
 def main(device: str = "cpu") -> None:
-    """Demonstrate training and evaluation workflows."""
-    print("Example 5: Training and Evaluation Workflows")
+    """Demonstrate training and evaluation workflows.
+
+    Parameters
+    ----------
+    device:
+        Device identifier to use for all models and tensors (for example
+        ``\"cpu\"`` or ``\"cuda:0\"``).
+
+    Raises
+    ------
+    ValueError
+        If an unknown model name is encountered in the comparison section.
+    """
+    print("Example 4: Training and Evaluation Workflows")
     print("=" * 60)
     print(f"Using device: {device}")
 
@@ -207,7 +221,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 1: Training Custom Model from Scratch")
     print("-" * 60)
 
-    model = create_model("training_example", num_classes=10, device=device)
+    model = TrainingExampleModel(device=device, num_classes=10)
     print(f"Created model: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -248,7 +262,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: Model Evaluation")
     print("-" * 60)
 
-    model = create_model("training_example", num_classes=8, device=device)
+    model = TrainingExampleModel(device=device, num_classes=8)
     model.eval()
 
     test_data, test_labels = create_dummy_dataset(100, 8)
@@ -285,7 +299,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 3: Model Checkpointing")
     print("-" * 60)
 
-    model = create_model("training_example", num_classes=6, device=device)
+    model = TrainingExampleModel(device=device, num_classes=6)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -314,7 +328,17 @@ def main(device: str = "cpu") -> None:
     print(f"Saved checkpoint: {checkpoint_path}")
 
     # Load model from checkpoint
-    loaded_model = load_model("training_example", checkpoint_path=str(checkpoint_path), device=device)
+    # Create a ModelSpec for the custom model
+    # num_classes will be automatically extracted from checkpoint by load_model
+    from representation_learning.configs import AudioConfig, ModelSpec
+
+    model_spec = ModelSpec(
+        name="training_example",
+        pretrained=False,
+        device=device,
+        audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=1.0),
+    )
+    loaded_model = load_model(model_spec, checkpoint_path=str(checkpoint_path), device=device)
     print(f"Loaded model: {type(loaded_model).__name__}")
 
     # Verify loaded model
@@ -328,15 +352,69 @@ def main(device: str = "cpu") -> None:
     print("Cleaned up checkpoint file.")
 
     # =========================================================================
-    # Part 4: Model comparison
+    # Part 4: Linear probe on embeddings (offline mode)
+    # =========================================================================
+    print("\nPart 4: Linear Probe on Embeddings (Offline Mode)")
+    print("-" * 60)
+
+    embedding_dim = 768
+    probe_config = ProbeConfig(
+        probe_type="linear",
+        target_layers=["backbone"],
+        aggregation="none",
+        freeze_backbone=True,
+        online_training=False,
+    )
+
+    probe = build_probe_from_config(
+        probe_config=probe_config,
+        input_dim=embedding_dim,
+        num_classes=6,
+        device=device,
+    )
+
+    # Dummy embedding dataset (simulating pre-computed embeddings)
+    embed_data = torch.randn(200, embedding_dim)
+    embed_labels = torch.randint(0, 6, (200,))
+    embed_dataset = TensorDataset(embed_data, embed_labels)
+    embed_loader = DataLoader(embed_dataset, batch_size=32, shuffle=True)
+
+    probe_optimizer = optim.Adam(probe.parameters(), lr=0.001)
+    probe_criterion = nn.CrossEntropyLoss()
+
+    print("Training linear probe on embeddings...")
+    for epoch in range(2):
+        probe.train()
+        total_loss = 0.0
+        correct = 0
+        total = 0
+        for batch_embeds, batch_labels in embed_loader:
+            batch_embeds = batch_embeds.to(device)
+            batch_labels = batch_labels.to(device)
+
+            probe_optimizer.zero_grad()
+            outputs = probe(batch_embeds)
+            loss = probe_criterion(outputs, batch_labels)
+            loss.backward()
+            probe_optimizer.step()
+
+            total_loss += loss.item()
+            preds = outputs.argmax(dim=1)
+            correct += (preds == batch_labels).sum().item()
+            total += batch_labels.size(0)
+
+        avg_loss = total_loss / len(embed_loader)
+        acc = 100.0 * correct / total
+        print(f"   Epoch {epoch + 1}: Loss={avg_loss:.4f}, Acc={acc:.2f}%")
+
+    # =========================================================================
+    # Part 5: Model comparison
     # =========================================================================
     print("\nPart 4: Model Comparison")
     print("-" * 60)
 
     models_to_compare = [
         ("training_example", {}),
-        ("simple_audio_cnn", {}),
-        ("simple_audio_mlp", {"hidden_dims": [256, 128]}),
     ]
 
     test_data, test_labels = create_dummy_dataset(50, 5)
@@ -347,7 +425,10 @@ def main(device: str = "cpu") -> None:
 
     print("Comparing models:")
     for model_name, kwargs in models_to_compare:
-        model = create_model(model_name, num_classes=5, device=device, **kwargs)
+        if model_name == "training_example":
+            model = TrainingExampleModel(device=device, num_classes=5, **kwargs)
+        else:
+            raise ValueError(f"Unknown model name in models_to_compare: {model_name}")
         model.eval()
 
         test_loss, test_acc = evaluate(model, test_loader, criterion, device)
@@ -365,7 +446,7 @@ def main(device: str = "cpu") -> None:
     print("Key Takeaways")
     print("=" * 60)
     print("""
-- Use create_model() for training new models
+- Use custom model classes (or backbones + probes) for training new models
 - Save checkpoints with model state, optimizer state, and metadata
 - Use load_model() with checkpoint_path to resume training
 - Compare models with consistent evaluation setup
