@@ -255,6 +255,14 @@ class ModelSpec(BaseModel):
     # TODO: general approach for model-specific configs
     use_naturelm: Optional[bool] = Field(None, description="Whether to use NatureLM for BEATs model")
     fine_tuned: Optional[bool] = Field(None, description="Whether to use fine-tuned weights for BEATs model")
+    beats_variant: Optional[Literal["beats", "openbeats"]] = Field(
+        "beats",
+        description="Select between the original BEATs checkpoints and OpenBEATs HuggingFace checkpoints",
+    )
+    openbeats_size: Optional[Literal["base", "large"]] = Field(
+        "base",
+        description="Select between OpenBEATs base or large model variants and checkpoints.",
+    )
 
     # BirdNet-specific configuration
     language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")

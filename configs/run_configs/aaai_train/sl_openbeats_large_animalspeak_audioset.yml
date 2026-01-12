@@ -1,0 +1,68 @@
+---
+# OpenBEATs Large (i2) fine-tuning on AnimalSpeak + AudioSet labels (multilabel)
+model_spec:
+  name: beats
+  pretrained: true
+  beats_variant: openbeats
+  openbeats_size: large
+  device: cuda
+  audio_config:  # BEATs/OpenBEATs expect raw waveform
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/aaai_train/data_animalspeak_audioset.yml
+
+output_dir: "./runs/aaai/sl_openbeats_large_animalspeak_audioset"
+multilabel: true
+label_type: supervised
+run_name: sl_openbeats_large_animalspeak_audioset
+preprocessing: null
+sr: 16000
+debug_mode: false
+logging: wandb
+log_checkpoints_to_wandb: true
+resume_from_checkpoint: null
+
+training_params:
+  train_epochs: 10
+  lr: 0.0002
+  batch_size: 16
+  optimizer: adamw8bit
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+
+scheduler:
+  name: cosine
+  warmup_steps: 4000
+  min_lr: 1e-6
+
+augmentations:
+  - noise:
+      noise_dirs:
+        - "/scratch-representation-learning/noise_16k/demand_10s"
+        - "/scratch-representation-learning/noise_16k/idmt"
+        - "/scratch-representation-learning/noise_16k/tut2016_10s"
+        - "/scratch-representation-learning/noise_16k/urbansound"
+        - "/scratch-representation-learning/noise_16k/freesound_10s"
+        - "/scratch-representation-learning/noise_16k/orcasound_shipnoise_10s"
+        - "/scratch-representation-learning/noise_16k/deepship_10s"
+        - "/scratch-representation-learning/noise_16k/shipsear_10s"
+        - "/scratch-representation-learning/noise_16k/wham_noise"
+        - "/scratch-representation-learning/noise_16k/audioset"
+      snr_db_range: [-5, 20]
+      augmentation_prob: 0.5
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 0.5
+
+loss_function: bce
+
+seed: 13
+num_workers: 12
+
+wandb_project: representation_learning

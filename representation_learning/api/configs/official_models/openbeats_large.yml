@@ -1,0 +1,14 @@
+---
+# OpenBEATs large model (pretrained) loaded from Hugging Face
+model_spec:
+  name: beats
+  pretrained: true
+  beats_variant: openbeats
+  openbeats_size: large
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
