@@ -49,8 +49,7 @@ def _load_openbeats_from_hub(
         from huggingface_hub import snapshot_download
     except Exception as e:  # pragma: no cover - optional dependency path
         raise ImportError(
-            "huggingface-hub is required to load OpenBEATs checkpoints. "
-            "Install via `pip install huggingface-hub`."
+            "huggingface-hub is required to load OpenBEATs checkpoints. Install via `pip install huggingface-hub`."
         ) from e
 
     # Download the full snapshot; we search for the checkpoint locally.
@@ -73,8 +72,7 @@ def _load_openbeats_from_hub(
         checkpoint_path = recursive[0] if recursive else None
     if checkpoint_path is None:
         raise FileNotFoundError(
-            f"No checkpoint file found in {cache_dir}. "
-            "Pass `openbeats_checkpoint_file` to point at a specific file."
+            f"No checkpoint file found in {cache_dir}. Pass `openbeats_checkpoint_file` to point at a specific file."
         )
 
     if checkpoint_path.suffix == ".safetensors":

@@ -13,4 +13,3 @@ model_spec:
     normalize: false
     target_length_seconds: 10
     window_selection: random
-    
