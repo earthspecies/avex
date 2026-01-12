@@ -16,7 +16,7 @@ training_params:
 
 experiments:
   - run_name: openbeats_large_i2_linear_last
-    run_config: configs/run_configs/pretrained/openbeats_large_i2.yml
+    run_config: configs/run_configs/aaai_train/sl_openbeats_large_animalspeak_audioset.yml
     probe_config:
       probe_type: "linear"
       aggregation: "mean"
