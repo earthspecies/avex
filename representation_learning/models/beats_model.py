@@ -297,9 +297,8 @@ class Model(ModelBase):
         torch.Tensor
             • When *return_features_only* is **False**: logits of shape
               ``(batch, num_classes)``
-            • Otherwise: pooled features of shape ``(batch, encoder_embed_dim)`` by
-              default, or frame-level features ``(batch, num_frames, encoder_embed_dim)``
-              when ``framewise=True``.
+            • Otherwise: frame-level features ``(batch, num_frames, encoder_embed_dim)``
+              by default (preserving temporal dimension for downstream tasks).
         """
         # Optional audio pre-processing
         x = self.process_audio(x)
@@ -310,16 +309,9 @@ class Model(ModelBase):
         # frame_padding: (B, T') or None
 
         if self._return_features_only:
-            if framewise:
-                return features
-
-            if frame_padding is not None and frame_padding.any():
-                masked_features = features.clone()
-                masked_features[frame_padding] = 0.0  # Zero-out padded frames
-                valid_counts = (~frame_padding).sum(dim=1, keepdim=True).clamp(min=1)
-                return masked_features.sum(dim=1) / valid_counts
-
-            return features.mean(dim=1)
+            # Return unpooled features (batch, time, features) by default
+            # This preserves temporal information for downstream tasks like probing
+            return features
 
         # ------------------------------------------------------------------
         # 3.  Masked mean-pooling over the temporal dimension
