@@ -53,8 +53,16 @@ def _dataset_columns(columns: Iterable[str]) -> list[str]:
 
     cols = list(columns)
     if len(cols) < 5:
-        raise ValueError("Expected at least 5 columns: base_model, probe_type, layers, ssl, <metric>")
-    return cols[4:]
+        raise ValueError(
+            "Expected at least 5 columns: base_model, probe_type, layers, ssl, <metric>",
+        )
+
+    # Exclude non-metric columns such as the auxiliary fully_ft flag.
+    meta = {"base_model", "probe_type", "layers", "ssl", "fully_ft"}
+    metric_cols = [c for c in cols if c not in meta]
+    if not metric_cols:
+        raise ValueError("No metric columns found after excluding metadata.")
+    return metric_cols
 
 
 def _clean_base_model_name(base_model: str) -> str:
@@ -76,6 +84,9 @@ def _clean_base_model_name(base_model: str) -> str:
         .replace("_attention_last_layer", "")
         .replace("_linear_all", "")
         .replace("_linear_last_layer", "")
+        .replace("_attention_ft", "")
+        .replace("_linear_ft", "")
+        .removesuffix("_ft")
     )
 
 
@@ -321,6 +332,7 @@ def create_probing_heatmap(
     figsize: Tuple[float, float] = (14.0, 8.0),
     csv_beans_classification: str | Path | None = None,
     csv_beans_detection: str | Path | None = None,
+    include_ft: bool = True,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """Create a heatmap with models as rows and probe configs as columns.
 
@@ -335,6 +347,14 @@ def create_probing_heatmap(
         Optional path to save the plot image.
     figsize
         Figure size ``(width, height)`` in inches.
+    csv_beans_classification
+        Optional path to Beans Classification CSV.
+    csv_beans_detection
+        Optional path to Beans Detection CSV.
+    include_ft
+        If True, include fully fine-tuned (FT) models, resulting in 6 columns
+        per dataset (Attention/Linear × All/Last/FT). If False, exclude FT
+        models for the original 4-column plot (Attention/Linear × All/Last).
 
     Returns
     -------
@@ -365,7 +385,24 @@ def create_probing_heatmap(
             base_model = _clean_base_model_name(base_model_raw)
 
             probe_type = "Attention" if "attention" in str(row["probe_type"]).lower() else "Linear"
-            layers = "All" if str(row["layers"]) == "all" else "Last"
+            # Check if this is a fully fine-tuned model
+            is_ft = False
+            if "fully_ft" in row and pd.notna(row["fully_ft"]) and bool(row["fully_ft"]):
+                is_ft = True
+            elif base_model_raw.endswith("_ft"):
+                is_ft = True
+
+            # Skip FT models if include_ft is False
+            if is_ft and not include_ft:
+                continue
+
+            if is_ft:
+                layers = "FT"
+            elif str(row["layers"]) == "all":
+                layers = "All"
+            else:
+                layers = "Last"
+
             # Default SSL/SL from CSV, then override for specific models
             ssl_tag = "SSL" if int(row["ssl"]) == 1 else "SL"
             ssl_overrides = {
@@ -373,6 +410,7 @@ def create_probing_heatmap(
                 "eat_hf_pretrained": "SSL",
                 "ssl_eat_all": "SSL",
                 "sl_eat_all_ssl_all": "SL",
+                "beats_naturelm": "SL",
             }
             if base_model in ssl_overrides:
                 ssl_tag = ssl_overrides[base_model]
@@ -427,12 +465,26 @@ def create_probing_heatmap(
         aligned.append((name, pv.reindex(all_index)))
 
     # Order columns within each dataset
-    within_order = [
-        ("Attention", "All"),
-        ("Attention", "Last"),
-        ("Linear", "All"),
-        ("Linear", "Last"),
-    ]
+    if include_ft:
+        # 6 combinations: 2 probe types × 3 layer options
+        within_order = [
+            ("Attention", "All"),
+            ("Attention", "Last"),
+            ("Attention", "FT"),
+            ("Linear", "All"),
+            ("Linear", "Last"),
+            ("Linear", "FT"),
+        ]
+        cols_per_dataset = 6
+    else:
+        # 4 combinations: 2 probe types × 2 layer options (original)
+        within_order = [
+            ("Attention", "All"),
+            ("Attention", "Last"),
+            ("Linear", "All"),
+            ("Linear", "Last"),
+        ]
+        cols_per_dataset = 4
 
     # Concatenate with a first-level for dataset
     parts: list[pd.DataFrame] = []
@@ -457,11 +509,11 @@ def create_probing_heatmap(
     sl_count_hm = len(sl_labels)
 
     data = combined.values
-    # Normalize colors per dataset block (4 columns each)
+    # Normalize colors per dataset block
     num_datasets = len(parts)
     norm_data = data.copy().astype(float)
     for k in range(num_datasets):
-        j0, j1 = k * 4, k * 4 + 4
+        j0, j1 = k * cols_per_dataset, k * cols_per_dataset + cols_per_dataset
         block = norm_data[:, j0:j1]
         block_min = float(np.min(block))
         block_max = float(np.max(block))
@@ -478,29 +530,39 @@ def create_probing_heatmap(
 
     # Labels (already include display name + supervision tag)
     ax.set_yticks(np.arange(combined.shape[0]))
-    ax.set_yticklabels(combined.index, fontsize=12, fontweight="bold")
+    ax.set_yticklabels(combined.index, fontsize=18, fontweight="bold")
     plt.setp(ax.get_yticklabels(), rotation=45, ha="right")
 
     # Build repeated col labels per dataset
     xticks = np.arange(data.shape[1])
     labels_x: list[str] = []
+    if include_ft:
+        label_set = [
+            "Attention\n(All)",
+            "Attention\n(Last)",
+            "Attention\n(FT)",
+            "Linear\n(All)",
+            "Linear\n(Last)",
+            "Linear\n(FT)",
+        ]
+    else:
+        label_set = [
+            "Attention\n(All)",
+            "Attention\n(Last)",
+            "Linear\n(All)",
+            "Linear\n(Last)",
+        ]
     for _k in range(num_datasets):
-        labels_x.extend(
-            [
-                "Attention\n(All)",
-                "Attention\n(Last)",
-                "Linear\n(All)",
-                "Linear\n(Last)",
-            ]
-        )
+        labels_x.extend(label_set)
+    x_tick_fontsize = 14 if not include_ft else 10
     ax.set_xticks(xticks)
-    ax.set_xticklabels(labels_x, fontsize=12, fontweight="bold")
+    ax.set_xticklabels(labels_x, fontsize=x_tick_fontsize, fontweight="bold")
     plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
 
-    # Add dataset group labels centered over each 4-column block
+    # Add dataset group labels centered over each dataset block
     dataset_names = [name for name, _ in aligned]
     for k, ds_name in enumerate(dataset_names):
-        x_center = k * 4 + 1.5  # center of 4-column block in data coords
+        x_center = k * cols_per_dataset + (cols_per_dataset - 1) / 2  # center of block in data coords
         x_frac = (x_center + 0.5) / n_cols  # convert to axes fraction
         ax.text(
             x_frac,
@@ -509,7 +571,7 @@ def create_probing_heatmap(
             transform=ax.transAxes,
             ha="center",
             va="bottom",
-            fontsize=14,
+            fontsize=20,
             fontweight="bold",
         )
 
@@ -527,12 +589,510 @@ def create_probing_heatmap(
         y_mid = boundary - 0.5
         ax.hlines(y_mid, x_start, x_end, colors="red", linewidth=2.0)
     # No right-side group labels; supervision shown in y-ticks
-    # Draw vertical single red separators between datasets (every 4 cols)
+    # Draw vertical single red separators between datasets
+    if num_datasets > 1:
+        for k in range(1, num_datasets):
+            x_boundary = (k * cols_per_dataset) - 0.5
+            y_start, y_end = -0.5, n_rows - 0.5
+            ax.vlines(x_boundary, y_start, y_end, colors="red", linewidth=2.0)
+    # Annotate each cell with its value
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            val = float(data[i, j])
+            # Choose text color based on normalized value for contrast
+            color = "white" if im.norm(val) > 0.5 else "black"
+            ax.text(
+                j,
+                i,
+                f"{val:.2f}",
+                ha="center",
+                va="center",
+                color=color,
+                fontsize=18,
+            )
+    plt.tight_layout()
+
+    if output_path is not None:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        LOGGER.info("Plot saved to %s", output_path)
+
+    return fig, ax
+
+
+def create_layer_wise_heatmap_ssl(
+    csv_file_path: str | Path,
+    output_path: str | Path | None = None,
+    figsize: Tuple[float, float] = (14.0, 8.0),
+    csv_beans_classification: str | Path | None = None,
+    csv_beans_detection: str | Path | None = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Create a layer-wise heatmap for SSL methods only.
+
+    Parameters
+    ----------
+    csv_file_path
+        Path to the CSV file.
+    output_path
+        Optional path to save the plot image.
+    figsize
+        Figure size ``(width, height)`` in inches.
+    csv_beans_classification
+        Optional path to Beans Classification CSV.
+    csv_beans_detection
+        Optional path to Beans Detection CSV.
+
+    Returns
+    -------
+    Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
+        The created figure and axes.
+    """
+
+    df = pd.read_csv(csv_file_path)
+    dataset_cols = _dataset_columns(df.columns)
+
+    def process_data(frame: pd.DataFrame, ds_cols: list[str]) -> pd.DataFrame:
+        results: list[dict[str, object]] = []
+        name_map = {
+            "beats_naturelm": "NatureBEATs",
+            "eat_hf_finetuned": "EAT_excluded",
+            "eat_hf_pretrained": "EAT_excluded",
+            "efficientnet_animalspeak_audioset": "EfficientNet",
+            "sl_beats_all": "BEATs",
+            "beats_pretrained": "BEATs",
+            "bird_aves_bio": "AVES",
+            "sl_eat_all_ssl_all": "EAT",
+            "ssl_eat_all": "EAT",
+        }
+        for _, row in frame.iterrows():
+            base_model_raw: str = row["base_model"]
+            base_model = _clean_base_model_name(base_model_raw)
+
+            # Exclude specified base models
+            if base_model in {"eat_hf_pretrained", "eat_hf_finetuned"}:
+                continue
+
+            probe_type = "Attention" if "attention" in str(row["probe_type"]).lower() else "Linear"
+            # Check if this is a fully fine-tuned model
+            is_ft = False
+            if "fully_ft" in row and pd.notna(row["fully_ft"]) and bool(row["fully_ft"]):
+                is_ft = True
+            elif base_model_raw.endswith("_ft"):
+                is_ft = True
+
+            # Filter out FT models in layer-wise heatmaps
+            if is_ft:
+                continue
+
+            if str(row["layers"]) == "all":
+                layers = "All"
+            else:
+                layers = "Last"
+
+            ssl_tag = "SSL" if int(row["ssl"]) == 1 else "SL"
+            ssl_overrides = {
+                "eat_hf_finetuned": "SL",
+                "eat_hf_pretrained": "SSL",
+                "ssl_eat_all": "SSL",
+                "sl_eat_all_ssl_all": "SL",
+            }
+            if base_model in ssl_overrides:
+                ssl_tag = ssl_overrides[base_model]
+
+            # Only include SSL methods
+            if ssl_tag != "SSL":
+                continue
+
+            dataset_scores = [float(row[col]) for col in ds_cols]
+            avg_score = float(np.mean(dataset_scores))
+
+            display = name_map.get(base_model, base_model.replace("_", " "))
+            model_label = f"{display}"
+
+            results.append(
+                {
+                    "base_model": base_model,
+                    "ssl_tag": ssl_tag,
+                    "probe_type": probe_type,
+                    "layers": layers,
+                    "avg_score": avg_score,
+                    "model_label": model_label,
+                }
+            )
+
+        return pd.DataFrame(results)
+
+    # Build per-dataset pivots
+    def build_pivot(frame: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+        proc = process_data(frame, cols)
+        return proc.pivot_table(
+            index="model_label",
+            columns=["probe_type", "layers"],
+            values="avg_score",
+            fill_value=0.0,
+        )
+
+    # Order datasets: Beans Classification, Beans Detection, then BirdSet
+    pivots: list[tuple[str, pd.DataFrame]] = []
+    if csv_beans_classification:
+        df_cls = pd.read_csv(csv_beans_classification)
+        cols_cls = _dataset_columns(df_cls.columns)
+        pivots.append(("BEANS Classification", build_pivot(df_cls, cols_cls)))
+    if csv_beans_detection:
+        df_det = pd.read_csv(csv_beans_detection)
+        cols_det = _dataset_columns(df_det.columns)
+        pivots.append(("BEANS Detection", build_pivot(df_det, cols_det)))
+    pivots.append(("BirdSet", build_pivot(df, dataset_cols)))
+
+    # Align indices across datasets
+    all_index = pivots[0][1].index
+    for _, pv in pivots[1:]:
+        all_index = all_index.union(pv.index)
+    aligned: list[tuple[str, pd.DataFrame]] = []
+    for name, pv in pivots:
+        aligned.append((name, pv.reindex(all_index)))
+
+    # Order columns within each dataset (4 combinations: 2 probe types × 2 layer options, no FT)
+    within_order = [
+        ("Attention", "All"),
+        ("Attention", "Last"),
+        ("Linear", "All"),
+        ("Linear", "Last"),
+    ]
+
+    # Concatenate with a first-level for dataset
+    parts: list[pd.DataFrame] = []
+    for name, pv in aligned:
+        cols_in_ds = [c for c in within_order if c in pv.columns]
+        pv_ordered = pv[cols_in_ds]
+        new_cols = [(name, c[0], c[1]) for c in pv_ordered.columns]
+        pv_ordered.columns = pd.MultiIndex.from_tuples(new_cols, names=["dataset", "probe_type", "layers"])
+        parts.append(pv_ordered)
+    combined = pd.concat(parts, axis=1)
+    combined = combined.sort_index()
+
+    # Filter out excluded models
+    combined = combined[~combined.index.to_series().str.startswith("EAT_excluded")]
+
+    data = combined.values
+    # Normalize colors per dataset block (4 columns each, no FT)
+    num_datasets = len(parts)
+    norm_data = data.copy().astype(float)
+    for k in range(num_datasets):
+        j0, j1 = k * 4, k * 4 + 4
+        block = norm_data[:, j0:j1]
+        block_min = float(np.min(block))
+        block_max = float(np.max(block))
+        if block_max > block_min:
+            norm_data[:, j0:j1] = (block - block_min) / (block_max - block_min)
+        else:
+            norm_data[:, j0:j1] = 0.0
+
+    fig, ax = plt.subplots(figsize=figsize)
+    n_rows, n_cols = data.shape
+    im = ax.imshow(norm_data, aspect="auto", cmap="viridis")
+    ax.set_xlim(-0.5, n_cols - 0.5)
+
+    # Labels
+    ax.set_yticks(np.arange(combined.shape[0]))
+    ax.set_yticklabels(combined.index, fontsize=18)
+
+    # Build repeated col labels per dataset
+    xticks = np.arange(data.shape[1])
+    labels_x: list[str] = []
+    for _k in range(num_datasets):
+        labels_x.extend(
+            [
+                "Attention\n(All)",
+                "Attention\n(Last)",
+                "Linear\n(All)",
+                "Linear\n(Last)",
+            ]
+        )
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(labels_x, fontsize=16)
+    plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
+
+    # Add dataset group labels centered over each 4-column block
+    dataset_names = [name for name, _ in aligned]
+    for k, ds_name in enumerate(dataset_names):
+        x_center = k * 4 + 1.5  # center of 4-column block in data coords
+        x_frac = (x_center + 0.5) / n_cols  # convert to axes fraction
+        ax.text(
+            x_frac,
+            1.02,
+            ds_name,
+            transform=ax.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=20,
+            fontweight="bold",
+        )
+
+    ax.set_xlabel("Probe configuration", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Model (SSL)", fontsize=12, fontweight="bold")
+
+    ax.grid(False)
+
+    # Draw vertical double separators between datasets (every 4 cols)
     if num_datasets > 1:
         for k in range(1, num_datasets):
             x_boundary = (k * 4) - 0.5
             y_start, y_end = -0.5, n_rows - 0.5
-            ax.vlines(x_boundary, y_start, y_end, colors="red", linewidth=2.0)
+            off = 0.08
+            ax.vlines(x_boundary - off, y_start, y_end, colors="black", linewidth=2.0)
+            ax.vlines(x_boundary + off, y_start, y_end, colors="black", linewidth=2.0)
+
+    # Annotate each cell with its value
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            val = float(data[i, j])
+            # Choose text color based on normalized value for contrast
+            color = "white" if im.norm(val) > 0.5 else "black"
+            ax.text(
+                j,
+                i,
+                f"{val:.2f}",
+                ha="center",
+                va="center",
+                color=color,
+                fontsize=18,
+            )
+    plt.tight_layout()
+
+    if output_path is not None:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        LOGGER.info("Plot saved to %s", output_path)
+
+    return fig, ax
+
+
+def create_layer_wise_heatmap_sl(
+    csv_file_path: str | Path,
+    output_path: str | Path | None = None,
+    figsize: Tuple[float, float] = (14.0, 8.0),
+    csv_beans_classification: str | Path | None = None,
+    csv_beans_detection: str | Path | None = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Create a layer-wise heatmap for SL methods only.
+
+    Parameters
+    ----------
+    csv_file_path
+        Path to the CSV file.
+    output_path
+        Optional path to save the plot image.
+    figsize
+        Figure size ``(width, height)`` in inches.
+    csv_beans_classification
+        Optional path to Beans Classification CSV.
+    csv_beans_detection
+        Optional path to Beans Detection CSV.
+
+    Returns
+    -------
+    Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
+        The created figure and axes.
+    """
+
+    df = pd.read_csv(csv_file_path)
+    dataset_cols = _dataset_columns(df.columns)
+
+    def process_data(frame: pd.DataFrame, ds_cols: list[str]) -> pd.DataFrame:
+        results: list[dict[str, object]] = []
+        name_map = {
+            "beats_naturelm": "NatureBEATs",
+            "eat_hf_finetuned": "EAT_excluded",
+            "eat_hf_pretrained": "EAT_excluded",
+            "efficientnet_animalspeak_audioset": "EfficientNet",
+            "sl_beats_all": "BEATs",
+            "beats_pretrained": "BEATs",
+            "bird_aves_bio": "AVES",
+            "sl_eat_all_ssl_all": "EAT",
+            "ssl_eat_all": "EAT",
+        }
+        for _, row in frame.iterrows():
+            base_model_raw: str = row["base_model"]
+            base_model = _clean_base_model_name(base_model_raw)
+
+            # Exclude specified base models
+            if base_model in {"eat_hf_pretrained", "eat_hf_finetuned"}:
+                continue
+
+            probe_type = "Attention" if "attention" in str(row["probe_type"]).lower() else "Linear"
+            # Check if this is a fully fine-tuned model
+            is_ft = False
+            if "fully_ft" in row and pd.notna(row["fully_ft"]) and bool(row["fully_ft"]):
+                is_ft = True
+            elif base_model_raw.endswith("_ft"):
+                is_ft = True
+
+            # Filter out FT models in layer-wise heatmaps
+            if is_ft:
+                continue
+
+            if str(row["layers"]) == "all":
+                layers = "All"
+            else:
+                layers = "Last"
+
+            ssl_tag = "SSL" if int(row["ssl"]) == 1 else "SL"
+            ssl_overrides = {
+                "eat_hf_finetuned": "SL",
+                "eat_hf_pretrained": "SSL",
+                "ssl_eat_all": "SSL",
+                "sl_eat_all_ssl_all": "SL",
+            }
+            if base_model in ssl_overrides:
+                ssl_tag = ssl_overrides[base_model]
+
+            # Only include SL methods
+            if ssl_tag != "SL":
+                continue
+
+            dataset_scores = [float(row[col]) for col in ds_cols]
+            avg_score = float(np.mean(dataset_scores))
+
+            display = name_map.get(base_model, base_model.replace("_", " "))
+            model_label = f"{display}"
+
+            results.append(
+                {
+                    "base_model": base_model,
+                    "ssl_tag": ssl_tag,
+                    "probe_type": probe_type,
+                    "layers": layers,
+                    "avg_score": avg_score,
+                    "model_label": model_label,
+                }
+            )
+
+        return pd.DataFrame(results)
+
+    # Build per-dataset pivots
+    def build_pivot(frame: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+        proc = process_data(frame, cols)
+        return proc.pivot_table(
+            index="model_label",
+            columns=["probe_type", "layers"],
+            values="avg_score",
+            fill_value=0.0,
+        )
+
+    # Order datasets: Beans Classification, Beans Detection, then BirdSet
+    pivots: list[tuple[str, pd.DataFrame]] = []
+    if csv_beans_classification:
+        df_cls = pd.read_csv(csv_beans_classification)
+        cols_cls = _dataset_columns(df_cls.columns)
+        pivots.append(("BEANS Classification", build_pivot(df_cls, cols_cls)))
+    if csv_beans_detection:
+        df_det = pd.read_csv(csv_beans_detection)
+        cols_det = _dataset_columns(df_det.columns)
+        pivots.append(("BEANS Detection", build_pivot(df_det, cols_det)))
+    pivots.append(("BirdSet", build_pivot(df, dataset_cols)))
+
+    # Align indices across datasets
+    all_index = pivots[0][1].index
+    for _, pv in pivots[1:]:
+        all_index = all_index.union(pv.index)
+    aligned: list[tuple[str, pd.DataFrame]] = []
+    for name, pv in pivots:
+        aligned.append((name, pv.reindex(all_index)))
+
+    # Order columns within each dataset (4 combinations: 2 probe types × 2 layer options, no FT)
+    within_order = [
+        ("Attention", "All"),
+        ("Attention", "Last"),
+        ("Linear", "All"),
+        ("Linear", "Last"),
+    ]
+
+    # Concatenate with a first-level for dataset
+    parts: list[pd.DataFrame] = []
+    for name, pv in aligned:
+        cols_in_ds = [c for c in within_order if c in pv.columns]
+        pv_ordered = pv[cols_in_ds]
+        new_cols = [(name, c[0], c[1]) for c in pv_ordered.columns]
+        pv_ordered.columns = pd.MultiIndex.from_tuples(new_cols, names=["dataset", "probe_type", "layers"])
+        parts.append(pv_ordered)
+    combined = pd.concat(parts, axis=1)
+    combined = combined.sort_index()
+
+    # Filter out excluded models
+    combined = combined[~combined.index.to_series().str.startswith("EAT_excluded")]
+
+    data = combined.values
+    # Normalize colors per dataset block (4 columns each, no FT)
+    num_datasets = len(parts)
+    norm_data = data.copy().astype(float)
+    for k in range(num_datasets):
+        j0, j1 = k * 4, k * 4 + 4
+        block = norm_data[:, j0:j1]
+        block_min = float(np.min(block))
+        block_max = float(np.max(block))
+        if block_max > block_min:
+            norm_data[:, j0:j1] = (block - block_min) / (block_max - block_min)
+        else:
+            norm_data[:, j0:j1] = 0.0
+
+    fig, ax = plt.subplots(figsize=figsize)
+    n_rows, n_cols = data.shape
+    im = ax.imshow(norm_data, aspect="auto", cmap="viridis")
+    ax.set_xlim(-0.5, n_cols - 0.5)
+
+    # Labels
+    ax.set_yticks(np.arange(combined.shape[0]))
+    ax.set_yticklabels(combined.index, fontsize=18)
+
+    # Build repeated col labels per dataset
+    xticks = np.arange(data.shape[1])
+    labels_x: list[str] = []
+    for _k in range(num_datasets):
+        labels_x.extend(
+            [
+                "Attention\n(All)",
+                "Attention\n(Last)",
+                "Linear\n(All)",
+                "Linear\n(Last)",
+            ]
+        )
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(labels_x, fontsize=16)
+    plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
+
+    # Add dataset group labels centered over each 4-column block
+    dataset_names = [name for name, _ in aligned]
+    for k, ds_name in enumerate(dataset_names):
+        x_center = k * 4 + 1.5  # center of 4-column block in data coords
+        x_frac = (x_center + 0.5) / n_cols  # convert to axes fraction
+        ax.text(
+            x_frac,
+            1.02,
+            ds_name,
+            transform=ax.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=20,
+            fontweight="bold",
+        )
+
+    ax.set_xlabel("Probe configuration", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Model (SL)", fontsize=12, fontweight="bold")
+
+    ax.grid(False)
+
+    # Draw vertical double separators between datasets (every 4 cols)
+    if num_datasets > 1:
+        for k in range(1, num_datasets):
+            x_boundary = (k * 4) - 0.5
+            y_start, y_end = -0.5, n_rows - 0.5
+            off = 0.08
+            ax.vlines(x_boundary - off, y_start, y_end, colors="black", linewidth=2.0)
+            ax.vlines(x_boundary + off, y_start, y_end, colors="black", linewidth=2.0)
+
     # Annotate each cell with its value
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
@@ -606,8 +1166,20 @@ def _build_argparser() -> argparse.ArgumentParser:
         "--plot",
         type=str,
         default="bars",
-        choices=["bars", "heatmap"],
-        help="Select plot type: grouped bars or heatmap.",
+        choices=["bars", "heatmap", "layer_wise_ssl", "layer_wise_sl"],
+        help="Select plot type: grouped bars, heatmap, layer-wise SSL, or layer-wise SL.",
+    )
+    parser.add_argument(
+        "--include-ft",
+        action="store_true",
+        default=True,
+        help="Include fully fine-tuned (FT) models in the heatmap (default: True).",
+    )
+    parser.add_argument(
+        "--no-include-ft",
+        dest="include_ft",
+        action="store_false",
+        help="Exclude fully fine-tuned (FT) models to generate the original 4-column plot.",
     )
     return parser
 
@@ -620,8 +1192,23 @@ def main() -> None:
 
     if args.plot == "bars":
         fig, _ax = create_probing_comparison_plot(args.csv, args.out)
-    else:
+    elif args.plot == "heatmap":
         fig, _ax = create_probing_heatmap(
+            args.csv,
+            args.out,
+            csv_beans_classification=args.csv_beans_classification,
+            csv_beans_detection=args.csv_beans_detection,
+            include_ft=args.include_ft,
+        )
+    elif args.plot == "layer_wise_ssl":
+        fig, _ax = create_layer_wise_heatmap_ssl(
+            args.csv,
+            args.out,
+            csv_beans_classification=args.csv_beans_classification,
+            csv_beans_detection=args.csv_beans_detection,
+        )
+    elif args.plot == "layer_wise_sl":
+        fig, _ax = create_layer_wise_heatmap_sl(
             args.csv,
             args.out,
             csv_beans_classification=args.csv_beans_classification,
