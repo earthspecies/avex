@@ -120,3 +120,84 @@ class MyCustomModel(ModelBase):
 from representation_learning import load_model
 model = load_model("config.yaml", device="cpu")
 ```
+
+## Loading Pre-trained Models
+
+### Checkpoint Path Management
+
+Checkpoint paths are now managed directly in YAML configuration files (`api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
+
+### Creating Custom Model Configurations
+
+To create your own model configuration, create a YAML file with the following structure:
+
+```yaml
+# my_model.yml - Custom model configuration
+# Optional: Default checkpoint path (can be local or cloud storage)
+checkpoint_path: gs://my-bucket/models/my_model.pt
+
+# Optional: Path to label mapping JSON file
+class_mapping_path: gs://my-bucket/models/my_model_labels.json
+
+# Required: Model specification
+model_spec:
+  name: efficientnet  # Model architecture type
+  pretrained: false
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: mel_spectrogram
+    n_mels: 128
+    target_length_seconds: 10
+    window_selection: random
+  # Model-specific parameters
+  efficientnet_variant: b0
+```
+
+### Using Custom Configurations
+
+```python
+from representation_learning import load_model, get_checkpoint_path
+
+# Load model from custom YAML file
+model = load_model("path/to/my_model.yml")
+
+# Or for official models, checkpoint paths are read automatically from YAML
+checkpoint = get_checkpoint_path("efficientnet_animalspeak")
+print(f"Default checkpoint: {checkpoint}")
+
+# Load with default checkpoint (from YAML)
+# num_classes=None automatically extracts num_classes from checkpoint
+model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint + extracts num_classes
+
+# Load with custom checkpoint (overrides YAML default)
+# Priority: user-provided checkpoint_path > YAML default > no checkpoint
+model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
+
+# Load for different number of classes
+# When num_classes is explicitly provided, a new classifier is created
+# (checkpoint classifier weights are NOT loaded - randomly initialized)
+model = load_model("efficientnet_animalspeak", num_classes=50)  # New classifier with 50 classes
+```
+
+### Checkpoint Path Priority
+
+When loading a model, checkpoint paths are resolved in this order:
+1. **User-provided `checkpoint_path` parameter** (highest priority)
+2. **Default checkpoint from YAML file** (if `num_classes=None`)
+3. **No checkpoint** (for embedding extraction or new models)
+
+### Classifier Head Behavior
+
+- **`num_classes=None` with checkpoint**: Extracts `num_classes` from checkpoint and preserves classifier weights
+- **`num_classes=None` without checkpoint**: Builds model for embedding extraction (if supported)
+- **`num_classes` explicitly set**: Creates new classifier head (checkpoint classifier weights are ignored)
+
+### `pretrained=True` Without Checkpoint
+
+When `pretrained=True` and no `checkpoint_path` is set:
+- The model uses its own pretrained weight loading mechanism (varies by model type)
+- BEATs: Loads from hardcoded SSL/ImageNet paths
+- EfficientNet: Loads ImageNet weights via torchvision
+- EAT-HF: Loads from HuggingFace
+- **Note**: If a `checkpoint_path` is found (from YAML or user-provided), `pretrained` is automatically set to `False` to prioritize checkpoint weights
