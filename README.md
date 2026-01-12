@@ -100,16 +100,28 @@ probe = build_probe_from_config(
 )
 ```
 
-## Documentation and Examples
+## Documentation
 
 **Full documentation**: [docs/index.md](docs/index.md)
 
-- [Getting Started](docs/index.md#getting-started) - Installation and quick start
-- [API Reference](docs/api_reference.md) - Complete API documentation
-- [Architecture](docs/api_architecture.md) - Framework design
-- [Training and Evaluation](docs/training_evaluation.md) - Training guides
-- [Probe System](docs/probe_system.md) - Transfer learning with probes
-- [Custom Models](docs/custom_model_registration.md) - Creating custom models
+### Core Documentation
+
+- **[API Reference](docs/api_reference.md)** - Complete API documentation for model loading, registry, and management functions
+- **[Architecture](docs/api_architecture.md)** - Framework architecture, core components, and plugin system
+- **[Supported Models](docs/supported_models.md)** - List of supported models and their configurations
+- **[Configuration](docs/configuration.md)** - ModelSpec parameters, audio requirements, and configuration options
+
+### Usage Guides
+
+- **[Training and Evaluation](docs/training_evaluation.md)** - Guide to training and evaluating models
+- **[Embedding Extraction](docs/embedding_extraction.md)** - Working with feature representations and embeddings
+- **[Examples](docs/examples.md)** - Comprehensive examples and use cases
+
+### Advanced Topics
+
+- **[Probe System](docs/probe_system.md)** - Understanding and using probes for transfer learning
+- **[API Probes](docs/api_probes.md)** - API reference for probe-related functionality
+- **[Custom Model Registration](docs/custom_model_registration.md)** - Guide on registering custom model classes and loading pre-trained models
 
 **Examples**: See the [`examples/`](examples/) directory:
 
