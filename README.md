@@ -1,5 +1,8 @@
 # Representation Learning Framework
 
+![CI status](https://github.com/earthspecies/representation-learning/actions/workflows/pythonapp.yml/badge.svg?branch=main)
+![Pre-commit status](https://github.com/earthspecies/representation-learning/actions/workflows/pre-commit.yml/badge.svg?branch=main)
+
 An API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.
 
 ## Description
