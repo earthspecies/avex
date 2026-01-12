@@ -151,5 +151,134 @@ class TrainValSplitTransform:
         return result_data, metadata
 
 
-# Register the transform
+class RLSubsampleConfig(BaseModel):
+    """Configuration for RLSubsampleTransform.
+
+    This transform performs simple random subsampling of the dataset.
+    """
+
+    type: Literal["rl_subsample"]
+    ratio: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Ratio of samples to keep from the dataset",
+    )
+    max_samples: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum total number of samples to keep",
+    )
+    random_state: Optional[int] = Field(default=42, description="Random state for reproducible sampling")
+
+
+class RLSubsampleTransform:
+    """Transform that performs simple random subsampling.
+
+    This transform randomly samples a specified ratio of the dataset,
+    optionally limiting the total number of samples.
+
+    Parameters
+    ----------
+    ratio : float, default=1.0
+        Ratio of samples to keep from the dataset
+    max_samples : Optional[int], default=None
+        Maximum total number of samples to keep
+    random_state : Optional[int], default=42
+        Random state for reproducible sampling
+    """
+
+    def __init__(
+        self,
+        ratio: float = 1.0,
+        max_samples: Optional[int] = None,
+        random_state: Optional[int] = 42,
+    ) -> None:
+        """Initialize the RLSubsampleTransform.
+
+        Raises
+        ------
+        ValueError
+            If ratio is not between 0 and 1, or max_samples is not positive
+        """
+        if not 0.0 <= ratio <= 1.0:
+            raise ValueError(f"ratio must be between 0 and 1, got {ratio}")
+        if max_samples is not None and max_samples < 1:
+            raise ValueError(f"max_samples must be >= 1, got {max_samples}")
+
+        self.ratio = ratio
+        self.max_samples = max_samples
+        self.random_state = random_state
+
+    @classmethod
+    def from_config(cls, cfg: RLSubsampleConfig) -> "RLSubsampleTransform":
+        """Create RLSubsampleTransform from configuration.
+
+        Returns
+        -------
+        RLSubsampleTransform
+            Configured transform instance
+        """
+        return cls(**cfg.model_dump(exclude=("type",)))
+
+    def __call__(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+        """Apply the subsampling transform.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input dataset to sample from
+
+        Returns
+        -------
+        Tuple[pd.DataFrame, dict]
+            Tuple containing:
+            - Sampled data (DataFrame, not tuple)
+            - Metadata dictionary with sampling information
+        """
+        if len(data) == 0:
+            return data, {
+                "rl_subsample": {
+                    "original_size": 0,
+                    "sampled_size": 0,
+                    "ratio": self.ratio,
+                    "max_samples": self.max_samples,
+                }
+            }
+
+        original_size = len(data)
+
+        # Calculate number of samples to keep
+        n_samples = int(len(data) * self.ratio)
+        n_samples = min(n_samples, len(data))
+
+        # Apply max_samples limit if specified
+        if self.max_samples is not None:
+            n_samples = min(n_samples, self.max_samples)
+
+        # Perform random sampling
+        if n_samples > 0:
+            sampled_data = data.sample(
+                n=n_samples,
+                random_state=self.random_state,
+            ).reset_index(drop=True)
+        else:
+            sampled_data = pd.DataFrame(columns=data.columns)
+
+        # Prepare metadata
+        metadata = {
+            "rl_subsample": {
+                "original_size": original_size,
+                "sampled_size": len(sampled_data),
+                "ratio": self.ratio,
+                "max_samples": self.max_samples,
+            }
+        }
+
+        # Return DataFrame (not tuple) to ensure compatibility with dataset structure
+        return sampled_data, metadata
+
+
+# Register the transforms
 register_transform(TrainValSplitConfig, TrainValSplitTransform)
+register_transform(RLSubsampleConfig, RLSubsampleTransform)

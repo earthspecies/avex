@@ -527,7 +527,7 @@ def train_and_eval_offline(
     exp_logger.probe_model = probe
 
     # Use spawn context for DataLoaders to avoid fork-related issues (e.g., HDF5)
-    ctx = multiprocessing.get_context("spawn")
+    ctx = multiprocessing.get_context("spawn") if eval_cfg.num_workers > 0 else None
 
     trainer = FineTuneTrainer(
         model=probe,

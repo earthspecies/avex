@@ -279,8 +279,11 @@ def _extract_embeddings_streaming(
 
     try:
         # Create HDF5 file with streaming approach
+        # Use path string directly for h5py instead of file handle to avoid read/write mode issues
         if not isinstance(save_path_obj, PureCloudPath):
-            with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
+            # Ensure parent directory exists
+            save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+            with h5py.File(str(save_path_obj), "w") as h5f:
                 _create_and_fill_h5_datasets_hybrid(
                     h5f,
                     total_samples,

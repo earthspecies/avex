@@ -26,6 +26,21 @@ jobs:
         steps:
             - uses: actions/checkout@v2
 
+            - name: Free disk space on runner
+              run: |
+                echo "Before cleanup:"
+                df -h /
+
+                sudo rm -rf /usr/share/dotnet || true
+                sudo rm -rf /opt/ghc || true
+                sudo rm -rf /usr/local/lib/android || true
+                sudo rm -rf /usr/share/swift || true
+
+                sudo apt-get clean || true
+
+                echo "After cleanup:"
+                df -h /
+
             - name: Authenticate to Google Cloud
               uses: "google-github-actions/auth@v2"
               with:
@@ -59,6 +74,6 @@ jobs:
             - name: Doctests with pytest
               run: |
                   uv run pytest --doctest-modules representation_learning
-            # - name: Integration tests with pytest
-            #  run: |
-            #      uv run pytest tests/integration
+            - name: Integration tests with pytest
+              run: |
+                  uv run pytest tests/integration -m "not slow" -vv --durations=20

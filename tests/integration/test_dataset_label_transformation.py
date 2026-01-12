@@ -31,7 +31,96 @@ from representation_learning.data.dataset import build_dataloaders
 class TestDatasetLabelTransformation:
     @pytest.fixture
     def config_path(self) -> Path:
-        return Path("configs/evaluation_configs/cpu_test.yml")
+        """Get the path to the CPU test config file, resolved to absolute path.
+
+        Returns
+        -------
+        Path
+            Absolute path to the CPU test configuration file.
+        """
+        # Resolve relative to project root to ensure relative paths in config work
+        project_root = Path(__file__).parent.parent.parent
+        config_file = project_root / "configs" / "evaluation_configs" / "cpu_test.yml"
+        return config_file.resolve()
+
+    def _load_eval_config(self, config_path: Path) -> EvaluateConfig:
+        """Helper to load EvaluateConfig with proper working directory.
+
+        Parameters
+        ----------
+        config_path : Path
+            Path to the evaluation configuration file.
+
+        Returns
+        -------
+        EvaluateConfig
+            Loaded and validated evaluation configuration.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the config file or referenced run_config files are not found.
+        """
+        import os
+        import tempfile
+
+        import yaml
+
+        project_root = Path(__file__).parent.parent.parent
+        original_cwd = os.getcwd()
+
+        # Read the config file
+        with config_path.open() as f:
+            config_data = yaml.safe_load(f)
+
+        # Resolve relative paths in experiments to absolute paths
+        if "experiments" in config_data:
+            for exp in config_data["experiments"]:
+                if "run_config" in exp and isinstance(exp["run_config"], str):
+                    run_config_path = Path(exp["run_config"])
+                    if not run_config_path.is_absolute():
+                        # Resolve relative to project root
+                        resolved = (project_root / run_config_path).resolve()
+                        if not resolved.exists():
+                            # Try without resolve() in case of symlinks
+                            resolved = project_root / run_config_path
+                        if resolved.exists():
+                            exp["run_config"] = str(resolved)
+                        else:
+                            # File doesn't exist - try to find an alternative efficientnet config
+                            # Use sl_efficientnet_animalspeak.yml as fallback (it's tracked in git)
+                            fallback_config = (
+                                project_root
+                                / "configs"
+                                / "run_configs"
+                                / "aaai_train"
+                                / "sl_efficientnet_animalspeak.yml"
+                            )
+                            if fallback_config.exists():
+                                exp["run_config"] = str(fallback_config)
+                            else:
+                                # No fallback available - raise error
+                                raise FileNotFoundError(
+                                    f"Config file not found: {run_config_path}\n"
+                                    f"Tried: {resolved}\n"
+                                    f"Project root: {project_root}\n"
+                                    f"Current working directory: {os.getcwd()}\n"
+                                    f"Fallback also not found: {fallback_config}"
+                                )
+
+        # Write modified config to temp file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
+            yaml.dump(config_data, tmp)
+            tmp_path = Path(tmp.name)
+
+        try:
+            os.chdir(project_root)
+            return EvaluateConfig.from_sources(yaml_file=tmp_path, cli_args=())
+        finally:
+            os.chdir(original_cwd)
+            # Clean up temp file
+            if tmp_path.exists():
+                tmp_path.unlink()
 
     @pytest.fixture
     def minimal_run_config(self) -> Callable[..., RunConfig]:
@@ -96,8 +185,7 @@ class TestDatasetLabelTransformation:
 
     def test_dataloader_creation_success(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that dataloaders can be created without errors."""
-        # Load evaluation config
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
 
         # Get dataset config
         benchmark_eval_cfg = eval_cfg.dataset_config
@@ -137,8 +225,7 @@ class TestDatasetLabelTransformation:
 
     def test_label_map_propagation(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that label maps are correctly propagated to all splits."""
-        # Load evaluation config
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
@@ -188,8 +275,7 @@ class TestDatasetLabelTransformation:
 
     def test_label_format_consistency(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that labels are in the correct format across all splits."""
-        # Load evaluation config and build dataloaders
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
@@ -231,8 +317,7 @@ class TestDatasetLabelTransformation:
 
     def test_batch_creation_no_overflow(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that batches can be created without overflow errors."""
-        # Load evaluation config and build dataloaders
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
@@ -288,8 +373,7 @@ class TestDatasetLabelTransformation:
 
     def test_no_nan_labels(self, config_path: Path, minimal_run_config: Callable[..., RunConfig]) -> None:
         """Test that no labels are NaN after transformation."""
-        # Load evaluation config and build dataloaders
-        eval_cfg = EvaluateConfig.from_sources(yaml_file=config_path, cli_args=())
+        eval_cfg = self._load_eval_config(config_path)
         benchmark_eval_cfg = eval_cfg.dataset_config
         evaluation_sets = benchmark_eval_cfg.get_all_evaluation_sets()
         eval_set_name, eval_set_data_cfg = evaluation_sets[0]
