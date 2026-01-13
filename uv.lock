@@ -950,7 +950,7 @@ wheels = [
 
 [[package]]
 name = "esp-data"
-version = "1.4.0"
+version = "1.5.0"
 source = { registry = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" }
 dependencies = [
     { name = "gcsfs" },
@@ -967,9 +967,9 @@ dependencies = [
     { name = "semver" },
     { name = "soundfile" },
 ]
-sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.4.0.tar.gz", hash = "sha256:cad6e7e6b8906bea03489bf174e1bca9d94de465eb4b376c9ee468524e3f2e1d" }
+sdist = { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.5.0.tar.gz", hash = "sha256:6386a1425eaf09250e0d7e99fb46c0c2a7942ac8d1ae95a6691d293fc25ee9e5" }
 wheels = [
-    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.4.0-py3-none-any.whl", hash = "sha256:586138586891ee25f1f3233a97dcd3229c7e8d12514fd2bed092a32abc5c4d62" },
+    { url = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/esp-data/esp_data-1.5.0-py3-none-any.whl", hash = "sha256:067cb792eef6ae0ce51b6322dd9a8db0eab59248ce9988355071654a91ada5b6" },
 ]
 
 [[package]]
@@ -4062,7 +4062,7 @@ project-dev = [
 requires-dist = [
     { name = "birdnetlib", specifier = ">=0.18.0" },
     { name = "einops", specifier = ">=0.8.1" },
-    { name = "esp-data", marker = "extra == 'dev'", specifier = ">=1.4.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", marker = "extra == 'dev'", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "esp-sweep", marker = "extra == 'dev'", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "fsspec", specifier = ">=2024.2.0" },
     { name = "gcsfs", specifier = ">=2024.2.0" },
@@ -4104,7 +4104,7 @@ dev = [
 ]
 gpu = [{ name = "bitsandbytes", marker = "sys_platform != 'darwin'", specifier = ">=0.45.5" }]
 project-dev = [
-    { name = "esp-data", specifier = ">=1.4.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "esp-sweep", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "gradio", specifier = ">=4.0.0" },
     { name = "gradio-leaderboard", specifier = ">=0.0.13" },
