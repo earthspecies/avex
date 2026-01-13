@@ -19,7 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from avex.models.beats.backbone import MultiheadAttention as _MultiheadAttention
+from avex.models.beats.backbone import _MultiheadAttention
 from avex.models.beats.beats import BEATs, BEATsConfig
 
 logger = logging.getLogger(__name__)
