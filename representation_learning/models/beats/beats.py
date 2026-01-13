@@ -20,11 +20,12 @@ Based on:
 # --------------------------------------------------------
 
 import logging
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torchaudio.compliance.kaldi as ta_kaldi
+from pydantic import BaseModel
 from torch.nn import LayerNorm
 
 from .backbone import TransformerEncoder
@@ -32,69 +33,46 @@ from .backbone import TransformerEncoder
 logger = logging.getLogger(__name__)
 
 
-class BEATsConfig:
+class BEATsConfig(BaseModel):
     """Configuration class for BEATs model parameters."""
 
-    def __init__(self, cfg: Optional[Dict[str, Any]] = None) -> None:
-        """Initialize BEATs configuration.
+    # patch embedding
+    input_patch_size: int = -1  # path size of patch embedding
+    embed_dim: int = 512  # patch embedding dimension
+    conv_bias: bool = False  # include bias in conv encoder
 
-        Args:
-            cfg: Optional dictionary containing configuration parameters
-        """
-        self.input_patch_size: int = -1  # path size of patch embedding
-        self.embed_dim: int = 512  # patch embedding dimension
-        self.conv_bias: bool = False  # include bias in conv encoder
+    # encoder
+    encoder_layers: int = 12  # num encoder layers in the transformer
+    encoder_embed_dim: int = 768  # encoder embedding dimension
+    encoder_ffn_embed_dim: int = 3072  # encoder embedding dimension for FFN
+    encoder_attention_heads: int = 12  # num encoder attention heads
+    activation_fn: str = "gelu"  # activation function to use
 
-        self.encoder_layers: int = 12  # num encoder layers in the transformer
-        self.encoder_embed_dim: int = 768  # encoder embedding dimension
-        self.encoder_ffn_embed_dim: int = 3072  # encoder embedding dimension for FFN
-        self.encoder_attention_heads: int = 12  # num encoder attention heads
-        self.activation_fn: str = "gelu"  # activation function to use
+    layer_wise_gradient_decay_ratio: float = 1.0  # ratio for layer-wise gradient decay
+    layer_norm_first: bool = False  # apply layernorm first in the transformer
+    deep_norm: bool = False  # apply deep_norm first in the transformer
 
-        self.layer_wise_gradient_decay_ratio: float = 1.0  # ratio for layer-wise gradient decay
-        self.layer_norm_first: bool = False  # apply layernorm first in the transformer
-        self.deep_norm: bool = False  # apply deep_norm first in the transformer
+    # dropouts
+    dropout: float = 0.1  # dropout probability for the transformer
+    attention_dropout: float = 0.1  # dropout probability for attention weights
+    activation_dropout: float = 0.0  # dropout probability after activation in FFN
+    encoder_layerdrop: float = 0.0  # probability of dropping a tarnsformer layer
+    dropout_input: float = 0.0  # dropout to apply to the input (after feat extr)
 
-        # dropouts
-        self.dropout: float = 0.1  # dropout probability for the transformer
-        self.attention_dropout: float = 0.1  # dropout probability for attention weights
-        self.activation_dropout: float = 0.0  # dropout probability after activation in FFN
-        self.encoder_layerdrop: float = 0.0  # probability of dropping a tarnsformer layer
-        self.dropout_input: float = 0.0  # dropout to apply to the input (after feat extr)
+    # positional embeddings
+    conv_pos: int = 128  # number of filters for convolutional positional embeddings
+    conv_pos_groups: int = 16  # number of groups for convolutional positional embedding
 
-        # positional embeddings
-        self.conv_pos: int = 128  # number of filters for convolutional positional embeddings
-        self.conv_pos_groups: int = 16  # number of groups for convolutional positional embedding
+    # relative position embedding
+    relative_position_embedding: bool = False  # apply relative position embedding
+    num_buckets: int = 320  # number of buckets for relative position embedding
+    max_distance: int = 1280  # maximum distance for relative position embedding
+    gru_rel_pos: bool = False  # apply gated relative position embedding
 
-        # relative position embedding
-        self.relative_position_embedding: bool = False  # apply relative position embedding
-        self.num_buckets: int = 320  # number of buckets for relative position embedding
-        self.max_distance: int = 1280  # maximum distance for relative position embedding
-        self.gru_rel_pos: bool = False  # apply gated relative position embedding
-
-        # label predictor
-        self.finetuned_model: bool = False  # whether the model is a fine-tuned model.
-        self.predictor_dropout: float = 0.1  # dropout probability for the predictor
-        self.predictor_class: int = 527  # target class number for the predictor
-
-        if cfg is not None:
-            self.update(cfg)
-
-    def update(self, cfg: Dict[str, Any]) -> None:
-        """Update configuration with new parameters.
-
-        Args:
-            cfg: Dictionary containing new configuration parameters
-        """
-        self.__dict__.update(cfg)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary.
-
-        Returns:
-            Dict[str, Any]: Configuration as dictionary
-        """
-        return self.__dict__
+    # label predictor
+    finetuned_model: bool = False  # whether the model is a fine-tuned model.
+    predictor_dropout: float = 0.1  # dropout probability for the predictor
+    predictor_class: int = 527  # target class number for the predictor
 
 
 class BEATs(nn.Module):
