@@ -20,6 +20,59 @@ from representation_learning.io import AnyPathT, PureCloudPath, anypath, filesys
 logger = logging.getLogger(__name__)
 
 
+def _get_local_path_for_cloud_file(
+    path: AnyPathT,
+    fs: Any,  # noqa: ANN401
+    cache_mode: Literal["none", "use", "force"],
+) -> Path | None:
+    """Get a local file path for a cloud file, handling caching if needed.
+
+    For cloud paths with caching enabled, downloads to cache directory.
+    For cloud paths without caching, returns None (caller should handle directly).
+    For local paths, returns the Path object directly.
+
+    Parameters
+    ----------
+    path : AnyPathT
+        Path to the file (local or cloud)
+    fs : Any
+        Filesystem object for the path
+    cache_mode : Literal["none", "use", "force"]
+        Cache mode for cloud files
+
+    Returns
+    -------
+    Path | None
+        Local file path if available, None if should read directly from cloud
+    """
+    is_cloud_path = isinstance(path, PureCloudPath)
+
+    if is_cloud_path:
+        if cache_mode in ["use", "force"]:
+            # Use cache
+            if "ESP_CACHE_HOME" in os.environ:
+                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
+            else:
+                cache_path = Path.home() / ".cache" / "esp" / path.name
+
+            if not cache_path.exists() or cache_mode == "force":
+                download_msg = (
+                    "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
+                )
+                logger.info(f"{download_msg} to {cache_path}...")
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                fs.get(str(path), str(cache_path))
+            else:
+                logger.debug(f"Found {cache_path}, using local cache.")
+            return cache_path
+        else:
+            # No caching - return None to indicate direct cloud read
+            return None
+    else:
+        # Local path
+        return Path(path)
+
+
 def _load_torch(
     path: AnyPathT,
     fs: Any,  # noqa: ANN401
@@ -47,32 +100,7 @@ def _load_torch(
     Any
         The object loaded from the file using torch.load()
     """
-    is_cloud_path = isinstance(path, PureCloudPath)
-
-    if is_cloud_path:
-        if cache_mode in ["use", "force"]:
-            # Use cache
-            if "ESP_CACHE_HOME" in os.environ:
-                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
-            else:
-                cache_path = Path.home() / ".cache" / "esp" / path.name
-
-            if not cache_path.exists() or cache_mode == "force":
-                download_msg = (
-                    "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
-                )
-                logger.info(f"{download_msg} to {cache_path}...")
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                fs.get(str(path), str(cache_path))
-            else:
-                logger.debug(f"Found {cache_path}, using local cache.")
-            local_path = cache_path
-        else:
-            # No caching - read directly from cloud
-            local_path = None
-    else:
-        # Local path
-        local_path = Path(path)
+    local_path = _get_local_path_for_cloud_file(path, fs, cache_mode)
 
     # Load the file
     if local_path is not None:
@@ -123,8 +151,6 @@ def _load_safetensor(
     """
     from safetensors.torch import load_file
 
-    is_cloud_path = isinstance(path, PureCloudPath)
-
     # Extract device/map_location from kwargs if provided (for safetensors)
     # map_location is the standard PyTorch parameter, device is for safetensors
     # Priority: map_location > device > default "cpu"
@@ -135,57 +161,34 @@ def _load_safetensor(
     elif device is None:
         device = "cpu"
 
-    if is_cloud_path:
-        if cache_mode in ["use", "force"]:
-            # Use cache
-            if "ESP_CACHE_HOME" in os.environ:
-                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
-            else:
-                cache_path = Path.home() / ".cache" / "esp" / path.name
+    local_path = _get_local_path_for_cloud_file(path, fs, cache_mode)
 
-            if not cache_path.exists() or cache_mode == "force":
-                download_msg = (
-                    "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
-                )
-                logger.info(f"{download_msg} to {cache_path}...")
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                fs.get(str(path), str(cache_path))
-            else:
-                logger.debug(f"Found {cache_path}, using local cache.")
-            local_path = cache_path
-
-            # Load from cached file
-            logger.debug(f"Loading safetensors file: {local_path}")
-            state_dict = load_file(str(local_path), device=device)
-
-            # Wrap in "model_state_dict" for compatibility with checkpoint loading code
-            return {"model_state_dict": state_dict}
-        else:
-            # No caching - use temp file with context manager for automatic cleanup
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".safetensors") as tmp_file:
-                tmp_path = Path(tmp_file.name)
-            try:
-                fs.get(str(path), str(tmp_path))
-                logger.debug(f"Loading safetensors file: {tmp_path}")
-                state_dict = load_file(str(tmp_path), device=device)
-
-                # Wrap in "model_state_dict" for compatibility with checkpoint loading code
-                return {"model_state_dict": state_dict}
-            finally:
-                # Clean up temp file
-                if tmp_path.exists():
-                    try:
-                        tmp_path.unlink()
-                    except Exception as e:
-                        logger.debug(f"Could not clean up temp file {tmp_path}: {e}")
-    else:
-        # Local path
-        local_path = Path(path)
+    if local_path is not None:
+        # Local file (cached or original)
         logger.debug(f"Loading safetensors file: {local_path}")
         state_dict = load_file(str(local_path), device=device)
 
         # Wrap in "model_state_dict" for compatibility with checkpoint loading code
         return {"model_state_dict": state_dict}
+    else:
+        # No caching - use temp file with context manager for automatic cleanup
+        # (safetensors requires a local file, so we must download to temp)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".safetensors") as tmp_file:
+            tmp_path = Path(tmp_file.name)
+        try:
+            fs.get(str(path), str(tmp_path))
+            logger.debug(f"Loading safetensors file: {tmp_path}")
+            state_dict = load_file(str(tmp_path), device=device)
+
+            # Wrap in "model_state_dict" for compatibility with checkpoint loading code
+            return {"model_state_dict": state_dict}
+        finally:
+            # Clean up temp file
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception as e:
+                    logger.debug(f"Could not clean up temp file {tmp_path}: {e}")
 
 
 def universal_torch_load(
