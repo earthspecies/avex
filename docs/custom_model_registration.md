@@ -125,7 +125,7 @@ model = load_model("config.yaml", device="cpu")
 
 ### Checkpoint Path Management
 
-Checkpoint paths are now managed directly in YAML configuration files (`api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
+Checkpoint paths are now managed directly in YAML configuration files (`representation_learning/api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
 
 ### Creating Custom Model Configurations
 
@@ -167,31 +167,28 @@ checkpoint = get_checkpoint_path("efficientnet_animalspeak")
 print(f"Default checkpoint: {checkpoint}")
 
 # Load with default checkpoint (from YAML)
-# num_classes=None automatically extracts num_classes from checkpoint
-model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint + extracts num_classes
+model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint
 
 # Load with custom checkpoint (overrides YAML default)
 # Priority: user-provided checkpoint_path > YAML default > no checkpoint
 model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
 
-# Load for different number of classes
-# When num_classes is explicitly provided, a new classifier is created
-# (checkpoint classifier weights are NOT loaded - randomly initialized)
-model = load_model("efficientnet_animalspeak", num_classes=50)  # New classifier with 50 classes
+# Load for embedding extraction (strip classifier head when present)
+base = load_model("efficientnet_animalspeak", return_features_only=True)
 ```
 
 ### Checkpoint Path Priority
 
 When loading a model, checkpoint paths are resolved in this order:
 1. **User-provided `checkpoint_path` parameter** (highest priority)
-2. **Default checkpoint from YAML file** (if `num_classes=None`)
+2. **Default checkpoint from YAML file**
 3. **No checkpoint** (for embedding extraction or new models)
 
 ### Classifier Head Behavior
 
-- **`num_classes=None` with checkpoint**: Extracts `num_classes` from checkpoint and preserves classifier weights
-- **`num_classes=None` without checkpoint**: Builds model for embedding extraction (if supported)
-- **`num_classes` explicitly set**: Creates new classifier head (checkpoint classifier weights are ignored)
+- `load_model()` preserves a trained classifier head when it is present in the checkpoint.
+- To build a new classifier for a new task, load a backbone with `return_features_only=True`
+  and attach a probe head via `build_probe_from_config()` (see probe documentation).
 
 ### `pretrained=True` Without Checkpoint
 

@@ -81,7 +81,7 @@ model = load_model("beats_naturelm", return_features_only=True, device="cpu")
 # Returns (batch, time_steps, 768) for BEATs
 
 # Load with a probe for transfer learning
-from representation_learning.api import build_probe_from_config
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")

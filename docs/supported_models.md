@@ -12,7 +12,7 @@ The framework includes support for various audio representation learning models:
 
 ## Model Configuration
 
-Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
+Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `representation_learning/api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
 
 **Minimal Model Configuration:**
 

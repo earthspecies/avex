@@ -32,8 +32,8 @@ describe_model("beats_naturelm", verbose=True)
 # Load a pre-trained model with checkpoint (num_classes extracted automatically)
 model = load_model("sl_beats_animalspeak", device="cpu")
 
-# Load a model for a new task (creates new classifier)
-model = load_model("beats_naturelm", num_classes=10, device="cpu")
+# For a new task, load a backbone and attach a probe head (classifier)
+base = load_model("beats_naturelm", return_features_only=True, device="cpu")
 
 # Load for embedding extraction (returns unpooled features)
 model = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -100,7 +100,7 @@ Probes are task-specific heads attached to pretrained backbones for transfer lea
 
 ```python
 from representation_learning import load_model
-from representation_learning.api import build_probe_from_config
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # Load backbone for feature extraction

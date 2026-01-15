@@ -104,7 +104,7 @@ pooled = spatial_features.mean(dim=1)  # (batch, 768)
 
 **Example**:
 ```python
-model = load_model("efficientnet", num_classes=10, return_features_only=True, device="cpu")
+model = load_model("efficientnet_animalspeak", return_features_only=True, device="cpu")
 audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
 features = model(audio, padding_mask=None)
 # features.shape = (1, 1280, 4, 5) for EfficientNet-B0

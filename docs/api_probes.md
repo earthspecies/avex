@@ -15,7 +15,8 @@ The probe API provides an interface for **defining, configuring, and attaching p
 Begin with a simple linear probe on the backbone's last layer:
 
 ```python
-from representation_learning.api import build_probe_from_config, load_model
+from representation_learning import load_model
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -96,7 +97,8 @@ Computational:    FAST ───────────────────
 ### Build and Use a Probe (Online Mode)
 
 ```python
-from representation_learning.api import load_model, build_probe_from_config
+from representation_learning import load_model
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # 1. Load a backbone model that returns features
@@ -123,7 +125,7 @@ probe = build_probe_from_config(
 ### Offline Mode (Pre-computed Embeddings)
 
 ```python
-from representation_learning.api import build_probe_from_config
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # For pre-computed embeddings (no base model needed)
@@ -137,11 +139,9 @@ probe_config = ProbeConfig(
 
 probe = build_probe_from_config(
     probe_config=probe_config,
-    base_model=None,              # offline mode
+    input_dim=768,                # embedding dimension
     num_classes=50,
     device="cpu",
-    feature_mode=True,
-    input_dim=768,                # embedding dimension
 )
 
 # Use with embeddings
@@ -235,7 +235,7 @@ from representation_learning.models.probes.utils import (
     load_probe_config,
     build_probe_from_config,
 )
-from representation_learning.api import load_model
+from representation_learning import load_model
 
 config = load_probe_config("my_linear_probe.yml")
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -250,7 +250,7 @@ probe = build_probe_from_config(config, base_model=base, num_classes=50, device=
 Unified factory function for building probe instances from a `ProbeConfig`. Supports both **online** (with base model) and **offline** (with pre-computed embeddings) modes.
 
 ```python
-from representation_learning.api import build_probe_from_config
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 def build_probe_from_config(
@@ -316,7 +316,8 @@ All probe configs include:
 ### Comparing Different Probe Architectures
 
 ```python
-from representation_learning.api import build_probe_from_config, load_model
+from representation_learning import load_model
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -364,7 +365,7 @@ from representation_learning.models.probes.utils import (
     build_probe_from_config,
     load_probe_config,
 )
-from representation_learning.api import load_model
+from representation_learning import load_model
 
 config = load_probe_config("custom_probe.yml")
 base = load_model("beats_naturelm", return_features_only=True, device="cpu")
@@ -407,7 +408,7 @@ representation_learning/
 │   │   └── factory.py                  # build_probe_from_config
 │   └── [probe implementations]
 └── examples/
-    └── 08_probe_training.py            # Usage examples
+    └── 07_probe_training_and_inference.py  # Usage examples
 ```
 
 ### Core Components
@@ -425,7 +426,7 @@ representation_learning/
 
 ### Verify Installation
 ```python
-from representation_learning.api import build_probe_from_config
+from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 import torch
 
@@ -455,7 +456,7 @@ with torch.no_grad():
 ### Run Example Script
 ```bash
 cd /home/marius/code/representation-learning
-python examples/08_probe_training.py
+python examples/07_probe_training_and_inference.py
 ```
 
 ## Tested Functionality
@@ -484,7 +485,7 @@ python examples/08_probe_training.py
 - `models/probes/utils/factory.py`
 
 ### Examples and Documentation
-- `examples/08_probe_training.py`
+- `examples/07_probe_training_and_inference.py`
 - `docs/api_probes.md` (this file)
 
 ## Future Enhancements
@@ -497,7 +498,7 @@ These can be added in future iterations following the same design patterns.
 
 ## See Also
 
-- `examples/08_probe_training.py` - Complete usage examples
+- `examples/07_probe_training_and_inference.py` - Complete usage examples
 - `representation_learning/models/probes/` - Probe implementations
 - Model API documentation for parallel structure reference
 

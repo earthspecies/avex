@@ -192,7 +192,7 @@ models = list_models()
 print(f"Available models: {list(models.keys())}")
 
 # Load a model
-model = load_model("efficientnet_animalspeak", num_classes=10, device="cpu")
+model = load_model("efficientnet_animalspeak", device="cpu")
 print(f"Model loaded: {type(model).__name__}")
 ```
 
