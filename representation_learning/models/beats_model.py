@@ -87,7 +87,7 @@ class Model(ModelBase):
         beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
         self.use_naturelm = use_naturelm
         self.fine_tuned = fine_tuned
-        beats_cfg = BEATsConfig(beats_ckpt["cfg"])
+        beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
         print(beats_cfg)
         if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
             beats_ckpt_naturelm = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
