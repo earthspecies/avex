@@ -37,7 +37,7 @@ class BEATsConfig(BaseModel):
     """Configuration class for BEATs model parameters."""
 
     # patch embedding
-    input_patch_size: int = -1  # path size of patch embedding
+    input_patch_size: int = 16  # path size of patch embedding
     embed_dim: int = 512  # patch embedding dimension
     conv_bias: bool = False  # include bias in conv encoder
 
