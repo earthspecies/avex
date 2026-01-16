@@ -148,52 +148,23 @@ For users who want to install the package and use it as a library (for example t
 #### 1.1 Prerequisites
 
 - Python 3.10, 3.11, or 3.12
-- ESP GCP authentication:
-
-```bash
-# Authenticate with Google Cloud
-gcloud auth login
-gcloud auth application-default login
-```
 
 #### 1.2 Install with uv (recommended)
 
 This assumes you are using `uv` to manage your project or environment.
 
-1. Install keyring with the Google Artifact Registry plugin (once per machine):
-
-```bash
-uv tool install keyring --with keyrings.google-artifactregistry-auth
-```
-
-2. Create and activate a uv-managed virtual environment (if you do not already have one):
-
-```bash
-uv venv
-source .venv/bin/activate
-```
-
-3. Configure `uv` to use the internal ESP PyPI index. Add the following to your `pyproject.toml` (either create one or edit the existing one):
+1. Add the following to your `pyproject.toml` list of dependencies (either create one or edit the existing one):
 
 ```toml
-[[tool.uv.index]]
-name = "esp-pypi"
-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-explicit = true
 
-[tool.uv.sources]
-representation-learning = { index = "esp-pypi" }
-# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
-esp-data = { index = "esp-pypi" }
-esp-sweep = { index = "esp-pypi" }
-
-[tool.uv]
-keyring-provider = "subprocess"
+dependencies = [
+  "representation-learning",
+]
 ```
 
-**Note:** If you plan to install `representation-learning[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
+**Note:** If you plan to install `representation-learning[dev]` (see section 2), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
-4. Install the package (API dependencies only):
+2. Install the package (API dependencies only):
 
 ```bash
 # Option A: Add and install in one step
@@ -217,14 +188,52 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 2. Install the package from the ESP index:
 
 ```bash
-pip install representation-learning \
-  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+pip install representation-learning
 ```
 
-#### 1.4 API + full dependencies (training / evaluation)
+#### 2. API + full dependencies (training / evaluation)
 
 If you want to use additional functionality such as `run_train.py`, `run_evaluate.py`, or other advanced workflows, install the `dev` extras:
 
+#### 2.1 Prerequisites
+
+- ESP GCP authentication:
+
+```bash
+# Authenticate with Google Cloud
+gcloud auth login
+gcloud auth application-default login
+```
+
+#### 2.2 Install with uv (recommended)
+
+This assumes you are using `uv` to manage your project or environment.
+
+1. Install keyring with the Google Artifact Registry plugin (once per machine):
+
+```bash
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+```
+
+2. Configure `uv` to use the internal ESP PyPI index. Add the following to your `pyproject.toml` (either create one or edit the existing one):
+
+```toml
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+representation-learning = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+esp-data = { index = "esp-pypi" }
+esp-sweep = { index = "esp-pypi" }
+
+[tool.uv]
+keyring-provider = "subprocess"
+```
+
+3. Install the package (with [dev] dependencies):
 ```bash
 # With uv (in a project configured for esp-pypi as above)
 
