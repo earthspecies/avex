@@ -1,0 +1,48 @@
+# On which datasets to run the evaluation and which metrics to use
+dataset_config: configs/data_configs/benchmark_originals.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+
+# Which experiments to evaluate
+experiments:
+  - run_name: newbeats_32khz_pretrained
+    run_config: configs/run_configs/pretrained/newbeats_32khz_pretrained.yml
+    # Load our custom 32kHz pretrained encoder checkpoint
+    pretrained: false
+    # checkpoint_path: gs://representation-learning/models/beats_pretrain/32khz_iter2_e13_mapped.pt
+    checkpoint_path: runs/v1/sl_newbeats/2026-01-13_07-31-39/checkpoint_epoch_006.pt
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+# Where to save the evaluation results
+save_dir: evaluation_results/newbeats_32khz
+
+# Optional: Append results to a global CSV file for cross-model comparison
+results_csv_path: evaluation_results/all_models_results.csv
+
+device: cuda
+
+seed: 42
+
+num_workers: 8  # Enable workers for better memory management
+
+# Evaluation phases
+eval_modes:
+  # - probe
+  - retrieval
+  - clustering
+
+offline_embeddings:
+  overwrite_embeddings: true
