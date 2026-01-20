@@ -2,46 +2,46 @@
 
 This guide explains how to install the `representation-learning` package.
 
-## Prerequisites
+The installation process depends on how you plan to use this package:
 
-- Python 3.11 or 3.12
-- `uv` package manager (recommended) or `pip`
+- **API user**: you just want to load models and run inference.
+- **Developer**: you want to clone the repo, modify code, or run the full training/evaluation stack.
 
-## Installation
+## 1. API Usage
 
-`representation-learning` is currently a private package, hosted on ESP's internal Python package repository. Because it isn't available on the public PyPI index, you'll need to configure your project to use ESP's private package index in order to install and update it.
+For users who want to install the package and use it as a library (for example to load models and run inference).
 
-### 1. Install keyring (one-time setup)
+### 1.1 Prerequisites
 
-To authenticate and interact with Python repositories hosted on Artifact Registry, you'll need to install the keyring library system-wide (not inside a virtual environment), along with the Google Artifact Registry backend. This step is required only once per system, typically when setting up your VM or laptop (not needed on Slurm compute nodes):
+- Python 3.10, 3.11, or 3.12
+- ESP GCP authentication:
+
+```bash
+# Authenticate with Google Cloud
+gcloud auth login
+gcloud auth application-default login
+```
+
+### 1.2 Install with uv (recommended)
+
+This assumes you are using `uv` to manage your project or environment.
+
+1. Install keyring with the Google Artifact Registry plugin (once per machine):
 
 ```bash
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 ```
 
-**Slurm**
+**Note for Slurm users**: This step is NOT required for Slurm jobs. All nodes on the cluster already have this package installed.
 
-This step is NOT required for Slurm jobs. All nodes on the cluster already have this package installed.
+2. Create and activate a uv-managed virtual environment (if you do not already have one):
 
-> **Info**
->
-> You only need to do this step once on your system.
+```bash
+uv venv
+source .venv/bin/activate
+```
 
-> **Tip**
->
-> `uv tool` allows you to install Python packages that provide command-line interfaces for system-wide use. The dependencies are installed in an isolated virtual environment, separate from your current project.
-
-### 2. Choose your installation scenario
-
-There are three scenarios for installing `representation-learning`:
-
-#### Scenario 1: Just want to use the package
-
-You just want to use `representation-learning` package and don't care about its source code and implementation. In that case, the installation is very similar to the esp-data guide.
-
-**Configure your project to use the private index**
-
-Add the following to your `pyproject.toml` to configure your project to use the private package index:
+3. Configure `uv` to use the internal ESP PyPI index. Add the following to your `pyproject.toml` (either create one or edit the existing one):
 
 ```toml
 [[tool.uv.index]]
@@ -51,65 +51,133 @@ explicit = true
 
 [tool.uv.sources]
 representation-learning = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+esp-data = { index = "esp-pypi" }
+esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
 keyring-provider = "subprocess"
 ```
 
-**Add representation-learning as a dependency**
+**Note:** If you plan to install `representation-learning[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
-You can now add `representation-learning` to your project by running:
+4. Install the package (API dependencies only):
 
 ```bash
+# Option A: Add and install in one step
 uv add representation-learning
-```
 
-Alternatively, you can manually update the dependencies section of your `pyproject.toml` and then run:
-
-```bash
+# Option B: If you've already added it to [project.dependencies] in pyproject.toml
 uv sync
 ```
 
-#### Scenario 2: Use as dependency but want to hack/patch the code
+### 1.3 Install with pip
 
-You want to use `representation-learning` as a dependency but want to hack/patch the code. In that case, clone this repo and add it as an editable dependency:
+If you prefer plain `pip`:
+
+1. Create and activate a virtual environment:
 
 ```bash
-# Clone the repository
-git clone https://github.com/earthspecies/representation-learning.git
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+2. Install the package from the ESP index:
+
+```bash
+pip install representation-learning \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+### 1.4 API + full dependencies (training / evaluation)
+
+If you want to use additional functionality such as `run_train.py`, `run_evaluate.py`, or other advanced workflows, install the `dev` extras:
+
+```bash
+# With uv (in a project configured for esp-pypi as above)
+
+# Option A: Add and install in one step
+uv add "representation-learning[dev]"
+
+# Option B: If you've already added it to pyproject.toml
+uv sync
+
+# With pip
+pip install "representation-learning[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+This pulls in additional dependencies, including for example:
+
+- `pytorch-lightning` – training (for ATST)
+- `mlflow` – experiment tracking
+- `wandb` – Weights & Biases integration
+- `esp-sweep` – hyperparameter sweeping
+- `esp-data` – dataset management
+- `gradio` – interactive demos
+- `gradio-leaderboard` – leaderboard visualization
+
+## 2. Development Usage
+
+For contributors or power users who clone the repository and want the full development and runtime stack locally.
+
+### 2.1 Prerequisites
+
+- Python 3.10, 3.11, or 3.12
+- Git
+- GCP authentication:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+```
+
+### 2.2 Clone the repository
+
+```bash
+git clone <repository-url>
 cd representation-learning
-
-# In your project, add as editable dependency
-uv add --editable "/path/to/representation-learning"
 ```
 
-Or manually add to your `pyproject.toml`:
-
-```toml
-[tool.uv.sources]
-representation-learning = { path = "/path/to/representation-learning", editable = true }
-```
-
-Then run:
+### 2.3 Install with uv (recommended for development)
 
 ```bash
-uv sync
+# 1. Install keyring with Google Artifact Registry plugin
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+
+# 2. Install the project with all dev/runtime dependencies
+uv sync --group project-dev
 ```
 
-#### Scenario 3: You're a developer of this package
+This will install:
 
-You're a developer of this package. In that case, you just clone and do `uv sync`:
+- Base API dependencies
+- Training/evaluation runtime dependencies (for example `pytorch-lightning`, `mlflow`, `wandb`, `esp-data`, etc.)
+- Development tools (`pytest`, `ruff`, `pre-commit`, etc.)
+- Optional GPU-related packages (for example `bitsandbytes`, when supported)
+
+The `project-dev` dependency group is used by CI and is intended to match the full development environment.
+
+### 2.4 Install with pip (alternative for development)
 
 ```bash
-# Clone the repository
-git clone https://github.com/earthspecies/representation-learning.git
-cd representation-learning
+# 1. Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies (handles private index automatically)
-uv sync
+# 2. Install in editable mode with dev extras
+pip install -e ".[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
-This will install all dependencies including `esp-data` and `esp-sweep` from the private index, as configured in the repository's `pyproject.toml`.
+Notes for development:
+
+- Editable install (`-e`) means changes in the repo are picked up immediately without reinstalling.
+- The `[dev]` extra mirrors the runtime dependencies used by `uv`'s `project-dev` group.
+- Use this setup if you plan to:
+  - Run tests (`pytest`)
+  - Run training/evaluation scripts
+  - Contribute code via pull requests
 
 ## Verification
 
@@ -139,10 +207,10 @@ list-models
 
 If you get an error about `esp-data` not being found:
 
-1. Make sure you've configured the private index in your `pyproject.toml` (see Scenario 1)
+1. Make sure you've configured the private index in your `pyproject.toml` (see section 1.2)
 2. Check that you have access to the Earth Species private PyPI repository
 3. Verify your authentication token is valid
-4. Make sure you've installed keyring (see step 1)
+4. Make sure you've installed keyring (see section 1.2, step 1)
 
 ### Permission Errors
 

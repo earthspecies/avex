@@ -1,0 +1,43 @@
+name: Build and Publish Package (Dry Run)
+
+on:    # yamllint disable-line rule:truthy
+  workflow_dispatch:
+
+jobs:
+  build-and-publish-dry-run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: "google-github-actions/auth@v2"
+        id: auth
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
+          service_account: ${{ secrets.GH_ACTIONS_SA }}
+          token_format: access_token
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install the project
+        run: |
+          uv tool install keyring --with keyrings.google-artifactregistry-auth
+          uv sync --all-extras --dev
+
+      - name: Build the package
+        run: uv build
+
+      - name: Publish the package (dry run)
+        run: uv publish --dry-run --index esp-pypi --password ${{ steps.auth.outputs.access_token }}

@@ -381,15 +381,21 @@ def extract_metrics_from_log(log_file_path: str) -> List[Dict[str, Any]]:
 
             # Combine all information
             if metrics_data:
+                # For fully fine-tuned models (ending with _ft), always set layers to 'last_layer'
+                base_model = metrics_data["base_model"]
+                layers_value = probe_config["layers"]
+                if base_model.endswith("_ft"):
+                    layers_value = "last_layer"
+
                 result = {
                     "probe_type": probe_config["probe_type"],
-                    "layers": probe_config["layers"],
+                    "layers": layers_value,
                     "aggregation": probe_config["aggregation"],
                     "input_processing": probe_config["input_processing"],
                     "training_mode": probe_config["training_mode"],
                     "dataset": metrics_data["dataset"],
                     "benchmark": metrics_data["benchmark"],
-                    "base_model": metrics_data["base_model"],
+                    "base_model": base_model,
                     "metrics": metrics_data["metrics"],
                     "retrieval": metrics_data["retrieval"],
                     "clustering": metrics_data["clustering"],
@@ -448,7 +454,7 @@ def get_expected_layers() -> List[str]:
     Returns:
         List of expected layer configurations
     """
-    return ["last_layer", "all"]
+    return ["last_layer", "all", "ft"]
 
 
 def read_extracted_csv(csv_path: str) -> Tuple[Set[str], Set[str], Set[str]]:
@@ -554,7 +560,7 @@ def generate_missing_combinations(
             for layer in expected_layers:
                 # Create expected base model name
                 # Map layer names to the correct format used in the logs
-                layer_mapping = {"last_layer": "last", "all": "all"}
+                layer_mapping = {"last_layer": "last", "all": "all", "ft": "ft"}
                 mapped_layer = layer_mapping.get(layer, layer)
                 base_model = f"sl_eat_all_ssl_all_{probe_type.replace('weighted_', '')}_{mapped_layer}"
 
@@ -826,7 +832,7 @@ def generate_missing_combinations_for_benchmark(
         for probe_type in expected_probe_types:
             for layer in expected_layers:
                 # Create expected base model name based on the actual base models found
-                layer_mapping = {"last_layer": "last", "all": "all"}
+                layer_mapping = {"last_layer": "last", "all": "all", "ft": "ft"}
                 mapped_layer = layer_mapping.get(layer, layer)
 
                 # Find the expected base model name by looking at what's actually in the log  # noqa: E501
@@ -913,6 +919,10 @@ def create_or_append_csv(results: List[Dict[str, Any]], csv_file_path: str) -> N
         try:
             df_existing = pd.read_csv(csv_file_path)
             existing_data = df_existing.to_dict("records")
+            # Add fully_ft column to existing rows if missing
+            for row in existing_data:
+                if "fully_ft" not in row or row.get("fully_ft") == "":
+                    row["fully_ft"] = row.get("base_model", "").endswith("_ft")
         except Exception as e:
             print(f"Warning: Could not read existing CSV file: {e}")
 
@@ -956,6 +966,9 @@ def create_or_append_csv(results: List[Dict[str, Any]], csv_file_path: str) -> N
         # Add layer weights
         row["layer_weights"] = result["layer_weights"] or ""
 
+        # Add fully_ft column: True if base_model ends with _ft, False otherwise
+        row["fully_ft"] = result["base_model"].endswith("_ft")
+
         # Check if this combination already exists
         if is_duplicate_entry(row, existing_data):
             duplicate_count += 1
@@ -981,6 +994,7 @@ def create_or_append_csv(results: List[Dict[str, Any]], csv_file_path: str) -> N
         "base_trainable",
         "base_total",
         "layer_weights",
+        "fully_ft",
         "metric",
     ]
 
@@ -990,8 +1004,11 @@ def create_or_append_csv(results: List[Dict[str, Any]], csv_file_path: str) -> N
             writer = csv.DictWriter(f, fieldnames=column_order)
             writer.writeheader()
             for row in all_data:
-                # Fill missing columns with empty strings
+                # Fill missing columns with default values
                 complete_row = {col: row.get(col, "") for col in column_order}
+                # Ensure fully_ft is set correctly (should already be set, but double-check)
+                if "fully_ft" not in complete_row or complete_row["fully_ft"] == "":
+                    complete_row["fully_ft"] = complete_row.get("base_model", "").endswith("_ft")
                 writer.writerow(complete_row)
 
         print(f"Successfully wrote {len(new_rows)} new rows to {csv_file_path}")

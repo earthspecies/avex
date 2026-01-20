@@ -5,14 +5,26 @@ This example demonstrates:
 - Loading models with default checkpoints (from YAML)
 - Loading models with custom checkpoints
 - Extracting num_classes from checkpoints
-- Working with cloud storage paths
+- Working with class mappings
 
-IMPORTANT: Model specifications (architecture, parameters) and default checkpoint paths
-are defined in YAML files in configs/official_models/. Checkpoint paths can be
-overridden by passing checkpoint_path parameter to load_model().
+IMPORTANT: Model specifications and default checkpoint paths are defined in
+YAML files in configs/official_models/. Checkpoint paths can be overridden
+by passing checkpoint_path parameter to load_model().
+
+Audio Requirements:
+- Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
+- Check with: describe_model("model_name") or get_model_spec("model_name").audio_config.sample_rate
+- For full reproducibility, resample using librosa with these exact parameters:
+
+    import librosa
+    audio_resampled = librosa.resample(
+        audio, orig_sr=original_sr, target_sr=target_sr,
+        res_type="kaiser_best", scale=True
+    )
 """
 
 import argparse
+from pathlib import Path
 
 import torch
 
@@ -22,216 +34,150 @@ from representation_learning import (
     load_label_mapping,
     load_model,
 )
+from representation_learning.configs import ProbeConfig
+from representation_learning.models.probes.utils import build_probe_from_config
 
 
 def main(device: str = "cpu") -> None:
-    print("🚀 Example 2: Checkpoint Loading and Management")
+    """Demonstrate checkpoint loading and management."""
+    print("Example 2: Checkpoint Loading and Management")
     print("=" * 50)
 
-    # Example 1: View default checkpoints from YAML
-    print("\n📋 Default checkpoints from YAML configurations:")
-    print("   Note: Checkpoint paths are defined in YAML files in configs/official_models/")
+    # =========================================================================
+    # Part 1: View default checkpoints from YAML
+    # =========================================================================
+    print("\nPart 1: Default Checkpoints from YAML")
+    print("-" * 50)
+    print("Note: Checkpoint paths are defined in configs/official_models/*.yml\n")
 
-    try:
-        # List registered models (prints table and returns detailed info)
-        models = list_models()
+    models = list_models()
 
-        # The table above shows which models have trained classifiers
-        # We can also programmatically access checkpoint paths
-        print("\n   Checkpoint details:")
-        for model_name in models.keys():
-            checkpoint = models[model_name]["checkpoint_path"]
-            if checkpoint:
-                print(
-                    f"  - {model_name}: {checkpoint[:60]}..."
-                    if len(checkpoint) > 60
-                    else f"  - {model_name}: {checkpoint}"
-                )
-            else:
-                print(f"  - {model_name}: No checkpoint")
-
-    except Exception as e:
-        print(f"❌ Error listing checkpoints: {e}")
-
-    # Example 2: Load model with default checkpoint
-    print("\n🔧 Loading model with default checkpoint:")
-    try:
-        # Use get_model_spec directly to avoid plugin architecture issues
-        from representation_learning import get_model_spec
-        from representation_learning.models.get_model import get_model
-
-        model_spec = get_model_spec("efficientnet_animalspeak")
-        model = get_model(model_spec, num_classes=10)
-        model = model.to(device)
-        print(f"✅ Loaded model with default checkpoint: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-        # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5, device=device)
-        with torch.no_grad():
-            output = model(dummy_input, padding_mask=None)
-        print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-
-    except Exception as e:
-        print(f"❌ Error loading with default checkpoint: {e}")
-        print("   (This is expected if the checkpoint doesn't exist)")
-
-    # Example 3: Load model with custom checkpoint
-    print("\n🔧 Loading model with custom checkpoint:")
-    try:
-        # Create a dummy checkpoint for demonstration
-        from pathlib import Path
-
-        # Ensure checkpoints directory exists
-        checkpoints_dir = Path(__file__).parent.parent / "checkpoints"
-        checkpoints_dir.mkdir(exist_ok=True)
-
-        dummy_checkpoint_path = checkpoints_dir / "dummy_checkpoint.pt"
-        dummy_state_dict = {
-            "classifier.weight": torch.randn(15, 768),  # 15 classes
-            "classifier.bias": torch.randn(15),
-        }
-        torch.save(dummy_state_dict, dummy_checkpoint_path)
-
-        # Load with custom checkpoint
-        model = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
-        print(f"✅ Loaded model with custom checkpoint: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-        # Test forward pass
-        dummy_input = torch.randn(1, 16000 * 5, device=device)
-        with torch.no_grad():
-            output = model(dummy_input)
-        print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-        print(f"   Extracted num_classes: {output.shape[-1]}")
-
-        # Note: Checkpoint saved to checkpoints/ directory for future use
-        print(f"   Checkpoint saved to: {dummy_checkpoint_path}")
-        # Optionally clean up:
-        # dummy_checkpoint_path.unlink()
-
-    except Exception as e:
-        print(f"❌ Error loading with custom checkpoint: {e}")
-
-    # Example 4: Load model with explicit num_classes (overrides checkpoint)
-    print("\n🔧 Loading model with explicit num_classes:")
-    try:
-        model = load_model(
-            "efficientnet_animalspeak",
-            num_classes=20,  # Override any checkpoint num_classes
-            device=device,
-        )
-        print(f"✅ Loaded model with explicit num_classes: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-        # Test forward pass
-        dummy_input = torch.randn(2, 16000 * 3, device=device)
-        with torch.no_grad():
-            output = model(dummy_input)
-        print(f"   Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
-
-    except Exception as e:
-        print(f"❌ Error loading with explicit num_classes: {e}")
-
-    # Example 5: Working with cloud storage paths
-    print("\n🔧 Working with cloud storage paths:")
-    try:
-        # Load from Google Cloud Storage path
-        model = load_model(
-            "sl_eat_animalspeak_ssl_all",
-            checkpoint_path="gs://representation-learning/models/sl_eat_animalspeak_ssl_all.pt",
-            device=device,
-        )
-        print(f"✅ Loaded model from cloud storage: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-
-    except Exception as e:
-        print(f"❌ Error loading from cloud storage: {e}")
-        print("   (This is expected if the cloud checkpoint doesn't exist)")
-
-    # Example 6: Checkpoint management
-    print("\n📊 Checkpoint Information:")
-    try:
-        # Get checkpoint info from YAML
-        checkpoint = get_checkpoint_path("efficientnet_animalspeak")
-        print(f"Default checkpoint for efficientnet_animalspeak: {checkpoint}")
-        print("   Note: Checkpoint paths are read from YAML files")
-        print("   To override, pass checkpoint_path parameter to load_model()")
-
-    except Exception as e:
-        print(f"❌ Error getting checkpoint info: {e}")
-
-    # Example 7: Class mapping for models with classifier heads
-    print("\n🏷️  Class Mapping for Models with Classifier Heads:")
-    print("   Note: Some models have classifier heads where logits correspond to specific class labels")
-    print("   The class mapping is defined in YAML files (class_mapping_path)")
-    try:
-        # Show which models have class mappings by trying to load them
-        models_with_mapping = []
-        for model_name in list_models().keys():
-            label_mapping = load_label_mapping(model_name)
-            if label_mapping:
-                models_with_mapping.append(model_name)
-
-        if models_with_mapping:
-            print(f"\n   Models with class mappings ({len(models_with_mapping)}):")
-            for model_name in models_with_mapping:
-                print(f"     - {model_name}")
+    print("Checkpoint details:")
+    for model_name, info in models.items():
+        checkpoint = info.get("checkpoint_path")
+        if checkpoint:
+            display = checkpoint[:50] + "..." if len(checkpoint) > 50 else checkpoint
+            print(f"  - {model_name}: {display}")
         else:
-            print("   No models with class mappings found")
+            print(f"  - {model_name}: No checkpoint")
 
-        # Example: Load a model with class mapping
-        print("\n   Example: Loading model with class mapping:")
-        model_name = "sl_beats_animalspeak"
-        print(f"   Loading label mapping for model: {model_name}")
-        label_mapping = load_label_mapping(model_name)
-        if label_mapping:
-            label_to_index = label_mapping["label_to_index"]
-            index_to_label = label_mapping["index_to_label"]
-            print(f"   ✅ Loaded class mapping with {len(label_to_index)} classes")
-            print("   Example labels (first 5):")
-            for _i, (label, idx) in enumerate(list(label_to_index.items())[:5]):
-                print(f"     - {label}: index {idx}")
-            print("   Example reverse mapping (indices 0-4):")
-            for idx in range(min(5, len(index_to_label))):
-                if idx in index_to_label:
-                    print(f"     - index {idx}: {index_to_label[idx]}")
+    # =========================================================================
+    # Part 2: Load model with default checkpoint
+    # =========================================================================
+    print("\nPart 2: Load Model with Default Checkpoint")
+    print("-" * 50)
 
-            # Demonstrate loading model with automatic class mapping attachment
-            print(f"\n   Loading model '{model_name}' (class mapping will be attached automatically):")
-            try:
-                model = load_model(model_name, device=device)
-                if hasattr(model, "class_mapping"):
-                    print("   ✅ Model loaded with label mapping attached")
-                    print(
-                        "   Access via: model.label_mapping['label_to_index'] or model.label_mapping['index_to_label']"
-                    )
+    # Load model with default checkpoint from YAML
+    # load_model() automatically loads the checkpoint specified in the YAML config
+    model = load_model("efficientnet_animalspeak", device=device)
+    model.eval()
 
-                    # Example: Use class mapping for predictions
-                    print("\n   Example: Using class mapping for predictions:")
-                    dummy_input = torch.randn(1, 16000 * 5)
-                    with torch.no_grad():
-                        logits = model(dummy_input)
-                    # Get top-3 predictions
-                    probs = torch.softmax(logits, dim=-1)
-                    top_probs, top_indices = torch.topk(probs, k=min(3, logits.shape[-1]), dim=-1)
-                    print("   Top-3 predicted classes:")
-                    for i, (prob, idx) in enumerate(zip(top_probs[0], top_indices[0], strict=False)):
-                        idx_int = idx.item()
-                        label = index_to_label.get(idx_int, f"Unknown (index {idx_int})")
-                        print(f"     {i + 1}. {label}: {prob.item():.4f}")
-                else:
-                    print("   ⚠️  Model loaded but class mapping not attached (checkpoint may not exist)")
-            except Exception as e:
-                print(f"   ⚠️  Could not load model (checkpoint may not exist): {e}")
-        else:
-            print("   ⚠️  Could not load class mapping (file may not exist or model has no mapping defined)")
+    print(f"Loaded model: {type(model).__name__}")
+    print(f"   Has classifier: {hasattr(model, 'classifier') and model.classifier is not None}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    except Exception as e:
-        print(f"❌ Error working with class mappings: {e}")
-        import traceback
+    # Test forward pass
+    dummy_input = torch.randn(1, 16000 * 5, device=device)
+    with torch.no_grad():
+        output = model(dummy_input, padding_mask=None)
+    print(f"   Output shape: {output.shape}")
 
-        traceback.print_exc()
+    # Load backbone-only and attach a new probe
+    print("\n   Alternative: Load backbone-only and attach new probe")
+    backbone = load_model("efficientnet_animalspeak", device=device, return_features_only=True)
+    backbone.eval()
+
+    probe_cfg = ProbeConfig(
+        probe_type="linear",
+        target_layers=["last_layer"],
+        aggregation="mean",
+        freeze_backbone=True,
+        online_training=True,
+    )
+    model_with_probe = build_probe_from_config(
+        probe_config=probe_cfg,
+        base_model=backbone,
+        num_classes=10,
+        device=device,
+    ).to(device)
+
+    print(f"   Backbone + probe parameters: {sum(p.numel() for p in model_with_probe.parameters()):,}")
+
+    # =========================================================================
+    # Part 3: Load model with custom checkpoint
+    # =========================================================================
+    print("\nPart 3: Load Model with Custom Checkpoint")
+    print("-" * 50)
+
+    # Ensure checkpoints directory exists
+    checkpoints_dir = Path(__file__).parent.parent / "checkpoints"
+    checkpoints_dir.mkdir(exist_ok=True)
+
+    # Create a dummy checkpoint for demonstration
+    dummy_checkpoint_path = checkpoints_dir / "dummy_checkpoint.pt"
+    dummy_state_dict = {
+        "classifier.weight": torch.randn(15, 768),  # 15 classes
+        "classifier.bias": torch.randn(15),
+    }
+    torch.save(dummy_state_dict, dummy_checkpoint_path)
+    print(f"Created dummy checkpoint: {dummy_checkpoint_path}")
+
+    # Load with custom checkpoint (backbone only)
+    backbone_ckpt = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
+    print(f"Loaded backbone: {type(backbone_ckpt).__name__}")
+
+    dummy_input = torch.randn(1, 16000 * 5, device=device)
+    with torch.no_grad():
+        feats = backbone_ckpt(dummy_input, padding_mask=None)
+    print(f"   Feature shape: {feats.shape}")
+
+    # =========================================================================
+    # Part 4: Class mapping for models with classifier heads
+    # =========================================================================
+    print("\nPart 4: Class Mapping")
+    print("-" * 50)
+
+    model_name = "sl_beats_animalspeak"
+    label_mapping = load_label_mapping(model_name)
+
+    if label_mapping:
+        label_to_index = label_mapping["label_to_index"]
+        index_to_label = label_mapping["index_to_label"]
+        print(f"Loaded class mapping for '{model_name}': {len(label_to_index)} classes")
+
+        print("\nExample labels (first 5):")
+        for label, idx in list(label_to_index.items())[:5]:
+            print(f"  - {label}: index {idx}")
+
+        print("\nExample reverse mapping (indices 0-4):")
+        for idx in range(min(5, len(index_to_label))):
+            print(f"  - index {idx}: {index_to_label.get(idx, 'N/A')}")
+
+    # =========================================================================
+    # Part 6: Checkpoint information utility
+    # =========================================================================
+    print("\nPart 6: Checkpoint Information")
+    print("-" * 50)
+
+    checkpoint = get_checkpoint_path("efficientnet_animalspeak")
+    print("Default checkpoint for efficientnet_animalspeak:")
+    print(f"   {checkpoint}")
+    print("\nTo override: load_model(name, checkpoint_path='your/path.pt')")
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    print("\n" + "=" * 50)
+    print("Key Takeaways")
+    print("=" * 50)
+    print("""
+- Default checkpoints defined in YAML files
+- Use checkpoint_path parameter to override
+- load_model(): Restores backbone (and classifier if checkpoint includes one)
+- Probes: Use build_probe_from_config() with base_model for online mode or input_dim for offline mode
+  to attach new classifier heads instead of passing num_classes
+- Class mappings link logit indices to labels
+""")
 
 
 if __name__ == "__main__":
@@ -240,8 +186,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="cpu",
-        choices=["cpu", "cuda"],
-        help="Device to use for model and data (default: cpu)",
+        help="Device to use for model and data (e.g. cpu, cuda, cuda:0)",
     )
     args = parser.parse_args()
     main(device=args.device)

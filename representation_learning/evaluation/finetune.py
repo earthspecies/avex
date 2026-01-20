@@ -17,7 +17,9 @@ from tqdm import tqdm
 
 from representation_learning.configs import EvaluateConfig, ExperimentConfig
 from representation_learning.metrics.metric_factory import get_metric_class
-from representation_learning.models.probes import get_probe
+from representation_learning.models.probes.utils.factory import (
+    build_probe_from_config,
+)
 from representation_learning.training.optimisers import get_optimizer
 from representation_learning.utils import ExperimentLogger, universal_torch_load
 
@@ -495,13 +497,11 @@ def train_and_eval_offline(
         f"Creating offline probe: type={probe_config.probe_type}, input_dim={input_dim}, target_length={target_length}"
     )
 
-    probe = get_probe(
+    probe = build_probe_from_config(
         probe_config=probe_config,
-        base_model=None,
+        input_dim=input_dim,
         num_classes=num_labels,
         device=device,
-        feature_mode=True,
-        input_dim=input_dim,
         target_length=target_length,
     )
     # Count parameters for offline probe
@@ -527,7 +527,7 @@ def train_and_eval_offline(
     exp_logger.probe_model = probe
 
     # Use spawn context for DataLoaders to avoid fork-related issues (e.g., HDF5)
-    ctx = multiprocessing.get_context("spawn")
+    ctx = multiprocessing.get_context("spawn") if eval_cfg.num_workers > 0 else None
 
     trainer = FineTuneTrainer(
         model=probe,
@@ -691,14 +691,11 @@ def train_and_eval_online(
         f"frozen={probe_config.freeze_backbone}, target_length={target_length}"
     )
 
-    sft_model = get_probe(
+    sft_model = build_probe_from_config(
         probe_config=probe_config,
         base_model=base_model,
         num_classes=num_labels,
         device=device,
-        feature_mode=False,
-        input_dim=None,
-        frozen=probe_config.freeze_backbone,
         target_length=target_length,
     )
     # Count parameters separately for probe and base model

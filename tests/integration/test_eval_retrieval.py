@@ -5,14 +5,10 @@ from typing import Any, Tuple
 
 import pytest
 import torch
+from esp_data import DatasetConfig
 from torch.utils.data import DataLoader, Dataset
 
-from representation_learning.configs import (
-    DatasetConfig,
-    EvaluateConfig,
-    ExperimentConfig,
-    TrainingParams,
-)
+from representation_learning.configs import EvaluateConfig, ExperimentConfig, TrainingParams
 from representation_learning.run_evaluate import run_experiment
 
 
@@ -95,6 +91,18 @@ def test_run_experiment_small(
 
     monkeypatch.setattr(retrieval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
     monkeypatch.setattr(reval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
+
+    # Mock GCS writes to avoid permission issues in CI
+    from representation_learning.utils import experiment_tracking as et_mod
+
+    def _mock_save_evaluation_metadata(*args: object, **kwargs: object) -> None:
+        """Mock save_evaluation_metadata to avoid GCS writes in CI."""
+        pass
+
+    monkeypatch.setattr(et_mod, "save_evaluation_metadata", _mock_save_evaluation_metadata)
+    # Also patch in run_evaluate module since it imports the function directly
+    monkeypatch.setattr(reval_mod, "save_evaluation_metadata", _mock_save_evaluation_metadata)
+
     # Minimal training params --------------------------------------------------
     train_params: TrainingParams = TrainingParams(
         train_epochs=1,
@@ -138,7 +146,7 @@ def test_run_experiment_small(
     )
 
     # Create a mock data collection config
-    from representation_learning.configs import DatasetCollectionConfig
+    from representation_learning.data.configs import DatasetCollectionConfig
 
     data_collection_cfg = DatasetCollectionConfig(
         train_datasets=[DatasetConfig(dataset_name="dummy_train")],
@@ -150,7 +158,7 @@ def test_run_experiment_small(
     #  Execute experiment
     # ------------------------------------------------------------------------- #
     # Create a mock evaluation set with train_vs_test retrieval mode
-    from representation_learning.configs import EvaluationSet
+    from representation_learning.data.configs import EvaluationSet
 
     evaluation_set = EvaluationSet(
         name="test_set",

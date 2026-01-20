@@ -1,8 +1,15 @@
-"""Model factory for representation learning models.
+"""Model factory for representation learning models. (Deprecated)
 
-This module provides a factory function to instantiate different types of
+This module provides a legacy factory function to instantiate different types of
 representation learning models based on configuration specifications.
+
+Deprecated:
+    Use ``representation_learning.models.utils.factory.build_model_from_spec``
+    instead. The registry-based factory is the supported, extensible API for
+    creating models from ``ModelSpec``.
 """
+
+import logging
 
 from representation_learning.configs import ModelSpec
 from representation_learning.models.aves_model import Model as AVESModel
@@ -13,6 +20,8 @@ from representation_learning.models.efficientnet import (
 )
 from representation_learning.models.perch import Model as PerchModel
 from representation_learning.models.resnet import Model as ResNetModel
+
+logger = logging.getLogger(__name__)
 
 
 def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
@@ -43,11 +52,12 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
     Returns:
         An instance of the corresponding model configured with the provided
         parameters.
-
-    Raises:
-        NotImplementedError: If the model_config does not match any supported
-        models.
     """
+    logger.warning(
+        "get_model() is deprecated and will be removed in a future release. "
+        "Use representation_learning.models.utils.factory.build_model_from_spec() instead."
+    )
+
     model_name = model_config.name.lower()
 
     if model_name == "efficientnet":
@@ -103,33 +113,6 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
-        )
-    elif model_name == "eat":
-        from representation_learning.models.eat.audio_model import (
-            Model as EATModel,  # Local import to avoid heavy deps when unused
-        )
-
-        # Optional EAT-specific kwargs
-        embed_dim = getattr(model_config, "embed_dim", 768)
-        patch_size = getattr(model_config, "patch_size", 16)
-        target_length = getattr(model_config, "target_length", 256)
-        enable_ema = getattr(model_config, "enable_ema", False)
-        pretraining_mode = getattr(model_config, "pretraining_mode", False)
-        handle_padding = getattr(model_config, "handle_padding", False)
-        eat_cfg_overrides = getattr(model_config, "eat_cfg", None)
-
-        return EATModel(
-            num_classes=num_classes,
-            pretrained=model_config.pretrained,
-            device=model_config.device,
-            audio_config=model_config.audio_config,
-            embed_dim=embed_dim,
-            patch_size=patch_size,
-            target_length=target_length,
-            enable_ema=enable_ema,
-            pretraining_mode=pretraining_mode,
-            handle_padding=handle_padding,
-            eat_cfg=eat_cfg_overrides,
         )
 
     elif model_name == "beats":
@@ -197,25 +180,3 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
             model_id=model_id,
         )
-    elif model_name == "biolingual":
-        from representation_learning.models.biolingual import (
-            Model as BioLingualModel,  # Local import to avoid transformers deps
-        )
-
-        model_id = getattr(model_config, "model_id", "davidrrobinson/BioLingual")
-
-        return BioLingualModel(
-            num_classes=num_classes,
-            pretrained=model_config.pretrained,
-            device=model_config.device,
-            audio_config=model_config.audio_config,
-            model_id=model_id,
-        )
-    else:
-        # Fallback
-        supported = (
-            "'efficientnet', 'clip', 'perch', 'atst', 'eat', "
-            "'eat_hf', 'resnet18', 'resnet50', 'resnet152', 'beats', "
-            "'birdnet', 'birdmae', 'biolingual', "
-        )
-        raise NotImplementedError(f"Model '{model_name}' is not implemented. Supported models: {supported}")

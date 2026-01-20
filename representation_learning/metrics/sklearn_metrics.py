@@ -2,6 +2,7 @@
 Classification and detection metrics using scikit-learn implementations.
 """
 
+import warnings
 from typing import Dict, Optional
 
 import numpy as np
@@ -15,6 +16,9 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+
+# Suppress sklearn warnings about no positive class when using zero_division=0
+warnings.filterwarnings("ignore", message="No positive class found in y_true", category=UserWarning)
 
 
 class Accuracy:

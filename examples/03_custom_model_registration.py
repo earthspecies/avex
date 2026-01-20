@@ -3,37 +3,73 @@ Example 3: Custom Model Registration and Plugin Architecture
 
 This example demonstrates:
 - Creating custom model classes
-- Registering them with the plugin architecture
+- When and why to register custom models
 - Using custom models with the API
 - Model class management functions
+
+**When Do You Need to Register?**
+
+Registration is ONLY required if you want to use the plugin architecture:
+- Using build_model() or build_model_from_spec() with ModelSpecs
+- Loading models from YAML configuration files
+- Dynamic model selection based on configuration
+
+Registration is NOT required if:
+- You're instantiating models directly: MyModel(device="cpu", num_classes=10)
+- You're using models standalone or attaching probes directly
+
+See docs/custom_model_registration.md for detailed guidance.
+
+Audio Requirements:
+- Each model expects a specific sample rate (defined in model_spec.audio_config.sample_rate)
+- Check with: describe_model("model_name") or get_model_spec("model_name").audio_config.sample_rate
+- For full reproducibility, resample using librosa with these exact parameters:
+
+    import librosa
+    audio_resampled = librosa.resample(
+        audio, orig_sr=original_sr, target_sr=target_sr,
+        res_type="kaiser_best", scale=True
+    )
 """
 
 import argparse
+from typing import Optional
 
 import torch
 import torch.nn as nn
 
 from representation_learning import (
-    build_model,
-    create_model,
     get_model_class,
+    get_model_spec,
     list_model_classes,
+    register_model,
     register_model_class,
 )
+from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
+from representation_learning.models.utils.factory import build_model_from_spec
+
+# =============================================================================
+# Custom Model Definitions
+# =============================================================================
 
 
-# Example 1: Simple CNN Model
 @register_model_class
 class SimpleAudioCNN(ModelBase):
     """A simple CNN for audio classification."""
 
     name = "simple_audio_cnn"
 
-    def __init__(self, device: str, num_classes: int, audio_config: dict = None, **kwargs: object) -> None:
+    def __init__(
+        self,
+        device: str,
+        num_classes: int,
+        audio_config: Optional[dict] = None,
+        **kwargs: object,
+    ) -> None:
+        """Initialize the model."""
         super().__init__(device=device, audio_config=audio_config)
 
-        # Simple CNN architecture
         self.conv_layers = nn.Sequential(
             nn.Conv1d(1, 32, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -43,7 +79,7 @@ class SimpleAudioCNN(ModelBase):
             nn.MaxPool1d(2),
             nn.Conv1d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.AdaptiveAvgPool1d(8),  # Fixed size output
+            nn.AdaptiveAvgPool1d(8),
         )
 
         self.classifier = nn.Sequential(
@@ -56,33 +92,30 @@ class SimpleAudioCNN(ModelBase):
 
         self.to(device)
 
-    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
-        """Forward pass through the model.
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass.
 
-        Returns:
-            torch.Tensor: Model output.
+        Returns
+        -------
+        torch.Tensor
+            Model output tensor.
         """
-        # Handle different input shapes
         if x.dim() == 2:
-            x = x.unsqueeze(1)  # Add channel dimension
-
-        # Apply convolutions
+            x = x.unsqueeze(1)
         features = self.conv_layers(x)
-
-        # Classify
-        output = self.classifier(features)
-        return output
+        return self.classifier(features)
 
     def get_embedding_dim(self) -> int:
-        """Return the embedding dimension.
+        """Return embedding dimension.
 
-        Returns:
-            int: The embedding dimension.
+        Returns
+        -------
+        int
+            Embedding dimension.
         """
         return 256
 
 
-# Example 2: Transformer-based Model
 @register_model_class
 class SimpleAudioTransformer(ModelBase):
     """A simple transformer for audio classification."""
@@ -93,29 +126,24 @@ class SimpleAudioTransformer(ModelBase):
         self,
         device: str,
         num_classes: int,
-        audio_config: dict = None,
+        audio_config: Optional[dict] = None,
         d_model: int = 128,
         nhead: int = 8,
         num_layers: int = 3,
         **kwargs: object,
     ) -> None:
+        """Initialize the model."""
         super().__init__(device=device, audio_config=audio_config)
 
         self.d_model = d_model
-
-        # Input projection
         self.input_projection = nn.Linear(1, d_model)
-
-        # Positional encoding
         self.pos_encoding = nn.Parameter(torch.randn(1000, d_model))
 
-        # Transformer encoder
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model, nhead=nhead, dim_feedforward=d_model * 4, batch_first=True
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
-        # Classifier
         self.classifier = nn.Sequential(
             nn.Linear(d_model, d_model // 2),
             nn.ReLU(),
@@ -125,38 +153,30 @@ class SimpleAudioTransformer(ModelBase):
 
         self.to(device)
 
-    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
-        """Forward pass through the model.
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass.
 
-        Returns:
-            torch.Tensor: Model output.
+        Returns
+        -------
+        torch.Tensor
+            Model output tensor.
         """
-        # Handle different input shapes
         if x.dim() == 2:
-            x = x.unsqueeze(-1)  # Add feature dimension
+            x = x.unsqueeze(-1)
 
         batch_size, seq_len, _ = x.shape
-
-        # Project input
         x = self.input_projection(x)
 
-        # Add positional encoding
         pos_enc = self.pos_encoding[:seq_len].unsqueeze(0).expand(batch_size, -1, -1)
         x = x + pos_enc
 
-        # Create padding mask if provided
+        mask = None
         if padding_mask is not None:
-            # Convert to transformer format (True = ignore)
             mask = ~padding_mask.bool()
-        else:
-            mask = None
 
-        # Apply transformer
         features = self.transformer(x, src_key_padding_mask=mask)
 
-        # Global average pooling
         if mask is not None:
-            # Masked average pooling
             mask_expanded = mask.unsqueeze(-1).expand_as(features)
             features = features.masked_fill(mask_expanded, 0)
             lengths = (~mask).sum(dim=1, keepdim=True).float()
@@ -164,20 +184,19 @@ class SimpleAudioTransformer(ModelBase):
         else:
             pooled = features.mean(dim=1)
 
-        # Classify
-        output = self.classifier(pooled)
-        return output
+        return self.classifier(pooled)
 
     def get_embedding_dim(self) -> int:
-        """Return the embedding dimension.
+        """Return embedding dimension.
 
-        Returns:
-            int: The embedding dimension.
+        Returns
+        -------
+        int
+            Embedding dimension.
         """
         return self.d_model
 
 
-# Example 3: MLP Model with custom parameters
 @register_model_class
 class SimpleAudioMLP(ModelBase):
     """A simple MLP for audio classification."""
@@ -188,176 +207,218 @@ class SimpleAudioMLP(ModelBase):
         self,
         device: str,
         num_classes: int,
-        audio_config: dict = None,
-        hidden_dims: list = None,
+        audio_config: Optional[dict] = None,
+        hidden_dims: Optional[list] = None,
         dropout: float = 0.2,
         **kwargs: object,
     ) -> None:
+        """Initialize the model."""
         super().__init__(device=device, audio_config=audio_config)
 
         if hidden_dims is None:
             hidden_dims = [512, 256, 128]
 
-        # Build MLP layers
         layers = []
-        input_dim = 16000  # Assume fixed input size for simplicity
+        input_dim = 16000  # Fixed input size
 
-        for _i, hidden_dim in enumerate(hidden_dims):
+        for hidden_dim in hidden_dims:
             layers.extend([nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout(dropout)])
             input_dim = hidden_dim
 
-        # Final classifier
         layers.append(nn.Linear(input_dim, num_classes))
-
         self.mlp = nn.Sequential(*layers)
         self.to(device)
 
-    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor = None) -> torch.Tensor:
-        """Forward pass through the model.
+    def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass.
 
-        Returns:
-            torch.Tensor: Model output.
+        Returns
+        -------
+        torch.Tensor
+            Model output tensor.
         """
-        # Flatten input
         if x.dim() > 2:
             x = x.view(x.size(0), -1)
 
-        # Ensure correct input size (pad or truncate)
-        if x.size(1) != 16000:
-            if x.size(1) < 16000:
-                # Pad
-                padding = torch.zeros(x.size(0), 16000 - x.size(1), device=x.device)
-                x = torch.cat([x, padding], dim=1)
-            else:
-                # Truncate
-                x = x[:, :16000]
+        # Ensure correct input size
+        if x.size(1) < 16000:
+            padding = torch.zeros(x.size(0), 16000 - x.size(1), device=x.device)
+            x = torch.cat([x, padding], dim=1)
+        elif x.size(1) > 16000:
+            x = x[:, :16000]
 
         return self.mlp(x)
 
     def get_embedding_dim(self) -> int:
-        """Return the embedding dimension.
+        """Return embedding dimension.
 
-        Returns:
-            int: The embedding dimension.
+        Returns
+        -------
+        int
+            Embedding dimension.
         """
-        return 128  # Last hidden layer size
+        return 128
+
+
+# =============================================================================
+# Main Example
+# =============================================================================
 
 
 def main(device: str = "cpu") -> None:
-    print("🚀 Example 3: Custom Model Registration and Plugin Architecture")
-    print("=" * 70)
+    """Demonstrate custom model registration."""
+    print("Example 3: Custom Model Registration")
+    print("=" * 50)
 
-    # Example 1: List registered model classes
-    print("\n📋 Registered Model Classes:")
+    # =========================================================================
+    # Part 1: List registered model classes
+    # =========================================================================
+    print("\nPart 1: Registered Model Classes")
+    print("-" * 50)
+
     model_classes = list_model_classes()
+    print(f"Total registered classes: {len(model_classes)}")
     for cls_name in model_classes:
         print(f"  - {cls_name}")
 
-    # Example 2: Test custom CNN model
-    print("\n🔧 Testing Simple Audio CNN:")
-    try:
-        model = create_model("simple_audio_cnn", num_classes=10, device=device)
-        print(f"✅ Created CNN model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-        print(f"   Embedding dim: {model.get_embedding_dim()}")
+    # =========================================================================
+    # Part 2: Test Simple Audio CNN
+    # =========================================================================
+    print("\nPart 2: Simple Audio CNN")
+    print("-" * 50)
 
-        # Test forward pass
-        dummy_input = torch.randn(2, 16000, device=device)  # 2 samples, 1 second each
-        with torch.no_grad():
-            output = model(dummy_input)
-        print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
+    model = SimpleAudioCNN(device=device, num_classes=10)
+    print(f"Created: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"   Embedding dim: {model.get_embedding_dim()}")
 
-    except Exception as e:
-        print(f"❌ Error with CNN model: {e}")
+    dummy_input = torch.randn(2, 16000, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
 
-    # Example 3: Test custom Transformer model
-    print("\n🔧 Testing Simple Audio Transformer:")
-    try:
-        model = create_model(
-            "simple_audio_transformer",
-            num_classes=15,
-            device=device,
-            d_model=64,  # Custom parameter
-            nhead=4,  # Custom parameter
-            num_layers=2,  # Custom parameter
-        )
-        print(f"✅ Created Transformer model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-        print(f"   Embedding dim: {model.get_embedding_dim()}")
+    # =========================================================================
+    # Part 3: Test Simple Audio Transformer
+    # =========================================================================
+    print("\nPart 3: Simple Audio Transformer")
+    print("-" * 50)
 
-        # Test forward pass
-        dummy_input = torch.randn(2, 1000, device=device)  # 2 samples, 1000 timesteps
-        with torch.no_grad():
-            output = model(dummy_input)
-        print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
+    model = SimpleAudioTransformer(
+        device=device,
+        num_classes=15,
+        d_model=64,
+        nhead=4,
+        num_layers=2,
+    )
+    print(f"Created: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print("   d_model: 64, nhead: 4, num_layers: 2")
 
-    except Exception as e:
-        print(f"❌ Error with Transformer model: {e}")
+    dummy_input = torch.randn(2, 1000, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
 
-    # Example 4: Test custom MLP model
-    print("\n🔧 Testing Simple Audio MLP:")
-    try:
-        model = create_model(
-            "simple_audio_mlp",
-            num_classes=20,
-            device=device,
-            hidden_dims=[256, 128, 64],  # Custom architecture
-            dropout=0.3,  # Custom dropout
-        )
-        print(f"✅ Created MLP model: {type(model).__name__}")
-        print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-        print(f"   Embedding dim: {model.get_embedding_dim()}")
+    # =========================================================================
+    # Part 4: Test Simple Audio MLP
+    # =========================================================================
+    print("\nPart 4: Simple Audio MLP")
+    print("-" * 50)
 
-        # Test forward pass
-        dummy_input = torch.randn(3, 8000, device=device)  # 3 samples, shorter audio
-        with torch.no_grad():
-            output = model(dummy_input)
-        print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
+    model = SimpleAudioMLP(
+        device=device,
+        num_classes=20,
+        hidden_dims=[256, 128, 64],
+        dropout=0.3,
+    )
+    print(f"Created: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print("   Hidden dims: [256, 128, 64], dropout: 0.3")
 
-    except Exception as e:
-        print(f"❌ Error with MLP model: {e}")
+    dummy_input = torch.randn(3, 8000, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
 
-    # Example 5: Model class management
-    print("\n📊 Model Class Management:")
-    try:
-        # Check if a model class is registered
-        model_class = get_model_class("simple_audio_cnn")
-        is_registered = model_class is not None
-        print(f"simple_audio_cnn registered: {is_registered}")
+    # =========================================================================
+    # Part 5: Model class management
+    # =========================================================================
+    print("\nPart 5: Model Class Management")
+    print("-" * 50)
 
-        # Get a specific model class
-        if model_class is not None:
-            print(f"Model class: {model_class.__name__}")
+    # Check registration
+    model_class = get_model_class("simple_audio_cnn")
+    print(f"simple_audio_cnn registered: {model_class is not None}")
+    print(f"   Class: {model_class.__name__ if model_class else 'N/A'}")
 
-        # Create model using build_model (alternative to create_model)
-        model = build_model("simple_audio_cnn", device=device, num_classes=5)
-        print(f"✅ Built model with build_model: {type(model).__name__}")
+    # Note: build_model() requires a ModelSpec to be registered, not just a model class.
+    # For custom models without ModelSpecs, instantiate directly.
+    # Custom models can be used standalone or with probes attached via
+    # build_probe_from_config() with base_model or input_dim
+    model = SimpleAudioCNN(device=device, num_classes=5)
+    print(f"\nDirect instantiation example: {type(model).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    except Exception as e:
-        print(f"❌ Error in model class management: {e}")
+    dummy_input = torch.randn(1, 16000, device=device)
+    with torch.no_grad():
+        output = model(dummy_input)
+    print(f"   Input: {dummy_input.shape} -> Output: {output.shape}")
 
-    # Example 6: Unregister a model class
-    print("\n🗑️ Unregistering Model Class:")
-    try:
-        # Note: Model classes remain registered for the session
-        # To use different configurations, register with unique names
-        print("✅ Model classes remain registered for the session")
-        print("   To use different configurations, register with unique names")
+    # =========================================================================
+    # Part 6: Register and use ModelSpec (for plugin architecture)
+    # =========================================================================
+    print("\nPart 6: Register ModelSpec for Plugin Architecture")
+    print("-" * 50)
 
-        # Check if it's still registered
-        model_class = get_model_class("simple_audio_mlp")
-        is_registered = model_class is not None
-        print(f"simple_audio_mlp still registered: {is_registered}")
+    # Create a ModelSpec for our custom model
+    model_spec = ModelSpec(
+        name="simple_audio_cnn",  # Must match the registered class name
+        pretrained=False,
+        device=device,
+        audio_config=AudioConfig(sample_rate=16000, representation="raw", target_length_seconds=5),
+    )
 
-        # Try to create it (should fail)
-        try:
-            model = create_model("simple_audio_mlp", num_classes=10, device=device)
-            print("❌ Unexpected: Model creation succeeded after unregistering")
-        except Exception as e:
-            print(f"✅ Expected error after unregistering: {e}")
+    # Register the ModelSpec
+    register_model("my_custom_cnn", model_spec)
+    print("Registered ModelSpec: my_custom_cnn")
+    print(f"   Model type: {model_spec.name}")
+    print(f"   Sample rate: {model_spec.audio_config.sample_rate}")
 
-    except Exception as e:
-        print(f"❌ Error unregistering model: {e}")
+    # Retrieve and use the registered ModelSpec
+    retrieved_spec = get_model_spec("my_custom_cnn")
+    print(f"\nRetrieved ModelSpec: {retrieved_spec.name}")
+
+    # Now we can use build_model_from_spec() with the registered ModelSpec
+    # This requires both the model class AND the ModelSpec to be registered
+    model_from_spec = build_model_from_spec(retrieved_spec, device=device, num_classes=10)
+    print(f"Built model from spec: {type(model_from_spec).__name__}")
+    print(f"   Parameters: {sum(p.numel() for p in model_from_spec.parameters()):,}")
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    print("\n" + "=" * 50)
+    print("Key Takeaways")
+    print("=" * 50)
+    print("""
+When to Register:
+- ✅ Required: Using build_model() or build_model_from_spec() with ModelSpecs
+- ✅ Required: Loading models from YAML configuration files
+- ❌ NOT needed: Direct instantiation (MyModel(device="cpu", num_classes=10))
+- ❌ NOT needed: Standalone usage or attaching probes directly
+
+Registration Process:
+- Use @register_model_class decorator to register custom model classes
+- Models must inherit from ModelBase
+- Define 'name' class attribute for registration
+- Use register_model(name, spec) to register ModelSpec configurations
+- build_model() requires both a registered ModelSpec AND a registered model class
+
+Alternative (No Registration):
+- For custom models without ModelSpecs, instantiate directly
+- Attach probes using build_probe_from_config() with base_model for online mode or input_dim for offline mode
+- See docs/custom_model_registration.md for more details
+""")
 
 
 if __name__ == "__main__":
@@ -366,8 +427,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         default="cpu",
-        choices=["cpu", "cuda"],
-        help="Device to use for model and data (default: cpu)",
+        help="Device to use for model and data (e.g. cpu, cuda, cuda:0)",
     )
     args = parser.parse_args()
     main(device=args.device)

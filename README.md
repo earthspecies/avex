@@ -1,26 +1,51 @@
 # Representation Learning Framework
 
-A comprehensive Python-based system for training, evaluating, and analyzing bioacoustics representation learning models with support for both supervised and self-supervised learning paradigms.
+An API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.
 
 ## 🚀 Quick Start
 
 ### Installation
 
-**Method 1: Install from Internal PyPI (esp-pypi) using uv**
+The installation process depends on how you plan to use this package:
 
-For users with access to the Earth Species Project's internal PyPI:
+- **API user**: you just want to load models and run inference.
+- **Developer**: you want to clone the repo, modify code, or run the full training/evaluation stack.
+
+### 1. API Usage
+
+For users who want to install the package and use it as a library (for example to load models and run inference).
+
+#### 1.1 Prerequisites
+
+- Python 3.10, 3.11, or 3.12
+- ESP GCP authentication:
 
 ```bash
-# 1. Authenticate with Google Cloud
+# Authenticate with Google Cloud
 gcloud auth login
 gcloud auth application-default login
+```
 
-# 2. Install keyring package system-wide with Google Artifact Registry plugin
+#### 1.2 Install with uv (recommended)
+
+This assumes you are using `uv` to manage your project or environment.
+
+1. Install keyring with the Google Artifact Registry plugin (once per machine):
+
+```bash
 uv tool install keyring --with keyrings.google-artifactregistry-auth
+```
 
-# 3. Configure your pyproject.toml to use the private index
-cat >> pyproject.toml << 'EOF'
+2. Create and activate a uv-managed virtual environment (if you do not already have one):
 
+```bash
+uv venv
+source .venv/bin/activate
+```
+
+3. Configure `uv` to use the internal ESP PyPI index. Add the following to your `pyproject.toml` (either create one or edit the existing one):
+
+```toml
 [[tool.uv.index]]
 name = "esp-pypi"
 url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
@@ -28,36 +53,133 @@ explicit = true
 
 [tool.uv.sources]
 representation-learning = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+esp-data = { index = "esp-pypi" }
+esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
 keyring-provider = "subprocess"
-EOF
-
-# 4. Install the package
-uv add representation-learning
-
-# Or use pip with extra index
-uv pip install representation-learning --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
-**Method 2: Install from Source using uv (Development)**
-```bash
-# Clone the repository
-git clone <repository-url>
-cd representation-learning
+**Note:** If you plan to install `representation-learning[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
-# Install with uv
+4. Install the package (API dependencies only):
+
+```bash
+# Option A: Add and install in one step
+uv add representation-learning
+
+# Option B: If you've already added it to [project.dependencies] in pyproject.toml
 uv sync
 ```
 
-**Method 3: Install from Source using pip**
-```bash
-# Install from source
-pip install -e .
+#### 1.3 Install with pip
 
-# Or install with private index for esp-data
-pip install -e . --extra-index-url https://esp-pypi.com/simple/
+If you prefer plain `pip`:
+
+1. Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
+
+2. Install the package from the ESP index:
+
+```bash
+pip install representation-learning \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+#### 1.4 API + full dependencies (training / evaluation)
+
+If you want to use additional functionality such as `run_train.py`, `run_evaluate.py`, or other advanced workflows, install the `dev` extras:
+
+```bash
+# With uv (in a project configured for esp-pypi as above)
+
+# Option A: Add and install in one step
+uv add "representation-learning[dev]"
+
+# Option B: If you've already added it to pyproject.toml
+uv sync
+
+# With pip
+pip install "representation-learning[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+This pulls in additional dependencies, including for example:
+
+- `pytorch-lightning` – training (for ATST)
+- `mlflow` – experiment tracking
+- `wandb` – Weights & Biases integration
+- `esp-sweep` – hyperparameter sweeping
+- `esp-data` – dataset management
+- `gradio` – interactive demos
+- `gradio-leaderboard` – leaderboard visualization
+
+### 2. Development Usage
+
+For contributors or power users who clone the repository and want the full development and runtime stack locally.
+
+#### 2.1 Prerequisites
+
+- Python 3.10, 3.11, or 3.12
+- Git
+- GCP authentication:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+```
+
+#### 2.2 Clone the repository
+
+```bash
+git clone <repository-url>
+cd representation-learning
+```
+
+#### 2.3 Install with uv (recommended for development)
+
+```bash
+# 1. Install keyring with Google Artifact Registry plugin
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+
+# 2. Install the project with all dev/runtime dependencies
+uv sync --group project-dev
+```
+
+This will install:
+
+- Base API dependencies
+- Training/evaluation runtime dependencies (for example `pytorch-lightning`, `mlflow`, `wandb`, `esp-data`, etc.)
+- Development tools (`pytest`, `ruff`, `pre-commit`, etc.)
+- Optional GPU-related packages (for example `bitsandbytes`, when supported)
+
+The `project-dev` dependency group is used by CI and is intended to match the full development environment.
+
+#### 2.4 Install with pip (alternative for development)
+
+```bash
+# 1. Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 2. Install in editable mode with dev extras
+pip install -e ".[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
+
+Notes for development:
+
+- Editable install (`-e`) means changes in the repo are picked up immediately without reinstalling.
+- The `[dev]` extra mirrors the runtime dependencies used by `uv`’s `project-dev` group.
+- Use this setup if you plan to:
+  - Run tests (`pytest`)
+  - Run training/evaluation scripts
+  - Contribute code via pull requests
 
 ### Basic Usage
 
@@ -78,17 +200,104 @@ model = load_model("sl_beats_animalspeak", device="cpu")
 # Load a model for a new task (creates new classifier)
 model = load_model("beats_naturelm", num_classes=10, device="cpu")
 
-# Load for embedding extraction (no classifier)
+# Load for embedding extraction (returns unpooled features)
 model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+# Returns (batch, time_steps, 768) for BEATs instead of classification logits
 ```
+
+#### Probes (Heads on Top of Backbones)
+
+Probes are task-specific heads attached to pretrained backbones for transfer learning:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Audio Input                          │
+│              (batch, time_steps)                        │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Pretrained Backbone │
+         │   (e.g., BEATs)       │
+         │                       │
+         │  ┌─────────────────┐  │
+         │  │  Layer 1        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Layer 2        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  ...            │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Last Layer     │◄─┼── target_layers=["last_layer"]
+         │  └────────┬────────┘  │
+         └───────────┼───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Embeddings          │
+         │   (batch, dim)        │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Probe Head          │
+         │   (linear/MLP/etc.)   │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Task Predictions    │
+         │   (batch, num_classes)│
+         └───────────────────────┘
+```
+
+**Key Concepts:**
+- **Backbone**: Pretrained model (frozen or fine-tunable)
+- **Probe**: Task-specific head (trained for your task)
+- **Target Layers**: Which backbone layers to extract features from
+- **Online Training**: Backbone + probe trained together
+- **Offline Training**: Embeddings pre-computed, probe trained separately
+
+```python
+from representation_learning import load_model
+from representation_learning.api import build_probe_from_config
+from representation_learning.configs import ProbeConfig
+
+# Load backbone for feature extraction
+base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+
+# Define a simple linear probe on the backbone features
+probe_config = ProbeConfig(
+    probe_type="linear",
+    target_layers=["last_layer"],
+    aggregation="mean",
+    freeze_backbone=True,
+    online_training=True,
+)
+
+probe = build_probe_from_config(
+    probe_config=probe_config,
+    base_model=base,
+    num_classes=10,
+    device="cpu",
+)
+```
+
+> **Note**: Each model expects a specific sample rate (e.g., 16 kHz for BEATs, 32 kHz for Perch). Use `describe_model()` to check, and resample with `librosa.resample()` if needed. See [Audio Requirements](#audio-requirements) for details.
 
 For more examples, see the `examples/` directory:
 - `00_quick_start.py` - Basic model loading and testing
 - `01_basic_model_loading.py` - Loading models with different configurations
 - `02_checkpoint_loading.py` - Working with checkpoints and class mappings
-- `03_custom_model_registration.py` - Creating and registering custom models
-- `06_embedding_extraction.py` - Feature extraction mode
-- `07_classifier_head_loading.py` - Understanding classifier head behavior
+- `03_custom_model_registration.py` - Creating and registering custom models and ModelSpecs
+- `04_training_and_evaluation.py` - Full training loop and evaluation examples
+- `05_embedding_extraction.py` - Feature extraction with `return_features_only=True` (unpooled features)
+- `06_classifier_head_loading.py` - Understanding classifier head behavior
 
 ## 📚 API Reference
 
@@ -172,31 +381,11 @@ model = load_model("beats", pretrained=True)  # BEATs loads SSL weights
 model = load_model("efficientnet_animalspeak")  # Uses checkpoint, pretrained=False
 ```
 
-#### `create_model()` - Create New Models
+#### Training New Models
 
-**When to use:**
-- ✅ Creating new models for training from scratch
-- ✅ When you don't need pre-trained weights
-- ✅ Using custom model classes (plugin architecture)
-- ✅ Building models for fine-tuning
-
-**When NOT to use:**
-- ❌ Loading pre-trained models with weights
-- ❌ Loading models from checkpoints
-- ❌ Loading models for inference/evaluation
-
-```python
-from representation_learning import create_model
-
-# Create new model for training
-model = create_model("efficientnet", num_classes=100)
-
-# Create custom model using plugin architecture
-model = create_model("my_custom_model", num_classes=50)
-
-# Create from config file
-model = create_model("experiments/my_model.yml", num_classes=10)
-```
+**Recommended pattern:**
+- Define a custom model class (subclassing `ModelBase`) with its own classifier head, or
+- Build a backbone via `build_model` / `build_model_from_spec` and attach a probe head with `build_probe_from_config` (supports both online and offline modes).
 
 #### `build_model()` - Plugin Architecture
 
@@ -204,10 +393,6 @@ model = create_model("experiments/my_model.yml", num_classes=10)
 - ✅ Using the plugin architecture for new custom models
 - ✅ When you have registered new model classes
 - ✅ Building new models from ModelSpec objects
-
-**When NOT to use:**
-- ❌ Loading pre-trained models with weights (use `load_model`)
-- ❌ Simple model creation (use `create_model`)
 
 ```python
 from representation_learning import build_model, register_model_class
@@ -351,7 +536,11 @@ if class_mapping:
 
 ### Plugin Architecture
 
-The framework supports a plugin architecture that allows users to register custom model classes without modifying the core library:
+The framework supports a plugin architecture that allows users to register custom model classes without modifying the core library.
+
+**Important**: Registration is only required if you want to use `build_model()` or `build_model_from_spec()` with ModelSpecs. For direct instantiation, registration is not needed.
+
+See [docs/custom_model_registration.md](docs/custom_model_registration.md) for detailed guidance on when and why to register custom models.
 
 ```python
 from representation_learning.models.base_model import ModelBase
@@ -372,8 +561,9 @@ class MyCustomModel(ModelBase):
     def get_embedding_dim(self):
         return 512
 
-# Now you can use it with any of the loading functions
-model = create_model("my_custom_model", num_classes=10)
+# Now you can use it with build_model() if you also register a ModelSpec
+# Or use it directly without registration: MyCustomModel(device="cpu", num_classes=10)
+model = MyCustomModel(num_classes=10, device="cpu")
 ```
 
 ## 🎯 Supported Models
@@ -382,15 +572,15 @@ model = create_model("my_custom_model", num_classes=10)
 
 The framework includes support for various audio representation learning models:
 
-- **EfficientNet**: Audio classification with different variants (b0, b1)
-- **BEATs**: Self-supervised audio representation learning
-- **EAT**: Audio transformer models (standard and HuggingFace versions)
-- **AVES**: Audio-visual event detection
-- **BirdMAE**: Bird-specific masked autoencoder
+- **EfficientNet**: EfficientNet-based models adapted for audio classification
+- **BEATs**: BEATs transformer models for audio representation learning
+- **EAT**: Efficient Audio Transformer models
+- **AVES**: AVES model for bioacoustics
+- **BirdMAE**: BirdMAE masked autoencoder for bioacoustic representation learning
 
 ### Model Configuration
 
-Models are configured using YAML files in the `api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
+Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
 
 **Minimal Model Configuration:**
 
@@ -479,6 +669,61 @@ model_spec = ModelSpec(
 )
 ```
 
+### Audio Requirements
+
+**Sample Rate**: Each model expects audio at a specific sample rate (defined in its `model_spec`).
+
+**Finding the expected sample rate:**
+
+```python
+from representation_learning import describe_model, get_model_spec
+
+# Option 1: Use describe_model() for a formatted overview
+describe_model("beats_naturelm", verbose=True)
+# Prints: 🎵 Sample Rate: 16000 Hz
+
+# Option 2: Access programmatically via get_model_spec()
+spec = get_model_spec("beats_naturelm")
+target_sr = spec.audio_config.sample_rate  # 16000
+```
+
+**Resampling audio (using librosa):**
+
+For full reproducibility, use `librosa.resample` with `res_type="kaiser_best", scale=True`.
+
+```python
+import librosa
+import torch
+from representation_learning import get_model_spec, load_model
+
+# Get the model's expected sample rate
+spec = get_model_spec("beats_naturelm")
+target_sr = spec.audio_config.sample_rate
+
+# Load audio at original sample rate
+audio, original_sr = librosa.load("audio.wav", sr=None)
+
+# Resample if needed (use these exact parameters for reproducibility)
+if original_sr != target_sr:
+    audio = librosa.resample(
+        audio,
+        orig_sr=original_sr,
+        target_sr=target_sr,
+        res_type="kaiser_best",
+        scale=True,
+    )
+
+# Convert to tensor and add batch dimension
+audio_tensor = torch.from_numpy(audio).unsqueeze(0).float()  # Shape: (1, num_samples)
+
+# Run inference
+model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+with torch.no_grad():
+    output = model(audio_tensor, padding_mask=None)
+```
+
+> **Note**: The models were trained with audio resampled using `res_type="kaiser_best"` and `scale=True`. Using different resampling methods may affect results.
+
 ### Audio Configuration
 
 ```python
@@ -499,7 +744,7 @@ audio_config = AudioConfig(
 )
 ```
 
-## 🚀 Training and Evaluation
+## 🚀 Training and Evaluation with the API
 
 ### Training
 
@@ -507,10 +752,10 @@ audio_config = AudioConfig(
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from representation_learning import create_model
+from representation_learning import build_model
 
-# Create a model for training
-model = create_model("efficientnet", num_classes=100, device="cpu")
+# Create a backbone for training (attach your own head or use a probe)
+model = build_model("efficientnet", device="cpu")
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -535,7 +780,7 @@ for epoch in range(num_epochs):
 torch.save(model.state_dict(), "checkpoints/my_model.pt")
 ```
 
-For complete training examples with data loading and evaluation, see `examples/05_training_and_evaluation.py`.
+For complete training examples with data loading and evaluation, see `examples/04_training_and_evaluation.py`.
 
 ### Evaluation
 
@@ -562,7 +807,135 @@ with torch.no_grad():
             print(f"{label}: {prob.item():.4f}")
 ```
 
-For complete evaluation examples, see `examples/05_training_and_evaluation.py`.
+For complete evaluation examples, see `examples/04_training_and_evaluation.py`.
+
+## 🎨 Embedding Extraction and Feature Representations
+
+### Understanding `return_features_only=True`
+
+When loading models with `return_features_only=True`, the model returns **unpooled features** instead of classification logits. This preserves temporal and spatial information, providing richer representations for downstream tasks.
+
+```python
+# Load model for embedding extraction
+model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model.eval()
+
+# Get unpooled features
+audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
+features = model(audio, padding_mask=None)
+# features.shape = (batch, time_steps, feature_dim)
+```
+
+### Model-Specific Output Formats
+
+Different models return features in different formats when `return_features_only=True`:
+
+#### BEATs (Bidirectional Encoder representation from Audio Transformers)
+
+**Output Shape**: `(batch, time_steps, 768)`
+
+**Key Characteristics**:
+- Each time step contains **8 embeddings** (one per frequency band)
+- Structure: `[T0_0, T0_1, T0_2, T0_3, T0_4, T0_5, T0_6, T0_7, T1_0, T1_1, ...]`
+- **Frame rate**: 6.25 Hz (not 100 Hz)
+  - Calculated as: 100 Hz / 16 (patch embedding size) = 6.25 Hz
+  - For 16 kHz input audio
+- Feature dimension: 768 per embedding
+
+**Example**:
+```python
+model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
+features = model(audio, padding_mask=None)
+# features.shape = (1, ~31, 768)
+# 31 frames ≈ 5 seconds * 6.25 Hz
+# Each frame has 768-dimensional features representing 8 frequency bands
+```
+
+**Understanding BEATs Frame Structure**:
+- Audio at 16 kHz: 16,000 samples per second
+- Patch embedding size: 16 samples
+- Base frame rate: 100 Hz (1000 ms / 10 ms per frame)
+- Actual frame rate after patching: 100 Hz / 16 = **6.25 Hz**
+- Each frame covers: 1 / 6.25 = **160 ms** of audio
+- For 5 seconds of audio: 5 * 6.25 = **31.25 frames**
+
+**Use Cases**:
+```python
+# Option 1: Pool manually for classification
+pooled = features.mean(dim=1)  # (batch, 768)
+
+# Option 2: Use specific frequency band
+band_0 = features[:, :, :96]  # First frequency band (assuming 96-dim per band)
+
+# Option 3: Use for sequence modeling
+# Features preserve temporal structure for RNNs, Transformers, etc.
+```
+
+#### EAT (Efficient Audio Transformer)
+
+**Output Shape**: `(batch, num_patches, 768)`
+
+**Key Characteristics**:
+- Returns unpooled patch embeddings from transformer backbone
+- Includes CLS token as first patch (index 0)
+- Number of patches depends on input length and patch size
+- Feature dimension: 768 per patch
+
+**Example**:
+```python
+model = load_model("sl_eat_animalspeak_ssl_all", return_features_only=True, device="cpu")
+audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
+features = model(audio, padding_mask=None)
+# features.shape = (1, 513, 768)
+# 513 patches = 1 CLS token + 512 spectrogram patches
+```
+
+**Use Cases**:
+```python
+# Option 1: Use CLS token (typically most informative)
+cls_token = features[:, 0]  # (batch, 768)
+
+# Option 2: Mean pooling over all patches
+pooled = features.mean(dim=1)  # (batch, 768)
+
+# Option 3: Exclude CLS token and pool
+spatial_features = features[:, 1:]  # Exclude CLS token
+pooled = spatial_features.mean(dim=1)  # (batch, 768)
+```
+
+#### EfficientNet
+
+**Output Shape**: `(batch, channels, height, width)`
+
+**Key Characteristics**:
+- Returns spatial feature maps before global average pooling
+- Preserves 2D spatial structure of spectrogram
+- Channel and spatial dimensions depend on model variant
+
+**Example**:
+```python
+model = load_model("efficientnet", num_classes=10, return_features_only=True, device="cpu")
+audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
+features = model(audio, padding_mask=None)
+# features.shape = (1, 1280, 4, 5) for EfficientNet-B0
+# 1280 channels, 4x5 spatial dimensions
+```
+
+**Use Cases**:
+```python
+# Option 1: Global average pooling
+pooled = features.mean(dim=[2, 3])  # (batch, 1280)
+
+# Option 2: Max pooling
+pooled = features.amax(dim=[2, 3])  # (batch, 1280)
+
+# Option 3: Flatten for spatial awareness
+flattened = features.flatten(1)  # (batch, 1280*4*5)
+```
+
+
+See `examples/05_embedding_extraction.py` for comprehensive examples of embedding extraction with different models.
 
 ## 📦 Package Structure
 
@@ -615,11 +988,10 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 | `00_quick_start.py` | Basic model loading and testing |
 | `01_basic_model_loading.py` | Loading pre-trained models with checkpoints and class mappings |
 | `02_checkpoint_loading.py` | Working with default and custom checkpoints from YAML configs |
-| `03_custom_model_registration.py` | Creating and registering custom model classes |
-| `04_model_registry_management.py` | Managing model configurations and registrations |
-| `05_training_and_evaluation.py` | Full training loop and evaluation examples |
-| `06_embedding_extraction.py` | Feature extraction mode with `return_features_only=True` |
-| `07_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
+| `03_custom_model_registration.py` | Creating and registering custom model classes and ModelSpecs |
+| `04_training_and_evaluation.py` | Full training loop and evaluation examples |
+| `05_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
+| `06_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
 | `colab_sl_beats_demo.ipynb` | Google Colab demo for the sl-beats model |
 
 ### Custom Model Registration
@@ -628,7 +1000,7 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 import torch
 import torch.nn as nn
 from representation_learning.models.base_model import ModelBase
-from representation_learning import register_model_class, create_model
+from representation_learning import register_model_class
 
 @register_model_class
 class MyAudioCNN(ModelBase):
@@ -660,7 +1032,7 @@ class MyAudioCNN(ModelBase):
         return 128
 
 # Use the custom model
-model = create_model("my_audio_cnn", num_classes=10, device="cpu")
+model = MyAudioCNN(device="cpu", num_classes=10)
 ```
 
 ### Loading Pre-trained Models
@@ -762,4 +1134,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built on top of PyTorch
 - Uses esp-data for dataset management
 - Integrates with various pre-trained audio models
-- Inspired by modern representation learning practices

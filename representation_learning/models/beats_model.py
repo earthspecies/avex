@@ -30,7 +30,7 @@ class Model(ModelBase):
 
     This module follows the same conventions as the other model wrappers
     (e.g. ``efficientnet.py``) so that it can be selected via
-    ``representation_learning.models.get_model.get_model``.
+    ``representation_learning.models.utils.factory.build_model_from_spec``.
 
     The underlying BEATs implementation operates directly on raw‐waveform
     inputs.  We therefore do *not* apply the optional :class:`AudioProcessor`
@@ -44,8 +44,8 @@ class Model(ModelBase):
         variable-length sequence into a fixed-dimensional vector via masked
         mean-pooling before feeding it to a linear classifier.
     2.  When ``return_features_only=True`` the classifier layer is skipped and
-        the pooled embedding is returned directly, which is handy for
-        representation extraction / linear probing.
+        the unpooled frame-level features are returned directly (shape: B x T x D),
+        which is handy for representation extraction / linear probing.
     """
 
     def __init__(
@@ -62,9 +62,15 @@ class Model(ModelBase):
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
-        if not return_features_only and num_classes is None:
-            raise ValueError("num_classes must be provided when return_features_only=False")
+        # If num_classes is not provided, always fall back to embedding mode.
+        # This keeps BEATs usable as a pure backbone without requiring a head.
+        if num_classes is None:
+            if not return_features_only:
+                logger.info(
+                    "num_classes is None for BEATs; falling back to return_features_only=True "
+                    "and disabling the classifier head."
+                )
+            return_features_only = True
 
         # Store disable_layerdrop parameter
         self.disable_layerdrop = disable_layerdrop
@@ -180,8 +186,8 @@ class Model(ModelBase):
         torch.Tensor
             • When *return_features_only* is **False**: logits of shape
               ``(batch, num_classes)``
-            • Otherwise: pooled embeddings of shape
-              ``(batch, encoder_embed_dim)``
+            • Otherwise: unpooled frame-level features of shape
+              ``(batch, num_frames, encoder_embed_dim)``
         """
         # Optional audio pre-processing
         x = self.process_audio(x)
@@ -190,6 +196,9 @@ class Model(ModelBase):
 
         # features: (B, T', D)
         # frame_padding: (B, T') or None
+
+        if self._return_features_only:
+            return features
 
         # ------------------------------------------------------------------
         # 3.  Masked mean-pooling over the temporal dimension
@@ -202,10 +211,7 @@ class Model(ModelBase):
         else:
             pooled = features.mean(dim=1)
 
-        if self._return_features_only:
-            return pooled
-        else:
-            return self.classifier(pooled)
+        return self.classifier(pooled)
 
     def extract_embeddings(
         self,

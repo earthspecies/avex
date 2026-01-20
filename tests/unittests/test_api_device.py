@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from representation_learning import create_model, load_model, register_model
+from representation_learning import load_model, register_model
 from representation_learning.configs import AudioConfig, ModelSpec
 from representation_learning.models.base_model import ModelBase
 from representation_learning.models.utils.registry import (
@@ -76,6 +76,11 @@ class TestAPIDeviceHandling:
             ),
         )
         register_model("test_model", model_spec)
+<<<<<<< HEAD
+=======
+        # Expose the class for direct instantiation in tests
+        self.TestModelClass = TestModelClass
+>>>>>>> main
 
         yield
 
@@ -111,7 +116,11 @@ class TestAPIDeviceHandling:
 
     def test_model_creation_cpu(self) -> None:
         """Test that models can be created on CPU."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cpu")
+=======
+        model = self.TestModelClass(num_classes=10, device="cpu")
+>>>>>>> main
 
         assert isinstance(model, ModelBase)
         assert model.device == "cpu"
@@ -121,7 +130,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_creation_cuda(self) -> None:
         """Test that models can be created on CUDA."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cuda")
+=======
+        model = self.TestModelClass(num_classes=10, device="cuda")
+>>>>>>> main
 
         assert isinstance(model, ModelBase)
         assert model.device == "cuda"
@@ -130,7 +143,11 @@ class TestAPIDeviceHandling:
 
     def test_model_transfer_cpu_to_cpu(self) -> None:
         """Test that models can be transferred from CPU to CPU."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cpu")
+=======
+        model = self.TestModelClass(num_classes=10, device="cpu")
+>>>>>>> main
         model_cpu = model.cpu()
 
         assert model_cpu.device == "cpu"
@@ -139,7 +156,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_transfer_cpu_to_cuda(self) -> None:
         """Test that models can be transferred from CPU to CUDA."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cpu")
+=======
+        model = self.TestModelClass(num_classes=10, device="cpu")
+>>>>>>> main
         model_cuda = model.cuda()
 
         assert model_cuda.device == "cpu"  # String attribute doesn't change
@@ -149,7 +170,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_transfer_cuda_to_cpu(self) -> None:
         """Test that models can be transferred from CUDA to CPU."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cuda")
+=======
+        model = self.TestModelClass(num_classes=10, device="cuda")
+>>>>>>> main
         model_cpu = model.cpu()
 
         assert model_cpu.device == "cuda"  # String attribute doesn't change
@@ -159,7 +184,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_transfer_cuda_to_cuda(self) -> None:
         """Test that models can be transferred from CUDA to CUDA."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cuda")
+=======
+        model = self.TestModelClass(num_classes=10, device="cuda")
+>>>>>>> main
         model_cuda = model.cuda()
 
         assert model_cuda.device == "cuda"
@@ -168,7 +197,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_to_method(self) -> None:
         """Test that models can be moved using .to() method."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cpu")
+=======
+        model = self.TestModelClass(num_classes=10, device="cpu")
+>>>>>>> main
 
         # Move to CUDA
         model_cuda = model.to("cuda")
@@ -186,7 +219,11 @@ class TestAPIDeviceHandling:
 
     def test_model_forward_cpu(self) -> None:
         """Test that models can perform forward pass on CPU."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cpu")
+=======
+        model = self.TestModelClass(num_classes=10, device="cpu")
+>>>>>>> main
         x = torch.randn(2, 128)
 
         with torch.no_grad():
@@ -198,7 +235,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_forward_cuda(self) -> None:
         """Test that models can perform forward pass on CUDA."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cuda")
+=======
+        model = self.TestModelClass(num_classes=10, device="cuda")
+>>>>>>> main
         x = torch.randn(2, 128, device="cuda")
 
         with torch.no_grad():
@@ -210,7 +251,11 @@ class TestAPIDeviceHandling:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_model_forward_device_mismatch_handling(self) -> None:
         """Test that models handle device mismatches correctly."""
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cpu")
+=======
+        model = self.TestModelClass(num_classes=10, device="cpu")
+>>>>>>> main
         x = torch.randn(2, 128, device="cuda")
 
         # Model should handle device mismatch (either error or auto-move)
@@ -230,10 +275,14 @@ class TestAPIDeviceHandling:
             pytest.skip("CUDA not available")
 
         # Import multiple times
+<<<<<<< HEAD
         from representation_learning import (
             create_model,  # noqa: F401
             register_model,  # noqa: F401
         )
+=======
+        from representation_learning import register_model  # noqa: F401
+>>>>>>> main
 
         # CUDA should still be available
         assert torch.cuda.is_available()
@@ -246,7 +295,11 @@ class TestAPIDeviceHandling:
         cuda_count_before = torch.cuda.device_count()
 
         # Load a model (this may trigger additional imports)
+<<<<<<< HEAD
         model = create_model("test_model", num_classes=10, device="cuda")
+=======
+        model = self.TestModelClass(num_classes=10, device="cuda")
+>>>>>>> main
 
         cuda_available_after = torch.cuda.is_available()
         cuda_count_after = torch.cuda.device_count()

@@ -80,7 +80,7 @@ def _extract_probe_info_from_base_model(base_model: str) -> Tuple[str, str]:
     -------
     tuple of str
         (probe_type, layers) where probe_type is "attention" or "linear"
-        and layers is "last_layer" or "all"
+        and layers is "last_layer", "all", or "ft"
     """
     # Remove "weighted_" prefix if present
     model = base_model.replace("weighted_", "")
@@ -90,10 +90,14 @@ def _extract_probe_info_from_base_model(base_model: str) -> Tuple[str, str]:
         return "attention", "last_layer"
     elif "_attention_all" in model:
         return "attention", "all"
+    elif "_attention_ft" in model:
+        return "attention", "ft"
     elif "_linear_last" in model:
         return "linear", "last_layer"
     elif "_linear_all" in model:
         return "linear", "all"
+    elif "_linear_ft" in model:
+        return "linear", "ft"
     else:
         # Fallback: try to extract from the end
         parts = model.split("_")

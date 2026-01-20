@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 
 import torch
 import torch.utils.checkpoint
-from torchvision.models import efficientnet_b0, efficientnet_b1
+from torchvision.models import EfficientNet_B0_Weights, EfficientNet_B1_Weights, efficientnet_b0, efficientnet_b1
 
 from representation_learning.configs import AudioConfig
 from representation_learning.models.base_model import ModelBase
@@ -50,10 +50,13 @@ class Model(ModelBase):
         self.audio_config = audio_config
 
         # Load the appropriate EfficientNet variant based on configuration
+        # Use weights parameter instead of deprecated pretrained parameter
         if efficientnet_variant == "b0":
-            self.model = efficientnet_b0(pretrained=pretrained)
+            weights = EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
+            self.model = efficientnet_b0(weights=weights)
         elif efficientnet_variant == "b1":
-            self.model = efficientnet_b1(pretrained=pretrained)
+            weights = EfficientNet_B1_Weights.IMAGENET1K_V1 if pretrained else None
+            self.model = efficientnet_b1(weights=weights)
         else:
             raise ValueError(f"Unsupported EfficientNet variant: {efficientnet_variant}")
 
@@ -187,7 +190,9 @@ class Model(ModelBase):
         Returns
         -------
         torch.Tensor
-            Model output (logits or features based on init flag)
+            Model output (logits or unpooled features based on init flag)
+            - If return_features_only=True: spatial feature maps (B, C, H, W)
+            - If return_features_only=False: classification logits (B, num_classes)
         """
         # Process audio
         x = self.process_audio(x)
@@ -198,15 +203,14 @@ class Model(ModelBase):
         else:
             features = self.model.features(x)
 
+        # Return unpooled spatial features if requested
+        if self.return_features_only:
+            return features
+
         pooled_features = self.model.avgpool(features)
         flattened_features = torch.flatten(pooled_features, 1)
-
-        # Return features or logits based on the flag
-        if self.return_features_only:
-            return flattened_features
-        else:
-            logits = self.model.classifier(flattened_features)
-            return logits
+        logits = self.model.classifier(flattened_features)
+        return logits
 
     def extract_embeddings(
         self,

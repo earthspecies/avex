@@ -16,15 +16,11 @@ Usage
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Self, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import yaml
-from esp_data import DatasetConfig
-
-# --------------------------------------------------------------------------- #
-#  3rd‑party imports
-# --------------------------------------------------------------------------- #
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -33,11 +29,15 @@ from pydantic import (
     model_validator,
 )
 from pydantic.v1.utils import deep_update
-from pydantic_settings import (
-    BaseSettings,
-    CliSettingsSource,
-    YamlConfigSettingsSource,
-)
+from pydantic_settings import BaseSettings, CliSettingsSource, YamlConfigSettingsSource
+
+if TYPE_CHECKING:
+    from representation_learning.data.configs import (
+        BenchmarkEvaluationConfig,
+        DatasetCollectionConfig,
+    )
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 #  Training‑level hyper‑parameters
@@ -347,6 +347,86 @@ class ProbeConfig(BaseModel):
 
     This class defines the configuration for various probe types including
     linear probes, MLPs, attention mechanisms, and sequence models.
+
+    **Core Parameters:**
+        probe_type: Type of probe to use ("linear", "mlp", "attention", "lstm", "transformer")
+        target_layers: List of layer names to extract embeddings from (required)
+            - Use "last_layer" for the final layer
+            - Use "all" for all discoverable layers
+            - Use specific layer names from list_model_layers()
+        aggregation: How to aggregate multiple dimensional embeddings
+            - "mean": Average pooling (default, good for most cases)
+            - "max": Max pooling
+            - "cls_token": Use CLS token (for transformer models)
+            - "none": No aggregation (for sequence-based probes)
+        freeze_backbone: Whether to freeze the backbone model during probing (default: True)
+        online_training: Whether to train online (raw audio) or offline (pre-computed embeddings)
+            - None: Auto-determined from aggregation method
+            - True: Online training (required for sequence probes)
+            - False: Offline training (requires freeze_backbone=True)
+
+    **MLP-Specific Parameters:**
+        hidden_dims: Hidden dimensions for MLP probe (e.g., [512, 256]) - required for MLP
+        dropout_rate: Dropout rate for non-linear probes (default: 0.1)
+        activation: Activation function ("relu", "gelu", "tanh", "swish", default: "relu")
+
+    **Attention/Transformer-Specific Parameters:**
+        num_heads: Number of attention heads (required for attention/transformer)
+        attention_dim: Dimension for attention mechanism (required for attention/transformer)
+        num_layers: Number of layers (required for transformer)
+
+    **LSTM-Specific Parameters:**
+        lstm_hidden_size: Hidden size for LSTM probe (required for LSTM)
+        num_layers: Number of layers (required for LSTM)
+        bidirectional: Whether to use bidirectional LSTM (default: False)
+
+    **Sequence Processing Parameters:**
+        input_processing: How to process input embeddings
+            - "pooled": Use pooled embeddings (default)
+            - "sequence": Keep sequence structure (for LSTM/attention/transformer)
+            - "flatten": Flatten embeddings
+            - "none": No processing
+        max_sequence_length: Maximum sequence length for sequence-based probes
+        use_positional_encoding: Whether to add positional encoding (default: False)
+
+    **Other Parameters:**
+        target_length: Target length in samples for audio processing (auto-computed if None)
+
+    **Examples:**
+        >>> # Simple linear probe
+        >>> cfg = ProbeConfig(
+        ...     probe_type="linear",
+        ...     target_layers=["last_layer"],
+        ...     aggregation="mean",
+        ...     freeze_backbone=True,
+        ... )
+        >>>
+        >>> # MLP probe with custom architecture
+        >>> cfg = ProbeConfig(
+        ...     probe_type="mlp",
+        ...     target_layers=["all"],
+        ...     hidden_dims=[512, 256, 128],
+        ...     dropout_rate=0.2,
+        ...     activation="gelu",
+        ... )
+        >>>
+        >>> # Attention probe for sequence data
+        >>> cfg = ProbeConfig(
+        ...     probe_type="attention",
+        ...     target_layers=["last_layer"],
+        ...     aggregation="none",
+        ...     num_heads=8,
+        ...     attention_dim=768,
+        ...     num_layers=2,
+        ...     input_processing="sequence",
+        ...     online_training=True,
+        ... )
+
+    **Viewing Field Descriptions:**
+        To see detailed descriptions of all parameters:
+        >>> import json
+        >>> schema = ProbeConfig.model_json_schema()  # doctest: +SKIP
+        >>> print(json.dumps(schema["properties"], indent=2))  # doctest: +SKIP
     """
 
     probe_type: Literal[
@@ -580,7 +660,7 @@ class BaseCLIConfig(BaseSettings):
     """
 
     @classmethod
-    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> Self:
+    def from_sources(cls, yaml_file: str | Path, cli_args: tuple[str, ...]) -> "RunConfig":
         """
         Create a RunConfig object from a YAML file and CLI arguments. If there are any
         conflicts, the CLI arguments will take precedence over the YAML file.
@@ -1209,214 +1289,19 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         return raw
 
 
-class DatasetCollectionConfig(BaseModel):
-    """Configuration for a collection of datasets.
-
-    This is used to define a set of datasets that can be used in training or evaluation.
-    It allows specifying multiple datasets with their configurations.
-
-    Attributes
-    ----------
-    datasets : List[DatasetConfig]
-        List of dataset configurations
-
-    concatenate : bool
-        If True, concatenate all datasets into a single dataset.
-        If False, treat each dataset separately.
-
-    concatenate_method : Literal["hard", "overlap", "soft"]
-        Method to use when concatenating datasets:
-        'hard' for strict concatenation (all columns must match),
-        'overlap' for overlapping columns only,
-        'soft' to allow any columns to be present in any dataset.
-    """
-
-    train_datasets: Optional[List[DatasetConfig]] = Field(
-        None, description="Optional List of training dataset configurations"
+# Import dataset configs from data module (dev-only, requires esp-data).
+# For API-only installs (no esp-data), these imports are skipped so that the
+# public API can be used without the private esp-data dependency. Development
+# workflows that rely on these configs must install the dev extras.
+try:
+    from representation_learning.data.configs import (
+        BenchmarkEvaluationConfig,
+        DatasetCollectionConfig,
     )
-    val_datasets: Optional[List[DatasetConfig]] = Field(
-        None,
-        description="Optional list of validation dataset configurations",
+except ImportError:  # pragma: no cover - exercised only in API-only envs
+    logger.info(
+        "esp_data is not installed; dataset-related configs "
+        "(DatasetCollectionConfig, BenchmarkEvaluationConfig) are unavailable. "
+        "This is expected for API-only installations. Install the dev extras "
+        "to enable training/evaluation configs."
     )
-    test_datasets: Optional[List[DatasetConfig]] = Field(
-        None,
-        description="Optional list of test dataset configurations",
-    )
-    concatenate_train: bool = Field(
-        True,
-        description=(
-            "If True, concatenate all datasets into a single dataset. If False, treat each dataset separately."
-        ),
-    )
-    concatenate_val: bool = Field(
-        True,
-        description=(
-            "If True, concatenate all evaluation datasets into a single dataset. "
-            "If False, treat each evaluation dataset separately."
-        ),
-    )
-    concatenate_test: bool = Field(
-        True,
-        description=(
-            "If True, concatenate all test datasets into a single dataset. "
-            "If False, treat each test dataset separately."
-        ),
-    )
-    concatenate_method: Literal["hard", "overlap", "soft"] = Field(
-        "soft",
-        description=(
-            "Method to use when concatenating datasets:"
-            "'hard' for strict concatenation (all columns must match),"
-            "'overlap' for overlapping columns only,"
-            "'soft' to allow any columns to be present in any dataset"
-        ),
-    )
-    transformations: list | None = Field(
-        None,
-        description=(
-            "Optional list of transformations to apply to the concatenated dataset. "
-            "These transformations are applied before concatenation."
-        ),
-    )
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="after")
-    def check_nonempty_datasets(self) -> Self:
-        # Check that not all of train, val and test are empty
-        # one of them has to be provided
-        if not (self.train_datasets or self.val_datasets or self.test_datasets):
-            raise ValueError("At least one of train_datasets, val_datasets,or test_datasets must be provided.")
-        return self
-
-
-class EvaluationSet(BaseModel):
-    """Configuration for a single evaluation set (train/val/test triplet)."""
-
-    name: str = Field(
-        ...,
-        description="Name of this evaluation set (e.g., 'dog_classification')",
-    )
-    train: DatasetConfig = Field(..., description="Training dataset configuration")
-    validation: DatasetConfig = Field(..., description="Validation dataset configuration")
-    test: DatasetConfig = Field(..., description="Test dataset configuration")
-    metrics: List[str] = Field(
-        default_factory=lambda: ["accuracy"],
-        description="List of metrics to compute for this evaluation set",
-    )
-
-    # Add retrieval mode configuration
-    retrieval_mode: Literal["test_vs_test", "train_vs_test"] = Field(
-        "test_vs_test",
-        description=("Retrieval evaluation mode: 'test_vs_test' (current default) or 'train_vs_test'"),
-    )
-
-    model_config = ConfigDict(extra="forbid")
-
-    def to_dataset_collection_config(self) -> DatasetCollectionConfig:
-        """Convert this evaluation set to a DatasetCollectionConfig.
-
-        Returns
-        -------
-        DatasetCollectionConfig
-            A config that can be used with esp-data's dataset loading functionality
-        """
-        return DatasetCollectionConfig(
-            train_datasets=[self.train],
-            val_datasets=[self.validation],
-            test_datasets=[self.test],
-            concatenate_train=True,
-            concatenate_val=True,
-            concatenate_test=True,
-            concatenate_method="soft",
-        )
-
-
-class BenchmarkEvaluationConfig(BaseModel):
-    """Configuration for benchmark evaluation wrapping
-    esp-data's DatasetCollectionConfig for actual data loading.
-
-    Example
-    -------
-    ```yaml
-    benchmark_name: "bioacoustic_benchmark_v1"
-    evaluation_sets:
-      - name: "dog_classification"
-        train:
-          dataset_name: beans
-          split: dogs_train
-          type: classification
-          # ... other config
-        validation:
-          dataset_name: beans
-          split: dogs_validation
-          type: classification
-          # ... other config
-        test:
-          dataset_name: beans
-          split: dogs_test
-          type: classification
-          # ... other config
-        metrics: [accuracy, balanced_accuracy]
-    ```
-    """
-
-    benchmark_name: str = Field(..., description="Name of this benchmark")
-    evaluation_sets: List[EvaluationSet] = Field(
-        ...,
-        description=("List of evaluation sets (train/val/test triplets) in this benchmark"),
-    )
-
-    model_config = ConfigDict(extra="forbid")
-
-    def get_evaluation_set(self, name: str) -> EvaluationSet:
-        """Get a specific evaluation set by name.
-
-        Parameters
-        ----------
-        name : str
-            Name of the evaluation set to retrieve
-
-        Returns
-        -------
-        EvaluationSet
-            The requested evaluation set
-
-        Raises
-        ------
-        ValueError
-            If no evaluation set with the given name is found
-        """
-        for eval_set in self.evaluation_sets:
-            if eval_set.name == name:
-                return eval_set
-        raise ValueError(f"No evaluation set named '{name}' found in benchmark '{self.benchmark_name}'")
-
-    def get_all_evaluation_sets(
-        self,
-    ) -> List[Tuple[str, DatasetCollectionConfig]]:
-        """Get all evaluation sets as (name, DatasetCollectionConfig) pairs.
-
-        This is the main interface for evaluation loops - it provides each evaluation
-        set converted to the format needed by esp-data for actual data loading.
-
-        Returns
-        -------
-        List[Tuple[str, DatasetCollectionConfig]]
-            List of (evaluation_set_name, dataset_collection_config) pairs
-        """
-        return [(eval_set.name, eval_set.to_dataset_collection_config()) for eval_set in self.evaluation_sets]
-
-    def get_metrics_for_evaluation_set(self, name: str) -> List[str]:
-        """Get the metrics list for a specific evaluation set.
-
-        Parameters
-        ----------
-        name : str
-            Name of the evaluation set
-
-        Returns
-        -------
-        List[str]
-            List of metric names for this evaluation set
-        """
-        return self.get_evaluation_set(name).metrics

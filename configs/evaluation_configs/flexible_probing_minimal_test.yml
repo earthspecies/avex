@@ -1,0 +1,37 @@
+dataset_config: configs/data_configs/benchmark_single.yml
+
+training_params:
+  train_epochs: 1
+  lr: 0.001
+  batch_size: 4
+  optimizer: adamw
+  weight_decay: 0.0
+  amp: false
+  amp_dtype: bf16
+
+experiments:
+  - run_name: beats_naturelm_flexible_test
+    run_config: configs/run_configs/pretrained/beats_naturelm.yml
+    pretrained: true
+    layers: last_layer
+    probe_config:
+      probe_type: linear
+      target_layers: ["last_layer"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+save_dir: evaluation_results/flexible_probing_minimal_test
+
+device: cpu
+
+seed: 42
+
+num_workers: 2
+
+eval_modes:
+  - retrieval
+
+offline_embeddings:
+  overwrite_embeddings: true

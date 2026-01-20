@@ -16,12 +16,9 @@ import numpy as np
 import soundfile as sf  # lightweight; writes the tmp .wav we feed in
 import torch
 import torch.nn as nn
-from birdnetlib import Recording, RecordingBuffer
 
-# --- external deps (≈ 30 MB wheels) -----------------------------------------
-#   pip install birdnetlib tflite-runtime
-from birdnetlib.analyzer import Analyzer  # downloads + wraps *.tflite
-
+# NOTE: birdnetlib imports are LAZY to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+# which would break PyTorch CUDA availability. Imports happen in __init__ and forward methods.
 from representation_learning.models.base_model import (
     ModelBase,
 )  # Add missing import
@@ -57,7 +54,7 @@ class Model(ModelBase):
     Thin wrapper around *birdnetlib* that exposes:
         • forward()  – returns clip-level class probabilities (rarely needed)
         • extract_embeddings() – 1024-d BirdNET feature vectors
-    Everything else (batching, .prepare_train(), …) comes from ModelBase.
+    Everything else (batching, device placement, …) comes from ModelBase.
     """
 
     SAMPLE_RATE = 48_000
@@ -72,26 +69,49 @@ class Model(ModelBase):
         language: str = "en_us",
         apply_sigmoid: bool = True,
         freeze_backbone: bool = True,
+        return_features_only: bool = False,
         **kwargs,  # Accept additional config parameters  # noqa: ANN003
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
-        # Treat None as 0 (feature extraction only)
-        if num_classes is None:
-            num_classes = 0
+        # Preserve CUDA_VISIBLE_DEVICES before importing TensorFlow
+        # TensorFlow sets it to "" which breaks PyTorch CUDA
+        cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+
+        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+        from birdnetlib.analyzer import Analyzer
 
         self._analyzer = Analyzer()  # classification helper
+
+        # Restore CUDA_VISIBLE_DEVICES after TensorFlow import
+        if cuda_visible_devices is None:
+            # Remove the empty string that TensorFlow set
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        else:
+            # Restore the original value
+            os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
         self._interpreter = self._analyzer.interpreter  # TFLite interpreter
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
 
-        self.num_classes = num_classes
+        self.return_features_only = return_features_only
         self.language = language
         self.apply_sigmoid = apply_sigmoid
         self.freeze_backbone = freeze_backbone
 
-        if num_classes > 0 and num_classes != self.num_species:
-            self.classifier = nn.Linear(self.num_species, num_classes)
+        # Handle return_features_only: if True, force num_classes to None
+        if return_features_only:
+            self.num_classes = None
+        else:
+            self.num_classes = num_classes
+
+        if (
+            not return_features_only
+            and self.num_classes is not None
+            and self.num_classes > 0
+            and self.num_classes != self.num_species
+        ):
+            self.classifier = nn.Linear(self.num_species, self.num_classes)
             # Move classifier to the specified device
             if device != "cpu" and torch.cuda.is_available():
                 self.classifier = self.classifier.to(device)
@@ -99,9 +119,9 @@ class Model(ModelBase):
             self.classifier = None
 
         logger.info(
-            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • num_classes = %d • device = %s",
+            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • num_classes = %s • device = %s",
             self.num_species,
-            num_classes,
+            self.num_classes if self.num_classes is not None else "None",
             device,
         )
 
@@ -218,8 +238,11 @@ class Model(ModelBase):
 
         batch_out = []
         for clip in wav:
-            emb_np = self._embedding_for_clip(clip.numpy())  # (N,1024)
+            emb_np = self._embedding_for_clip(clip.numpy())  # (N,1024) or (1024,)
             emb = torch.from_numpy(emb_np).float()
+            # Ensure embeddings are at least 2D: (N, 1024) or (1, 1024)
+            if emb.ndim == 1:
+                emb = emb.unsqueeze(0)  # (1024,) -> (1, 1024)
             batch_out.append(emb)
 
         # Handle different aggregation methods
@@ -267,6 +290,9 @@ class Model(ModelBase):
         Returns:
             torch.Tensor: Probability vector for the audio clip.
         """
+        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+        from birdnetlib import Recording
+
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
             with suppress_stdout_stderr():
@@ -301,46 +327,126 @@ class Model(ModelBase):
         """
         # Use the analyzer's built-in embedding extraction method if available
         if hasattr(self._analyzer, "extract_embeddings_for_recording"):
+            # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+            from birdnetlib import Recording
+
             with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
                 sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
-                # Try using the built-in embedding extraction
                 try:
-                    embeddings = self._analyzer.extract_embeddings_for_recording(tmp.name)
-                    return embeddings.astype(np.float32)
-                except Exception:
+                    # Create Recording object, analyze, and extract embeddings
+                    with suppress_stdout_stderr():
+                        recording = Recording(self._analyzer, tmp.name)
+                        recording.analyze()
+                        recording.extract_embeddings()
+
+                    # Get embeddings from the recording
+                    embeddings_data = recording.embeddings
+
+                    if embeddings_data and len(embeddings_data) > 0:
+                        # Extract embeddings from the first (and typically only) segment
+                        first_segment = embeddings_data[0]
+                        if isinstance(first_segment, dict) and "embeddings" in first_segment:
+                            embeddings_list = first_segment["embeddings"]
+                            if isinstance(embeddings_list, list) and len(embeddings_list) > 0:
+                                # Convert to numpy array and ensure 2D shape (1, 1024)
+                                embeddings = np.array(embeddings_list, dtype=np.float32)
+                                if embeddings.ndim == 1:
+                                    embeddings = embeddings.reshape(1, -1)  # (1024,) -> (1, 1024)
+                                return embeddings
+
+                    # If we get here, the built-in method didn't work as expected
+                    logger.debug("Built-in embedding extraction returned unexpected format")
+                except Exception as e:
+                    logger.debug(f"Built-in embedding extraction failed: {e}")
                     # Fall back to manual extraction
                     pass
 
+        # Manual extraction as fallback
         interp = self._interpreter
-        interp.allocate_tensors()  # Ensure tensors are allocated
 
-        # Reset the interpreter to clear any previous state
-        interp.reset_all_variables()
+        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
+        from birdnetlib import RecordingBuffer
 
-        # Get output details
-        output_details = interp.get_output_details()
-
-        # Create the buffer and analyze (suppress verbose output)
+        # Feed through RecordingBuffer which handles resampling + spectrograms
         with suppress_stdout_stderr():
             buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
             buf.analyze()
 
-        # After analysis, ensure tensors are properly allocated again
-        interp.allocate_tensors()
+        # Ensure tensors are allocated
+        try:
+            interp.allocate_tensors()
+        except Exception as e:
+            logger.error(f"Failed to allocate tensors: {e}")
+            raise
 
-        # Get the embedding index - more robust approach
-        emb_idx = None
-        for i, detail in enumerate(output_details):
-            if "embedding" in detail["name"].lower() or len(output_details) == 1:
-                emb_idx = i
-                break
+        # Try different approaches to find embeddings
+        embeddings = None
 
-        if emb_idx is None:
-            raise ValueError("Could not find embedding output tensor in model")
+        # First try: check if there are multiple outputs (old BirdNet format)
+        out_info = interp.get_output_details()
+        if len(out_info) > 1:
+            try:
+                emb_idx = out_info[1]["index"]
+                embeddings = interp.get_tensor(emb_idx)
+            except Exception:
+                pass
 
-        # Get the tensor data
-        embeddings = interp.get_tensor(emb_idx)  # (Nchunks,1024)
-        return embeddings.astype(np.float32)
+        # Second try: search tensor details for embedding layer
+        if embeddings is None:
+            tensor_details = interp.get_tensor_details()
+
+            # Look for the global average pooling layer first (most reliable)
+            for detail in tensor_details:
+                name = detail.get("name", "")
+                shape = detail.get("shape", [])
+                if "GLOBAL_AVG_POOL" in name and len(shape) == 2 and 1024 in shape:
+                    try:
+                        embeddings = interp.get_tensor(detail.get("index"))
+                        break
+                    except Exception:
+                        continue
+
+            # Fallback: look for any 1024-dimensional tensor
+            if embeddings is None:
+                for detail in tensor_details:
+                    shape = detail.get("shape", [])
+                    name = detail.get("name", "")
+                    # Normalize shape to tuple for comparison (handles both list, tuple, and numpy array)
+                    # Check if shape exists and has elements before converting
+                    if shape is not None and len(shape) > 0:
+                        shape_tuple = tuple(shape)
+                    else:
+                        shape_tuple = ()
+                    if (
+                        len(shape) >= 1
+                        and 1024 in shape
+                        and (
+                            "embedding" in name.lower()
+                            or "feature" in name.lower()
+                            or shape_tuple == (1024,)
+                            or shape_tuple == (1, 1024)
+                        )
+                    ):
+                        try:
+                            embeddings = interp.get_tensor(detail.get("index"))
+                            break
+                        except Exception:
+                            continue
+
+        if embeddings is None:
+            raise ValueError(
+                f"Could not find embedding tensor in BirdNet model. "
+                f"Available outputs: {len(out_info)} with shapes: "
+                f"{[detail.get('shape') for detail in out_info]}. "
+                f"This may be a newer BirdNet model format that doesn't "
+                f"expose embeddings."
+            )
+
+        embeddings = embeddings.astype(np.float32)
+        # Ensure embeddings are at least 2D: (N, 1024) or (1, 1024)
+        if embeddings.ndim == 1:
+            embeddings = embeddings.reshape(1, -1)  # (1024,) -> (1, 1024)
+        return embeddings
 
     # ------------------------------------------------------------------ #
     #                 OPTIONALS EXPECTED BY ModelBase                    #
