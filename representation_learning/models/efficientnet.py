@@ -60,7 +60,7 @@ class Model(ModelBase):
         else:
             raise ValueError(f"Unsupported EfficientNet variant: {efficientnet_variant}")
 
-        if num_classes != 1000:
+        if num_classes is not None and num_classes != 1000:
             in_features = self.model.classifier[-1].in_features
             self.model.classifier[-1] = torch.nn.Linear(in_features, num_classes)
 
