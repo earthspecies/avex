@@ -37,12 +37,18 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
-        # (though EfficientNet uses torchvision's classifier which has fixed classes)
-        # When return_features_only=True, num_classes is not used
-        if not return_features_only and num_classes is None:
-            # Use default from torchvision EfficientNet
-            num_classes = 1000
+        # If num_classes is not provided, always fall back to embedding mode.
+        # This keeps EfficientNet usable as a pure backbone without requiring a head.
+        if num_classes is None:
+            if not return_features_only:
+                logger.info(
+                    "num_classes is None for EfficientNet; falling back to "
+                    "return_features_only=True and disabling the classifier head."
+                )
+            return_features_only = True
+            self.num_classes = None
+        else:
+            self.num_classes = num_classes
 
         # Store the flag and config
         self.return_features_only = return_features_only
@@ -60,7 +66,7 @@ class Model(ModelBase):
         else:
             raise ValueError(f"Unsupported EfficientNet variant: {efficientnet_variant}")
 
-        if num_classes is not None and num_classes != 1000:
+        if not self.return_features_only:
             in_features = self.model.classifier[-1].in_features
             self.model.classifier[-1] = torch.nn.Linear(in_features, num_classes)
 

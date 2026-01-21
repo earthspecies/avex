@@ -71,6 +71,9 @@ class Model(ModelBase):
                     "and disabling the classifier head."
                 )
             return_features_only = True
+            self.num_classes = None
+        else:
+            self.num_classes = num_classes
 
         # Store disable_layerdrop parameter
         self.disable_layerdrop = disable_layerdrop
