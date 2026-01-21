@@ -8,5 +8,5 @@
 #SBATCH --cpus-per-gpu=12
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 # cd ..
-uv sync
-srun uv run scripts/inference_pseudovox.py --shard $SLURM_ARRAY_TASK_ID
+uv sync --extra dev
+srun uv run scripts/inference_pseudovox_v1.py --shard $SLURM_ARRAY_TASK_ID
