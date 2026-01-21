@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
 from representation_learning.configs import ModelSpec
+from representation_learning.io import anypath, exists, filesystem_from_path
 from representation_learning.models.base_model import ModelBase
 
 try:
@@ -227,13 +228,22 @@ def load_model_spec_from_yaml(yaml_path: Union[str, Path]) -> ModelSpec:
         A validated ModelSpec instance
 
     Raises:
-        ValueError: If YAML cannot be parsed into a ModelSpec
+        FileNotFoundError: If the YAML file does not exist.
+        ValueError: If YAML cannot be parsed into a ModelSpec.
     """
     if yaml is None:
         raise ValueError("PyYAML not available to parse YAML files")
 
-    path = Path(yaml_path)
-    with path.open("r", encoding="utf-8") as f:
+    # Resolve the path through the internal IO layer so that both local
+    # files and cloud URIs (e.g. gs://, s3://) are supported consistently.
+    # `anypath` normalises the string/Path-like input, while
+    # `filesystem_from_path` returns an fsspec filesystem that can open it.
+    resolved_path = anypath(str(yaml_path))
+    if not exists(resolved_path):
+        raise FileNotFoundError(f"Model config file not found: {yaml_path}")
+
+    fs = filesystem_from_path(resolved_path)
+    with fs.open(str(resolved_path), mode="r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     if not isinstance(data, dict):
