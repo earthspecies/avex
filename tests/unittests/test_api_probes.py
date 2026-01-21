@@ -215,6 +215,30 @@ class TestBuildProbeFromConfig:
             output = probe(dummy_input, padding_mask=None)
         assert output.shape == (2, 10)
 
+    def test_probeconfig_allows_extra_config(self, base_model: ModelBase) -> None:
+        """Test that ProbeConfig accepts extra_config without affecting probe build."""
+        probe_config = ProbeConfig(
+            probe_type="linear",
+            target_layers=["last_layer"],
+            aggregation="mean",
+            freeze_backbone=True,
+            online_training=True,
+            extra_config={"custom_option": "value", "flag": True},
+        )
+
+        assert probe_config.extra_config is not None
+        assert probe_config.extra_config["custom_option"] == "value"
+        assert probe_config.extra_config["flag"] is True
+
+        # Ensure extra_config does not break probe construction
+        probe = build_probe_from_config(
+            probe_config=probe_config,
+            base_model=base_model,
+            num_classes=3,
+            device="cpu",
+        )
+        assert probe is not None
+
     def test_builds_mlp_probe_online(self, base_model: ModelBase) -> None:
         """Test building MLP probe in online mode."""
         probe_config = ProbeConfig(
