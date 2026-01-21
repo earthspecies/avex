@@ -1,0 +1,24 @@
+---
+# EfficientNet B0 model fine-tuned at 32kHz on AnimalSpeak (AudioSet + Xeno-Canto + iNaturalist)
+# Performance: 83.6% on CBI (vs. classifier V0 64%, sl-beats-all 76%, Perch 74.4%, NatureLM-audio 77.8%)
+# Default checkpoint path for this model (can be overridden when loading)
+checkpoint_path: gs://representation-learning/models/v1/effnet_32khz_v0/final_model.pt
+# Class mapping path with 8462 classes
+class_mapping_path: gs://representation-learning/models/v1/effnet_32khz_v0/label_map.json
+
+model_spec:
+  name: efficientnet
+  pretrained: false  # Set to false when loading from checkpoint
+  device: cuda
+  efficientnet_variant: b0
+  audio_config:
+    sample_rate: 32000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 256
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
