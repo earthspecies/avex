@@ -542,15 +542,17 @@ def describe_model(name: str, verbose: bool = False) -> dict:
 
         print("\n💡 Usage:")
         if has_trained_classifier:
-            print(f"  # Load with original trained classifier ({num_classes} classes):")
-            print(f'  model = load_model("{name}", num_classes=None)')
-            print("\n  # Load with new classifier (e.g., 10 classes):")
-            print(f'  model = load_model("{name}", num_classes=10)')
+            classes_str = f"{num_classes} classes" if num_classes else "trained classifier"
+            print(f"  # Load with the original trained classifier ({classes_str}):")
+            print(f'  model = load_model("{name}")')
+            print("\n  # Load for embedding extraction (classifier stripped when present):")
+            print(f'  model = load_model("{name}", return_features_only=True)')
         else:
             print("  # Load for embedding extraction:")
-            print(f'  model = load_model("{name}", num_classes=None, return_features_only=True)')
-            print("\n  # Load with new classifier (e.g., 10 classes):")
-            print(f'  model = load_model("{name}", num_classes=10)')
+            print(f'  model = load_model("{name}", return_features_only=True)')
+            print("\n  # For classification on a new task:")
+            print("  #   - load a backbone with return_features_only=True")
+            print("  #   - attach a probe head via build_probe_from_config()")
 
         print("=" * 80 + "\n")
 
