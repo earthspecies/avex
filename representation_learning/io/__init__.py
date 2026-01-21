@@ -15,7 +15,7 @@ import logging
 
 from .file_utils import exists, rm
 from .filesystem import filesystem_from_path
-from .paths import AnyPathT, PureCloudPath, PureGSPath, PureR2Path, PureS3Path, anypath
+from .paths import AnyPathT, PureCloudPath, PureGSPath, PureHFPath, PureR2Path, PureS3Path, anypath
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ __all__ = [
     "AnyPathT",
     "PureCloudPath",
     "PureGSPath",
+    "PureHFPath",
     "PureR2Path",
     "PureS3Path",
     "anypath",
