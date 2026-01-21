@@ -177,15 +177,20 @@ class Model(ModelBase):
         """
         return torch.utils.checkpoint.checkpoint(self.model.features, x, use_reentrant=False)
 
-    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """Forward pass through the model.
 
         Parameters
         ----------
         x : torch.Tensor
             Input audio tensor
-        padding_mask : torch.Tensor
-            Padding mask for the input
+        padding_mask : torch.Tensor | None, optional
+            Padding mask for the input. Currently ignored for EfficientNet models
+            but kept for API compatibility across architectures.
 
         Returns
         -------
