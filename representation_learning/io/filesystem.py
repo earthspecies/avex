@@ -17,11 +17,12 @@ from typing import Literal
 import fsspec
 from fsspec.implementations.local import LocalFileSystem
 from gcsfs import GCSFileSystem
+from huggingface_hub import HfFileSystem
 from s3fs import S3FileSystem
 
 from .paths import AnyPathT, PureGSPath, PureHFPath, PureR2Path, anypath
 
-FilesystemT = GCSFileSystem | S3FileSystem | LocalFileSystem | object
+FilesystemT = GCSFileSystem | S3FileSystem | LocalFileSystem | HfFileSystem
 
 
 @cache
@@ -34,6 +35,7 @@ def _filesystem(protocol: Literal["gcs", "gs", "r2", "s3", "hf", "local"] = "loc
         Storage backend identifier. Supported values are:
         - ``"gcs"`` or ``"gs"`` for Google Cloud Storage
         - ``"r2"`` or ``"s3"`` for Cloudflare R2 or generic S3-compatible storage
+        - ``"hf"`` for Hugging Face Hub
         - ``"local"`` for the local filesystem
 
     Returns
@@ -51,17 +53,12 @@ def _filesystem(protocol: Literal["gcs", "gs", "r2", "s3", "hf", "local"] = "loc
     if protocol in ["r2", "s3"]:
         return S3FileSystem(anon=False)
     if protocol == "hf":
-        try:
-            from huggingface_hub import HfFileSystem  # type: ignore
-        except Exception as e:  # pragma: no cover
-            msg = "huggingface_hub is required for hf:// paths"
-            raise ValueError(msg) from e
         # token=True -> use local token store / env vars if present (also works for public repos).
         return HfFileSystem(token=True)
     if protocol == "local":
         return fsspec.filesystem("local")
 
-    msg = f"Unknown backend: {protocol}. Supported backends are: gcs, r2, s3, local."
+    msg = f"Unknown backend: {protocol}. Supported backends are: gcs, r2, s3, hf, local."
     raise ValueError(msg)
 
 
