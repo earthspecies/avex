@@ -51,10 +51,17 @@ class Model(ModelBase):
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
-        if not return_features_only and num_classes is None:
-            # Use default from torchvision ResNet (1000 classes)
-            num_classes = 1000
+        # If num_classes is not provided, always fall back to embedding mode.
+        # This keeps ResNet usable as a pure backbone without requiring a head.
+        if num_classes is None:
+            if not return_features_only:
+                # We avoid importing logging here; rely on ModelBase / caller for logging
+                # behaviour if needed. This mirrors the BEATs pattern semantically.
+                pass
+            return_features_only = True
+            self.num_classes = None
+        else:
+            self.num_classes = num_classes
 
         variant = variant.lower()
         if variant not in self._ALLOWED_VARIANTS:
@@ -77,7 +84,8 @@ class Model(ModelBase):
             self.classifier = nn.Linear(in_features, num_classes)
             self.classifier.to(self.device)
         else:
-            self.classifier = None
+            # Mirror BEATs pattern: ensure attribute exists but has no parameters.
+            self.register_module("classifier", None)  # type: ignore[arg-type]
 
         # Send to device
         self.backbone.to(self.device)
