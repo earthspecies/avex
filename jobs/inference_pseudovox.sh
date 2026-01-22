@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH --array=0-11
+#SBATCH --array=0-3
 #SBATCH --partition=a100-40
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=1
