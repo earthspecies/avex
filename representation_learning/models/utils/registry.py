@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
 from representation_learning.configs import ModelSpec
+from representation_learning.io import anypath, exists, filesystem_from_path
 from representation_learning.models.base_model import ModelBase
 
 try:
@@ -227,13 +228,22 @@ def load_model_spec_from_yaml(yaml_path: Union[str, Path]) -> ModelSpec:
         A validated ModelSpec instance
 
     Raises:
-        ValueError: If YAML cannot be parsed into a ModelSpec
+        FileNotFoundError: If the YAML file does not exist.
+        ValueError: If YAML cannot be parsed into a ModelSpec.
     """
     if yaml is None:
         raise ValueError("PyYAML not available to parse YAML files")
 
-    path = Path(yaml_path)
-    with path.open("r", encoding="utf-8") as f:
+    # Resolve the path through the internal IO layer so that both local
+    # files and cloud URIs (e.g. gs://, s3://) are supported consistently.
+    # `anypath` normalises the string/Path-like input, while
+    # `filesystem_from_path` returns an fsspec filesystem that can open it.
+    resolved_path = anypath(str(yaml_path))
+    if not exists(resolved_path):
+        raise FileNotFoundError(f"Model config file not found: {yaml_path}")
+
+    fs = filesystem_from_path(resolved_path)
+    with fs.open(str(resolved_path), mode="r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     if not isinstance(data, dict):
@@ -542,15 +552,17 @@ def describe_model(name: str, verbose: bool = False) -> dict:
 
         print("\n💡 Usage:")
         if has_trained_classifier:
-            print(f"  # Load with original trained classifier ({num_classes} classes):")
-            print(f'  model = load_model("{name}", num_classes=None)')
-            print("\n  # Load with new classifier (e.g., 10 classes):")
-            print(f'  model = load_model("{name}", num_classes=10)')
+            classes_str = f"{num_classes} classes" if num_classes else "trained classifier"
+            print(f"  # Load with the original trained classifier ({classes_str}):")
+            print(f'  model = load_model("{name}")')
+            print("\n  # Load for embedding extraction (classifier stripped when present):")
+            print(f'  model = load_model("{name}", return_features_only=True)')
         else:
             print("  # Load for embedding extraction:")
-            print(f'  model = load_model("{name}", num_classes=None, return_features_only=True)')
-            print("\n  # Load with new classifier (e.g., 10 classes):")
-            print(f'  model = load_model("{name}", num_classes=10)')
+            print(f'  model = load_model("{name}", return_features_only=True)')
+            print("\n  # For classification on a new task:")
+            print("  #   - load a backbone with return_features_only=True")
+            print("  #   - attach a probe head via build_probe_from_config()")
 
         print("=" * 80 + "\n")
 
