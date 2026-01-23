@@ -256,7 +256,7 @@ def main():
     parser.add_argument(
         "--num_shards",
         type=int,
-        default=8,
+        default=100,
         help="Total number of shards.",
     )
     args = parser.parse_args()
@@ -274,7 +274,7 @@ def main():
     ).to_dict()
     idx_to_label = {label_to_idx[x]: x for x in label_to_idx}
 
-    model = load_model('effnet_32khz_v0', device=device)
+    model = load_model('effnet_32khz_v0', checkpoint_path="gs://representation-learning/models/v1/effnet_32khz_v0/final_model.pt", device=device)
     # load_model(
     #     '/mnt/home/representation-learning/config.yml',
     #     checkpoint_path="gs://representation-learning/models/v1/effnet_32khz_v0/final_model.pt",
