@@ -288,7 +288,7 @@ def create_probing_comparison_plot(
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=600, bbox_inches="tight")
         LOGGER.info("Plot saved to %s", output_path)
 
     return fig, ax
@@ -557,7 +557,7 @@ def create_probing_heatmap(
     x_tick_fontsize = 14 if not include_ft else 10
     ax.set_xticks(xticks)
     ax.set_xticklabels(labels_x, fontsize=x_tick_fontsize, fontweight="bold")
-    plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
 
     # Add dataset group labels centered over each dataset block
     dataset_names = [name for name, _ in aligned]
@@ -615,7 +615,7 @@ def create_probing_heatmap(
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=600, bbox_inches="tight")
         LOGGER.info("Plot saved to %s", output_path)
 
     return fig, ax
@@ -864,7 +864,7 @@ def create_layer_wise_heatmap_ssl(
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=600, bbox_inches="tight")
         LOGGER.info("Plot saved to %s", output_path)
 
     return fig, ax
@@ -1113,7 +1113,7 @@ def create_layer_wise_heatmap_sl(
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_path, dpi=600, bbox_inches="tight")
         LOGGER.info("Plot saved to %s", output_path)
 
     return fig, ax

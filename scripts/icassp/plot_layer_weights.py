@@ -233,7 +233,7 @@ def plot_layer_weights(stats_df: pd.DataFrame, output_path: str, title: str) -> 
     plt.tight_layout()
 
     # Save plot
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
 
     print(f"Saved layer weights plot to {output_path}")
@@ -320,7 +320,7 @@ def plot_combined_layer_weights(beans_stats: pd.DataFrame, birdset_stats: pd.Dat
     plt.tight_layout()
 
     # Save plot
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
 
     print(f"Saved combined layer weights plot to {output_path}")
@@ -437,7 +437,7 @@ def plot_averaged_layer_weights(beans_data: pd.DataFrame, birdset_data: pd.DataF
     plt.tight_layout()
 
     # Save plot
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
 
     print(f"Saved averaged layer weights plot to {output_path}")
@@ -518,7 +518,7 @@ def plot_dataset_specific_layer_weights(beans_data: pd.DataFrame, birdset_data: 
     plt.tight_layout()
 
     # Save plot
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
 
     print(f"Saved subdataset-specific layer weights plot to {output_path}")
@@ -581,7 +581,7 @@ def plot_layer_weights_heatmap(beans_data: pd.DataFrame, birdset_data: pd.DataFr
         fontweight="bold",
     )
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
     print(f"Saved layer weights heatmap to {output_path}")
 
@@ -814,7 +814,7 @@ def plot_dataset_specific_heatmap(beans_data: pd.DataFrame, birdset_data: pd.Dat
     for label in ax.get_yticklabels():
         label.set_fontweight("bold")
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
     print(f"Saved dataset-specific heatmap to {output_path}")
 
@@ -921,7 +921,7 @@ def plot_ssl_sl_heatmap(beans_csv: str, birdset_csv: str, output_path: str) -> N
     ax1.axhline(y=len(ssl_data), color="red", linewidth=2, alpha=0.7)
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close()
     print(f"Saved SSL/SL heatmap to {output_path}")
 
