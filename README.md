@@ -66,25 +66,25 @@ For development installation with training/evaluation tools, see the [Installati
 ```python
 from representation_learning import list_models, load_model, describe_model
 
-# List available models
+# List available models (table shows which have a trained classifier / labels)
 models = list_models()
 print(f"Available models: {list(models.keys())}")
 
 # Get detailed information about a model
-describe_model("beats_naturelm", verbose=True)
+describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
 
 # Load a pre-trained model
-model = load_model("beats_naturelm", device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", device="cpu")
 
 # Load for embedding extraction
-model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 # Returns (batch, time_steps, 768) for BEATs
 
 # Load with a probe for transfer learning
 from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 probe_config = ProbeConfig(
     probe_type="linear",
     target_layers=["last_layer"],

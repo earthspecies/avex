@@ -19,7 +19,7 @@ from representation_learning import load_model
 from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 cfg = ProbeConfig(
     probe_type="linear",
     target_layers=["last_layer"],
@@ -102,7 +102,7 @@ from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # 1. Load a backbone model that returns features
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 
 # 2. Define a simple linear probe on the backbone features
 probe_config = ProbeConfig(
@@ -238,7 +238,7 @@ from representation_learning.models.probes.utils import (
 from representation_learning import load_model
 
 config = load_probe_config("my_linear_probe.yml")
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 probe = build_probe_from_config(config, base_model=base, num_classes=50, device="cpu")
 ```
 
@@ -320,7 +320,7 @@ from representation_learning import load_model
 from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 
 probe_types = [
     ("linear", {"aggregation": "mean"}),
@@ -368,7 +368,7 @@ from representation_learning.models.probes.utils import (
 from representation_learning import load_model
 
 config = load_probe_config("custom_probe.yml")
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 probe = build_probe_from_config(config, base_model=base, num_classes=50, device="cpu")
 ```
 

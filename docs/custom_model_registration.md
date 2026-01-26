@@ -163,7 +163,7 @@ from representation_learning import load_model, get_checkpoint_path
 model = load_model("path/to/my_model.yml")
 
 # Or for official models, checkpoint paths are read automatically from YAML
-checkpoint = get_checkpoint_path("efficientnet_animalspeak")
+checkpoint = get_checkpoint_path("esp_aves2_effnetb0_all")
 print(f"Default checkpoint: {checkpoint}")
 
 # Load with default checkpoint (from YAML)
@@ -171,10 +171,10 @@ model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint
 
 # Load with custom checkpoint (overrides YAML default)
 # Priority: user-provided checkpoint_path > YAML default > no checkpoint
-model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
+model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-custom-checkpoint.pt")
 
 # Load for embedding extraction (strip classifier head when present)
-base = load_model("efficientnet_animalspeak", return_features_only=True)
+base = load_model("esp_aves2_effnetb0_all", return_features_only=True)
 ```
 
 ### Checkpoint Path Priority

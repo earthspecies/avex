@@ -26,17 +26,17 @@ models = list_models()  # Prints table + returns dict with detailed info
 print(f"Available models: {list(models.keys())}")
 
 # Get detailed information about a model
-describe_model("beats_naturelm", verbose=True)
+describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
 # Shows: model type, whether it has a trained classifier, number of classes, usage examples
 
 # Load a pre-trained model with checkpoint (num_classes extracted automatically)
-model = load_model("sl_beats_animalspeak", device="cpu")
+model = load_model("esp_aves2_sl_beats_all", device="cpu")
 
 # For a new task, load a backbone and attach a probe head (classifier)
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 
 # Load for embedding extraction (returns unpooled features)
-model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 # Returns (batch, time_steps, 768) for BEATs instead of classification logits
 ```
 
@@ -104,7 +104,7 @@ from representation_learning.models.probes import build_probe_from_config
 from representation_learning.configs import ProbeConfig
 
 # Load backbone for feature extraction
-base = load_model("beats_naturelm", return_features_only=True, device="cpu")
+base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 
 # Define a simple linear probe on the backbone features
 probe_config = ProbeConfig(
