@@ -247,7 +247,7 @@ def universal_torch_load(
 # -------------------------------------------------------------------- #
 
 
-def _process_state_dict(state_dict: dict, keep_classifier: bool = False) -> dict:
+def _process_state_dict(state_dict: dict, keep_classifier: bool = False, drop_model_prefix: bool = True) -> dict:
     """Process state dict to handle common prefixes and optionally remove
     classifier layers.
 
@@ -263,6 +263,10 @@ def _process_state_dict(state_dict: dict, keep_classifier: bool = False) -> dict
     keep_classifier : bool, default False
         If True, keep classifier/head layers in the output.
         If False (default), remove classifier layers for backbone loading.
+    drop_model_prefix : bool, default True
+        If True, strip leading ``model.`` from parameter names (common in
+        DDP/lightning checkpoints). Set to False when the target model's
+        parameters already include the ``model.`` prefix to avoid mismatches.
 
     Returns
     -------
@@ -291,7 +295,7 @@ def _process_state_dict(state_dict: dict, keep_classifier: bool = False) -> dict
         processed_key = key
         if processed_key.startswith("module."):
             processed_key = processed_key[7:]  # Remove "module."
-        elif processed_key.startswith("model."):
+        elif drop_model_prefix and processed_key.startswith("model."):
             processed_key = processed_key[6:]  # Remove "model."
 
         # Conditionally skip classifier layers based on keep_classifier parameter
