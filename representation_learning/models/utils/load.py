@@ -543,7 +543,13 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
     checkpoint = universal_torch_load(ckpt_path, map_location=device)
 
     # Process state dict if needed
-    state_dict = _process_state_dict(checkpoint, keep_classifier=keep_classifier)
+    target_keys = model.state_dict().keys()
+    target_has_model_prefix = any(k.startswith("model.") for k in target_keys)
+    state_dict = _process_state_dict(
+        checkpoint,
+        keep_classifier=keep_classifier,
+        drop_model_prefix=not target_has_model_prefix,
+    )
 
     # Load weights
     model.load_state_dict(state_dict, strict=False)
