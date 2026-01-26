@@ -128,7 +128,20 @@ class PureR2Path(PureCloudPath):
     __slots__ = ()
 
 
-AnyPathT: TypeAlias = Path | PureGSPath | PureR2Path
+class PureHFPath(PureCloudPath):
+    """Hugging Face Hub path.
+
+    This uses the `huggingface_hub` fsspec-compatible filesystem under the hood.
+
+    Expected format:
+        hf://<repo_id>/<path>
+    """
+
+    cloud_prefix = "hf://"
+    __slots__ = ()
+
+
+AnyPathT: TypeAlias = Path | PureGSPath | PureR2Path | PureS3Path | PureHFPath
 
 
 def anypath(path: str | AnyPathT) -> AnyPathT:
@@ -159,5 +172,7 @@ def anypath(path: str | AnyPathT) -> AnyPathT:
         return PureR2Path("s3://" + as_str.removeprefix("r2://"))
     if as_str.startswith("s3://"):
         return PureR2Path(as_str)
+    if as_str.startswith("hf://"):
+        return PureHFPath(as_str)
 
     return Path(as_str)

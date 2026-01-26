@@ -130,6 +130,52 @@ class TestLoadModelSpecFromYaml:
         assert spec.audio_config.extra_config["pcen_bias"] == 2.0
         assert spec.audio_config.extra_config["activity_detection_prob"] == 0.8
 
+    def test_load_from_gcs_uri(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test loading a model spec from a GCS-style URI via the IO shim."""
+        yaml_content = dedent(
+            """\
+            model_spec:
+              name: beats
+              pretrained: false
+              device: cpu
+            """
+        )
+
+        # Dummy filesystem that serves the YAML content for any path.
+        class DummyFS:
+            def __init__(self, content: str) -> None:
+                self._content = content
+
+            def open(
+                self,
+                path: str,
+                mode: str = "r",
+                encoding: str | None = "utf-8",
+            ) -> object:
+                from io import BytesIO, StringIO
+
+                if "b" in mode:
+                    return BytesIO(self._content.encode(encoding or "utf-8"))
+                return StringIO(self._content)
+
+        # Import the registry module to patch the functions where they're used
+        from representation_learning.models.utils import registry
+
+        dummy_fs = DummyFS(yaml_content)
+
+        # Patch the IO functions in the registry module's namespace
+        # These are imported at module level, so we patch them where they're used
+        monkeypatch.setattr(registry, "filesystem_from_path", lambda _path: dummy_fs)
+        monkeypatch.setattr(registry, "exists", lambda _path: True)
+        # anypath should return the path as-is for our test
+        monkeypatch.setattr(registry, "anypath", lambda path: path)
+
+        spec = load_model_spec_from_yaml("gs://bucket/test_model.yml")
+        assert isinstance(spec, ModelSpec)
+        assert spec.name == "beats"
+        assert spec.pretrained is False
+        assert spec.device == "cpu"
+
 
 class TestImportlibResources:
     """Test importlib.resources.files() usage for packaged YAMLs."""
