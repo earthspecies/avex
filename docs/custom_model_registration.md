@@ -133,8 +133,8 @@ To create your own model configuration, create a YAML file with the following st
 
 ```yaml
 # my_model.yml - Custom model configuration
-# Optional: Default checkpoint path (can be local or cloud storage)
-checkpoint_path: gs://my-bucket/models/my_model.pt
+# Optional: Default checkpoint path (can be local path or hf:// repo)
+checkpoint_path: hf://my-org/my-model
 
 # Optional: Path to label mapping JSON file
 class_mapping_path: gs://my-bucket/models/my_model_labels.json
@@ -214,7 +214,7 @@ model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint
 
 # Load with custom checkpoint (overrides YAML default)
 # Priority: user-provided checkpoint_path > YAML default > no checkpoint
-model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
+model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/my-checkpoint")
 
 # Load for embedding extraction (strip classifier head when present)
 base = load_model("efficientnet_animalspeak", return_features_only=True)

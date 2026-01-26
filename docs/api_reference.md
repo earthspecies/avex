@@ -21,7 +21,7 @@ The framework provides three main functions for working with models, each design
 from representation_learning import load_model
 
 # Load with custom checkpoint
-model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-bucket/checkpoint.pt")
+model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/checkpoint")
 
 # Load with default checkpoint (from YAML config)
 # Checkpoint paths are defined in `representation_learning/api/configs/official_models/*.yml`
@@ -169,7 +169,7 @@ print(f"Default checkpoint: {checkpoint}")
 
 # Override default checkpoint by passing checkpoint_path parameter
 from representation_learning import load_model
-model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-custom-checkpoint.pt")
+model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/my-checkpoint")
 ```
 
 ### Class Mapping Management

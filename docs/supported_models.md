@@ -34,10 +34,10 @@ model_spec:
 ```yaml
 # Example: efficientnet_animalspeak.yml - Complete configuration
 # Optional: Default checkpoint path
-checkpoint_path: gs://my-bucket/models/efficientnet_animalspeak.pt
+checkpoint_path: hf://my-org/efficientnet_animalspeak
 
 # Optional: Label mapping for human-readable predictions
-class_mapping_path: gs://my-bucket/models/label_map.json
+class_mapping_path: hf://my-org/efficientnet_animalspeak/label_map.json
 
 # Required: Model specification
 model_spec:
