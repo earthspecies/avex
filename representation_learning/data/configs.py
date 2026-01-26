@@ -88,7 +88,7 @@ class DatasetCollectionConfig(BaseModel):
             "These transformations are applied before concatenation."
         ),
     )
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
     def check_nonempty_datasets(self) -> "DatasetCollectionConfig":
@@ -120,7 +120,7 @@ class EvaluationSet(BaseModel):
         description=("Retrieval evaluation mode: 'test_vs_test' (current default) or 'train_vs_test'"),
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     def to_dataset_collection_config(self) -> DatasetCollectionConfig:
         """Convert this evaluation set to a DatasetCollectionConfig.
@@ -176,7 +176,7 @@ class BenchmarkEvaluationConfig(BaseModel):
         description=("List of evaluation sets (train/val/test triplets) in this benchmark"),
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     def get_evaluation_set(self, name: str) -> EvaluationSet:
         """Get a specific evaluation set by name.

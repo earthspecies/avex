@@ -3,8 +3,10 @@ configs.py
 ~~~~~~~~~~
 Canonical **Pydantic v2** data‑classes for training‑run YAML files.
 
-The schema is deliberately strict (`extra='forbid'`) so that typos in
-configuration files raise immediately.
+EXPERIMENT: schema uses `extra='allow'` to accept custom fields;
+typos in known field names will not raise (may be reverted to `extra='forbid'`).
+If reverting: configs that rely on top-level extra keys will break unless those
+keys are first moved into the explicit `extra_config` (or new schema) fields.
 
 Usage
 -----
@@ -115,7 +117,7 @@ class TrainingParams(BaseModel):
         description="Type of learning rate scheduler to use",
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
 # --------------------------------------------------------------------------- #
@@ -141,7 +143,7 @@ class NoiseAugment(BaseModel):
         description="Probability of masking the original signal and using only noise",
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
 class MixupAugment(BaseModel):
@@ -156,7 +158,7 @@ class MixupAugment(BaseModel):
     n_mixup: int = Field(1, ge=1, description="Number of mixup pairs per batch")
     augmentation_prob: float = Field(..., ge=0, le=1)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
 Augment = Union[NoiseAugment, MixupAugment]
@@ -186,7 +188,7 @@ class AudioConfig(BaseModel):
     window_selection: Literal["random", "center"] = "random"
     center: bool = True
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     @field_validator(
         "sample_rate",
@@ -268,7 +270,7 @@ class ModelSpec(BaseModel):
         ),
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     @field_validator("eat_cfg")
     @classmethod
@@ -508,7 +510,7 @@ class ProbeConfig(BaseModel):
         ),
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
     def validate_probe_configuration(self) -> "ProbeConfig":
@@ -651,7 +653,7 @@ class SchedulerConfig(BaseModel):
     warmup_steps: int = Field(0, ge=0, description="Number of steps to warm up learning rate")
     min_lr: float = Field(0.0, ge=0, description="Minimum learning rate for cosine annealing")
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
 class BaseCLIConfig(BaseSettings):
@@ -709,10 +711,10 @@ class ClusteringEvalConfig(BaseModel):
     max_samples: Optional[int] = Field(None, ge=100, description="Maximum samples to use (None = use all)")
     run_before_training: bool = Field(False, description="Run clustering evaluation before the first epoch")
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
-class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
+class RunConfig(BaseCLIConfig, extra="allow", validate_assignment=True):
     """Everything needed for a single *training run*."""
 
     # --------------------------------------------------------------------------- #
@@ -922,7 +924,7 @@ class ExperimentConfig(BaseModel):
         "Use probe_config.freeze_backbone instead.",
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     @field_validator("run_config", mode="before")
     @classmethod
@@ -1138,7 +1140,7 @@ class ExperimentConfig(BaseModel):
             return not self.is_frozen()
 
 
-class EvaluateConfig(BaseCLIConfig, extra="forbid"):
+class EvaluateConfig(BaseCLIConfig, extra="allow"):
     """Configuration for running evaluation experiments."""
 
     experiments: List[ExperimentConfig] = Field(..., description="List of experiments to run")
@@ -1246,7 +1248,7 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             description=("Number of batches to process before writing during streaming."),
         )
 
-        model_config = ConfigDict(extra="forbid")
+        model_config = ConfigDict(extra="allow")
 
     offline_embeddings: OfflineEmbeddingsConfig = Field(
         default_factory=OfflineEmbeddingsConfig,
@@ -1273,7 +1275,7 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         ),
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     @field_validator("dataset_config", mode="before")
     @classmethod
