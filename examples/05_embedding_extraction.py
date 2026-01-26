@@ -69,7 +69,8 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: EAT (Transformer)")
     print("-" * 50)
 
-    model = load_model("sl_eat_animalspeak_ssl_all", device=device)
+    # This model has a classifier; request embedding output for this example.
+    model = load_model("sl_eat_animalspeak_ssl_all", device=device, return_features_only=True)
     model.eval()
 
     print(f"Loaded model: {type(model).__name__}")
