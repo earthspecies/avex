@@ -17,10 +17,16 @@ def test_efficientnet() -> None:
     # EfficientNet B0 expects images of at least 224x224 in size.
     dummy_input = torch.randn(8, 3, 224, 224).to(device)
 
-    # Perform a forward pass (EfficientNet requires padding_mask)
+    # Test forward pass without padding_mask (padding_mask defaults to None)
+    outputs = model(dummy_input)
+    assert outputs.shape == (8, 1000), f"Expected shape (8, 1000), got {outputs.shape}"
+    print("Output shape (without padding_mask):", outputs.shape)
+
+    # Test forward pass with explicit padding_mask (should also work)
     padding_mask = torch.zeros(8, 224 * 224, dtype=torch.bool).to(device)
-    outputs = model(dummy_input, padding_mask)
-    print("Output shape:", outputs.shape)
+    outputs_with_mask = model(dummy_input, padding_mask)
+    assert outputs_with_mask.shape == (8, 1000), f"Expected shape (8, 1000), got {outputs_with_mask.shape}"
+    print("Output shape (with padding_mask):", outputs_with_mask.shape)
 
 
 if __name__ == "__main__":

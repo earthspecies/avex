@@ -37,12 +37,18 @@ class Model(ModelBase):
         # Call parent initializer with audio config
         super().__init__(device=device, audio_config=audio_config)
 
-        # Validate num_classes: required when return_features_only=False
-        # (though EfficientNet uses torchvision's classifier which has fixed classes)
-        # When return_features_only=True, num_classes is not used
-        if not return_features_only and num_classes is None:
-            # Use default from torchvision EfficientNet
-            num_classes = 1000
+        # If num_classes is not provided, always fall back to embedding mode.
+        # This keeps EfficientNet usable as a pure backbone without requiring a head.
+        if num_classes is None:
+            if not return_features_only:
+                logger.info(
+                    "num_classes is None for EfficientNet; falling back to "
+                    "return_features_only=True and disabling the classifier head."
+                )
+            return_features_only = True
+            self.num_classes = None
+        else:
+            self.num_classes = num_classes
 
         # Store the flag and config
         self.return_features_only = return_features_only
@@ -59,6 +65,10 @@ class Model(ModelBase):
             self.model = efficientnet_b1(weights=weights)
         else:
             raise ValueError(f"Unsupported EfficientNet variant: {efficientnet_variant}")
+
+        if not self.return_features_only:
+            in_features = self.model.classifier[-1].in_features
+            self.model.classifier[-1] = torch.nn.Linear(in_features, num_classes)
 
         # Move model to device
         self.model = self.model.to(self.device)
@@ -177,15 +187,20 @@ class Model(ModelBase):
         """
         return torch.utils.checkpoint.checkpoint(self.model.features, x, use_reentrant=False)
 
-    def forward(self, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """Forward pass through the model.
 
         Parameters
         ----------
         x : torch.Tensor
             Input audio tensor
-        padding_mask : torch.Tensor
-            Padding mask for the input
+        padding_mask : torch.Tensor | None, optional
+            Padding mask for the input. Currently ignored for EfficientNet models
+            but kept for API compatibility across architectures.
 
         Returns
         -------

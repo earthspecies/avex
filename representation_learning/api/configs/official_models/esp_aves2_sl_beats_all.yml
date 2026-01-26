@@ -1,0 +1,19 @@
+---
+# ESP-AVES2: Supervised/linear-probe BEATs (all) model.
+#
+# Weights are hosted on the Hugging Face Hub as a safetensors file.
+# The loader supports `hf://` URIs via huggingface_hub's fsspec filesystem.
+checkpoint_path: hf://EarthSpeciesProject/esp-aves2-sl-beats-all/esp-aves2-sl-beats-all.safetensors
+class_mapping_path: hf://EarthSpeciesProject/esp-aves2-sl-beats-all/label_map.json
+
+model_spec:
+  name: beats
+  pretrained: false
+  fine_tuned: true
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
