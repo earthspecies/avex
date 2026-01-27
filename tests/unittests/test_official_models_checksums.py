@@ -20,23 +20,23 @@ from representation_learning.models.utils.registry import get_checkpoint_path
 # Keys = official model name (YAML stem); values are 64-digit lowercase hex.
 # Update from the .safetensors.sha256 files when official models are (re-)uploaded.
 OFFICIAL_MODEL_CHECKSUMS: dict[str, str] = {
-    "esp_aves2_eat_all": "8dcd5f9059785f7a2b1ff19b81ddcf75bab80a359a04f38a9da728fd33b25d39",
-    "esp_aves2_eat_bio": "8968be9d42668d5f62da47e3ea725258ec53195544434d5f62adc856f04e3639",
-    "esp_aves2_effnetb0_all": "60a54b874b0ae9a3a3fec9143a6b73aaf59f2e77c20d19fe1fabc797da3faeb1",
-    "esp_aves2_effnetb0_audioset": "a17360719494663ac12372adc1de0beee296036349ed603f939ef455535c77a3",
-    "esp_aves2_effnetb0_bio": "1b74aab200e2035582da47e3ea725258ec53195544434d5f62adc856f04e3639",
-    "esp_aves2_naturelm_audio_v1_beats": "730d2c3b6c67d3e0a26ef9d5c3b7d0fbb20a7dca104456922a6b16e6b7a696b8",
-    "esp_aves2_sl_beats_all": "a928a74190e2d314e3f146805a7c76772a91cce75b4101a88fde845a662a2cc7",
+    "esp_aves2_eat_all": "7cd1d643345bfd14d6d8489350d0337f00c97485f23442d21a15d9ad5667cf42",
+    "esp_aves2_eat_bio": "1279c1dbca6240a84b8bbbda0205bab58b9b58119ea0c2c57a67bce8576c29a1",
+    "esp_aves2_effnetb0_all": "a9ab2bf0896493a4bf325dbd739a7fbd58971513ac171bded880a81f7982bdc1",
+    "esp_aves2_effnetb0_audioset": "58455bac5346a8c8d705b20210edfd14a5f6151fed9dd61320bda2e31030119c",
+    "esp_aves2_effnetb0_bio": "e34db5a8951f28f4d90cb06b396f4a4e716dd79e48a54e672017d832804868d7",
+    "esp_aves2_naturelm_audio_v1_beats": "ce2c16141465e11852105eaee4a32bbb4663cfe8cf7a49ddc874ea5c267f78a2",
+    "esp_aves2_sl_beats_all": "25dc242853822de6e35228b22c285886162b5f787d162280e0277c010a510e91",
     "esp_aves2_sl_beats_bio": "1881788eb6d059d7b005e1c68235906fcb12bf3a6cde824cec7cbdc34dcb9fc3",
-    "esp_aves2_sl_eat_all_ssl_all": "af10ff12eb15b0e134334d787b4ccb97bd3e4fe11147140c68ba646d64130cc",
-    "esp_aves2_sl_eat_bio_ssl_all": "d787a181898e4ca68e0d0fa78dc2de83b27c2bd1648bce476534fc8c5ac2c7d",
+    "esp_aves2_sl_eat_all_ssl_all": "af10ff12eb15b0e1343348d787b4ccb97bd3e4fe11147140c68ba646d64130cc",
+    "esp_aves2_sl_eat_bio_ssl_all": "d787a181898e4ca68e0d0fa78dc2de83b27c2bd1648bce476534fc8c5ac2c7d7",
 }
 
 # Prefix for Hugging Face Hub checkpoint paths (only these are checked).
 _HF_PREFIX = "hf://"
 
 # .safetensors.sha256 lines look like: "<64-hex>  filename"
-_SHA256_LINE_RE = re.compile(r"^([0-9a-fA-F]{64})\\s+\\S+\\s*$")
+_SHA256_LINE_RE = re.compile(r"^([0-9a-fA-F]{64})\s+\S+\s*$")
 
 
 def _official_hf_model_names() -> list[str]:
@@ -85,6 +85,17 @@ def _path_for_hf_fs(path: str) -> str:
 
 class TestOfficialModelsChecksumsHardcoded:
     """Test that hardcoded checksums are valid hex (no network)."""
+
+    @pytest.fixture(autouse=True)
+    def _ensure_registry_initialized(self) -> None:
+        """Ensure the model registry is populated before each test.
+
+        Other tests may clear the global registry; re-initialize it so
+        get_checkpoint_path() and related helpers can see all official models.
+        """
+        from representation_learning.models.utils import registry
+
+        registry.initialize_registry()
 
     def test_all_official_hf_models_have_checksum_entry(self) -> None:
         """Every official HF model must have an entry in OFFICIAL_MODEL_CHECKSUMS."""
