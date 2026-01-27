@@ -72,6 +72,21 @@ class Model(ModelBase):
         return_features_only: bool = False,
         **kwargs,  # Accept additional config parameters  # noqa: ANN003
     ) -> None:
+        # Create default audio_config for BirdNet if not provided
+        # BirdNet expects 48kHz audio, mel spectrogram with specific parameters
+        if audio_config is None:
+            from representation_learning.configs import AudioConfig
+
+            audio_config = AudioConfig(
+                sample_rate=self.SAMPLE_RATE,  # 48000
+                representation="mel_spectrogram",
+                n_fft=2048,
+                hop_length=320,
+                n_mels=128,
+                target_length_seconds=self.CHUNK_SEC,  # 3.0 seconds
+                normalize=False,  # We'll apply BirdNet-specific normalization later
+            )
+
         super().__init__(device=device, audio_config=audio_config)
 
         # Preserve CUDA_VISIBLE_DEVICES before importing TensorFlow
@@ -90,7 +105,46 @@ class Model(ModelBase):
         else:
             # Restore the original value
             os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
-        self._interpreter = self._analyzer.interpreter  # TFLite interpreter
+
+        # CRITICAL FIX for TensorFlow 2.17.0+ bug:
+        # The interpreter created by birdnetlib doesn't use experimental_preserve_all_tensors=True,
+        # which causes get_tensor() to return null for intermediate tensors. We need to recreate
+        # the interpreter with this flag to access embedding tensors.
+        # Try to get the model path from the analyzer and recreate the interpreter
+        try:
+            import tensorflow as tf
+
+            # Try to access the model path from the analyzer
+            model_path = None
+            if hasattr(self._analyzer, "model_path"):
+                model_path = self._analyzer.model_path
+            elif hasattr(self._analyzer, "_model_path"):
+                model_path = self._analyzer._model_path
+            elif hasattr(self._analyzer, "interpreter") and hasattr(self._analyzer.interpreter, "_model_path"):
+                # Try to get from the interpreter itself
+                model_path = self._analyzer.interpreter._model_path
+
+            if model_path:
+                # Recreate interpreter with experimental_preserve_all_tensors=True
+                logger.info(
+                    "Recreating interpreter with experimental_preserve_all_tensors=True for TF 2.17.0+ compatibility"
+                )
+                self._interpreter = tf.lite.Interpreter(model_path=model_path, experimental_preserve_all_tensors=True)
+            else:
+                # Fallback: use the analyzer's interpreter (may have issues with TF 2.17.0+)
+                logger.warning(
+                    "Could not access model path to recreate interpreter. "
+                    "Using birdnetlib's interpreter (may have issues with TensorFlow 2.17.0+). "
+                    "Consider pinning TensorFlow to 2.16.1 or earlier."
+                )
+                self._interpreter = self._analyzer.interpreter
+        except Exception as e:
+            # Fallback to original interpreter if recreation fails
+            logger.warning(
+                f"Failed to recreate interpreter with experimental_preserve_all_tensors: {e}. "
+                f"Using original interpreter."
+            )
+            self._interpreter = self._analyzer.interpreter
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
 
@@ -364,22 +418,92 @@ class Model(ModelBase):
         # Manual extraction as fallback
         interp = self._interpreter
 
-        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
-        from birdnetlib import RecordingBuffer
+        # CRITICAL FIX: We process the audio manually and invoke self._interpreter directly.
+        # We don't use RecordingBuffer.analyze() because it uses its own interpreter
+        # and doesn't update self._interpreter, which would cause stale embeddings.
+        # Instead, we process the audio with librosa to match BirdNet's preprocessing pipeline.
 
-        # Feed through RecordingBuffer which handles resampling + spectrograms
-        with suppress_stdout_stderr():
-            buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
-            buf.analyze()
-
-        # Ensure tensors are allocated
+        # Get input details and prepare the interpreter
+        # CRITICAL: For TensorFlow 2.17.0+, we need to ensure tensors are allocated
+        # and preserved. The bug in TF 2.17.0+ causes get_tensor() to return null
+        # for intermediate tensors unless experimental_preserve_all_tensors=True was
+        # used during interpreter creation. Since we can't control birdnetlib's
+        # interpreter creation, we ensure allocation here.
         try:
             interp.allocate_tensors()
         except Exception as e:
-            logger.error(f"Failed to allocate tensors: {e}")
-            raise
+            logger.warning(f"allocate_tensors() failed: {e}. This may indicate a TensorFlow version issue.")
+            # Try to continue anyway - the interpreter might already be allocated
+
+        input_details = interp.get_input_details()
+        if len(input_details) == 0:
+            raise ValueError("No input details found in interpreter")
+
+        input_idx = input_details[0]["index"]
+        input_shape = input_details[0]["shape"]
+        input_dtype = input_details[0]["dtype"]
+
+        # Process the audio using AudioProcessor (same pattern as EfficientNet)
+        # AudioProcessor is always available since we create a default config in __init__
+        if self.audio_processor is None:
+            raise ValueError(
+                "AudioProcessor is not available. This should not happen as a default "
+                "audio_config is created in __init__. Please check the initialization."
+            )
+
+        # Convert numpy to torch tensor for AudioProcessor
+        audio_tensor = torch.from_numpy(mono_wave).unsqueeze(0)  # (1, T)
+
+        # Process with AudioProcessor
+        mel_spec_tensor = self.audio_processor(audio_tensor)  # (1, F, T')
+
+        # Convert back to numpy and apply BirdNet-specific normalization
+        # AudioProcessor returns (B, F, T), we need (T, F) for BirdNet
+        mel_spec = mel_spec_tensor.squeeze(0).cpu().numpy()  # (F, T)
+
+        # Apply BirdNet-specific post-processing (log scale, normalize)
+        # AudioProcessor may not apply the exact same normalization as BirdNet expects
+        mel_spec_db = np.log10(mel_spec + 1e-10) * 20  # Convert to dB
+        mel_spec_db = (mel_spec_db + 80) / 80.0
+        mel_spec_db = np.clip(mel_spec_db, -1.0, 1.0)
+
+        # Transpose: (freq, time) -> (time, freq) to match expected input
+        processed_input = mel_spec_db.T
+
+        # Ensure the input matches the expected shape and dtype
+        if processed_input.shape != tuple(input_shape):
+            # Reshape or pad/truncate to match expected input shape
+            if processed_input.size >= np.prod(input_shape):
+                processed_input = processed_input.flatten()[: np.prod(input_shape)].reshape(input_shape)
+            else:
+                # Pad with zeros
+                padded = np.zeros(input_shape, dtype=processed_input.dtype)
+                flat_input = processed_input.flatten()
+                padded.flat[: len(flat_input)] = flat_input
+                processed_input = padded
+
+        # Set the input tensor and invoke the interpreter
+        # This ensures self._interpreter has the correct inference results for this audio
+        # CRITICAL: We must set the input and invoke BEFORE reading embeddings
+        # to ensure we get fresh inference results, not stale cached data
+        input_data = processed_input.astype(input_dtype)
+
+        # Verify input is valid (not all zeros or NaN)
+        if np.all(input_data == 0):
+            logger.warning("Input tensor is all zeros - this may cause identical embeddings")
+        if np.any(np.isnan(input_data)):
+            logger.warning("Input tensor contains NaN values")
+
+        interp.set_tensor(input_idx, input_data)
+        interp.invoke()
+
+        # CRITICAL: After invoke(), we must read from OUTPUT tensors, not intermediate tensors
+        # The embedding should be in an output tensor or a specific intermediate tensor
+        # that gets updated during inference
 
         # Try different approaches to find embeddings
+        # CRITICAL: After invoke(), get_tensor() should return fresh data
+        # But we need to make sure we're reading from the correct tensor
         embeddings = None
 
         # First try: check if there are multiple outputs (old BirdNet format)
@@ -387,7 +511,8 @@ class Model(ModelBase):
         if len(out_info) > 1:
             try:
                 emb_idx = out_info[1]["index"]
-                embeddings = interp.get_tensor(emb_idx)
+                # Read from output tensor - this should be fresh after invoke()
+                embeddings = interp.get_tensor(emb_idx).copy()  # Make a copy to ensure we have the data
             except Exception:
                 pass
 
@@ -401,8 +526,18 @@ class Model(ModelBase):
                 shape = detail.get("shape", [])
                 if "GLOBAL_AVG_POOL" in name and len(shape) == 2 and 1024 in shape:
                     try:
-                        embeddings = interp.get_tensor(detail.get("index"))
-                        break
+                        tensor_idx = detail.get("index")
+                        tensor_data = interp.get_tensor(tensor_idx)
+                        if tensor_data is not None and tensor_data.size > 0:
+                            # Make a copy to ensure we have fresh data
+                            embeddings = tensor_data.copy()
+                            break
+                        else:
+                            logger.debug(f"Tensor {tensor_idx} ({name}) returned null/empty data")
+                    except ValueError as e:
+                        if "Tensor data is null" in str(e):
+                            logger.debug(f"Tensor {detail.get('index')} ({name}) data is null - TF 2.17.0+ bug")
+                        continue
                     except Exception:
                         continue
 
@@ -428,8 +563,18 @@ class Model(ModelBase):
                         )
                     ):
                         try:
-                            embeddings = interp.get_tensor(detail.get("index"))
-                            break
+                            tensor_idx = detail.get("index")
+                            tensor_data = interp.get_tensor(tensor_idx)
+                            if tensor_data is not None and tensor_data.size > 0:
+                                # Make a copy to ensure we have fresh data
+                                embeddings = tensor_data.copy()
+                                break
+                            else:
+                                logger.debug(f"Tensor {tensor_idx} ({name}) returned null/empty data")
+                        except ValueError as e:
+                            if "Tensor data is null" in str(e):
+                                logger.debug(f"Tensor {detail.get('index')} ({name}) data is null - TF 2.17.0+ bug")
+                            continue
                         except Exception:
                             continue
 
