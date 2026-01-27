@@ -124,6 +124,9 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
         fine_tuned = getattr(model_config, "fine_tuned", False)
         disable_layerdrop = getattr(model_config, "disable_layerdrop", False)
 
+        beats_variant = getattr(model_config, "beats_variant", None)
+        openbeats_size = getattr(model_config, "openbeats_size", "base")
+
         return BeatsModel(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
@@ -132,6 +135,8 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             use_naturelm=use_naturelm,
             fine_tuned=fine_tuned,
             disable_layerdrop=disable_layerdrop,
+            beats_variant=beats_variant,
+            openbeats_size=openbeats_size,
         )
     elif model_name == "eat_hf":
         from representation_learning.models.eat_hf import (

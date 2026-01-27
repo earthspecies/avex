@@ -41,7 +41,8 @@ class BEATsConfig:
         Args:
             cfg: Optional dictionary containing configuration parameters
         """
-        self.input_patch_size: int = -1  # path size of patch embedding
+        # set to 16x16 as a sensible default so that loading from HF works
+        self.input_patch_size: int = 16  # patch size of patch embedding
         self.embed_dim: int = 512  # patch embedding dimension
         self.conv_bias: bool = False  # include bias in conv encoder
 

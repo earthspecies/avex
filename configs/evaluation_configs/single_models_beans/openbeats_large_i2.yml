@@ -1,0 +1,42 @@
+---
+# Evaluation config for OpenBEATs Large (i2) pretrained checkpoint
+dataset_config: configs/data_configs/benchmark_base.yml
+
+training_params:
+  train_epochs: 50
+  lr: 0.001
+  batch_size: 128
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+  amp_dtype: bf16
+  gradient_clip_val: 1.0
+  warmup_epochs: 5
+  scheduler_type: cosine
+
+experiments:
+  - run_name: openbeats_large_i2_linear_last
+    run_config: configs/run_configs/aaai_train/sl_openbeats_large_animalspeak_audioset.yml
+    probe_config:
+      probe_type: "linear"
+      aggregation: "mean"
+      input_processing: "pooled"
+      target_layers: ["last_layer"]
+      freeze_backbone: true
+      online_training: false
+    pretrained: false
+
+save_dir: evaluation_results/openbeats_large_i2
+results_csv_path: evaluation_results/all_models_results.csv
+
+device: cuda
+seed: 42
+num_workers: 8
+
+eval_modes:
+  - probe
+
+offline_embeddings:
+  overwrite_embeddings: true
+
+disable_tqdm: true
