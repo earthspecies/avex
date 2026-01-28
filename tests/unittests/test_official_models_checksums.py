@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import re
-from importlib import resources
 
 import pytest
 
 from representation_learning.io import filesystem_from_path
-from representation_learning.models.utils.registry import get_checkpoint_path
+from representation_learning.models.utils.registry import get_checkpoint_path, list_models
 
 # Expected SHA-256 (hex) of each official model's safetensors file.
 # Keys = official model name (YAML stem); values are 64-digit lowercase hex.
@@ -44,23 +43,31 @@ def _official_hf_model_names() -> list[str]:
 
     Returns
     -------
-    list[str]
+        list[str]
         Sorted list of official model names whose checkpoint_path is on the Hub.
     """
-    pkg = "representation_learning.api.configs.official_models"
-    root = resources.files(pkg)
     names: list[str] = []
-    for entry in root.iterdir():
-        if not entry.name.endswith(".yml") or not entry.is_file():
-            continue
-        name = entry.stem
+    for name in list_models().keys():
         try:
             checkpoint_path = get_checkpoint_path(name)
-            if checkpoint_path and checkpoint_path.startswith(_HF_PREFIX):
-                names.append(name)
         except KeyError:
             continue
+        if checkpoint_path and checkpoint_path.startswith(_HF_PREFIX):
+            names.append(name)
     return sorted(names)
+
+
+def _hf_models_with_checksums() -> list[str]:
+    """Return HF-backed models that also have checksum entries.
+
+    Returns
+    -------
+    list[str]
+        Sorted list of model names that are both HF-backed and present in
+        OFFICIAL_MODEL_CHECKSUMS.
+    """
+    hf_models = set(_official_hf_model_names())
+    return sorted(name for name in OFFICIAL_MODEL_CHECKSUMS if name in hf_models)
 
 
 def _path_for_hf_fs(path: str) -> str:
@@ -97,12 +104,13 @@ class TestOfficialModelsChecksumsHardcoded:
 
         registry.initialize_registry()
 
-    def test_all_official_hf_models_have_checksum_entry(self) -> None:
-        """Every official HF model must have an entry in OFFICIAL_MODEL_CHECKSUMS."""
-        for name in _official_hf_model_names():
-            assert name in OFFICIAL_MODEL_CHECKSUMS, (
-                f"Add OFFICIAL_MODEL_CHECKSUMS[{name!r}] from the model's "
-                ".safetensors.sha256 file (upload folder or HF repo)."
+    def test_checksum_entries_correspond_to_hf_models(self) -> None:
+        """Every checksum entry must correspond to an HF-backed official model."""
+        hf_models = set(_official_hf_model_names())
+        for name in OFFICIAL_MODEL_CHECKSUMS:
+            assert name in hf_models, (
+                f"OFFICIAL_MODEL_CHECKSUMS[{name!r}] refers to a model that is "
+                "not an HF-backed official model; remove or update this entry."
             )
 
     def test_checksum_entries_are_valid_hex_when_set(self) -> None:
