@@ -79,9 +79,59 @@ class TestLoadModelSpecFromYaml:
         # checkpoint_path is not part of ModelSpec, it's at root level
         # This is handled by get_checkpoint_path()
 
+    def test_load_with_extra_config(self, tmp_path: Path) -> None:
+        """Test loading YAML with extra_config inside model_spec."""
+        yaml_content = dedent(
+            """\
+            model_spec:
+              name: beats
+              pretrained: false
+              device: cpu
+              extra_config:
+                custom_flag: true
+                new_param: 123
+            """
+        )
+        yaml_file = tmp_path / "test_extra.yml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+
+        spec = load_model_spec_from_yaml(yaml_file)
+        assert isinstance(spec, ModelSpec)
+        assert spec.name == "beats"
+        assert spec.extra_config is not None
+        assert spec.extra_config["custom_flag"] is True
+        assert spec.extra_config["new_param"] == 123
+
+    def test_load_with_audio_extra_config(self, tmp_path: Path) -> None:
+        """Test loading YAML with extra_config inside audio_config."""
+        yaml_content = dedent(
+            """\
+            model_spec:
+              name: efficientnet
+              pretrained: true
+              device: cpu
+              audio_config:
+                sample_rate: 22050
+                n_fft: 1024
+                extra_config:
+                  pcen_bias: 2.0
+                  activity_detection_prob: 0.8
+            """
+        )
+        yaml_file = tmp_path / "test_audio_extra.yml"
+        yaml_file.write_text(yaml_content, encoding="utf-8")
+
+        spec = load_model_spec_from_yaml(yaml_file)
+        assert isinstance(spec, ModelSpec)
+        assert spec.audio_config is not None
+        assert spec.audio_config.sample_rate == 22050
+        assert spec.audio_config.n_fft == 1024
+        assert spec.audio_config.extra_config is not None
+        assert spec.audio_config.extra_config["pcen_bias"] == 2.0
+        assert spec.audio_config.extra_config["activity_detection_prob"] == 0.8
+
     def test_load_from_gcs_uri(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test loading a model spec from a GCS-style URI via the IO shim."""
-
         yaml_content = dedent(
             """\
             model_spec:
