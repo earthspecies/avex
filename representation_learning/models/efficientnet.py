@@ -151,13 +151,18 @@ class Model(ModelBase):
         Parameters
         ----------
         x : torch.Tensor
-            Input audio tensor
+            Input audio tensor (will be automatically cast to float32 if needed)
 
         Returns
         -------
         torch.Tensor
             Processed audio tensor with 3 channels for EfficientNet (B0/B1)
         """
+        # Ensure audio is float32 (required to match mel_basis dtype in mel_spectrogram processing)
+        # The mel_basis (MelScale) is float32, so float64 input causes dtype mismatch errors
+        if x.dtype != torch.float32:
+            x = x.to(torch.float32)
+
         # First use parent's audio processing
         x = super().process_audio(x)
 
