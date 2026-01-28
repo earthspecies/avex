@@ -186,6 +186,19 @@ class AudioConfig(BaseModel):
     window_selection: Literal["random", "center"] = "random"
     center: bool = True
 
+    # Allow custom/extended parameters for model-specific audio processing.
+    # Known fields above remain strictly validated; any additional options
+    # should be placed inside this dictionary.
+    extra_config: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Optional dictionary for custom audio processing parameters not defined in "
+            "the base AudioConfig schema. This allows models to extend audio "
+            "configuration without modifying the core schema. Known fields remain "
+            "strictly validated; arbitrary keys should be placed under this mapping."
+        ),
+    )  # noqa: ANN401
+
     model_config = ConfigDict(extra="forbid")
 
     @field_validator(
@@ -230,6 +243,20 @@ class ModelSpec(BaseModel):
 
     # Free-form overrides for the EAT backbone (Data2VecMultiConfig).
     eat_cfg: Optional[dict[str, Any]] = None  # noqa: ANN401
+
+    # Generic extension point for model-specific parameters that are not part of the
+    # core ModelSpec schema (e.g., custom heads, routing flags). Known fields above
+    # remain strictly validated thanks to extra="forbid".
+    extra_config: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Optional dictionary for custom model-specific configuration parameters "
+            "that are not covered by the base ModelSpec fields. This allows extending "
+            "model configurations without modifying the core schema. Known fields "
+            "remain strictly validated; arbitrary keys should be placed under this "
+            "mapping."
+        ),
+    )  # noqa: ANN401
 
     # When true the EAT model is instantiated for self-supervised pre-training.
     pretraining_mode: Optional[bool] = None
@@ -391,6 +418,7 @@ class ProbeConfig(BaseModel):
 
     **Other Parameters:**
         target_length: Target length in samples for audio processing (auto-computed if None)
+        extra_config: Free-form dictionary for backend- or experiment-specific options
 
     **Examples:**
         >>> # Simple linear probe
@@ -507,6 +535,20 @@ class ProbeConfig(BaseModel):
             "based probes (LSTM, attention, transformer)."
         ),
     )
+
+    # Generic extension point for probe-specific parameters that are not explicitly
+    # modeled above (e.g., backend hints, experimental flags). Known fields remain
+    # strictly validated; arbitrary options should be placed under this mapping.
+    extra_config: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Optional dictionary for custom probe-specific configuration parameters "
+            "that are not covered by the base ProbeConfig fields. This allows "
+            "extending probing behavior without modifying the core schema. Known "
+            "fields remain strictly validated; arbitrary keys should be placed under "
+            "this mapping."
+        ),
+    )  # noqa: ANN401
 
     model_config = ConfigDict(extra="forbid")
 
