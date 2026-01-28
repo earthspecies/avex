@@ -90,7 +90,46 @@ class Model(ModelBase):
         else:
             # Restore the original value
             os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
-        self._interpreter = self._analyzer.interpreter  # TFLite interpreter
+
+        # Try to recreate interpreter with experimental_preserve_all_tensors=True
+        # See birdnetlib bug report for TF >= 2.17.0:
+        # https://github.com/joeweiss/birdnetlib/issues/125
+        try:
+            import tensorflow as tf
+
+            model_path: Optional[str] = None
+            if hasattr(self._analyzer, "model_path"):
+                model_path = self._analyzer.model_path
+            elif hasattr(self._analyzer, "_model_path"):
+                model_path = self._analyzer._model_path  # type: ignore[assignment]
+            elif hasattr(self._analyzer, "interpreter") and hasattr(
+                self._analyzer.interpreter,
+                "_model_path",
+            ):
+                model_path = self._analyzer.interpreter._model_path  # type: ignore[attr-defined]
+
+            if model_path:
+                logger.info(
+                    "Recreating BirdNet interpreter with experimental_preserve_all_tensors=True (TF >= 2.17 fix).",
+                )
+                self._interpreter = tf.lite.Interpreter(
+                    model_path=model_path,
+                    experimental_preserve_all_tensors=True,
+                )
+            else:
+                logger.warning(
+                    "Could not access model path to recreate BirdNet interpreter. "
+                    "Using birdnetlib's interpreter directly.",
+                )
+                self._interpreter = self._analyzer.interpreter
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to recreate BirdNet interpreter with "
+                "experimental_preserve_all_tensors=True: %s. "
+                "Using original interpreter.",
+                exc,
+            )
+            self._interpreter = self._analyzer.interpreter
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
 
