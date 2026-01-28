@@ -18,6 +18,8 @@ jobs:
         permissions:
             contents: read
             id-token: write
+        env:
+            HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
         # Run CI on a single Python version to keep checks simple
         strategy:

@@ -160,11 +160,11 @@ def main(device: str = "cpu") -> None:
     print("-" * 60)
 
     # Load a pretrained backbone model (without classifier)
-    print("Loading beats_naturelm backbone...")
+    print("Loading esp_aves2_naturelm_audio_v1_beats backbone...")
     print("   (This may take ~20-30 seconds to download pretrained weights on first run)")
     start_time = time.time()
-    # beats_naturelm has no classifier checkpoint, so it automatically loads in embedding mode
-    backbone = load_model("beats_naturelm", device=device)
+    # esp_aves2_naturelm_audio_v1_beats has no classifier checkpoint, so it automatically loads in embedding mode
+    backbone = load_model("esp_aves2_naturelm_audio_v1_beats", device=device)
     backbone.eval()
     load_time = time.time() - start_time
     print(f"   ✓ Loaded in {load_time:.2f} seconds")
@@ -217,7 +217,7 @@ def main(device: str = "cpu") -> None:
     # Get audio config from backbone to create properly sized dummy data
     from representation_learning import get_model_spec
 
-    model_spec = get_model_spec("beats_naturelm")
+    model_spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
     sample_rate = model_spec.audio_config.sample_rate
     target_length_seconds = model_spec.audio_config.target_length_seconds
 
@@ -323,7 +323,7 @@ def main(device: str = "cpu") -> None:
     # In practice, you might load it fresh, but for this example we'll reuse it
     print("Using backbone (reusing from training)...")
     start_time = time.time()
-    # beats_naturelm has no classifier checkpoint, so it automatically loads in embedding mode
+    # esp_aves2_naturelm_audio_v1_beats has no classifier checkpoint, so it automatically loads in embedding mode
     loaded_backbone = backbone  # Reuse the same backbone instance
     loaded_backbone.eval()
     backbone_time = time.time() - start_time

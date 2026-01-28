@@ -1,0 +1,17 @@
+---
+# ESP-AVES2: Supervised/linear-probe BEATs (bio) model.
+# Weights on Hugging Face Hub (safetensors). Load via hf:// URIs.
+checkpoint_path: hf://EarthSpeciesProject/esp-aves2-sl-beats-bio/esp-aves2-sl-beats-bio.safetensors
+class_mapping_path: hf://EarthSpeciesProject/esp-aves2-sl-beats-bio/label_map.json
+
+model_spec:
+  name: beats
+  pretrained: false
+  fine_tuned: true
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random

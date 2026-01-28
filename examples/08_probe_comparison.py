@@ -171,13 +171,13 @@ def main(device: str = "cpu") -> None:
     print("-" * 60)
 
     # Load backbone once
-    print("Loading backbone: beats_naturelm...")
-    backbone = load_model("beats_naturelm", device=device)
+    print("Loading backbone: esp_aves2_naturelm_audio_v1_beats...")
+    backbone = load_model("esp_aves2_naturelm_audio_v1_beats", device=device)
     backbone.eval()
     print(f"  Backbone loaded: {type(backbone).__name__}")
 
     # Get model spec for audio config
-    model_spec = get_model_spec("beats_naturelm")
+    model_spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
     sample_rate = model_spec.audio_config.sample_rate
     target_length_seconds = model_spec.audio_config.target_length_seconds
 
@@ -216,7 +216,7 @@ def main(device: str = "cpu") -> None:
 
     # MLP probe - reload backbone to avoid hook conflicts
     try:
-        mlp_backbone = load_model("beats_naturelm", device=device)
+        mlp_backbone = load_model("esp_aves2_naturelm_audio_v1_beats", device=device)
         mlp_backbone.eval()
         mlp_config = ProbeConfig(
             probe_type="mlp",
@@ -280,7 +280,7 @@ def main(device: str = "cpu") -> None:
 
     # all layers configuration - reload backbone to avoid hook conflicts
     try:
-        all_layers_backbone = load_model("beats_naturelm", device=device)
+        all_layers_backbone = load_model("esp_aves2_naturelm_audio_v1_beats", device=device)
         all_layers_backbone.eval()
         all_layers_config = ProbeConfig(
             probe_type="linear",

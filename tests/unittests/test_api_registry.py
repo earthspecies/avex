@@ -536,10 +536,10 @@ class TestGetModelSpec:
         # Ensure registry is initialized with official models
         registry.initialize_registry()
 
-        # Test with beats_naturelm (should have audio_config with sample_rate)
-        spec = get_model_spec("beats_naturelm")
-        assert spec is not None, "beats_naturelm should be registered"
-        assert spec.audio_config is not None, "beats_naturelm should have audio_config"
+        # Test with esp_aves2_naturelm_audio_v1_beats (should have audio_config with sample_rate)
+        spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
+        assert spec is not None, "esp_aves2_naturelm_audio_v1_beats should be registered"
+        assert spec.audio_config is not None, "model should have audio_config"
         assert spec.audio_config.sample_rate is not None, "audio_config should have sample_rate"
         assert isinstance(spec.audio_config.sample_rate, int), "sample_rate should be an integer"
         assert spec.audio_config.sample_rate > 0, "sample_rate should be positive"

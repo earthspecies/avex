@@ -55,11 +55,11 @@ model_spec = ModelSpec(
 from representation_learning import describe_model, get_model_spec
 
 # Option 1: Use describe_model() for a formatted overview
-describe_model("beats_naturelm", verbose=True)
+describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
 # Prints: 🎵 Sample Rate: 16000 Hz
 
 # Option 2: Access programmatically via get_model_spec()
-spec = get_model_spec("beats_naturelm")
+spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
 target_sr = spec.audio_config.sample_rate  # 16000
 ```
 
@@ -73,7 +73,7 @@ import torch
 from representation_learning import get_model_spec, load_model
 
 # Get the model's expected sample rate
-spec = get_model_spec("beats_naturelm")
+spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
 target_sr = spec.audio_config.sample_rate
 
 # Load audio at original sample rate
@@ -93,7 +93,7 @@ if original_sr != target_sr:
 audio_tensor = torch.from_numpy(audio).unsqueeze(0).float()  # Shape: (1, num_samples)
 
 # Run inference
-model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 with torch.no_grad():
     output = model(audio_tensor, padding_mask=None)
 ```
