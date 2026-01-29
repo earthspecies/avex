@@ -29,7 +29,7 @@ try:
     __version__ = version("avex")
 except Exception:
     # Fallback for development or if package not installed
-    __version__ = "0.4.3"
+    __version__ = "0.5.0a0"
 
 __all__ = [
     # Model loading
