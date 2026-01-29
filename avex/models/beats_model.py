@@ -24,6 +24,36 @@ BEATS_PRETRAINED_PATH_NATURELM = (
     "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
 )
 
+# Default config for BEATs iter3 plus AS2M (fine-tuned variant)
+# This allows initialization without loading from GCS when pretrained=False
+BEATS_ITER3_AS2M_CONFIG = {
+    "input_patch_size": 16,
+    "embed_dim": 512,
+    "conv_bias": False,
+    "encoder_layers": 12,
+    "encoder_embed_dim": 768,
+    "encoder_ffn_embed_dim": 3072,
+    "encoder_attention_heads": 12,
+    "activation_fn": "gelu",
+    "layer_wise_gradient_decay_ratio": 1.0,
+    "layer_norm_first": False,
+    "deep_norm": False,
+    "dropout": 0.1,
+    "attention_dropout": 0.1,
+    "activation_dropout": 0.0,
+    "encoder_layerdrop": 0.05,
+    "dropout_input": 0.0,
+    "conv_pos": 128,
+    "conv_pos_groups": 16,
+    "relative_position_embedding": True,
+    "num_buckets": 320,
+    "max_distance": 800,
+    "gru_rel_pos": True,
+    "finetuned_model": True,
+    "predictor_dropout": 0.0,
+    "predictor_class": 527,
+}
+
 
 class Model(ModelBase):
     """Wrapper that adapts the raw *BEATs* backbone for our training loop.
@@ -77,29 +107,39 @@ class Model(ModelBase):
 
         # Store disable_layerdrop parameter
         self.disable_layerdrop = disable_layerdrop
+        self.use_naturelm = use_naturelm
+        self.fine_tuned = fine_tuned
 
         # ------------------------------------------------------------------
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
 
-        if fine_tuned:
-            beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
-        else:
-            beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
+        if pretrained:
+            # Load config and weights from GCS checkpoint
+            if fine_tuned:
+                beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
+            else:
+                beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
 
-        beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
-        self.use_naturelm = use_naturelm
-        self.fine_tuned = fine_tuned
-        beats_cfg = BEATsConfig(beats_ckpt["cfg"])
-        print(beats_cfg)
-        if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
-            beats_ckpt_naturelm = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+            beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
+            beats_cfg = BEATsConfig(beats_ckpt["cfg"])
+            logger.debug(f"Loaded BEATs config from checkpoint: {beats_cfg}")
+
+            if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
+                beats_ckpt_weights = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+            else:
+                beats_ckpt_weights = beats_ckpt["model"]
+
+            self.backbone = BEATs(beats_cfg)
+            self.backbone.to(device)
+            self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
-            beats_ckpt_naturelm = beats_ckpt["model"]
-        # beats_ckpt_naturelm = beats_ckpt
-        self.backbone = BEATs(beats_cfg)
-        self.backbone.to(device)
-        self.backbone.load_state_dict(beats_ckpt_naturelm, strict=False)
+            # Use default config without loading pretrained weights
+            # Weights can be loaded later via load_state_dict (e.g., from HuggingFace checkpoint)
+            logger.info("Initializing BEATs with default config (pretrained=False)")
+            beats_cfg = BEATsConfig(BEATS_ITER3_AS2M_CONFIG)
+            self.backbone = BEATs(beats_cfg)
+            self.backbone.to(device)
 
         # ------------------------------------------------------------------
         # 2.  Optional classifier for supervised training
