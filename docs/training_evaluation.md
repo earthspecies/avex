@@ -50,7 +50,7 @@ import torch
 from representation_learning import load_model
 
 # Load pre-trained model with checkpoint
-model = load_model("sl_beats_animalspeak", device="cpu")
+model = load_model("esp_aves2_sl_beats_all", device="cpu")
 model.eval()
 
 # Run inference

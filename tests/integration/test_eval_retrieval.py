@@ -142,7 +142,7 @@ def test_run_experiment_small(
 
     exp_cfg: ExperimentConfig = ExperimentConfig(
         run_name="beats_test",
-        run_config="configs/run_configs/pretrained/beats_naturelm.yml",
+        run_config="configs/run_configs/aaai_train/sl_beats_animalspeak.yml",
         pretrained=True,
         layers="last_layer",  # Use last_layer for BEATs model
     )

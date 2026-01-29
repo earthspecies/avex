@@ -50,9 +50,9 @@ def main(device: str = "cpu") -> None:
     print("\nPart 1: Checkpoint-based classifier loading")
     print("-" * 60)
 
-    # Use the registered sl_beats_animalspeak model with its checkpoint classifier
+    # Use the registered esp_aves2_sl_beats_all model with its checkpoint classifier
     print("\nLoading BEATs model with classifier from checkpoint ...")
-    model = load_model("sl_beats_animalspeak", device=device)
+    model = load_model("esp_aves2_sl_beats_all", device=device)
     model = model.to(device)
 
     # Check if model has a classifier (it should if loaded from checkpoint with classifier weights)
@@ -79,7 +79,7 @@ def main(device: str = "cpu") -> None:
     print("\nDemo 1: Loading from explicit checkpoint")
     print("   Behavior: Classifier weights loaded from checkpoint")
     loaded_model_1 = load_model(
-        "sl_beats_animalspeak",
+        "esp_aves2_sl_beats_all",
         checkpoint_path=str(checkpoint_path),
         device=device,
     )
@@ -97,18 +97,18 @@ def main(device: str = "cpu") -> None:
     print(f"   Classifier weights match checkpoint: {weights_match and bias_match}")
 
     # =========================================================================
-    # Part 2: Self-supervised model (beats_naturelm) use cases
+    # Part 2: Self-supervised model (esp_aves2_naturelm_audio_v1_beats) use cases
     # =========================================================================
     print("\n" + "=" * 60)
-    print("Part 2: Self-supervised model (beats_naturelm)")
+    print("Part 2: Self-supervised model (esp_aves2_naturelm_audio_v1_beats)")
     print("=" * 60)
-    print("\nbeats_naturelm is a self-supervised model without a trained classifier.")
+    print("\nesp_aves2_naturelm_audio_v1_beats is a self-supervised model without a trained classifier.")
     print("This demonstrates different ways to use such models.\n")
 
     # Use case 1: Embedding extraction mode (default for models without classifier)
     print("Use case 1: Embedding extraction (default behavior)")
     print("-" * 60)
-    model = load_model("beats_naturelm", device=device)
+    model = load_model("esp_aves2_naturelm_audio_v1_beats", device=device)
     model.eval()
 
     # Models without a checkpoint classifier load in embedding mode
@@ -128,7 +128,7 @@ def main(device: str = "cpu") -> None:
     print("-" * 60)
     num_classes = 10
 
-    backbone = load_model("beats_naturelm", device=device, return_features_only=True)
+    backbone = load_model("esp_aves2_naturelm_audio_v1_beats", device=device, return_features_only=True)
     backbone.eval()
 
     probe_config = ProbeConfig(
@@ -154,7 +154,7 @@ def main(device: str = "cpu") -> None:
     # Use case 3: Explicit embedding extraction with return_features_only
     print("\nUse case 3: Explicit embedding extraction mode")
     print("-" * 60)
-    model = load_model("beats_naturelm", return_features_only=True, device=device)
+    model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device=device)
     model.eval()
 
     dummy_input = torch.randn(1, 16000 * 5, device=device)
@@ -172,7 +172,7 @@ def main(device: str = "cpu") -> None:
 1. Supervised models with checkpoint classifiers:
    - load_model keeps the classifier weights from the checkpoint
 
-2. Self-supervised models (like beats_naturelm):
+2. Self-supervised models (like esp_aves2_naturelm_audio_v1_beats):
    - No trained classifier exists, so they default to embedding extraction mode
 
 3. return_features_only=True:

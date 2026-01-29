@@ -69,7 +69,7 @@ def main(device: str = "cpu") -> None:
 
     # Load model with default checkpoint from YAML
     # load_model() automatically loads the checkpoint specified in the YAML config
-    model = load_model("efficientnet_animalspeak", device=device)
+    model = load_model("esp_aves2_effnetb0_all", device=device)
     model.eval()
 
     print(f"Loaded model: {type(model).__name__}")
@@ -84,7 +84,7 @@ def main(device: str = "cpu") -> None:
 
     # Load backbone-only and attach a new probe
     print("\n   Alternative: Load backbone-only and attach new probe")
-    backbone = load_model("efficientnet_animalspeak", device=device, return_features_only=True)
+    backbone = load_model("esp_aves2_effnetb0_all", device=device, return_features_only=True)
     backbone.eval()
 
     probe_cfg = ProbeConfig(
@@ -123,7 +123,9 @@ def main(device: str = "cpu") -> None:
     print(f"Created dummy checkpoint: {dummy_checkpoint_path}")
 
     # Load with custom checkpoint (backbone only)
-    backbone_ckpt = load_model("beats_naturelm", checkpoint_path=str(dummy_checkpoint_path), device=device)
+    backbone_ckpt = load_model(
+        "esp_aves2_naturelm_audio_v1_beats", checkpoint_path=str(dummy_checkpoint_path), device=device
+    )
     print(f"Loaded backbone: {type(backbone_ckpt).__name__}")
 
     dummy_input = torch.randn(1, 16000 * 5, device=device)
@@ -137,7 +139,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 4: Class Mapping")
     print("-" * 50)
 
-    model_name = "sl_beats_animalspeak"
+    model_name = "esp_aves2_sl_beats_all"
     label_mapping = load_label_mapping(model_name)
 
     if label_mapping:
@@ -159,8 +161,8 @@ def main(device: str = "cpu") -> None:
     print("\nPart 6: Checkpoint Information")
     print("-" * 50)
 
-    checkpoint = get_checkpoint_path("efficientnet_animalspeak")
-    print("Default checkpoint for efficientnet_animalspeak:")
+    checkpoint = get_checkpoint_path("esp_aves2_effnetb0_all")
+    print("Default checkpoint for esp_aves2_effnetb0_all:")
     print(f"   {checkpoint}")
     print("\nTo override: load_model(name, checkpoint_path='your/path.pt')")
 

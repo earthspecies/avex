@@ -47,8 +47,8 @@ def main(device: str = "cpu") -> None:
     print("\nPart 2: Model Information")
     print("-" * 50)
 
-    # Use beats_naturelm as example
-    model_name = "beats_naturelm"
+    # Use esp_aves2_naturelm_audio_v1_beats as example
+    model_name = "esp_aves2_naturelm_audio_v1_beats"
     print(f"Detailed information for '{model_name}':")
     describe_model(model_name, verbose=True)
 

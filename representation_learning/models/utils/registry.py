@@ -308,12 +308,12 @@ def list_models() -> Dict[str, dict]:
         # ====================================================================================================
         # Model Name                          Description                              Trained Classifier
         # ====================================================================================================
-        # beats_naturelm                      beats (pretrained backbone) - NatureLM   ❌ No
-        # sl_beats_animalspeak                beats (fine-tuned) - 12279 classes       ✅ Yes (12279 classes)
+        # esp_aves2_naturelm_audio_v1_beats   BEATs with NatureLM (audio v1)            ✅ Yes
+        # esp_aves2_sl_beats_all              BEATs fine-tuned (all data)              ✅ Yes
         # ====================================================================================================
         #
         # Returns dict:
-        # {'beats_naturelm': {'description': '...', 'has_trained_classifier': False, ...}}
+        # {'esp_aves2_sl_beats_all': {'description': '...', 'has_trained_classifier': True, ...}}
     """
     # Build human-readable information for each model
     models_info = {}
@@ -645,7 +645,7 @@ def list_model_layers(
         ValueError: If model name is not found in registry or model doesn't support layer discovery
 
     Example:
-        >>> layers_info = list_model_layers("beats_naturelm")  # doctest: +SKIP
+        >>> layers_info = list_model_layers("esp_aves2_naturelm_audio_v1_beats")  # doctest: +SKIP
         >>> print(layers_info["layers"])  # doctest: +SKIP
         >>> print(layers_info["last_layer"])  # doctest: +SKIP
         >>> print(layers_info["special_options"])  # doctest: +SKIP

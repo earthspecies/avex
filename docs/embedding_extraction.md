@@ -6,7 +6,7 @@ When loading models with `return_features_only=True`, the model returns **unpool
 
 ```python
 # Load model for embedding extraction
-model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 model.eval()
 
 # Get unpooled features
@@ -33,7 +33,7 @@ Different models return features in different formats when `return_features_only
 
 **Example**:
 ```python
-model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
 features = model(audio, padding_mask=None)
 # features.shape = (1, ~31, 768)
@@ -73,7 +73,7 @@ band_0 = features[:, :, :96]  # First frequency band (assuming 96-dim per band)
 
 **Example**:
 ```python
-model = load_model("sl_eat_animalspeak_ssl_all", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_sl_eat_all_ssl_all", return_features_only=True, device="cpu")
 audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
 features = model(audio, padding_mask=None)
 # features.shape = (1, 513, 768)
@@ -104,7 +104,7 @@ pooled = spatial_features.mean(dim=1)  # (batch, 768)
 
 **Example**:
 ```python
-model = load_model("efficientnet_animalspeak", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_effnetb0_all", return_features_only=True, device="cpu")
 audio = torch.randn(1, 16000 * 5)  # 5 seconds at 16kHz
 features = model(audio, padding_mask=None)
 # features.shape = (1, 1280, 4, 5) for EfficientNet-B0
