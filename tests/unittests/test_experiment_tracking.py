@@ -16,12 +16,12 @@ import pytest
 
 from representation_learning.configs import (
     AudioConfig,
-    DatasetCollectionConfig,
     ModelSpec,
     RunConfig,
     SchedulerConfig,
     TrainingParams,
 )
+from representation_learning.data.configs import DatasetCollectionConfig
 from representation_learning.utils.experiment_tracking import (
     create_initial_experiment_metadata,
     get_run_config_params_from_metadata,

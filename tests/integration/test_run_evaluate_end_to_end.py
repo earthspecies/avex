@@ -7,6 +7,9 @@ This test:
 3. Tests with last_layer and all_layers configurations
 4. Tests with training offline and online modes
 5. Validates that expected metrics are present and within valid ranges
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
 """
 
 import tempfile
@@ -15,6 +18,11 @@ from typing import Any
 
 import pandas as pd
 import pytest
+
+# Skip entire module if esp_data is not installed (internal dependency)
+# These tests use build_dataloaders which loads real datasets via esp_data
+pytest.importorskip("esp_data")
+
 import yaml
 
 
