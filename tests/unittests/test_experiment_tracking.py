@@ -1,5 +1,8 @@
 """
 Tests for experiment tracking utilities.
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
 """
 
 from __future__ import annotations
@@ -10,16 +13,15 @@ from typing import Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
-from esp_data import DatasetConfig
 
 from representation_learning.configs import (
     AudioConfig,
-    DatasetCollectionConfig,
     ModelSpec,
     RunConfig,
     SchedulerConfig,
     TrainingParams,
 )
+from representation_learning.data.configs import DatasetCollectionConfig
 from representation_learning.utils.experiment_tracking import (
     create_initial_experiment_metadata,
     get_run_config_params_from_metadata,
@@ -29,6 +31,10 @@ from representation_learning.utils.experiment_tracking import (
     save_evaluation_metadata,
     save_experiment_metadata,
 )
+
+# Skip entire module if esp_data is not installed (internal dependency)
+esp_data = pytest.importorskip("esp_data")
+DatasetConfig = esp_data.DatasetConfig
 
 
 @pytest.fixture

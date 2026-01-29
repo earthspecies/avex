@@ -7,6 +7,9 @@ This test verifies that:
 3. Label transformation is skipped when labels are already integers
 4. Batch creation works without overflow errors
 5. Labels are in the correct format (integers for single-label, lists for multi-label)
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
 """
 
 import math
@@ -14,6 +17,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import pytest
+
+# Skip entire module if esp_data is not installed (internal dependency)
+# These tests use build_dataloaders which loads real datasets via esp_data
+pytest.importorskip("esp_data")
+
 import torch
 
 from representation_learning.configs import (
