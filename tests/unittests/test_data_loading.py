@@ -1,12 +1,14 @@
 """
 Unit tests for data loading and processing.
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
 """
 
 from pathlib import Path
 
 import pandas as pd
 import pytest
-from esp_data import Dataset, DatasetConfig, dataset_from_config
 
 from representation_learning.configs import (
     AudioConfig,
@@ -18,6 +20,12 @@ from representation_learning.configs import (
 from representation_learning.data.dataset import (
     build_dataloaders,
 )
+
+# Skip entire module if esp_data is not installed (internal dependency)
+esp_data = pytest.importorskip("esp_data")
+Dataset = esp_data.Dataset
+DatasetConfig = esp_data.DatasetConfig
+dataset_from_config = esp_data.dataset_from_config
 
 
 def create_test_csv(tmp_path: Path) -> Path:
