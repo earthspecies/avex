@@ -5,9 +5,9 @@ This guide walks you through using custom models with the representation learnin
 **Most of the time, you don't need to register your custom model.** You can use it directly:
 
 ```python
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.utils import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex.models.base_model import ModelBase
+from avex.models.probes.utils import build_probe_from_config
+from avex.configs import ProbeConfig
 
 # Define your model
 class MyCustomModel(ModelBase):
@@ -47,8 +47,8 @@ If you want to use the plugin system, follow these steps:
 ### Step 1: Register Your Model Class
 
 ```python
-from representation_learning import register_model_class
-from representation_learning.models.base_model import ModelBase
+from avex import register_model_class
+from avex.models.base_model import ModelBase
 
 @register_model_class
 class MyCustomModel(ModelBase):
@@ -63,8 +63,8 @@ class MyCustomModel(ModelBase):
 ### Step 2: Create and Use a ModelSpec
 
 ```python
-from representation_learning.configs import ModelSpec, AudioConfig
-from representation_learning.models.utils.factory import build_model_from_spec
+from avex.configs import ModelSpec, AudioConfig
+from avex.models.utils.factory import build_model_from_spec
 
 # Create a ModelSpec that references your model class
 model_spec = ModelSpec(
@@ -85,7 +85,7 @@ model = build_model_from_spec(model_spec, device="cpu", num_classes=10)
 If you want to reuse the same configuration, you can register it:
 
 ```python
-from representation_learning import register_model, build_model
+from avex import register_model, build_model
 
 register_model("my_model_config", model_spec)
 
@@ -117,7 +117,7 @@ class MyCustomModel(ModelBase):
     # ...
 
 # Load from YAML
-from representation_learning import load_model
+from avex import load_model
 model = load_model("config.yaml", device="cpu")
 ```
 
@@ -125,7 +125,7 @@ model = load_model("config.yaml", device="cpu")
 
 ### Checkpoint Path Management
 
-Checkpoint paths are now managed directly in YAML configuration files (`representation_learning/api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
+Checkpoint paths are now managed directly in YAML configuration files (`avex/api/configs/official_models/*.yml`). The framework reads checkpoint paths from YAML when needed, eliminating the need for a separate checkpoint registry.
 
 ### Creating Custom Model Configurations
 
@@ -157,7 +157,7 @@ model_spec:
 ### Using Custom Configurations
 
 ```python
-from representation_learning import load_model, get_checkpoint_path
+from avex import load_model, get_checkpoint_path
 
 # Load model from custom YAML file
 model = load_model("path/to/my_model.yml")

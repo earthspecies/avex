@@ -6,6 +6,6 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="aves eval"
 
-cd ~/code/representation-learning
+cd ~/code/avex
 uv sync
-srun uv run repr-learn evaluate --config configs/evaluation_configs/aves_bio.yml
+srun uv run avex evaluate --config configs/evaluation_configs/aves_bio.yml

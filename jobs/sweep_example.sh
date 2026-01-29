@@ -4,6 +4,6 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="sweep example"
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
 srun uv run esp-sweep agent dazzling-wildebeest

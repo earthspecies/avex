@@ -8,6 +8,6 @@
 #SBATCH --cpus-per-gpu=6
 
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
-srun uv run repr-learn evaluate --config configs/evaluation_configs/test_sft.yml
+srun uv run avex evaluate --config configs/evaluation_configs/test_sft.yml

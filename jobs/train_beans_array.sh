@@ -17,7 +17,7 @@
 #SBATCH --array=0-2
 
 # Navigate to repository root on compute node
-cd ~/representation-learning
+cd ~/avex
 
 # Ensure dependencies are in sync on the worker
 uv sync
@@ -44,4 +44,4 @@ esac
 
 echo "Launching training with config: $CONFIG"
 
-srun uv run representation_learning/run_train.py --config "$CONFIG"
+srun uv run avex/run_train.py --config "$CONFIG"

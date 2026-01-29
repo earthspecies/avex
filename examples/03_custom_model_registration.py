@@ -38,16 +38,16 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from representation_learning import (
+from avex import (
     get_model_class,
     get_model_spec,
     list_model_classes,
     register_model,
     register_model_class,
 )
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.utils.factory import build_model_from_spec
+from avex.configs import AudioConfig, ModelSpec
+from avex.models.base_model import ModelBase
+from avex.models.utils.factory import build_model_from_spec
 
 # =============================================================================
 # Custom Model Definitions

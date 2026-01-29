@@ -10,14 +10,14 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from representation_learning.configs import (
+from avex.configs import (
     AudioConfig,
     ModelSpec,
     RunConfig,
     TrainingParams,
 )
-from representation_learning.data.configs import DatasetCollectionConfig
-from representation_learning.data.dataset import build_dataloaders
+from avex.data.configs import DatasetCollectionConfig
+from avex.data.dataset import build_dataloaders
 
 # Skip entire module if esp_data is not installed (internal dependency)
 esp_data = pytest.importorskip("esp_data")

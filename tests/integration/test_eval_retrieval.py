@@ -13,8 +13,8 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from representation_learning.configs import EvaluateConfig, ExperimentConfig, TrainingParams
-from representation_learning.run_evaluate import run_experiment
+from avex.configs import EvaluateConfig, ExperimentConfig, TrainingParams
+from avex.run_evaluate import run_experiment
 
 # Skip entire module if esp_data is not installed (internal dependency)
 esp_data_module = pytest.importorskip("esp_data")
@@ -77,16 +77,16 @@ def test_run_experiment_small(
     """Verify that `run_experiment` executes end-to-end with BEATs model and
     retrieval evaluation."""
     # Patch dataloader builders ------------------------------------------------
-    from representation_learning.data import dataset as dataset_mod
+    from avex.data import dataset as dataset_mod
 
     monkeypatch.setattr(dataset_mod, "build_dataloaders", _mock_build_dataloaders)
 
-    import representation_learning.run_evaluate as reval_mod
+    import avex.run_evaluate as reval_mod
 
     monkeypatch.setattr(reval_mod, "build_dataloaders", _mock_build_dataloaders)
 
     # Mock the retrieval evaluation to handle None labels issue
-    from representation_learning.evaluation import retrieval as retrieval_mod
+    from avex.evaluation import retrieval as retrieval_mod
 
     def _mock_eval_retrieval_cross_set(*args: object, **kwargs: object) -> dict[str, float]:
         """Mock retrieval evaluation that returns dummy metrics.
@@ -102,7 +102,7 @@ def test_run_experiment_small(
     monkeypatch.setattr(reval_mod, "eval_retrieval_cross_set", _mock_eval_retrieval_cross_set)
 
     # Mock GCS writes to avoid permission issues in CI
-    from representation_learning.utils import experiment_tracking as et_mod
+    from avex.utils import experiment_tracking as et_mod
 
     def _mock_save_evaluation_metadata(*args: object, **kwargs: object) -> None:
         """Mock save_evaluation_metadata to avoid GCS writes in CI."""
@@ -155,7 +155,7 @@ def test_run_experiment_small(
     )
 
     # Create a mock data collection config
-    from representation_learning.data.configs import DatasetCollectionConfig
+    from avex.data.configs import DatasetCollectionConfig
 
     data_collection_cfg = DatasetCollectionConfig(
         train_datasets=[DatasetConfig(dataset_name="dummy_train")],
@@ -167,7 +167,7 @@ def test_run_experiment_small(
     #  Execute experiment
     # ------------------------------------------------------------------------- #
     # Create a mock evaluation set with train_vs_test retrieval mode
-    from representation_learning.data.configs import EvaluationSet
+    from avex.data.configs import EvaluationSet
 
     evaluation_set = EvaluationSet(
         name="test_set",

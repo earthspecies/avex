@@ -6,6 +6,6 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="eat pretraining"
 #SBATCH --cpus-per-gpu=12
-cd ~/representation-learning
+cd ~/avex
 uv sync
-srun uv run repr-learn train --config configs/run_configs/eat_pretrain_all.yml
+srun uv run avex train --config configs/run_configs/eat_pretrain_all.yml

@@ -7,6 +7,6 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=40G
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
-srun uv run repr-learn train --config configs/run_configs/efficientnet_base.yml
+srun uv run avex train --config configs/run_configs/efficientnet_base.yml

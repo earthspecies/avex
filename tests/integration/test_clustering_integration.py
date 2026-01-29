@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import pytest
 import torch
 
-from representation_learning.evaluation.clustering import (
+from avex.evaluation.clustering import (
     _get_empty_clustering_metrics,
     eval_clustering,
 )

@@ -59,4 +59,4 @@ device: cuda
 seed: 42
 num_workers: 8
 
-wandb_project: representation_learning
+wandb_project: avex

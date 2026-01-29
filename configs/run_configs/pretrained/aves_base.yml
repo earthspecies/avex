@@ -90,4 +90,4 @@ num_workers: 12
 
 run_name: aves_bio
 
-wandb_project: representation_learning
+wandb_project: avex

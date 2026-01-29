@@ -12,8 +12,8 @@ import re
 
 import pytest
 
-from representation_learning.io import filesystem_from_path
-from representation_learning.models.utils.registry import get_checkpoint_path, list_models
+from avex.io import filesystem_from_path
+from avex.models.utils.registry import get_checkpoint_path, list_models
 
 # Expected SHA-256 (hex) of each official model's safetensors file.
 # Keys = official model name (YAML stem); values are 64-digit lowercase hex.
@@ -100,7 +100,7 @@ class TestOfficialModelsChecksumsHardcoded:
         Other tests may clear the global registry; re-initialize it so
         get_checkpoint_path() and related helpers can see all official models.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry.initialize_registry()
 

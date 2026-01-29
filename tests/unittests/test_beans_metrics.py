@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from representation_learning.metrics.beans_metrics import (
+from avex.metrics.beans_metrics import (
     Accuracy,
     AveragePrecision,
     BalancedAccuracy,

@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from representation_learning.models.birdnet import Model as BirdNetModel
+from avex.models.birdnet import Model as BirdNetModel
 
 
 @pytest.fixture(scope="session")

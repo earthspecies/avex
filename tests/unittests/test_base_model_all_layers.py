@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from representation_learning.models.base_model import ModelBase
+from avex.models.base_model import ModelBase
 
 
 class SimpleTestModel(ModelBase):

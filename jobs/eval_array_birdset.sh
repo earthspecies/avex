@@ -42,7 +42,7 @@ fi
 
 echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
-cd ~/code/representation_learning
+cd ~/code/avex
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 export GOOGLE_APPLICATION_CREDENTIALS=/home/marius_miron_earthspecies_org/.config/gcloud/application_default_credentials.json
@@ -51,4 +51,4 @@ export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 echo $UV_PROJECT_ENVIRONMENT
 uv sync
 
-srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
+srun uv run avex evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml

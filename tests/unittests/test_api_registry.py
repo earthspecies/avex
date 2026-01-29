@@ -12,9 +12,9 @@ from textwrap import dedent
 
 import pytest
 
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.utils.registry import (
+from avex.configs import AudioConfig, ModelSpec
+from avex.models.base_model import ModelBase
+from avex.models.utils.registry import (
     _OFFICIAL_MODELS_PKG,
     describe_model,
     get_checkpoint_path,
@@ -159,7 +159,7 @@ class TestLoadModelSpecFromYaml:
                 return StringIO(self._content)
 
         # Import the registry module to patch the functions where they're used
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         dummy_fs = DummyFS(yaml_content)
 
@@ -222,7 +222,7 @@ class TestImportlibResources:
 
         try:
             # Monkeypatch the package name
-            from representation_learning.models.utils import registry
+            from avex.models.utils import registry
 
             original_pkg = registry._OFFICIAL_MODELS_PKG
             registry._OFFICIAL_MODELS_PKG = "test_pkg.official_models"
@@ -313,7 +313,7 @@ class TestCheckpointPathReading:
             importlib.import_module(pkg_name)
             importlib.import_module(f"{pkg_name}.official_models")
 
-            from representation_learning.models.utils import registry
+            from avex.models.utils import registry
 
             original_pkg = registry._OFFICIAL_MODELS_PKG
             registry._OFFICIAL_MODELS_PKG = f"{pkg_name}.official_models"
@@ -346,7 +346,7 @@ class TestRegisterModel:
 
     def test_register_model_adds_to_registry(self) -> None:
         """Test that register_model adds a ModelSpec to the registry."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry to start fresh
         registry._MODEL_REGISTRY.clear()
@@ -374,7 +374,7 @@ class TestRegisterModel:
 
     def test_register_model_overwrites_existing(self) -> None:
         """Test that register_model overwrites existing entries."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -403,7 +403,7 @@ class TestRegisterModelClass:
 
     def test_register_model_class_adds_to_registry(self) -> None:
         """Test that register_model_class adds a model class to the registry."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_CLASSES.clear()
@@ -437,7 +437,7 @@ class TestRegisterModelClass:
 
     def test_register_model_class_without_name_attribute(self) -> None:
         """Test that register_model_class uses class name if name attribute is missing."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_CLASSES.clear()
@@ -464,7 +464,7 @@ class TestRegisterModelClass:
 
     def test_register_model_class_overwrites_existing(self) -> None:
         """Test that register_model_class overwrites existing entries."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_CLASSES.clear()
@@ -505,7 +505,7 @@ class TestGetModelSpec:
 
     def test_get_model_spec_returns_none_when_not_found(self) -> None:
         """Test that get_model_spec returns None for unregistered models."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         spec = get_model_spec("nonexistent_model")
@@ -513,7 +513,7 @@ class TestGetModelSpec:
 
     def test_get_model_spec_returns_registered_model(self) -> None:
         """Test that get_model_spec returns the correct ModelSpec."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         model_spec = ModelSpec(name="test", pretrained=False, device="cpu")
@@ -531,7 +531,7 @@ class TestGetModelSpec:
         This verifies that users can programmatically determine the expected
         sample rate for a given model, which is important for audio preprocessing.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Ensure registry is initialized with official models
         registry.initialize_registry()
@@ -554,7 +554,7 @@ class TestGetModelClass:
 
     def test_get_model_class_returns_none_when_not_found(self) -> None:
         """Test that get_model_class returns None for unregistered classes."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
         cls = get_model_class("nonexistent_class")
@@ -562,7 +562,7 @@ class TestGetModelClass:
 
     def test_get_model_class_returns_registered_class(self) -> None:
         """Test that get_model_class returns the correct class."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
 
@@ -588,7 +588,7 @@ class TestListModels:
 
     def test_list_models_returns_copy(self) -> None:
         """Test that list_models returns a copy, not the original dict."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         model_spec = ModelSpec(name="test", pretrained=False, device="cpu")
@@ -613,7 +613,7 @@ class TestListModels:
 
     def test_list_models_with_official_models(self) -> None:
         """Test that list_models works correctly with official models loaded."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Ensure registry is initialized (happens at module import)
         registry.initialize_registry()
@@ -634,7 +634,7 @@ class TestListModelClasses:
 
     def test_list_model_classes_returns_registered_classes(self) -> None:
         """Test that list_model_classes returns all registered class names."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
 
@@ -667,7 +667,7 @@ class TestListModelClasses:
 
     def test_list_model_classes_empty_registry(self) -> None:
         """Test that list_model_classes returns empty list when registry is empty."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
         classes = list_model_classes()
@@ -679,7 +679,7 @@ class TestGetCheckpointPath:
 
     def test_get_checkpoint_path_raises_keyerror_when_not_registered(self) -> None:
         """Test that get_checkpoint_path raises KeyError for unregistered models."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
 
@@ -688,7 +688,7 @@ class TestGetCheckpointPath:
 
     def test_get_checkpoint_path_returns_none_when_no_checkpoint(self) -> None:
         """Test that get_checkpoint_path returns None when no checkpoint_path in YAML."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         model_spec = ModelSpec(name="test", pretrained=False, device="cpu")
@@ -706,7 +706,7 @@ class TestDescribeModel:
 
     def test_describe_model_raises_keyerror_when_not_found(self) -> None:
         """Test that describe_model raises KeyError for unregistered models."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
 
@@ -715,7 +715,7 @@ class TestDescribeModel:
 
     def test_describe_model_returns_model_info(self) -> None:
         """Test that describe_model returns correct model information."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         model_spec = ModelSpec(
@@ -739,7 +739,7 @@ class TestDescribeModel:
 
     def test_describe_model_verbose_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that describe_model prints when verbose=True."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         model_spec = ModelSpec(name="test", pretrained=False, device="cpu")

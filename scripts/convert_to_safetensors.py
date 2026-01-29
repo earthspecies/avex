@@ -47,8 +47,8 @@ import torch
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
-from representation_learning.io import AnyPathT, PureCloudPath, anypath, exists, filesystem_from_path
-from representation_learning.utils import universal_torch_load
+from avex.io import AnyPathT, PureCloudPath, anypath, exists, filesystem_from_path
+from avex.utils import universal_torch_load
 
 logging.basicConfig(
     level=logging.INFO,

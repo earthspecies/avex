@@ -3,7 +3,7 @@ from typing import Any, Dict
 import pytest
 import torch
 
-from representation_learning.models.base_model import ModelBase
+from avex.models.base_model import ModelBase
 
 
 class MockModel(ModelBase):

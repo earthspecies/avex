@@ -5,7 +5,7 @@
 The `ModelSpec` class supports various parameters for different model types:
 
 ```python
-from representation_learning.configs import ModelSpec, AudioConfig
+from avex.configs import ModelSpec, AudioConfig
 
 # Basic configuration
 model_spec = ModelSpec(
@@ -52,7 +52,7 @@ model_spec = ModelSpec(
 **Finding the expected sample rate:**
 
 ```python
-from representation_learning import describe_model, get_model_spec
+from avex import describe_model, get_model_spec
 
 # Option 1: Use describe_model() for a formatted overview
 describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
@@ -70,7 +70,7 @@ For full reproducibility, use `librosa.resample` with `res_type="kaiser_best", s
 ```python
 import librosa
 import torch
-from representation_learning import get_model_spec, load_model
+from avex import get_model_spec, load_model
 
 # Get the model's expected sample rate
 spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
@@ -103,7 +103,7 @@ with torch.no_grad():
 ## Audio Configuration
 
 ```python
-from representation_learning.configs import AudioConfig
+from avex.configs import AudioConfig
 
 audio_config = AudioConfig(
     sample_rate=16000,

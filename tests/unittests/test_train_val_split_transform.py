@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from representation_learning.data.transforms import (
+from avex.data.transforms import (
     TrainValSplitConfig,
     TrainValSplitTransform,
 )

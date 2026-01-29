@@ -6,6 +6,6 @@
 #SBATCH --job-name="rl-eval"
 #SBATCH --cpus-per-task=30
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
-srun uv run representation_learning/run_evaluate.py --config configs/evaluation_configs/perch_cpu.yml
+srun uv run avex/run_evaluate.py --config configs/evaluation_configs/perch_cpu.yml

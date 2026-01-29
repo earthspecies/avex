@@ -8,6 +8,6 @@
 #SBATCH --cpus-per-gpu=12
 #SBATCH --mem=32G  # Reserve 32GB of RAM
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
-srun uv run repr-learn train --config configs/run_configs/efficientnet_base_test.yml
+srun uv run avex train --config configs/run_configs/efficientnet_base_test.yml

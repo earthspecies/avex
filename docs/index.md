@@ -4,7 +4,7 @@ Welcome to the Representation Learning Framework documentation. This framework p
 
 ## Getting Started
 
-### What is representation-learning?
+### What is avex?
 
 The Representation Learning Framework is an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models. It provides:
 
@@ -19,7 +19,7 @@ The Representation Learning Framework is an API for model loading and inference,
 #### Basic Usage
 
 ```python
-from representation_learning import list_models, load_model, describe_model
+from avex import list_models, load_model, describe_model
 
 # List available models (prints table and returns dict)
 models = list_models()  # Prints table + returns dict with detailed info
@@ -99,9 +99,9 @@ Probes are task-specific heads attached to pretrained backbones for transfer lea
 - **Offline Training**: Embeddings pre-computed, probe trained separately
 
 ```python
-from representation_learning import load_model
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex import load_model
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 # Load backbone for feature extraction
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
@@ -158,17 +158,17 @@ This assumes you are using `uv` to manage your project or environment.
 ```toml
 
 dependencies = [
-  "representation-learning",
+  "avex",
 ]
 ```
 
-**Note:** If you plan to install `representation-learning[dev]` (see section 2), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
+**Note:** If you plan to install `avex[dev]` (see section 2), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
 2. Install the package (API dependencies only):
 
 ```bash
 # Option A: Add and install in one step
-uv add representation-learning
+uv add avex
 
 # Option B: If you've already added it to [project.dependencies] in pyproject.toml
 uv sync
@@ -188,7 +188,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 2. Install the package from the ESP index:
 
 ```bash
-pip install representation-learning
+pip install avex
 ```
 
 #### 2. API + full dependencies (training / evaluation)
@@ -224,8 +224,8 @@ url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pyp
 explicit = true
 
 [tool.uv.sources]
-representation-learning = { index = "esp-pypi" }
-# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+avex = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (avex[dev])
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
@@ -238,13 +238,13 @@ keyring-provider = "subprocess"
 # With uv (in a project configured for esp-pypi as above)
 
 # Option A: Add and install in one step
-uv add "representation-learning[dev]"
+uv add "avex[dev]"
 
 # Option B: If you've already added it to pyproject.toml
 uv sync
 
 # With pip
-pip install "representation-learning[dev]" \
+pip install "avex[dev]" \
   --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
@@ -277,7 +277,7 @@ gcloud auth application-default login
 
 ```bash
 git clone <repository-url>
-cd representation-learning
+cd avex
 ```
 
 #### 2.3 Install with uv (recommended for development)

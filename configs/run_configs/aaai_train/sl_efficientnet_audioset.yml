@@ -85,7 +85,7 @@ num_workers: 12
 
 run_name: efficientnet_base
 
-wandb_project: representation_learning
+wandb_project: avex
 multilabel: true
 metrics: ["accuracy"]
 

@@ -240,7 +240,7 @@ class TestRunEvaluateEndToEnd:
         """
         import os
 
-        from representation_learning.configs import EvaluateConfig
+        from avex.configs import EvaluateConfig
 
         project_root = Path(__file__).parent.parent.parent
         original_cwd = os.getcwd()
@@ -303,7 +303,7 @@ class TestRunEvaluateEndToEnd:
     ) -> None:
         import os
 
-        from representation_learning.run_evaluate import main
+        from avex.run_evaluate import main
 
         config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 

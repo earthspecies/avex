@@ -24,7 +24,7 @@ pytest.importorskip("esp_data")
 
 import torch
 
-from representation_learning.configs import (
+from avex.configs import (
     AudioConfig,
     DatasetCollectionConfig,
     EvaluateConfig,
@@ -33,7 +33,7 @@ from representation_learning.configs import (
     SchedulerConfig,
     TrainingParams,
 )
-from representation_learning.data.dataset import build_dataloaders
+from avex.data.dataset import build_dataloaders
 
 
 class TestDatasetLabelTransformation:

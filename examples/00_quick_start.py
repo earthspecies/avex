@@ -1,7 +1,7 @@
 """
 Quick Start Example
 
-This example demonstrates the basic functionality of the representation-learning library:
+This example demonstrates the basic functionality of the avex library:
 - Listing available models
 - Getting model information
 - Loading and running a model
@@ -22,10 +22,10 @@ import argparse
 
 import torch
 
-from representation_learning import describe_model, get_model_spec, list_models
-from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
-from representation_learning.models.utils.factory import build_model_from_spec
+from avex import describe_model, get_model_spec, list_models
+from avex.configs import ProbeConfig
+from avex.models.probes.utils import build_probe_from_config
+from avex.models.utils.factory import build_model_from_spec
 
 
 def main(device: str = "cpu") -> None:

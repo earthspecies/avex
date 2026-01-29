@@ -6,6 +6,6 @@
 #SBATCH --job-name="samplerate"
 #SBATCH --cpus-per-task=15
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
 srun uv run scripts/fix_paths.py

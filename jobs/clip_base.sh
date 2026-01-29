@@ -7,7 +7,7 @@
 #SBATCH --output="/home/%u/logs/%A.log"
 #SBATCH --job-name="rl-clip"
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 
@@ -19,4 +19,4 @@ export NCCL_SOCKET_IFNAME=^docker0,lo
 # Ensure GPU visibility is properly set
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 
-srun uv run repr-learn train --config configs/run_configs/clip_base_beans.yml
+srun uv run avex train --config configs/run_configs/clip_base_beans.yml

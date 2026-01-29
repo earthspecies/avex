@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.attention_probe import (
+from avex.models.base_model import ModelBase
+from avex.models.probes.attention_probe import (
     AttentionProbe,
 )
 

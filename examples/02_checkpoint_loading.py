@@ -28,14 +28,14 @@ from pathlib import Path
 
 import torch
 
-from representation_learning import (
+from avex import (
     get_checkpoint_path,
     list_models,
     load_label_mapping,
     load_model,
 )
-from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from avex.configs import ProbeConfig
+from avex.models.probes.utils import build_probe_from_config
 
 
 def main(device: str = "cpu") -> None:

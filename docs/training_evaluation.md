@@ -13,7 +13,7 @@ This guide covers two approaches to training and evaluation:
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from representation_learning import build_model
+from avex import build_model
 
 # Create a backbone for training (attach your own head or use a probe)
 model = build_model("efficientnet", device="cpu")
@@ -47,7 +47,7 @@ For complete training examples with data loading and evaluation, see `examples/0
 
 ```python
 import torch
-from representation_learning import load_model
+from avex import load_model
 
 # Load pre-trained model with checkpoint
 model = load_model("esp_aves2_sl_beats_all", device="cpu")
@@ -79,7 +79,7 @@ For supervised learning experiments, the framework provides dedicated scripts th
 > # With uv
 > uv sync --group project-dev
 > # Or
-> uv add "representation-learning[dev]"
+> uv add "avex[dev]"
 >
 > # With pip
 > pip install -e ".[dev]" --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
@@ -89,7 +89,7 @@ For supervised learning experiments, the framework provides dedicated scripts th
 
 ### Training with `run_train.py`
 
-The [`run_train.py`](../representation_learning/run_train.py) script provides a complete training pipeline with support for:
+The [`run_train.py`](../avex/run_train.py) script provides a complete training pipeline with support for:
 
 - Distributed training
 - Experiment tracking (MLflow, WandB)
@@ -106,13 +106,13 @@ The [`run_train.py`](../representation_learning/run_train.py) script provides a 
 
 ```bash
 # Using the CLI
-uv run repr-learn train --config configs/run_configs/my_training_config.yml
+uv run avex train --config configs/run_configs/my_training_config.yml
 
 # Or directly with Python
-uv run python representation_learning/run_train.py configs/run_configs/my_training_config.yml
+uv run python avex/run_train.py configs/run_configs/my_training_config.yml
 
 # With config patches (override config values)
-uv run repr-learn train --config configs/run_configs/my_training_config.yml --patch "training.lr=0.001" --patch "model.device=cuda"
+uv run avex train --config configs/run_configs/my_training_config.yml --patch "training.lr=0.001" --patch "model.device=cuda"
 ```
 
 The script expects a YAML configuration file that defines:
@@ -124,7 +124,7 @@ The script expects a YAML configuration file that defines:
 
 ### Evaluation with `run_evaluate.py`
 
-The [`run_evaluate.py`](../representation_learning/run_evaluate.py) script provides comprehensive evaluation capabilities for:
+The [`run_evaluate.py`](../avex/run_evaluate.py) script provides comprehensive evaluation capabilities for:
 
 - **Linear probing**: Training linear classifiers on frozen backbones
 - **Fine-tuning**: End-to-end training of backbones with probes
@@ -146,13 +146,13 @@ The [`run_evaluate.py`](../representation_learning/run_evaluate.py) script provi
 
 ```bash
 # Using the CLI
-uv run repr-learn evaluate --config configs/evaluation_configs/my_evaluation_config.yml
+uv run avex evaluate --config configs/evaluation_configs/my_evaluation_config.yml
 
 # Or directly with Python
-uv run python representation_learning/run_evaluate.py configs/evaluation_configs/my_evaluation_config.yml
+uv run python avex/run_evaluate.py configs/evaluation_configs/my_evaluation_config.yml
 
 # With config patches
-uv run repr-learn evaluate --config configs/evaluation_configs/my_evaluation_config.yml --patch "experiments[0].model_spec.device=cuda"
+uv run avex evaluate --config configs/evaluation_configs/my_evaluation_config.yml --patch "experiments[0].model_spec.device=cuda"
 ```
 
 The evaluation script expects a YAML configuration file (`EvaluateConfig`) that defines:

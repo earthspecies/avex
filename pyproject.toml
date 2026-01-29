@@ -1,5 +1,5 @@
 [project]
-name = "representation-learning"
+name = "avex"
 version = "0.4.3"
 description = "A comprehensive Python-based system for training, evaluating, and analyzing audio representation learning models with support for both supervised and self-supervised learning paradigms"
 readme = "README.md"
@@ -8,7 +8,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Earth Species", email = "contact@earthspecies.org"},
 ]
-keywords = ["audio", "machine-learning", "representation-learning", "self-supervised", "bioacoustics"]
+keywords = ["audio", "machine-learning", "avex", "self-supervised", "bioacoustics"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -81,8 +81,8 @@ project-dev = [
 ]
 
 [project.scripts]
-repr-learn = "representation_learning.cli:cli"
-list-models = "representation_learning.api.list_models:main"
+avex = "avex.cli:cli"
+list-models = "avex.api.list_models:main"
 
 [[tool.uv.index]]
 name = "esp-pypi"
@@ -99,17 +99,17 @@ default-groups = ["dev", "gpu"]
 keyring-provider = "subprocess"
 
 [project.urls]
-Homepage = "https://github.com/earthspecies/representation-learning"
-Repository = "https://github.com/earthspecies/representation-learning"
-Documentation = "https://github.com/earthspecies/representation-learning#readme"
-"Bug Tracker" = "https://github.com/earthspecies/representation-learning/issues"
+Homepage = "https://github.com/earthspecies/avex"
+Repository = "https://github.com/earthspecies/avex"
+Documentation = "https://github.com/earthspecies/avex#readme"
+"Bug Tracker" = "https://github.com/earthspecies/avex/issues"
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "representation_learning"
+module-name = "avex"
 module-root = ""
 
 [tool.pytest.ini_options]

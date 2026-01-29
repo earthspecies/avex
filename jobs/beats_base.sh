@@ -7,7 +7,7 @@
 #SBATCH --job-name="rl-beats"
 #SBATCH --cpus-per-gpu=12
 
-cd ~/representation-learning
+cd ~/avex
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
-srun uv run representation_learning/run_train.py --config configs/run_configs/beats_base_beans.yml
+srun uv run avex/run_train.py --config configs/run_configs/beats_base_beans.yml

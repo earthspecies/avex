@@ -10,7 +10,7 @@ from typing import Callable, Generator
 
 import pytest
 
-from representation_learning.models.base_model import ModelBase
+from avex.models.base_model import ModelBase
 
 
 def create_cleanup_hooks_fixture(
