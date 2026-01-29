@@ -91,45 +91,7 @@ class Model(ModelBase):
             # Restore the original value
             os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
 
-        # Try to recreate interpreter with experimental_preserve_all_tensors=True
-        # See birdnetlib bug report for TF >= 2.17.0:
-        # https://github.com/joeweiss/birdnetlib/issues/125
-        try:
-            import tensorflow as tf
-
-            model_path: Optional[str] = None
-            if hasattr(self._analyzer, "model_path"):
-                model_path = self._analyzer.model_path
-            elif hasattr(self._analyzer, "_model_path"):
-                model_path = self._analyzer._model_path  # type: ignore[assignment]
-            elif hasattr(self._analyzer, "interpreter") and hasattr(
-                self._analyzer.interpreter,
-                "_model_path",
-            ):
-                model_path = self._analyzer.interpreter._model_path  # type: ignore[attr-defined]
-
-            if model_path:
-                logger.info(
-                    "Recreating BirdNet interpreter with experimental_preserve_all_tensors=True (TF >= 2.17 fix).",
-                )
-                self._interpreter = tf.lite.Interpreter(
-                    model_path=model_path,
-                    experimental_preserve_all_tensors=True,
-                )
-            else:
-                logger.warning(
-                    "Could not access model path to recreate BirdNet interpreter. "
-                    "Using birdnetlib's interpreter directly.",
-                )
-                self._interpreter = self._analyzer.interpreter
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Failed to recreate BirdNet interpreter with "
-                "experimental_preserve_all_tensors=True: %s. "
-                "Using original interpreter.",
-                exc,
-            )
-            self._interpreter = self._analyzer.interpreter
+        self._interpreter = self._get_interpreter(self._analyzer)
         self.species = self._analyzer.labels  # 6 522 labels
         self.num_species = len(self.species)
 
@@ -318,9 +280,62 @@ class Model(ModelBase):
 
         return result
 
-    # ------------------------------------------------------------------ #
-    #                          Helper functions                          #
-    # ------------------------------------------------------------------ #
+    def _get_interpreter(self, analyzer: Any) -> Any:  # noqa: ANN401
+        """Create a TFLite interpreter with experimental_preserve_all_tensors=True.
+
+        This is required for TensorFlow >= 2.17.0 to access intermediate tensors
+        for embedding extraction. See birdnetlib bug report:
+        https://github.com/joeweiss/birdnetlib/issues/125
+
+        Parameters
+        ----------
+        analyzer : birdnetlib.analyzer.Analyzer
+            The birdnetlib Analyzer instance.
+
+        Returns
+        -------
+        tf.lite.Interpreter
+            A TFLite interpreter configured with experimental_preserve_all_tensors=True,
+            or the original analyzer interpreter as fallback.
+        """
+        try:
+            import tensorflow as tf
+
+            # Try multiple attributes to find the model path (birdnetlib internals vary)
+            model_path: Optional[str] = None
+            if hasattr(analyzer, "model_path"):
+                model_path = analyzer.model_path
+            elif hasattr(analyzer, "_model_path"):
+                model_path = analyzer._model_path  # type: ignore[assignment]
+            elif hasattr(analyzer, "interpreter") and hasattr(
+                analyzer.interpreter,
+                "_model_path",
+            ):
+                model_path = analyzer.interpreter._model_path  # type: ignore[attr-defined]
+
+            if model_path:
+                logger.info(
+                    "Recreating BirdNet interpreter with experimental_preserve_all_tensors=True (TF >= 2.17 fix).",
+                )
+                return tf.lite.Interpreter(
+                    model_path=model_path,
+                    experimental_preserve_all_tensors=True,
+                )
+
+            logger.warning(
+                "Could not access model path to recreate BirdNet interpreter. Using birdnetlib's interpreter directly.",
+            )
+            return analyzer.interpreter
+
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to recreate BirdNet interpreter with "
+                "experimental_preserve_all_tensors=True: %s. "
+                "Using original interpreter.",
+                exc,
+            )
+            return analyzer.interpreter
+
     def _infer_clip(self, mono_wave: np.ndarray) -> torch.Tensor:
         """
         Uses birdnetlib's Analyzer to get a per-clip probability vector.
