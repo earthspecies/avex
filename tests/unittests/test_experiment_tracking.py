@@ -14,15 +14,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from avex.configs import (
+# Skip entire module if esp_data is not installed (internal dependency)
+# Must be before imports that trigger esp_data loading (e.g., avex.data.*)
+esp_data = pytest.importorskip("esp_data")
+DatasetConfig = esp_data.DatasetConfig
+
+from avex.configs import (  # noqa: E402
     AudioConfig,
     ModelSpec,
     RunConfig,
     SchedulerConfig,
     TrainingParams,
 )
-from avex.data.configs import DatasetCollectionConfig
-from avex.utils.experiment_tracking import (
+from avex.data.configs import DatasetCollectionConfig  # noqa: E402
+from avex.utils.experiment_tracking import (  # noqa: E402
     create_initial_experiment_metadata,
     get_run_config_params_from_metadata,
     get_training_params_from_metadata,
@@ -31,10 +36,6 @@ from avex.utils.experiment_tracking import (
     save_evaluation_metadata,
     save_experiment_metadata,
 )
-
-# Skip entire module if esp_data is not installed (internal dependency)
-esp_data = pytest.importorskip("esp_data")
-DatasetConfig = esp_data.DatasetConfig
 
 
 @pytest.fixture

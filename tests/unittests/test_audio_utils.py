@@ -1,15 +1,23 @@
-"""Unit tests for audio processing utilities."""
+"""Unit tests for audio processing utilities.
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
+"""
 
 import numpy as np
 import pytest
 import torch
 
-from avex.configs import AudioConfig
-from avex.data.audio_utils import (
+# Skip entire module if esp_data is not installed (internal dependency)
+# Must be before imports that trigger esp_data loading (e.g., avex.data.dataset)
+pytest.importorskip("esp_data")
+
+from avex.configs import AudioConfig  # noqa: E402
+from avex.data.audio_utils import (  # noqa: E402
     AudioProcessor,
     pad_or_window,
 )
-from avex.data.dataset import Collater
+from avex.data.dataset import Collater  # noqa: E402
 
 
 @pytest.fixture
