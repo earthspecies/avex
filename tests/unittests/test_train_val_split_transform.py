@@ -1,9 +1,17 @@
-"""Unit tests for TrainValSplitTransform."""
+"""Unit tests for TrainValSplitTransform.
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
+"""
 
 import pandas as pd
 import pytest
 
-from avex.data.transforms import (
+# Skip entire module if esp_data is not installed (internal dependency)
+# Must be before imports that trigger esp_data loading (e.g., avex.data.transforms)
+pytest.importorskip("esp_data")
+
+from avex.data.transforms import (  # noqa: E402
     TrainValSplitConfig,
     TrainValSplitTransform,
 )

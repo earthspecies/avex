@@ -13,12 +13,13 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from avex.configs import EvaluateConfig, ExperimentConfig, TrainingParams
-from avex.run_evaluate import run_experiment
-
 # Skip entire module if esp_data is not installed (internal dependency)
+# Must be before imports that trigger esp_data loading (e.g., avex.run_evaluate)
 esp_data_module = pytest.importorskip("esp_data")
 DatasetConfig = esp_data_module.DatasetConfig
+
+from avex.configs import EvaluateConfig, ExperimentConfig, TrainingParams  # noqa: E402
+from avex.run_evaluate import run_experiment  # noqa: E402
 
 
 # --------------------------------------------------------------------- #

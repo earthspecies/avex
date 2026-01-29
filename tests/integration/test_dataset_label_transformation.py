@@ -17,14 +17,13 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import pytest
+import torch
 
 # Skip entire module if esp_data is not installed (internal dependency)
 # These tests use build_dataloaders which loads real datasets via esp_data
 pytest.importorskip("esp_data")
 
-import torch
-
-from avex.configs import (
+from avex.configs import (  # noqa: E402
     AudioConfig,
     DatasetCollectionConfig,
     EvaluateConfig,
@@ -33,7 +32,7 @@ from avex.configs import (
     SchedulerConfig,
     TrainingParams,
 )
-from avex.data.dataset import build_dataloaders
+from avex.data.dataset import build_dataloaders  # noqa: E402
 
 
 class TestDatasetLabelTransformation:
