@@ -380,7 +380,7 @@ wheels = [
 
 [[package]]
 name = "avex"
-version = "0.4.3"
+version = "0.5.0a0"
 source = { editable = "." }
 dependencies = [
     { name = "birdnetlib" },

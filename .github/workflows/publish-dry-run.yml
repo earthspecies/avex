@@ -13,14 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: "google-github-actions/auth@v2"
-        id: auth
-        with:
-          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
-          service_account: ${{ secrets.GH_ACTIONS_SA }}
-          token_format: access_token
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
@@ -32,12 +24,20 @@ jobs:
           python-version-file: ".python-version"
 
       - name: Install the project
-        run: |
-          uv tool install keyring --with keyrings.google-artifactregistry-auth
-          uv sync --all-extras --dev
+        run: uv sync
 
       - name: Build the package
         run: uv build
 
-      - name: Publish the package (dry run)
-        run: uv publish --dry-run --index esp-pypi --password ${{ steps.auth.outputs.access_token }}
+      - name: Check version is prerelease
+        run: |
+          python - <<'EOF'
+          from importlib.metadata import version
+          v = version("avex")
+          assert any(x in v for x in ("a", "b", "rc", "dev")), f"Refusing to publish non-prerelease version: {v}"
+          EOF
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
