@@ -133,8 +133,8 @@ To create your own model configuration, create a YAML file with the following st
 
 ```yaml
 # my_model.yml - Custom model configuration
-# Optional: Default checkpoint path (can be local path or hf:// repo)
-checkpoint_path: hf://my-org/my-model
+# Optional: Default checkpoint path (can be local or cloud storage)
+checkpoint_path: gs://my-bucket/models/my_model.pt
 
 # Optional: Path to label mapping JSON file
 class_mapping_path: gs://my-bucket/models/my_model_labels.json
@@ -150,52 +150,9 @@ model_spec:
     n_mels: 128
     target_length_seconds: 10
     window_selection: random
-    # Optional: audio-specific extra configuration (custom parameters)
-    extra_config:
-      pcen_bias: 2.0
-      activity_detection_prob: 0.8
   # Model-specific parameters
   efficientnet_variant: b0
-  # Optional: generic extra configuration for custom models
-  extra_config:
-    custom_head_type: crf
-    use_special_routing: true
 ```
-
-#### Extending configs safely with `extra_config`
-
-The configuration schema is intentionally strict (`extra="forbid"`) for all known
-fields so that typos fail fast during validation. To keep that safety **and**
-allow extensions, use the dedicated `extra_config` fields instead of adding
-arbitrary top-level keys:
-
-- `ModelSpec.extra_config`: generic bag for **model-specific options** that are
-  not part of the core schema (e.g. custom heads, routing flags, backend hints).
-- `AudioConfig.extra_config`: bag for **audio-processing options** that go
-  beyond the standard STFT/mel parameters (e.g. PCEN, activity detection).
-- `ProbeConfig.extra_config`: bag for **probe-specific options** (e.g. extra
-  regularisation knobs, backend hints) without changing the core probe schema.
-
-Example (Python) for a custom model using these fields:
-
-```python
-from representation_learning.configs import AudioConfig, ModelSpec
-
-spec = ModelSpec(
-    name="my_custom_model",
-    device="cuda",
-    audio_config=AudioConfig(
-        sample_rate=22050,
-        n_fft=1024,
-        extra_config={"pcen_bias": 2.0, "activity_detection_prob": 0.8},
-    ),
-    extra_config={"custom_head_type": "crf", "use_special_routing": True},
-)
-```
-
-Your custom model class can then read these dictionaries explicitly, while all
-standard fields on `ModelSpec` / `AudioConfig` / `ProbeConfig` remain strictly
-validated by Pydantic.
 
 ### Using Custom Configurations
 
@@ -206,7 +163,7 @@ from representation_learning import load_model, get_checkpoint_path
 model = load_model("path/to/my_model.yml")
 
 # Or for official models, checkpoint paths are read automatically from YAML
-checkpoint = get_checkpoint_path("efficientnet_animalspeak")
+checkpoint = get_checkpoint_path("esp_aves2_effnetb0_all")
 print(f"Default checkpoint: {checkpoint}")
 
 # Load with default checkpoint (from YAML)
@@ -214,10 +171,10 @@ model = load_model("efficientnet_animalspeak")  # Uses YAML checkpoint
 
 # Load with custom checkpoint (overrides YAML default)
 # Priority: user-provided checkpoint_path > YAML default > no checkpoint
-model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/my-checkpoint")
+model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-custom-checkpoint.pt")
 
 # Load for embedding extraction (strip classifier head when present)
-base = load_model("efficientnet_animalspeak", return_features_only=True)
+base = load_model("esp_aves2_effnetb0_all", return_features_only=True)
 ```
 
 ### Checkpoint Path Priority

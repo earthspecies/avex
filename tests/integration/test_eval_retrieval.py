@@ -1,3 +1,9 @@
+"""Integration tests for evaluation retrieval.
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,11 +11,14 @@ from typing import Any, Tuple
 
 import pytest
 import torch
-from esp_data import DatasetConfig
 from torch.utils.data import DataLoader, Dataset
 
 from representation_learning.configs import EvaluateConfig, ExperimentConfig, TrainingParams
 from representation_learning.run_evaluate import run_experiment
+
+# Skip entire module if esp_data is not installed (internal dependency)
+esp_data_module = pytest.importorskip("esp_data")
+DatasetConfig = esp_data_module.DatasetConfig
 
 
 # --------------------------------------------------------------------- #
@@ -133,7 +142,7 @@ def test_run_experiment_small(
 
     exp_cfg: ExperimentConfig = ExperimentConfig(
         run_name="beats_test",
-        run_config="configs/run_configs/pretrained/beats_naturelm.yml",
+        run_config="configs/run_configs/aaai_train/sl_beats_animalspeak.yml",
         pretrained=True,
         layers="last_layer",  # Use last_layer for BEATs model
     )

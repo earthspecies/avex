@@ -21,7 +21,7 @@ The framework provides three main functions for working with models, each design
 from representation_learning import load_model
 
 # Load with custom checkpoint
-model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/checkpoint")
+model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-bucket/checkpoint.pt")
 
 # Load with default checkpoint (from YAML config)
 # Checkpoint paths are defined in `representation_learning/api/configs/official_models/*.yml`
@@ -29,7 +29,7 @@ model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/chec
 model = load_model("efficientnet_animalspeak")  # Uses default checkpoint from YAML
 
 # Load for embedding extraction (no classifier head)
-model = load_model("beats_naturelm", return_features_only=True)  # Returns features, not logits
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True)  # Returns features, not logits
 
 # Load from config file
 model = load_model("experiments/my_model.yml")
@@ -52,10 +52,10 @@ over any model-default pretrained weights.
 
 ```python
 # Load for embedding extraction (no classifier head)
-model = load_model("beats_naturelm", return_features_only=True, device="cpu")
+model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 
 # Load with default checkpoint (from YAML config)
-model = load_model("efficientnet_animalspeak", device="cpu")
+model = load_model("esp_aves2_effnetb0_all", device="cpu")
 ```
 
 ### Training New Models
@@ -113,7 +113,7 @@ models = list_models()
 # ====================================================================================================
 # Model Name                          Description                              Trained Classifier
 # ====================================================================================================
-# beats_naturelm                      beats (pretrained backbone) - NatureLM   ❌ No
+# esp_aves2_naturelm_audio_v1_beats   BEATs with NatureLM (audio v1)            ✅ Yes
 # sl_beats_animalspeak                beats (fine-tuned) - 12279 classes       ✅ Yes (12279 classes)
 # ====================================================================================================
 #
@@ -121,7 +121,7 @@ models = list_models()
 print(f"Available models: {list(models.keys())}")
 
 # Get detailed model information
-model_info = describe_model("beats_naturelm", verbose=True)
+model_info = describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
 # Prints formatted output showing:
 # - Model type and device
 # - Whether it has a trained classifier
@@ -164,12 +164,12 @@ from representation_learning import get_checkpoint_path
 
 # Get default checkpoint path from YAML config
 # Checkpoint paths are defined in `representation_learning/api/configs/official_models/*.yml`
-checkpoint = get_checkpoint_path("efficientnet_animalspeak")
+checkpoint = get_checkpoint_path("esp_aves2_effnetb0_all")
 print(f"Default checkpoint: {checkpoint}")
 
 # Override default checkpoint by passing checkpoint_path parameter
 from representation_learning import load_model
-model = load_model("efficientnet_animalspeak", checkpoint_path="hf://my-org/my-checkpoint")
+model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-custom-checkpoint.pt")
 ```
 
 ### Class Mapping Management
@@ -178,7 +178,7 @@ from representation_learning import load_label_mapping
 
 # Load class mappings for a model
 # Class mappings define the relationship between class labels and indices
-class_mapping = load_label_mapping("sl_beats_animalspeak")
+class_mapping = load_label_mapping("esp_aves2_sl_beats_all")
 if class_mapping:
     label_to_index = class_mapping["label_to_index"]
     index_to_label = class_mapping["index_to_label"]

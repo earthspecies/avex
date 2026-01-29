@@ -48,7 +48,7 @@ def main(device: str = "cpu") -> None:
     print("-" * 50)
 
     # Load model with checkpoint - num_classes extracted automatically
-    model = load_model("efficientnet_animalspeak", device=device)
+    model = load_model("esp_aves2_effnetb0_all", device=device)
     print(f"Loaded model: {type(model).__name__}")
     print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -80,7 +80,7 @@ def main(device: str = "cpu") -> None:
     print("\nPart 3: Create New Model for Training")
     print("-" * 50)
 
-    model_spec = get_model_spec("sl_beats_animalspeak")
+    model_spec = get_model_spec("esp_aves2_sl_beats_all")
 
     # Build backbone-only model from spec
     backbone = build_model_from_spec(model_spec, device=device).to(device)
@@ -158,7 +158,7 @@ def main(device: str = "cpu") -> None:
     # =========================================================================
     print("\nPart 5: Model Information")
     print("-" * 50)
-    describe_model("beats_naturelm", verbose=True)
+    describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
 
     # =========================================================================
     # Summary

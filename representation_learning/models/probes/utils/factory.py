@@ -93,7 +93,7 @@ def build_probe_from_config(
         Online mode (with base model):
             >>> from representation_learning import load_model  # doctest: +SKIP
             >>> from representation_learning.configs import ProbeConfig  # doctest: +SKIP
-            >>> base = load_model("beats_naturelm", device="cpu")  # doctest: +SKIP
+            >>> base = load_model("esp_aves2_naturelm_audio_v1_beats", device="cpu")  # doctest: +SKIP
             >>> cfg = ProbeConfig(probe_type="linear", target_layers=["last_layer"])  # doctest: +SKIP
             >>> probe = build_probe_from_config(cfg, base_model=base, num_classes=50, device="cpu")  # doctest: +SKIP
 

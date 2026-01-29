@@ -46,7 +46,7 @@ def main(device: str = "cpu") -> None:
     print("-" * 50)
 
     # Load without num_classes - automatically uses return_features_only=True
-    model = load_model("beats_naturelm", device=device)
+    model = load_model("esp_aves2_naturelm_audio_v1_beats", device=device)
     model.eval()
 
     print(f"Loaded model: {type(model).__name__}")
@@ -70,7 +70,7 @@ def main(device: str = "cpu") -> None:
     print("-" * 50)
 
     # This model has a classifier; request embedding output for this example.
-    model = load_model("sl_eat_animalspeak_ssl_all", device=device, return_features_only=True)
+    model = load_model("esp_aves2_sl_eat_all_ssl_all", device=device, return_features_only=True)
     model.eval()
 
     print(f"Loaded model: {type(model).__name__}")
@@ -131,11 +131,11 @@ def main(device: str = "cpu") -> None:
     print("-" * 50)
 
     # Embedding mode
-    embedding_model = load_model("sl_beats_all", return_features_only=True, device=device)
+    embedding_model = load_model("esp_aves2_sl_beats_all", return_features_only=True, device=device)
     embedding_model.eval()
 
     # Classification mode
-    classification_model = load_model("sl_beats_all", device=device)
+    classification_model = load_model("esp_aves2_sl_beats_all", device=device)
     classification_model.eval()
 
     # Check for label mapping

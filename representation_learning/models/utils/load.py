@@ -54,9 +54,9 @@ def load_model(
     This function provides a single entry point for loading any model type:
 
     **Registered Models**: Use predefined model names from the registry
-    - `"efficientnet_animalspeak"` - EfficientNet for audio classification
-    - `"beats_naturelm"` - BEATs from NatureLM for bioacoustics
-    - `"sl_eat_animalspeak_ssl_all"` - EAT for bioacoustics
+    - `"esp_aves2_effnetb0_all"` - EfficientNet B0 for audio classification
+    - `"esp_aves2_naturelm_audio_v1_beats"` - BEATs with NatureLM for bioacoustics
+    - `"esp_aves2_sl_eat_all_ssl_all"` - EAT SSL for bioacoustics
 
     **Custom Configs**: Load from YAML configuration files
     - `"path/to/experiment.yml"` - External experiment configs
@@ -80,16 +80,16 @@ def load_model(
 
     Examples:
         >>> # Load with default checkpoint (num_classes extracted automatically)
-        >>> # model = load_model("efficientnet_animalspeak")
+        >>> # model = load_model("esp_aves2_effnetb0_all")
 
         >>> # Load with custom checkpoint
-        >>> # model = load_model("efficientnet_animalspeak", checkpoint_path="gs://my-bucket/checkpoint.pt")
+        >>> # model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-bucket/checkpoint.pt")
 
         >>> # Load from config file
         >>> # model = load_model("experiments/my_model.yml")
 
         >>> # Load for embedding extraction (no classifier)
-        >>> # model = load_model("beats_naturelm", return_features_only=True)
+        >>> # model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True)
     """
     if isinstance(model, str):
         # Case 1: Registered model
@@ -438,7 +438,7 @@ def load_label_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
 
     Example:
         >>> # Load by model name (reads path from YAML config)
-        >>> mapping = load_label_mapping("sl_beats_animalspeak")
+        >>> mapping = load_label_mapping("esp_aves2_sl_beats_all")
         >>>
         >>> # Load by direct path
         >>> mapping = load_label_mapping("gs://bucket/label_map.json")
