@@ -256,7 +256,7 @@ def main():
     parser.add_argument(
         "--num_shards",
         type=int,
-        default=100,
+        default=8,
         help="Total number of shards.",
     )
     args = parser.parse_args()
@@ -333,7 +333,11 @@ def main():
     cols_to_add = [
         "custom_classifier_logit_for_species_scientific_gbif",
         "custom_classifier_logit_for_species_scientific_animalspeak",
-        "Duration (s)"
+        "Duration (s)",
+        "top_25_logit",
+        "top_10_logit",
+        "top_5_logit",
+        "top_1_logit"
     ]
     cols_to_add += [f"custom_classifier_logit_for_background_species_{i}_scientific_gbif" for i in range(10)]
     for col in cols_to_add:
@@ -380,6 +384,12 @@ def main():
                         shard_metadata.at[
                             df_idx, f"custom_classifier_logit_for_{key}"
                         ] = float(logit_vec[pred_idx])
+
+                logits_sorted_desc = np.sort(logit_vec)[::-1]
+                for k in [1,5,10,25]:
+                    value = logits_sorted_desc[k]
+                    shard_metadata.at[df_idx, f"top_{k}_logit"] = value
+
             # if ii == 10:
             #     break
 
