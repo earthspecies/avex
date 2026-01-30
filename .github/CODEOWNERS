@@ -1,0 +1,15 @@
+# CODEOWNERS file - defines who must approve PRs
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# NOTE: Teams must have explicit write access to the repository.
+# Order matters - last matching pattern takes precedence.
+
+# Default: AI team owns everything
+*                       @earthspecies/ai-fte
+
+# Humans team can approve docs and READMEs
+/docs/                  @earthspecies/humans
+*.md                    @earthspecies/humans
+
+# Protect CODEOWNERS itself - requires AI team approval
+/.github/CODEOWNERS     @earthspecies/ai-fte
