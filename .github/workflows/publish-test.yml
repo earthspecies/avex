@@ -30,4 +30,4 @@ jobs:
         run: uv build
 
       - name: Publish to TestPyPI
-        run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing
+        run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing always
