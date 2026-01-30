@@ -33,5 +33,4 @@ jobs:
         run: uv build
 
       - name: Publish to PyPI
-        run: |
-          run: uv publish --publish-url https://pypi.org/legacy/ --trusted-publishing
+        run: uv publish --publish-url https://upload.pypi.org/legacy/ --trusted-publishing always --keyring-provider disabled

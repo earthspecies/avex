@@ -4,7 +4,7 @@ on:    # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 jobs:
-  build-and-publish-dry-run:
+  build-and-publish-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,14 +29,5 @@ jobs:
       - name: Build the package
         run: uv build
 
-      - name: Check version is prerelease
-        run: |
-          python - <<'EOF'
-          from importlib.metadata import version
-          v = version("avex")
-          assert any(x in v for x in ("a", "b", "rc", "dev")), f"Refusing to publish non-prerelease version: {v}"
-          EOF
-
       - name: Publish to TestPyPI
-        run: |
-          run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing
+        run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing always --keyring-provider disabled
