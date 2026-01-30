@@ -32,11 +32,13 @@ jobs:
       - name: Check version is prerelease
         run: |
           python - <<'EOF'
-          from importlib.metadata import version
-          v = version("avex")
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              data = tomllib.load(f)
+          v = data["project"]["version"]
           assert any(x in v for x in ("a", "b", "rc", "dev")), f"Refusing to publish non-prerelease version: {v}"
+          print(f"Version {v} is a prerelease, OK to publish")
           EOF
 
       - name: Publish to TestPyPI
-        run: |
-          run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing
+        run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing
