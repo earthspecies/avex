@@ -20,7 +20,7 @@ Based on:
 # --------------------------------------------------------
 
 import logging
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -43,7 +43,7 @@ class BEATsConfig(BaseModel):
     Example:
         >>> config = BEATsConfig()  # Use defaults
         >>> config = BEATsConfig(encoder_layers=6)  # Override specific fields
-        >>> config = BEATsConfig.from_dict({"encoder_layers": 6})  # Load from dict
+        >>> config = BEATsConfig(**{"encoder_layers": 6})  # Load from dict
     """
 
     # Patch embedding configuration
@@ -87,29 +87,6 @@ class BEATsConfig(BaseModel):
 
     # Allow extra fields from checkpoints that may have additional config keys
     model_config = ConfigDict(extra="allow")
-
-    @classmethod
-    def from_dict(cls, cfg: Dict[str, Any]) -> "BEATsConfig":
-        """Create a BEATsConfig from a dictionary.
-
-        This method provides backward compatibility for loading configurations
-        from checkpoint files that store config as a dictionary.
-
-        Args:
-            cfg: Dictionary containing configuration parameters
-
-        Returns:
-            BEATsConfig: Validated configuration object
-        """
-        return cls(**cfg)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary.
-
-        Returns:
-            Dict[str, Any]: Configuration as dictionary
-        """
-        return self.model_dump()
 
 
 class BEATs(nn.Module):
