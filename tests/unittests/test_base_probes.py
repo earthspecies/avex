@@ -15,8 +15,8 @@ from typing import Any, Optional
 import torch
 import torch.nn as nn
 
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.base_probes import BaseProbe2D, BaseProbe3D
+from avex.models.base_model import ModelBase
+from avex.models.probes.base_probes import BaseProbe2D, BaseProbe3D
 
 
 class _Dummy2DProbe(BaseProbe2D):

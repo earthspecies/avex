@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 import torch
 
-from representation_learning.configs import AudioConfig
-from representation_learning.data.audio_utils import (
+from avex.configs import AudioConfig
+from avex.data.audio_utils import (
     AudioProcessor,
     pad_or_window,
 )
-from representation_learning.data.dataset import Collater
+from avex.data.dataset import Collater
 
 
 @pytest.fixture

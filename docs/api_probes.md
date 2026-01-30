@@ -15,9 +15,9 @@ The probe API provides an interface for **defining, configuring, and attaching p
 Begin with a simple linear probe on the backbone's last layer:
 
 ```python
-from representation_learning import load_model
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex import load_model
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 cfg = ProbeConfig(
@@ -97,9 +97,9 @@ Computational:    FAST ───────────────────
 ### Build and Use a Probe (Online Mode)
 
 ```python
-from representation_learning import load_model
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex import load_model
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 # 1. Load a backbone model that returns features
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
@@ -125,8 +125,8 @@ probe = build_probe_from_config(
 ### Offline Mode (Pre-computed Embeddings)
 
 ```python
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 # For pre-computed embeddings (no base model needed)
 probe_config = ProbeConfig(
@@ -208,7 +208,7 @@ All probe configs support (non-exhaustive):
 ### Example: Minimal Linear Probe (Python)
 
 ```python
-from representation_learning.configs import ProbeConfig
+from avex.configs import ProbeConfig
 
 probe_config = ProbeConfig(
     probe_type="linear",
@@ -231,11 +231,11 @@ online_training: true
 ```
 
 ```python
-from representation_learning.models.probes.utils import (
+from avex.models.probes.utils import (
     load_probe_config,
     build_probe_from_config,
 )
-from representation_learning import load_model
+from avex import load_model
 
 config = load_probe_config("my_linear_probe.yml")
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
@@ -250,8 +250,8 @@ probe = build_probe_from_config(config, base_model=base, num_classes=50, device=
 Unified factory function for building probe instances from a `ProbeConfig`. Supports both **online** (with base model) and **offline** (with pre-computed embeddings) modes.
 
 ```python
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 def build_probe_from_config(
     probe_config: ProbeConfig,
@@ -286,7 +286,7 @@ def build_probe_from_config(
 #### `load_probe_config()`
 
 ```python
-from representation_learning.models.probes.utils import load_probe_config
+from avex.models.probes.utils import load_probe_config
 
 config = load_probe_config("my_probe.yml")
 ```
@@ -316,9 +316,9 @@ All probe configs include:
 ### Comparing Different Probe Architectures
 
 ```python
-from representation_learning import load_model
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex import load_model
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 
@@ -361,11 +361,11 @@ attention parameters: 66560
 # aggregation: mean
 # hidden_dims: [1024, 512]
 
-from representation_learning.models.probes.utils import (
+from avex.models.probes.utils import (
     build_probe_from_config,
     load_probe_config,
 )
-from representation_learning import load_model
+from avex import load_model
 
 config = load_probe_config("custom_probe.yml")
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
@@ -375,8 +375,8 @@ probe = build_probe_from_config(config, base_model=base, num_classes=50, device=
 ### Using ProbeConfig Programmatically
 
 ```python
-from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from avex.configs import ProbeConfig
+from avex.models.probes.utils import build_probe_from_config
 
 # Create config programmatically
 config = ProbeConfig(
@@ -400,7 +400,7 @@ probe = build_probe_from_config(config, base_model=my_model, num_classes=50, dev
 The probe API mirrors the model API structure for consistency:
 
 ```
-representation_learning/
+avex/
 ├── models/probes/
 │   ├── utils/                          # Probe utilities (parallel to models/utils/)
 │   │   ├── __init__.py
@@ -426,8 +426,8 @@ representation_learning/
 
 ### Verify Installation
 ```python
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 import torch
 
 # Test offline mode (works independently)
@@ -455,7 +455,7 @@ with torch.no_grad():
 
 ### Run Example Script
 ```bash
-cd /home/marius/code/representation-learning
+cd /home/marius/code/avex
 python examples/07_probe_training_and_inference.py
 ```
 
@@ -499,6 +499,6 @@ These can be added in future iterations following the same design patterns.
 ## See Also
 
 - `examples/07_probe_training_and_inference.py` - Complete usage examples
-- `representation_learning/models/probes/` - Probe implementations
+- `avex/models/probes/` - Probe implementations
 - Model API documentation for parallel structure reference
 

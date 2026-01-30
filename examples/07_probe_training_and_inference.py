@@ -29,9 +29,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-from representation_learning import load_model
-from representation_learning.configs import ProbeConfig
-from representation_learning.models.probes.utils import build_probe_from_config
+from avex import load_model
+from avex.configs import ProbeConfig
+from avex.models.probes.utils import build_probe_from_config
 
 
 def create_dummy_dataset(
@@ -215,7 +215,7 @@ def main(device: str = "cpu") -> None:
 
     start_time = time.time()
     # Get audio config from backbone to create properly sized dummy data
-    from representation_learning import get_model_spec
+    from avex import get_model_spec
 
     model_spec = get_model_spec("esp_aves2_naturelm_audio_v1_beats")
     sample_rate = model_spec.audio_config.sample_rate

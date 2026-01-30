@@ -16,7 +16,7 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 ## Package Structure
 
 ```
-representation_learning/
+avex/
 ├── __init__.py              # Main API exports and version
 ├── api/                     # Public API layer
 │   ├── configs/            # Official model configurations
@@ -52,5 +52,5 @@ uv run pytest tests/integration/
 uv run pytest tests/consistency/
 
 # Run with coverage
-uv run pytest --cov=representation_learning
+uv run pytest --cov=avex
 ```

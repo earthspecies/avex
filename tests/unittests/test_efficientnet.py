@@ -1,7 +1,7 @@
 import torch
 
-from representation_learning.configs import AudioConfig
-from representation_learning.models.efficientnet import Model as EfficientNet
+from avex.configs import AudioConfig
+from avex.models.efficientnet import Model as EfficientNet
 
 
 def test_efficientnet() -> None:

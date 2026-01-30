@@ -102,4 +102,4 @@ num_workers: 7
 
 run_name: clap_efficientnet_captions
 
-wandb_project: representation_learning
+wandb_project: avex

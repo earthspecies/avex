@@ -82,7 +82,7 @@ seed: 13
 
 num_workers: 12
 
-wandb_project: representation_learning
+wandb_project: avex
 multilabel: true
 metrics: ["accuracy"]
 

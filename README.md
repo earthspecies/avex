@@ -1,7 +1,7 @@
 # Representation Learning Framework
 
-![CI status](https://github.com/earthspecies/representation-learning/actions/workflows/pythonapp.yml/badge.svg?branch=main)
-![Pre-commit status](https://github.com/earthspecies/representation-learning/actions/workflows/pre-commit.yml/badge.svg?branch=main)
+![CI status](https://github.com/earthspecies/avex/actions/workflows/pythonapp.yml/badge.svg?branch=main)
+![Pre-commit status](https://github.com/earthspecies/avex/actions/workflows/pre-commit.yml/badge.svg?branch=main)
 
 An API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.
 
@@ -38,13 +38,13 @@ url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pyp
 explicit = true
 
 [tool.uv.sources]
-representation-learning = { index = "esp-pypi" }
+avex = { index = "esp-pypi" }
 
 [tool.uv]
 keyring-provider = "subprocess"
 
 # 4. Install the package
-uv add representation-learning
+uv add avex
 ```
 
 ### Install with pip
@@ -55,7 +55,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install from ESP index
-pip install representation-learning \
+pip install avex \
   --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
@@ -64,7 +64,7 @@ For development installation with training/evaluation tools, see the [Installati
 ## Quick Start
 
 ```python
-from representation_learning import list_models, load_model, describe_model
+from avex import list_models, load_model, describe_model
 
 # List available models (table shows which have a trained classifier / labels)
 models = list_models()
@@ -81,8 +81,8 @@ model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=Tru
 # Returns (batch, time_steps, 768) for BEATs
 
 # Load with a probe for transfer learning
-from representation_learning.models.probes import build_probe_from_config
-from representation_learning.configs import ProbeConfig
+from avex.models.probes import build_probe_from_config
+from avex.configs import ProbeConfig
 
 base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
 probe_config = ProbeConfig(

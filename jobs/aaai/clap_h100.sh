@@ -7,7 +7,7 @@
 #SBATCH --job-name="rl-clap"
 #SBATCH --cpus-per-gpu=26
 
-cd ~/representation-learning
+cd ~/avex
 # uv tool install keyring --with keyrings.google-artifactregistry-auth
 uv sync
 
@@ -27,4 +27,4 @@ export PYTORCH_DISTRIBUTED_BACKEND=nccl
 #keyring
 
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/clap_efficientnet_captions_h100.yml
+srun uv run avex/run_train.py --config configs/run_configs/aaai_train/clap_efficientnet_captions_h100.yml

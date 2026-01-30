@@ -1,6 +1,6 @@
 # Installation Guide
 
-This guide explains how to install the `representation-learning` package.
+This guide explains how to install the `avex` package.
 
 The installation process depends on how you plan to use this package:
 
@@ -50,8 +50,8 @@ url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pyp
 explicit = true
 
 [tool.uv.sources]
-representation-learning = { index = "esp-pypi" }
-# Optional: only needed if you plan to install the dev extras (representation-learning[dev])
+avex = { index = "esp-pypi" }
+# Optional: only needed if you plan to install the dev extras (avex[dev])
 esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
@@ -59,13 +59,13 @@ esp-sweep = { index = "esp-pypi" }
 keyring-provider = "subprocess"
 ```
 
-**Note:** If you plan to install `representation-learning[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
+**Note:** If you plan to install `avex[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
 
 4. Install the package (API dependencies only):
 
 ```bash
 # Option A: Add and install in one step
-uv add representation-learning
+uv add avex
 
 # Option B: If you've already added it to [project.dependencies] in pyproject.toml
 uv sync
@@ -85,7 +85,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 2. Install the package from the ESP index:
 
 ```bash
-pip install representation-learning \
+pip install avex \
   --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
@@ -97,13 +97,13 @@ If you want to use additional functionality such as `run_train.py`, `run_evaluat
 # With uv (in a project configured for esp-pypi as above)
 
 # Option A: Add and install in one step
-uv add "representation-learning[dev]"
+uv add "avex[dev]"
 
 # Option B: If you've already added it to pyproject.toml
 uv sync
 
 # With pip
-pip install "representation-learning[dev]" \
+pip install "avex[dev]" \
   --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 ```
 
@@ -136,7 +136,7 @@ gcloud auth application-default login
 
 ```bash
 git clone <repository-url>
-cd representation-learning
+cd avex
 ```
 
 ### 2.3 Install with uv (recommended for development)
@@ -185,7 +185,7 @@ After installation, verify that everything works:
 
 ```python
 # Test the API
-from representation_learning import load_model, list_models
+from avex import load_model, list_models
 
 # List available models
 models = list_models()

@@ -27,7 +27,7 @@ fi
 
 echo "Running EfficientNet training for config: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
-cd ~/representation-learning
+cd ~/avex
 
 # Environment setup
 export GOOGLE_APPLICATION_CREDENTIALS=/home/david_earthspecies_org/.config/gcloud/application_default_credentials.json
@@ -41,4 +41,4 @@ export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 uv sync
 
 # Run training
-srun uv run representation_learning/run_train.py --config configs/run_configs/aaai_train/$config_file
+srun uv run avex/run_train.py --config configs/run_configs/aaai_train/$config_file

@@ -1,4 +1,4 @@
-"""Tests for device handling in the representation_learning API.
+"""Tests for device handling in the avex API.
 
 This module tests that importing the API doesn't break CUDA availability
 and that models can be transferred between devices without issues.
@@ -9,10 +9,10 @@ from __future__ import annotations
 import pytest
 import torch
 
-from representation_learning import load_model, register_model
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.utils.registry import (
+from avex import load_model, register_model
+from avex.configs import AudioConfig, ModelSpec
+from avex.models.base_model import ModelBase
+from avex.models.utils.registry import (
     register_model_class,
 )
 
@@ -27,7 +27,7 @@ class TestAPIDeviceHandling:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -232,7 +232,7 @@ class TestAPIDeviceHandling:
             pytest.skip("CUDA not available")
 
         # Import multiple times
-        from representation_learning import register_model  # noqa: F401
+        from avex import register_model  # noqa: F401
 
         # CUDA should still be available
         assert torch.cuda.is_available()

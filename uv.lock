@@ -379,6 +379,126 @@ wheels = [
 ]
 
 [[package]]
+name = "avex"
+version = "0.4.3"
+source = { editable = "." }
+dependencies = [
+    { name = "birdnetlib" },
+    { name = "einops" },
+    { name = "fsspec" },
+    { name = "gcsfs" },
+    { name = "h5py" },
+    { name = "huggingface-hub" },
+    { name = "librosa" },
+    { name = "numpy" },
+    { name = "omegaconf" },
+    { name = "pandas" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "s3fs" },
+    { name = "soundfile" },
+    { name = "tensorflow" },
+    { name = "tensorflow-hub" },
+    { name = "timm" },
+    { name = "torch" },
+    { name = "torchaudio" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "esp-data" },
+    { name = "esp-sweep" },
+    { name = "gradio" },
+    { name = "gradio-leaderboard" },
+    { name = "mlflow" },
+    { name = "pytorch-lightning" },
+    { name = "wandb" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "click" },
+    { name = "ipykernel" },
+    { name = "isort" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "yamllint" },
+]
+gpu = [
+    { name = "bitsandbytes", marker = "sys_platform != 'darwin'" },
+]
+project-dev = [
+    { name = "esp-data" },
+    { name = "esp-sweep" },
+    { name = "gradio" },
+    { name = "gradio-leaderboard" },
+    { name = "mlflow" },
+    { name = "pytorch-lightning" },
+    { name = "wandb" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "birdnetlib", specifier = ">=0.18.0" },
+    { name = "einops", specifier = ">=0.8.1" },
+    { name = "esp-data", marker = "extra == 'dev'", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-sweep", marker = "extra == 'dev'", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "fsspec", specifier = ">=2024.2.0" },
+    { name = "gcsfs", specifier = ">=2024.2.0" },
+    { name = "gradio", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "gradio-leaderboard", marker = "extra == 'dev'", specifier = ">=0.0.13" },
+    { name = "h5py", specifier = ">=3.13.0" },
+    { name = "huggingface-hub", specifier = ">=0.36.0" },
+    { name = "librosa", specifier = ">=0.11.0" },
+    { name = "mlflow", marker = "extra == 'dev'", specifier = ">=2.22.0" },
+    { name = "numpy", specifier = ">=1.26.4" },
+    { name = "omegaconf", specifier = ">=2.3.0" },
+    { name = "pandas", specifier = ">=2.2.3" },
+    { name = "pydantic", specifier = ">=2.11.3" },
+    { name = "pydantic-settings", specifier = ">=2.9.1" },
+    { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.5.1.post0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "s3fs", specifier = ">=2024.2.0" },
+    { name = "soundfile", specifier = ">=0.13.1" },
+    { name = "tensorflow", specifier = ">=2.17.0" },
+    { name = "tensorflow-hub", specifier = ">=0.16.1" },
+    { name = "timm", specifier = ">=1.0.15" },
+    { name = "torch", specifier = ">=2.5.0" },
+    { name = "torchaudio", specifier = ">=2.2.0" },
+    { name = "torchvision", specifier = ">=0.17.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "transformers", specifier = ">=4.0.0" },
+    { name = "wandb", marker = "extra == 'dev'", specifier = ">=0.21.0" },
+]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "click", specifier = "<=8.1.7" },
+    { name = "ipykernel", specifier = ">=6.29.5" },
+    { name = "isort", specifier = "<=5.13.2" },
+    { name = "pre-commit", specifier = "<=4.2.0" },
+    { name = "pytest", specifier = "<=7.4.0" },
+    { name = "ruff", specifier = "<=0.11.2" },
+    { name = "yamllint", specifier = "<=1.35.1" },
+]
+gpu = [{ name = "bitsandbytes", marker = "sys_platform != 'darwin'", specifier = ">=0.45.5" }]
+project-dev = [
+    { name = "esp-data", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-sweep", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "gradio", specifier = ">=4.0.0" },
+    { name = "gradio-leaderboard", specifier = ">=0.0.13" },
+    { name = "mlflow", specifier = ">=2.22.0" },
+    { name = "pytorch-lightning", specifier = ">=2.5.1.post0" },
+    { name = "wandb", specifier = ">=0.21.0" },
+]
+
+[[package]]
 name = "babel"
 version = "2.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3993,126 +4113,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/59/9b/7c29be7903c318488983e7d97abcf8ebd3830e4c956c4c540005fcfb0462/regex-2025.11.3-cp312-cp312-win32.whl", hash = "sha256:3839967cf4dc4b985e1570fd8d91078f0c519f30491c60f9ac42a8db039be204", size = 266194, upload-time = "2025-11-03T21:31:51.53Z" },
     { url = "https://files.pythonhosted.org/packages/1a/67/3b92df89f179d7c367be654ab5626ae311cb28f7d5c237b6bb976cd5fbbb/regex-2025.11.3-cp312-cp312-win_amd64.whl", hash = "sha256:e721d1b46e25c481dc5ded6f4b3f66c897c58d2e8cfdf77bbced84339108b0b9", size = 277069, upload-time = "2025-11-03T21:31:53.151Z" },
     { url = "https://files.pythonhosted.org/packages/d7/55/85ba4c066fe5094d35b249c3ce8df0ba623cfd35afb22d6764f23a52a1c5/regex-2025.11.3-cp312-cp312-win_arm64.whl", hash = "sha256:64350685ff08b1d3a6fff33f45a9ca183dc1d58bbfe4981604e70ec9801bbc26", size = 270330, upload-time = "2025-11-03T21:31:54.514Z" },
-]
-
-[[package]]
-name = "representation-learning"
-version = "0.4.3"
-source = { editable = "." }
-dependencies = [
-    { name = "birdnetlib" },
-    { name = "einops" },
-    { name = "fsspec" },
-    { name = "gcsfs" },
-    { name = "h5py" },
-    { name = "huggingface-hub" },
-    { name = "librosa" },
-    { name = "numpy" },
-    { name = "omegaconf" },
-    { name = "pandas" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyyaml" },
-    { name = "s3fs" },
-    { name = "soundfile" },
-    { name = "tensorflow" },
-    { name = "tensorflow-hub" },
-    { name = "timm" },
-    { name = "torch" },
-    { name = "torchaudio" },
-    { name = "torchvision" },
-    { name = "tqdm" },
-    { name = "transformers" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "esp-data" },
-    { name = "esp-sweep" },
-    { name = "gradio" },
-    { name = "gradio-leaderboard" },
-    { name = "mlflow" },
-    { name = "pytorch-lightning" },
-    { name = "wandb" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "click" },
-    { name = "ipykernel" },
-    { name = "isort" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "yamllint" },
-]
-gpu = [
-    { name = "bitsandbytes", marker = "sys_platform != 'darwin'" },
-]
-project-dev = [
-    { name = "esp-data" },
-    { name = "esp-sweep" },
-    { name = "gradio" },
-    { name = "gradio-leaderboard" },
-    { name = "mlflow" },
-    { name = "pytorch-lightning" },
-    { name = "wandb" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "birdnetlib", specifier = ">=0.18.0" },
-    { name = "einops", specifier = ">=0.8.1" },
-    { name = "esp-data", marker = "extra == 'dev'", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
-    { name = "esp-sweep", marker = "extra == 'dev'", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
-    { name = "fsspec", specifier = ">=2024.2.0" },
-    { name = "gcsfs", specifier = ">=2024.2.0" },
-    { name = "gradio", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "gradio-leaderboard", marker = "extra == 'dev'", specifier = ">=0.0.13" },
-    { name = "h5py", specifier = ">=3.13.0" },
-    { name = "huggingface-hub", specifier = ">=0.36.0" },
-    { name = "librosa", specifier = ">=0.11.0" },
-    { name = "mlflow", marker = "extra == 'dev'", specifier = ">=2.22.0" },
-    { name = "numpy", specifier = ">=1.26.4" },
-    { name = "omegaconf", specifier = ">=2.3.0" },
-    { name = "pandas", specifier = ">=2.2.3" },
-    { name = "pydantic", specifier = ">=2.11.3" },
-    { name = "pydantic-settings", specifier = ">=2.9.1" },
-    { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.5.1.post0" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "s3fs", specifier = ">=2024.2.0" },
-    { name = "soundfile", specifier = ">=0.13.1" },
-    { name = "tensorflow", specifier = ">=2.17.0" },
-    { name = "tensorflow-hub", specifier = ">=0.16.1" },
-    { name = "timm", specifier = ">=1.0.15" },
-    { name = "torch", specifier = ">=2.5.0" },
-    { name = "torchaudio", specifier = ">=2.2.0" },
-    { name = "torchvision", specifier = ">=0.17.0" },
-    { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "transformers", specifier = ">=4.0.0" },
-    { name = "wandb", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-]
-provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "click", specifier = "<=8.1.7" },
-    { name = "ipykernel", specifier = ">=6.29.5" },
-    { name = "isort", specifier = "<=5.13.2" },
-    { name = "pre-commit", specifier = "<=4.2.0" },
-    { name = "pytest", specifier = "<=7.4.0" },
-    { name = "ruff", specifier = "<=0.11.2" },
-    { name = "yamllint", specifier = "<=1.35.1" },
-]
-gpu = [{ name = "bitsandbytes", marker = "sys_platform != 'darwin'", specifier = ">=0.45.5" }]
-project-dev = [
-    { name = "esp-data", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
-    { name = "esp-sweep", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
-    { name = "gradio", specifier = ">=4.0.0" },
-    { name = "gradio-leaderboard", specifier = ">=0.0.13" },
-    { name = "mlflow", specifier = ">=2.22.0" },
-    { name = "pytorch-lightning", specifier = ">=2.5.1.post0" },
-    { name = "wandb", specifier = ">=0.21.0" },
 ]
 
 [[package]]

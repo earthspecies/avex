@@ -97,4 +97,4 @@ seed: 42
 num_workers: 10
 
 run_name: sl_eat_animalspeak
-wandb_project: representation_learning
+wandb_project: avex

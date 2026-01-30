@@ -18,13 +18,13 @@ The framework provides three main functions for working with models, each design
 - ❌ Using custom model classes (use `build_model` for plugin architecture)
 
 ```python
-from representation_learning import load_model
+from avex import load_model
 
 # Load with custom checkpoint
 model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-bucket/checkpoint.pt")
 
 # Load with default checkpoint (from YAML config)
-# Checkpoint paths are defined in `representation_learning/api/configs/official_models/*.yml`
+# Checkpoint paths are defined in `avex/api/configs/official_models/*.yml`
 # The loader preserves the classifier head from the checkpoint when present.
 model = load_model("efficientnet_animalspeak")  # Uses default checkpoint from YAML
 
@@ -72,8 +72,8 @@ model = load_model("esp_aves2_effnetb0_all", device="cpu")
 - ✅ Building new models from ModelSpec objects
 
 ```python
-from representation_learning import build_model, register_model_class
-from representation_learning.models.base_model import ModelBase
+from avex import build_model, register_model_class
+from avex.models.base_model import ModelBase
 
 # Register a custom model class
 @register_model_class
@@ -93,12 +93,12 @@ model = build_model("my_custom_model", device="cpu", num_classes=10)
 
 ### Registry Management
 ```python
-from representation_learning import (
+from avex import (
     register_model, get_model_spec, list_models, describe_model
 )
 
 # Register a new model configuration
-from representation_learning.configs import ModelSpec, AudioConfig
+from avex.configs import ModelSpec, AudioConfig
 model_spec = ModelSpec(
     name="my_model",
     pretrained=False,
@@ -140,7 +140,7 @@ else:
 
 ### Model Class Management (Plugin Architecture)
 ```python
-from representation_learning import (
+from avex import (
     register_model_class, get_model_class, list_model_classes
 )
 
@@ -160,21 +160,21 @@ model_class = get_model_class("my_model")
 
 ### Checkpoint Management
 ```python
-from representation_learning import get_checkpoint_path
+from avex import get_checkpoint_path
 
 # Get default checkpoint path from YAML config
-# Checkpoint paths are defined in `representation_learning/api/configs/official_models/*.yml`
+# Checkpoint paths are defined in `avex/api/configs/official_models/*.yml`
 checkpoint = get_checkpoint_path("esp_aves2_effnetb0_all")
 print(f"Default checkpoint: {checkpoint}")
 
 # Override default checkpoint by passing checkpoint_path parameter
-from representation_learning import load_model
+from avex import load_model
 model = load_model("esp_aves2_effnetb0_all", checkpoint_path="gs://my-custom-checkpoint.pt")
 ```
 
 ### Class Mapping Management
 ```python
-from representation_learning import load_label_mapping
+from avex import load_label_mapping
 
 # Load class mappings for a model
 # Class mappings define the relationship between class labels and indices

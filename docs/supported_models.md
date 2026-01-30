@@ -23,11 +23,11 @@ The framework includes support for various audio representation learning models:
 - **Per model**: Call `describe_model("model_name", verbose=True)` to see "Has Trained Classifier", checkpoint path, class mapping path, and number of classes.
 
 **Current official models (ESP-AVES2)**
-All official models in `representation_learning/api/configs/official_models/` (e.g. `esp_aves2_sl_beats_all`, `esp_aves2_effnetb0_all`) currently have both a checkpoint and a class mapping, so they support **classification with labels**. They also support **embedding extraction** with `load_model(..., return_features_only=True)`.
+All official models in `avex/api/configs/official_models/` (e.g. `esp_aves2_sl_beats_all`, `esp_aves2_effnetb0_all`) currently have both a checkpoint and a class mapping, so they support **classification with labels**. They also support **embedding extraction** with `load_model(..., return_features_only=True)`.
 
 ## Model Configuration
 
-Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `representation_learning/api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
+Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `avex/api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
 
 **Minimal Model Configuration:**
 

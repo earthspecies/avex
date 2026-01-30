@@ -6,7 +6,7 @@ Copyright (c) 2024 Earth Species Project. All rights reserved.
 import pytest
 import torch
 
-from representation_learning.evaluation.clustering import (
+from avex.evaluation.clustering import (
     eval_clustering,
     eval_clustering_multiple_k,
 )

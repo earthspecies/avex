@@ -55,7 +55,7 @@ seed: 42
 num_workers: 10
 
 run_name: beats_naturelm_base
-wandb_project: representation_learning
+wandb_project: avex
 
 augmentations:
   # Add background noise at random SNRs

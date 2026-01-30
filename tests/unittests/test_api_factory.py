@@ -11,14 +11,14 @@ from typing import Any
 import pytest
 import torch
 
-from representation_learning.configs import AudioConfig, ModelSpec
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.utils.factory import (
+from avex.configs import AudioConfig, ModelSpec
+from avex.models.base_model import ModelBase
+from avex.models.utils.factory import (
     _add_model_spec_params,
     build_model,
     build_model_from_spec,
 )
-from representation_learning.models.utils.registry import (
+from avex.models.utils.registry import (
     register_model,
     register_model_class,
 )
@@ -111,7 +111,7 @@ class TestBuildModel:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -183,7 +183,7 @@ class TestBuildModel:
 
     def test_raises_key_error_when_model_class_not_registered(self) -> None:
         """Test that KeyError is raised when model class is not registered."""
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Register a model spec with unregistered class
         model_spec = ModelSpec(name="unregistered_type", pretrained=False, device="cpu")
@@ -217,7 +217,7 @@ class TestBuildModel:
             build_model("failing_model", device="cpu")
 
         # Clean up
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_REGISTRY.clear()
         registry._MODEL_CLASSES.clear()
@@ -233,7 +233,7 @@ class TestBuildModelFromSpec:
         Yields:
             None: Fixture yields nothing, just sets up the registry.
         """
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         # Clear registry
         registry._MODEL_REGISTRY.clear()
@@ -395,7 +395,7 @@ class TestBuildModelFromSpec:
         assert isinstance(model, ModelBase)
 
         # Clean up
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
 
@@ -445,7 +445,7 @@ class TestBuildModelFromSpec:
         assert model.use_naturelm is True
 
         # Clean up
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()
 
@@ -476,6 +476,6 @@ class TestBuildModelFromSpec:
             build_model_from_spec(model_spec, device="cpu")
 
         # Clean up
-        from representation_learning.models.utils import registry
+        from avex.models.utils import registry
 
         registry._MODEL_CLASSES.clear()

@@ -60,4 +60,4 @@ seed: 42
 num_workers: 8
 
 run_name: perch_base
-wandb_project: representation_learning
+wandb_project: avex

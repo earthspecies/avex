@@ -27,7 +27,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ```bash
 git clone <repository-url>
-cd representation-learning
+cd avex
 ```
 
 ## Development Setup
@@ -88,16 +88,16 @@ uv run pytest tests/unittests
 uv run pytest tests/integration -m "not slow"
 
 # Consistency tests
-uv run pytest tests/consistency --base_folder representation_learning
+uv run pytest tests/consistency --base_folder avex
 
 # Docstring tests
-uv run pytest --doctest-modules representation_learning
+uv run pytest --doctest-modules avex
 ```
 
 ### Run Tests with Coverage
 
 ```bash
-uv run pytest --cov=representation_learning
+uv run pytest --cov=avex
 ```
 
 ### Run Tests on Specific Device
@@ -167,14 +167,14 @@ uv run pre-commit run --all-files
 
 ### Adding a New Model
 
-1. **Create the model class** in `representation_learning/models/`:
+1. **Create the model class** in `avex/models/`:
    - Inherit from `ModelBase`
    - Implement required methods (`forward`, `get_embedding_dim`, etc.)
    - See existing models for reference (e.g., `beats_model.py`, `efficientnet.py`)
 
 2. **Register the model class** (if using plugin architecture):
    ```python
-   from representation_learning import register_model_class
+   from avex import register_model_class
 
    @register_model_class
    class MyNewModel(ModelBase):
@@ -183,7 +183,7 @@ uv run pre-commit run --all-files
    ```
 
 3. **Create a ModelSpec configuration**:
-   - Add YAML config in `representation_learning/api/configs/official_models/` (if official)
+   - Add YAML config in `avex/api/configs/official_models/` (if official)
    - Or create custom YAML config for your use case
 
 4. **Add tests**:
@@ -196,13 +196,13 @@ uv run pre-commit run --all-files
 
 ### Adding a New Probe Type
 
-1. **Create the probe class** in `representation_learning/models/probes/`:
+1. **Create the probe class** in `avex/models/probes/`:
    - Inherit from `BaseProbe`
    - Implement required methods
 
 2. **Register the probe**:
    ```python
-   from representation_learning.models.probes.utils import register_probe
+   from avex.models.probes.utils import register_probe
 
    @register_probe("my_probe_type")
    class MyProbe(BaseProbe):
@@ -213,7 +213,7 @@ uv run pre-commit run --all-files
 
 ### Adding New Metrics or Evaluation Functions
 
-1. **Add metric implementation** in `representation_learning/metrics/` or `representation_learning/evaluation/`
+1. **Add metric implementation** in `avex/metrics/` or `avex/evaluation/`
 
 2. **Add tests** in `tests/unittests/test_*.py`
 

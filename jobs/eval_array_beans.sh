@@ -48,11 +48,11 @@ export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 uv sync
 # Check if it's a consolidated config or single model config
 if [[ "$config_file" == consolidated_* ]]; then
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file  --patch dataset_config=configs/data_configs/finch.yml
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
-    srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
+    # srun uv run avex evaluate --config configs/evaluation_configs/$config_file  --patch dataset_config=configs/data_configs/finch.yml
+    # srun uv run avex evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
+    srun uv run avex evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
 else
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/finch.yml
-    srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
-    # srun uv run repr-learn evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
+    # srun uv run avex evaluate --config configs/evaluation_configs/$config_file --patch dataset_config=configs/data_configs/finch.yml
+    srun uv run avex evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/individual_id_h100.yml
+    # srun uv run avex evaluate --config configs/evaluation_configs/single_models_beans/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
 fi

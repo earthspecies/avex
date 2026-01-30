@@ -44,9 +44,9 @@ fi
 
 echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
-cd ~/code/representation_learning
+cd ~/code/avex
 
 echo $UV_PROJECT_ENVIRONMENT
 uv sync
 
-srun uv run repr-learn evaluate --config configs/evaluation_configs/icassp/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml
+srun uv run avex evaluate --config configs/evaluation_configs/icassp/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml

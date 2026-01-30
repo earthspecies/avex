@@ -31,8 +31,8 @@ The framework supports a plugin architecture that allows users to register custo
 See [Custom Model Registration](custom_model_registration.md) for detailed guidance on when and why to register custom models.
 
 ```python
-from representation_learning.models.base_model import ModelBase
-from representation_learning import register_model_class
+from avex.models.base_model import ModelBase
+from avex import register_model_class
 
 @register_model_class
 class MyCustomModel(ModelBase):

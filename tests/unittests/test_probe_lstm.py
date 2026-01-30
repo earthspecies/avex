@@ -4,8 +4,8 @@ from typing import List, Optional, Union
 
 import torch
 
-from representation_learning.models.base_model import ModelBase
-from representation_learning.models.probes.lstm_probe import (
+from avex.models.base_model import ModelBase
+from avex.models.probes.lstm_probe import (
     LSTMProbe,
 )
 

@@ -5,7 +5,7 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
-from representation_learning.evaluation.retrieval import (
+from avex.evaluation.retrieval import (
     evaluate_auc_roc,
     evaluate_precision,
 )
@@ -154,7 +154,7 @@ def test_none_class_skipping() -> None:
     )
 
     # Double-check the skipping logic by verifying _binary_relevance_matrix behavior
-    from representation_learning.evaluation.retrieval import (
+    from avex.evaluation.retrieval import (
         _binary_relevance_matrix,
     )
 
@@ -170,7 +170,7 @@ def test_none_class_impact_on_average() -> None:
     """Demonstrate the measurable impact of skipping None samples."""
     import numpy as np
 
-    from representation_learning.evaluation.retrieval import (
+    from avex.evaluation.retrieval import (
         _binary_relevance_matrix,
     )
 
@@ -229,7 +229,7 @@ def test_none_class_skipping_comparison() -> None:
 
     import numpy as np
 
-    from representation_learning.evaluation.retrieval import (
+    from avex.evaluation.retrieval import (
         _binary_relevance_matrix,
     )
 
