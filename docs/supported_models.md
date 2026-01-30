@@ -1,16 +1,33 @@
 # Supported Models
 
-## Official Models
+## Official Models (ESP-AVES2)
 
-The framework includes support for various audio representation learning models:
+The ESP-AVES2 model collection is available on HuggingFace: [EarthSpeciesProject/esp-aves2](https://huggingface.co/collections/EarthSpeciesProject/esp-aves2)
 
-- **EfficientNet**: EfficientNet-based models adapted for audio classification
-- **BEATs**: BEATs transformer models for audio representation learning
+### Available Models
+
+| Model Name | Architecture | Training Data | HuggingFace |
+|------------|--------------|---------------|-------------|
+| `esp_aves2_sl_beats_all` | BEATs | All (AudioSet + Bio) | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-beats-all) |
+| `esp_aves2_sl_beats_bio` | BEATs | Bioacoustics | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-beats-bio) |
+| `esp_aves2_naturelm_audio_v1_beats` | BEATs + NatureLM | All | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-naturelm-audio-v1-beats) |
+| `esp_aves2_eat_all` | EAT | All (AudioSet + Bio) | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-eat-all) |
+| `esp_aves2_eat_bio` | EAT | Bioacoustics | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-eat-bio) |
+| `esp_aves2_sl_eat_all_ssl_all` | EAT (SSL) | All | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-eat-all-ssl-all) |
+| `esp_aves2_sl_eat_bio_ssl_all` | EAT (SSL) | Bioacoustics | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-eat-bio-ssl-all) |
+| `esp_aves2_effnetb0_all` | EfficientNet-B0 | All (AudioSet + Bio) | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-all) |
+| `esp_aves2_effnetb0_bio` | EfficientNet-B0 | Bioacoustics | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-bio) |
+| `esp_aves2_effnetb0_audioset` | EfficientNet-B0 | AudioSet | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-audioset) |
+
+### Supported Architectures
+
+- **BEATs**: Bidirectional Encoder representation from Audio Transformers
 - **EAT**: Efficient Audio Transformer models
+- **EfficientNet**: EfficientNet-based models adapted for audio classification
 - **AVES**: AVES model for bioacoustics
 - **BirdMAE**: BirdMAE masked autoencoder for bioacoustic representation learning
 
-### Labels vs features only
+### Labels vs Features Only
 
 | Capability | Description |
 |------------|-------------|
@@ -22,8 +39,7 @@ The framework includes support for various audio representation learning models:
 - **At runtime**: Call `list_models()` — the printed table has a "Trained Classifier" column (✅ = has checkpoint + class mapping, ❌ = backbone/features only). The returned dict includes `has_trained_classifier` and `num_classes` per model.
 - **Per model**: Call `describe_model("model_name", verbose=True)` to see "Has Trained Classifier", checkpoint path, class mapping path, and number of classes.
 
-**Current official models (ESP-AVES2)**
-All official models in `avex/api/configs/official_models/` (e.g. `esp_aves2_sl_beats_all`, `esp_aves2_effnetb0_all`) currently have both a checkpoint and a class mapping, so they support **classification with labels**. They also support **embedding extraction** with `load_model(..., return_features_only=True)`.
+All official ESP-AVES2 models have both a checkpoint and a class mapping, so they support **classification with labels**. They also support **embedding extraction** with `load_model(..., return_features_only=True)`.
 
 ## Model Configuration
 
@@ -52,7 +68,7 @@ model_spec:
 checkpoint_path: hf://EarthSpeciesProject/esp-aves2-effnetb0-all/esp-aves2-effnetb0-all.safetensors
 
 # Optional: Label mapping for human-readable predictions
-class_mapping_path: gs://my-bucket/models/label_map.json
+class_mapping_path: hf://EarthSpeciesProject/esp-aves2-effnetb0-all/label_map.json
 
 # Required: Model specification
 model_spec:

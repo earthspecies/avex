@@ -6,6 +6,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
+- [Internal Development Setup](#internal-development-setup-esp-team)
 - [Running Tests](#running-tests)
 - [Code Style and Quality](#code-style-and-quality)
 - [Adding New Functionality](#adding-new-functionality)
@@ -17,11 +18,6 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 - Python 3.10, 3.11, or 3.12
 - Git
-- GCP authentication (for accessing ESP PyPI index):
-  ```bash
-  gcloud auth login
-  gcloud auth application-default login
-  ```
 
 ### Clone the Repository
 
@@ -34,39 +30,68 @@ cd avex
 
 ### Install with uv (Recommended)
 
+```bash
+# Install the project with dev dependencies
+uv sync --group dev
+```
+
+This will install:
+- Base API dependencies
+- Development tools (`pytest`, `ruff`, `pre-commit`, etc.)
+
+### Install with pip (Alternative)
+
+```bash
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in editable mode
+pip install -e .
+
+# Install dev tools
+pip install pytest ruff pre-commit
+```
+
+**Note**: Editable install (`-e`) means changes in the repo are picked up immediately without reinstalling.
+
+Some tests that depend on internal packages (`esp-data`) will be automatically skipped.
+
+## Internal Development Setup (ESP Team)
+
+For ESP team members who need access to internal packages (`esp-data`, `esp-sweep`) and the full training/evaluation stack:
+
+### Prerequisites
+
+- GCP authentication:
+  ```bash
+  gcloud auth login
+  gcloud auth application-default login
+  ```
+
+### Install with uv
+
 1. Install keyring with Google Artifact Registry plugin:
    ```bash
    uv tool install keyring --with keyrings.google-artifactregistry-auth
    ```
 
-2. Install the project with all dev/runtime dependencies:
+2. Install with the internal dependency group:
    ```bash
    uv sync --group project-dev
    ```
 
-This will install:
-- Base API dependencies
-- Training/evaluation runtime dependencies (`pytorch-lightning`, `mlflow`, `wandb`, `esp-data`, etc.)
-- Development tools (`pytest`, `ruff`, `pre-commit`, etc.)
-- Optional GPU-related packages (when supported)
+This installs additional internal dependencies:
+- `esp-data` – dataset management
+- `esp-sweep` – hyperparameter sweeping
+- `pytorch-lightning`, `mlflow`, `wandb` – training infrastructure
 
-The `project-dev` dependency group is used by CI and matches the full development environment.
+### Install with pip
 
-### Install with pip (Alternative)
-
-1. Create and activate a virtual environment:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-2. Install in editable mode with dev extras:
-   ```bash
-   pip install -e ".[dev]" \
-     --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
-   ```
-
-**Note**: Editable install (`-e`) means changes in the repo are picked up immediately without reinstalling.
+```bash
+pip install -e ".[dev]" \
+  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+```
 
 ## Running Tests
 
