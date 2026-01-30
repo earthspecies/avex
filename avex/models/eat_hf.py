@@ -2,6 +2,23 @@
 
 This module provides HuggingFace-compatible EAT (Data2Vec) model implementation
 for audio representation learning tasks.
+
+.. warning::
+    **Transformers 5.0.0+ Compatibility Issue**
+
+    The upstream EAT model (worstchan/EAT-base_epoch30_pretrain) is not yet compatible
+    with transformers >= 5.0.0. The remote model's `EATModel` class is missing the
+    `_tied_weights_keys` class attribute required by the newer transformers library.
+
+    Error: ``AttributeError: 'EATModel' object has no attribute 'all_tied_weights_keys'``
+
+    **Workaround**: Pin transformers to version < 5.0.0 in your dependencies:
+    ``transformers>=4.40.0,<5.0.0``
+
+    This issue needs to be fixed in the upstream HuggingFace repository by adding
+    ``_tied_weights_keys = []`` to the EATModel class in modeling_eat.py.
+
+    See: https://huggingface.co/worstchan/EAT-base_epoch30_pretrain
 """
 
 from __future__ import annotations
