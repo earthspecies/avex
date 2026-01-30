@@ -1,0 +1,17 @@
+---
+# BEATs iter3+AS2M fine-tuned backbone
+# Fine-tuned on AudioSet 2M classification
+# Weights from HuggingFace: https://huggingface.co/THUdyh/Ola_speech_encoders
+checkpoint_path: hf://THUdyh/Ola_speech_encoders/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt
+
+model_spec:
+  name: beats
+  pretrained: true
+  fine_tuned: true
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random

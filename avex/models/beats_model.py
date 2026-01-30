@@ -13,46 +13,39 @@ import torch.nn as nn
 from avex.configs import AudioConfig
 from avex.models.base_model import ModelBase
 from avex.models.beats.beats import BEATs, BEATsConfig
+from avex.models.utils.registry import get_checkpoint_path
 from avex.utils import universal_torch_load
 
 logger = logging.getLogger(__name__)
 
-BEATS_PRETRAINED_PATH_FT = "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt"
-BEATS_PRETRAINED_PATH_SSL = "gs://representation-learning/pretrained/BEATs_iter3_plus_AS2M.pt"
 
-BEATS_PRETRAINED_PATH_NATURELM = (
-    "gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2_rl_loaded.pt"
-)
+def _get_beats_checkpoint_path(use_naturelm: bool, fine_tuned: bool) -> str:
+    """Get the checkpoint path for a BEATs model variant from the registry.
 
-# Default config for BEATs iter3 plus AS2M (fine-tuned variant)
-# This allows initialization without loading from GCS when pretrained=False
-BEATS_ITER3_AS2M_CONFIG = {
-    "input_patch_size": 16,
-    "embed_dim": 512,
-    "conv_bias": False,
-    "encoder_layers": 12,
-    "encoder_embed_dim": 768,
-    "encoder_ffn_embed_dim": 3072,
-    "encoder_attention_heads": 12,
-    "activation_fn": "gelu",
-    "layer_wise_gradient_decay_ratio": 1.0,
-    "layer_norm_first": False,
-    "deep_norm": False,
-    "dropout": 0.1,
-    "attention_dropout": 0.1,
-    "activation_dropout": 0.0,
-    "encoder_layerdrop": 0.05,
-    "dropout_input": 0.0,
-    "conv_pos": 128,
-    "conv_pos_groups": 16,
-    "relative_position_embedding": True,
-    "num_buckets": 320,
-    "max_distance": 800,
-    "gru_rel_pos": True,
-    "finetuned_model": True,
-    "predictor_dropout": 0.0,
-    "predictor_class": 527,
-}
+    Args:
+        use_naturelm: Whether to use NatureLM variant
+        fine_tuned: Whether to use fine-tuned (AS2M) variant
+
+    Returns:
+        Checkpoint path from the registry
+
+    Raises:
+        ValueError: If no checkpoint path is found in the registry
+    """
+    if use_naturelm:
+        model_name = "esp_aves2_naturelm_audio_v1_beats"
+    elif fine_tuned:
+        model_name = "BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2"
+    else:
+        model_name = "BEATs_iter3_plus_AS2M"
+
+    checkpoint_path = get_checkpoint_path(model_name)
+    if checkpoint_path is None:
+        raise ValueError(
+            f"No checkpoint path found for '{model_name}' in registry. "
+            f"Ensure the YAML config exists in avex/api/configs/official_models/"
+        )
+    return checkpoint_path
 
 
 class Model(ModelBase):
@@ -115,18 +108,17 @@ class Model(ModelBase):
         # ------------------------------------------------------------------
 
         if pretrained:
-            # Load config and weights from GCS checkpoint
-            if fine_tuned:
-                beats_checkpoint_path = BEATS_PRETRAINED_PATH_FT
-            else:
-                beats_checkpoint_path = BEATS_PRETRAINED_PATH_SSL
+            # Load config and weights from registry-based checkpoint paths
+            # For NatureLM, we need to load config from the fine-tuned checkpoint first
+            config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
+            beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
+            beats_cfg = BEATsConfig.from_dict(beats_ckpt["cfg"])
+            logger.debug(f"Loaded BEATs config from checkpoint: {beats_cfg.model_dump()}")
 
-            beats_ckpt = universal_torch_load(beats_checkpoint_path, cache_mode="use", map_location="cpu")
-            beats_cfg = BEATsConfig(beats_ckpt["cfg"])
-            logger.debug(f"Loaded BEATs config from checkpoint: {beats_cfg}")
-
-            if use_naturelm:  # BEATs-NatureLM has no config, load from regular ckpt first.
-                beats_ckpt_weights = universal_torch_load(BEATS_PRETRAINED_PATH_NATURELM, map_location="cpu")
+            if use_naturelm:
+                # BEATs-NatureLM has no config in its checkpoint, load weights separately
+                naturelm_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=True, fine_tuned=False)
+                beats_ckpt_weights = universal_torch_load(naturelm_checkpoint_path, map_location="cpu")
             else:
                 beats_ckpt_weights = beats_ckpt["model"]
 
@@ -134,10 +126,10 @@ class Model(ModelBase):
             self.backbone.to(device)
             self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
-            # Use default config without loading pretrained weights
+            # Use default Pydantic config without loading pretrained weights
             # Weights can be loaded later via load_state_dict (e.g., from HuggingFace checkpoint)
             logger.info("Initializing BEATs with default config (pretrained=False)")
-            beats_cfg = BEATsConfig(BEATS_ITER3_AS2M_CONFIG)
+            beats_cfg = BEATsConfig()
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
 

@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torchaudio.compliance.kaldi as ta_kaldi
+from pydantic import BaseModel, ConfigDict, Field
 from torch.nn import LayerNorm
 
 from .backbone import TransformerEncoder
@@ -32,61 +33,75 @@ from .backbone import TransformerEncoder
 logger = logging.getLogger(__name__)
 
 
-class BEATsConfig:
-    """Configuration class for BEATs model parameters."""
+class BEATsConfig(BaseModel):
+    """Configuration for BEATs model parameters.
 
-    def __init__(self, cfg: Optional[Dict[str, Any]] = None) -> None:
-        """Initialize BEATs configuration.
+    This Pydantic model defines all configuration options for the BEATs
+    (Bidirectional Encoder representation from Audio Transformers) architecture.
+    Default values are set to match the iter3+AS2M fine-tuned variant.
+
+    Example:
+        >>> config = BEATsConfig()  # Use defaults
+        >>> config = BEATsConfig(encoder_layers=6)  # Override specific fields
+        >>> config = BEATsConfig.from_dict(checkpoint["cfg"])  # Load from checkpoint
+    """
+
+    # Patch embedding configuration
+    input_patch_size: int = Field(16, description="Patch size of patch embedding")
+    embed_dim: int = Field(512, description="Patch embedding dimension")
+    conv_bias: bool = Field(False, description="Include bias in conv encoder")
+
+    # Encoder architecture
+    encoder_layers: int = Field(12, description="Number of encoder layers in the transformer")
+    encoder_embed_dim: int = Field(768, description="Encoder embedding dimension")
+    encoder_ffn_embed_dim: int = Field(3072, description="Encoder FFN embedding dimension")
+    encoder_attention_heads: int = Field(12, description="Number of encoder attention heads")
+    activation_fn: str = Field("gelu", description="Activation function to use")
+
+    # Training dynamics
+    layer_wise_gradient_decay_ratio: float = Field(1.0, description="Ratio for layer-wise gradient decay")
+    layer_norm_first: bool = Field(False, description="Apply layernorm first in the transformer")
+    deep_norm: bool = Field(False, description="Apply deep_norm first in the transformer")
+
+    # Dropout configuration
+    dropout: float = Field(0.1, description="Dropout probability for the transformer")
+    attention_dropout: float = Field(0.1, description="Dropout probability for attention weights")
+    activation_dropout: float = Field(0.0, description="Dropout probability after activation in FFN")
+    encoder_layerdrop: float = Field(0.05, description="Probability of dropping a transformer layer")
+    dropout_input: float = Field(0.0, description="Dropout to apply to the input after feature extraction")
+
+    # Positional embeddings
+    conv_pos: int = Field(128, description="Number of filters for convolutional positional embeddings")
+    conv_pos_groups: int = Field(16, description="Number of groups for convolutional positional embedding")
+
+    # Relative position embedding
+    relative_position_embedding: bool = Field(True, description="Apply relative position embedding")
+    num_buckets: int = Field(320, description="Number of buckets for relative position embedding")
+    max_distance: int = Field(800, description="Maximum distance for relative position embedding")
+    gru_rel_pos: bool = Field(True, description="Apply gated relative position embedding")
+
+    # Label predictor (for fine-tuned models)
+    finetuned_model: bool = Field(True, description="Whether this is a fine-tuned model")
+    predictor_dropout: float = Field(0.0, description="Dropout probability for the predictor")
+    predictor_class: int = Field(527, description="Target class number for the predictor")
+
+    # Allow extra fields from checkpoints that may have additional config keys
+    model_config = ConfigDict(extra="allow")
+
+    @classmethod
+    def from_dict(cls, cfg: Dict[str, Any]) -> "BEATsConfig":
+        """Create a BEATsConfig from a dictionary.
+
+        This method provides backward compatibility for loading configurations
+        from checkpoint files that store config as a dictionary.
 
         Args:
-            cfg: Optional dictionary containing configuration parameters
+            cfg: Dictionary containing configuration parameters
+
+        Returns:
+            BEATsConfig: Validated configuration object
         """
-        self.input_patch_size: int = -1  # path size of patch embedding
-        self.embed_dim: int = 512  # patch embedding dimension
-        self.conv_bias: bool = False  # include bias in conv encoder
-
-        self.encoder_layers: int = 12  # num encoder layers in the transformer
-        self.encoder_embed_dim: int = 768  # encoder embedding dimension
-        self.encoder_ffn_embed_dim: int = 3072  # encoder embedding dimension for FFN
-        self.encoder_attention_heads: int = 12  # num encoder attention heads
-        self.activation_fn: str = "gelu"  # activation function to use
-
-        self.layer_wise_gradient_decay_ratio: float = 1.0  # ratio for layer-wise gradient decay
-        self.layer_norm_first: bool = False  # apply layernorm first in the transformer
-        self.deep_norm: bool = False  # apply deep_norm first in the transformer
-
-        # dropouts
-        self.dropout: float = 0.1  # dropout probability for the transformer
-        self.attention_dropout: float = 0.1  # dropout probability for attention weights
-        self.activation_dropout: float = 0.0  # dropout probability after activation in FFN
-        self.encoder_layerdrop: float = 0.0  # probability of dropping a tarnsformer layer
-        self.dropout_input: float = 0.0  # dropout to apply to the input (after feat extr)
-
-        # positional embeddings
-        self.conv_pos: int = 128  # number of filters for convolutional positional embeddings
-        self.conv_pos_groups: int = 16  # number of groups for convolutional positional embedding
-
-        # relative position embedding
-        self.relative_position_embedding: bool = False  # apply relative position embedding
-        self.num_buckets: int = 320  # number of buckets for relative position embedding
-        self.max_distance: int = 1280  # maximum distance for relative position embedding
-        self.gru_rel_pos: bool = False  # apply gated relative position embedding
-
-        # label predictor
-        self.finetuned_model: bool = False  # whether the model is a fine-tuned model.
-        self.predictor_dropout: float = 0.1  # dropout probability for the predictor
-        self.predictor_class: int = 527  # target class number for the predictor
-
-        if cfg is not None:
-            self.update(cfg)
-
-    def update(self, cfg: Dict[str, Any]) -> None:
-        """Update configuration with new parameters.
-
-        Args:
-            cfg: Dictionary containing new configuration parameters
-        """
-        self.__dict__.update(cfg)
+        return cls(**cfg)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary.
@@ -94,7 +109,7 @@ class BEATsConfig:
         Returns:
             Dict[str, Any]: Configuration as dictionary
         """
-        return self.__dict__
+        return self.model_dump()
 
 
 class BEATs(nn.Module):
@@ -110,7 +125,7 @@ class BEATs(nn.Module):
             cfg: BEATs configuration object
         """
         super().__init__()
-        logger.info(f"BEATs Config: {cfg.__dict__}")
+        logger.info(f"BEATs Config: {cfg.model_dump()}")
 
         self.cfg = cfg
 
