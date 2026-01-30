@@ -21,8 +21,11 @@ Audio Requirements:
     )
 
 Output Formats:
-- Transformer models (BEATs, EAT) return 3D tensors: (batch, frames/patches, features)
+- Transformer models (BEATs) return 3D tensors: (batch, frames/patches, features)
 - CNN models (EfficientNet, ResNet) return 4D tensors: (batch, channels, height, width)
+
+Note: EAT models are currently not compatible with transformers >= 5.0.0.
+See avex/models/eat_hf.py for details on the upstream compatibility issue.
 """
 
 import argparse
@@ -64,33 +67,9 @@ def main(device: str = "cpu") -> None:
     print(f"   - Feature dimension: {output.shape[2]}")
 
     # =========================================================================
-    # Part 2: EAT (Transformer - 3D output)
+    # Part 2: EfficientNet (CNN - 4D output)
     # =========================================================================
-    print("\nPart 2: EAT (Transformer)")
-    print("-" * 50)
-
-    # This model has a classifier; request embedding output for this example.
-    model = load_model("esp_aves2_sl_eat_all_ssl_all", device=device, return_features_only=True)
-    model.eval()
-
-    print(f"Loaded model: {type(model).__name__}")
-    print(f"   Parameters: {sum(p.numel() for p in model.parameters()):,}")
-    print(f"   Return features only: {getattr(model, 'return_features_only', 'N/A')}")
-
-    # EAT expects 16kHz audio
-    dummy_input = torch.randn(1, 16000 * 5, device=device)
-    with torch.no_grad():
-        output = model(dummy_input, padding_mask=None)
-
-    print(f"\n   Output shape: {output.shape}")
-    print(f"   - Batch size: {output.shape[0]}")
-    print(f"   - Number of patches: {output.shape[1]}")
-    print(f"   - Feature dimension: {output.shape[2]}")
-
-    # =========================================================================
-    # Part 3: EfficientNet (CNN - 4D output)
-    # =========================================================================
-    print("\nPart 3: EfficientNet (CNN)")
+    print("\nPart 2: EfficientNet (CNN)")
     print("-" * 50)
 
     audio_config = AudioConfig(
@@ -125,9 +104,9 @@ def main(device: str = "cpu") -> None:
     print(f"   - Width: {output.shape[3]}")
 
     # =========================================================================
-    # Part 4: Embedding vs Classification mode comparison
+    # Part 3: Embedding vs Classification mode comparison
     # =========================================================================
-    print("\nPart 4: Embedding vs Classification Mode")
+    print("\nPart 3: Embedding vs Classification Mode")
     print("-" * 50)
 
     # Embedding mode
@@ -180,7 +159,7 @@ def main(device: str = "cpu") -> None:
 - Or use return_features_only=True explicitly
 
 Output dimensions:
-- Transformers (BEATs, EAT): 3D (batch, frames/patches, features)
+- Transformers (BEATs): 3D (batch, frames/patches, features)
 - CNNs (EfficientNet, ResNet): 4D (batch, channels, height, width)
 
 Use cases:
