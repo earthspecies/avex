@@ -38,27 +38,55 @@ For development installation with training/evaluation tools, see the [Contributi
 ## Quick Start
 
 ```python
-from avex import list_models, load_model, describe_model
+import torch
+import librosa
+from avex import load_model, list_models
 
-# List available models (table shows which have a trained classifier / labels)
-models = list_models()
-print(f"Available models: {list(models.keys())}")
-
-# Get detailed information about a model
-describe_model("esp_aves2_naturelm_audio_v1_beats", verbose=True)
+# List available models
+print(list_models().keys())
 
 # Load a pre-trained model
-model = load_model("esp_aves2_naturelm_audio_v1_beats", device="cpu")
+model = load_model("esp_aves2_sl_beats_all", device="cpu")
 
-# Load for embedding extraction
-model = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
-# Returns (batch, time_steps, 768) for BEATs
+# Load and preprocess audio (BEATs expects 16kHz)
+audio, sr = librosa.load("your_audio.wav", sr=16000)
+audio_tensor = torch.tensor(audio).unsqueeze(0)  # Shape: (1, num_samples)
 
-# Load with a probe for transfer learning
+# Run inference
+with torch.no_grad():
+    logits = model(audio_tensor)
+    predicted_class = logits.argmax(dim=-1).item()
+
+# Get human-readable label
+if model.label_mapping:
+    label = model.label_mapping.get(str(predicted_class), predicted_class)
+    print(f"Predicted: {label}")
+```
+
+### Embedding Extraction
+
+```python
+# Load for embedding extraction (no classifier head)
+model = load_model("esp_aves2_sl_beats_all", return_features_only=True, device="cpu")
+
+with torch.no_grad():
+    embeddings = model(audio_tensor)
+    # Shape: (batch, time_steps, 768) for BEATs
+
+# Pool to get fixed-size embedding
+embedding = embeddings.mean(dim=1)  # Shape: (batch, 768)
+```
+
+### Transfer Learning with Probes
+
+```python
 from avex.models.probes import build_probe_from_config
 from avex.configs import ProbeConfig
 
-base = load_model("esp_aves2_naturelm_audio_v1_beats", return_features_only=True, device="cpu")
+# Load backbone for feature extraction
+base = load_model("esp_aves2_sl_beats_all", return_features_only=True, device="cpu")
+
+# Define a probe head for your task
 probe_config = ProbeConfig(
     probe_type="linear",
     target_layers=["last_layer"],
@@ -66,10 +94,11 @@ probe_config = ProbeConfig(
     freeze_backbone=True,
     online_training=True,
 )
+
 probe = build_probe_from_config(
     probe_config=probe_config,
     base_model=base,
-    num_classes=10,
+    num_classes=10,  # Your number of classes
     device="cpu",
 )
 ```
