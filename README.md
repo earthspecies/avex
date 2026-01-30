@@ -1,4 +1,4 @@
-# Representation Learning Framework
+# avex - Animal Vocalization Encoder Library
 
 ![CI status](https://github.com/earthspecies/avex/actions/workflows/pythonapp.yml/badge.svg?branch=main)
 ![Pre-commit status](https://github.com/earthspecies/avex/actions/workflows/pre-commit.yml/badge.svg?branch=main)
@@ -7,7 +7,7 @@ An API for model loading and inference, and a Python-based system for training a
 
 ## Description
 
-The Representation Learning Framework provides a unified interface for working with pre-trained bioacoustics representation learning models, with support for:
+The Animal Vocalization Encoder library avex provides a unified interface for working with pre-trained bioacoustics representation learning models, with support for:
 
 - **Model Loading**: Load pre-trained models with checkpoints and class mappings
 - **Embedding Extraction**: Extract features from audio for downstream tasks
@@ -21,45 +21,19 @@ The Representation Learning Framework provides a unified interface for working w
 
 - Python 3.10, 3.11, or 3.12
 
-### Install with uv (Recommended)
-
-```bash
-# 1. Install keyring with Google Artifact Registry plugin
-uv tool install keyring --with keyrings.google-artifactregistry-auth
-
-# 2. Create and activate virtual environment
-uv venv
-source .venv/bin/activate
-
-# 3. Configure uv (add to pyproject.toml)
-[[tool.uv.index]]
-name = "esp-pypi"
-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-explicit = true
-
-[tool.uv.sources]
-avex = { index = "esp-pypi" }
-
-[tool.uv]
-keyring-provider = "subprocess"
-
-# 4. Install the package
-uv add avex
-```
-
 ### Install with pip
 
 ```bash
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install from ESP index
-pip install avex \
-  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+pip install avex
 ```
 
-For development installation with training/evaluation tools, see the [Installation guide](docs/index.md#installation).
+### Install with uv
+
+```bash
+uv add avex
+```
+
+For development installation with training/evaluation tools, see the [Contributing guide](CONTRIBUTING.md).
 
 ## Quick Start
 
@@ -197,5 +171,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Built on top of PyTorch
-- Uses esp-data for dataset management
 - Integrates with various pre-trained audio models
