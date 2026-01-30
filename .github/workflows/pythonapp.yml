@@ -65,9 +65,17 @@ jobs:
             - name: Unittests with pytest
               run: |
                   uv run pytest tests/unittests
+            # TODO: Remove --ignore flags once esp_data is public
             - name: Doctests with pytest
               run: |
-                  uv run pytest --doctest-modules avex
+                  uv run pytest --doctest-modules avex \
+                    --ignore=avex/run_train.py \
+                    --ignore=avex/run_evaluate.py \
+                    --ignore=avex/data \
+                    --ignore=avex/training \
+                    --ignore=avex/evaluation \
+                    --ignore=avex/utils/experiment_tracking.py \
+                    --ignore=avex/models/atst_frame
             - name: Integration tests with pytest
               run: |
                   uv run pytest tests/integration -m "not slow" -vv --durations=20
