@@ -112,7 +112,7 @@ class Model(ModelBase):
             # For NatureLM, we need to load config from the fine-tuned checkpoint first
             config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
             beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
-            beats_cfg = BEATsConfig.from_dict(beats_ckpt["cfg"])
+            beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
             logger.debug(f"Loaded BEATs config from checkpoint: {beats_cfg.model_dump()}")
 
             if use_naturelm:
