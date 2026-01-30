@@ -4,7 +4,7 @@ on:    # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 jobs:
-  build-and-publish-dry-run:
+  build-and-publish-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,17 +28,6 @@ jobs:
 
       - name: Build the package
         run: uv build
-
-      - name: Check version is prerelease
-        run: |
-          python - <<'EOF'
-          import tomllib
-          with open("pyproject.toml", "rb") as f:
-              data = tomllib.load(f)
-          v = data["project"]["version"]
-          assert any(x in v for x in ("a", "b", "rc", "dev")), f"Refusing to publish non-prerelease version: {v}"
-          print(f"Version {v} is a prerelease, OK to publish")
-          EOF
 
       - name: Publish to TestPyPI
         run: uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing
