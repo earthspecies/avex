@@ -2,7 +2,6 @@
 # ESP-AVES2: EfficientNet B0 trained on AudioSet.
 # Weights on Hugging Face Hub (safetensors). Load via hf:// URIs.
 checkpoint_path: hf://EarthSpeciesProject/esp-aves2-effnetb0-audioset/esp-aves2-effnetb0-audioset.safetensors
-class_mapping_path: hf://EarthSpeciesProject/esp-aves2-effnetb0-audioset/label_map.json
 
 model_spec:
   name: efficientnet
