@@ -32,7 +32,6 @@ jobs:
       - name: Build the package
         run: uv build
 
-      - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
+      - name: Publish to PyPI
+        run: |
+          run: uv publish --publish-url https://pypi.org/legacy/ --trusted-publishing
