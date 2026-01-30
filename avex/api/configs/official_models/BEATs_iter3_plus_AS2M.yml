@@ -1,0 +1,17 @@
+---
+# BEATs iter3+AS2M SSL pretrained backbone
+# Self-supervised learning checkpoint without fine-tuning
+# Weights from HuggingFace: https://huggingface.co/lpepino/beats_ckpts
+checkpoint_path: hf://lpepino/beats_ckpts/BEATs_iter3_plus_AS2M.pt
+
+model_spec:
+  name: beats
+  pretrained: true
+  fine_tuned: false
+  device: cuda
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
