@@ -53,8 +53,10 @@ def _filesystem(protocol: Literal["gcs", "gs", "r2", "s3", "hf", "local"] = "loc
     if protocol in ["r2", "s3"]:
         return S3FileSystem(anon=False)
     if protocol == "hf":
-        # token=True -> use local token store / env vars if present (also works for public repos).
-        return HfFileSystem(token=True)
+        # token=None -> use local token store / env vars if available, otherwise anonymous access.
+        # This allows unauthenticated users to access public repos while authenticated users
+        # benefit from higher rate limits.
+        return HfFileSystem(token=None)
     if protocol == "local":
         return fsspec.filesystem("local")
 

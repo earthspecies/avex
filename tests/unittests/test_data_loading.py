@@ -10,20 +10,21 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from avex.configs import (
+# Skip entire module if esp_data is not installed (internal dependency)
+# Must be before imports that trigger esp_data loading (e.g., avex.data.*)
+esp_data = pytest.importorskip("esp_data")
+Dataset = esp_data.Dataset
+DatasetConfig = esp_data.DatasetConfig
+dataset_from_config = esp_data.dataset_from_config
+
+from avex.configs import (  # noqa: E402
     AudioConfig,
     ModelSpec,
     RunConfig,
     TrainingParams,
 )
-from avex.data.configs import DatasetCollectionConfig
-from avex.data.dataset import build_dataloaders
-
-# Skip entire module if esp_data is not installed (internal dependency)
-esp_data = pytest.importorskip("esp_data")
-Dataset = esp_data.Dataset
-DatasetConfig = esp_data.DatasetConfig
-dataset_from_config = esp_data.dataset_from_config
+from avex.data.configs import DatasetCollectionConfig  # noqa: E402
+from avex.data.dataset import build_dataloaders  # noqa: E402
 
 
 def create_test_csv(tmp_path: Path) -> Path:

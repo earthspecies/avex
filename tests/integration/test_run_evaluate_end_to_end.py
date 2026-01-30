@@ -18,12 +18,11 @@ from typing import Any
 
 import pandas as pd
 import pytest
+import yaml
 
 # Skip entire module if esp_data is not installed (internal dependency)
 # These tests use build_dataloaders which loads real datasets via esp_data
 pytest.importorskip("esp_data")
-
-import yaml
 
 
 class TestRunEvaluateEndToEnd:

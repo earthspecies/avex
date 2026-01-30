@@ -39,7 +39,11 @@ _SHA256_LINE_RE = re.compile(r"^([0-9a-fA-F]{64})\s+\S+\s*$")
 
 
 def _official_hf_model_names() -> list[str]:
-    """Return official model names that have an hf:// checkpoint path.
+    """Return official ESP model names that have an hf:// checkpoint path.
+
+    Only includes models whose name starts with 'esp_' (ESP official models).
+    Third-party backbone models (e.g., BEATs from external repos) are excluded
+    since they don't have .sha256 sidecar files for checksum validation.
 
     Returns
     -------
@@ -48,6 +52,10 @@ def _official_hf_model_names() -> list[str]:
     """
     names: list[str] = []
     for name in list_models().keys():
+        # Only include ESP official models (name starts with 'esp_')
+        # Exclude third-party backbone models which don't have .sha256 sidecar files
+        if not name.startswith("esp_"):
+            continue
         try:
             checkpoint_path = get_checkpoint_path(name)
         except KeyError:

@@ -2,7 +2,6 @@
 # ESP-AVES2: EAT trained on bio data.
 # Weights on Hugging Face Hub (safetensors). Load via hf:// URIs.
 checkpoint_path: hf://EarthSpeciesProject/esp-aves2-eat-bio/esp-aves2-eat-bio.safetensors
-class_mapping_path: hf://EarthSpeciesProject/esp-aves2-eat-bio/label_map.json
 
 model_spec:
   name: eat_hf

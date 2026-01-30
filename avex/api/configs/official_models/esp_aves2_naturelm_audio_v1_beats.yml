@@ -2,7 +2,6 @@
 # ESP-AVES2: BEATs with NatureLM (audio v1).
 # Weights on Hugging Face Hub (safetensors). Load via hf:// URIs.
 checkpoint_path: hf://EarthSpeciesProject/esp-aves2-naturelm-audio-v1-beats/esp-aves2-naturelm-audio-v1-beats.safetensors
-class_mapping_path: hf://EarthSpeciesProject/esp-aves2-naturelm-audio-v1-beats/label_map.json
 
 model_spec:
   name: beats

@@ -6,6 +6,8 @@ audio representation learning models with support for both supervised and
 self-supervised learning paradigms.
 """
 
+from importlib.metadata import version
+
 from .models.utils.factory import (
     build_model,
     build_model_from_spec,
@@ -23,13 +25,8 @@ from .models.utils.registry import (
     register_model_class,
 )
 
-try:
-    from importlib.metadata import version
+__version__ = version("avex")
 
-    __version__ = version("avex")
-except Exception:
-    # Fallback for development or if package not installed
-    __version__ = "0.4.3"
 
 __all__ = [
     # Model loading
