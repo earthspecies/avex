@@ -43,7 +43,7 @@ class BEATsConfig(BaseModel):
     Example:
         >>> config = BEATsConfig()  # Use defaults
         >>> config = BEATsConfig(encoder_layers=6)  # Override specific fields
-        >>> config = BEATsConfig.from_dict(checkpoint["cfg"])  # Load from checkpoint
+        >>> config = BEATsConfig.from_dict({"encoder_layers": 6})  # Load from dict
     """
 
     # Patch embedding configuration
