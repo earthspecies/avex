@@ -1,10 +1,10 @@
-# Representation Learning Framework Documentation
+# AVEX - Animal Vocalization Encoder Library Documentation
 
 Welcome to the Representation Learning Framework documentation. This framework provides an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.
 
 ## Getting Started
 
-### What is avex?
+### What is AVEX?
 
 The Representation Learning Framework is an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models. It provides:
 

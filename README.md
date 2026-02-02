@@ -1,4 +1,4 @@
-# avex - Animal Vocalization Encoder Library
+# AVEX - Animal Vocalization Encoder Library
 
 ![CI status](https://github.com/earthspecies/avex/actions/workflows/pythonapp.yml/badge.svg?branch=main)
 ![Pre-commit status](https://github.com/earthspecies/avex/actions/workflows/pre-commit.yml/badge.svg?branch=main)
@@ -7,7 +7,7 @@ An API for model loading and inference, and a Python-based system for training a
 
 ## Description
 
-The Animal Vocalization Encoder library avex provides a unified interface for working with pre-trained bioacoustics representation learning models, with support for:
+The Animal Vocalization Encoder library AVEX provides a unified interface for working with pre-trained bioacoustics representation learning models, with support for:
 
 - **Model Loading**: Load pre-trained models with checkpoints and class mappings
 - **Embedding Extraction**: Extract features from audio for downstream tasks
