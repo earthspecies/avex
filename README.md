@@ -1,5 +1,8 @@
 # AVEX - Animal Vocalization Encoder Library
 
+[![arXiv](https://img.shields.io/badge/arXiv-2508.11845-b31b1b.svg)](https://arxiv.org/abs/2508.11845)
+[![PyPI](https://img.shields.io/pypi/v/avex.svg)](https://pypi.org/project/avex/)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Collection-yellow)](https://huggingface.co/collections/EarthSpeciesProject/esp-aves2)
 ![CI status](https://github.com/earthspecies/avex/actions/workflows/pythonapp.yml/badge.svg?branch=main)
 ![Pre-commit status](https://github.com/earthspecies/avex/actions/workflows/pre-commit.yml/badge.svg?branch=main)
 
