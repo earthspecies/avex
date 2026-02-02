@@ -31,7 +31,10 @@ cd avex
 ### Install with uv (Recommended)
 
 ```bash
-# Install the project with dev dependencies
+# Install the project without dev dependencies
+uv sync
+
+# For ESP users, install the project with dev dependencies
 uv sync --group dev
 ```
 
