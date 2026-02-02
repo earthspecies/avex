@@ -198,3 +198,4 @@ cython_debug/
 
 # Notebooks
 notebooks/*
+docs/_build/
