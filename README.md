@@ -148,9 +148,9 @@ The framework supports the following audio representation learning models:
 - **ATST** - Audio Spectrogram Transformer
 - **ResNet** - ResNet models (ResNet18, ResNet50, ResNet152)
 - **CLIP** - Contrastive Language-Audio Pretraining models
-- **BirdNet** - BirdNet models for bioacoustic classification
-- **Perch** - Perch models for bioacoustics
-- **SurfPerch** - SurfPerch models
+- **BirdNet** - BirdNet models for bioacoustic classification - external tensorflow model, some features might not be available
+- **Perch** - Perch models for bioacoustics - external tensorflow model, some features might not be available
+- **SurfPerch** - SurfPerch models - external tensorflow model, some features might not be available
 
 See [Supported Models](docs/supported_models.md) for detailed information and configuration examples.
 
@@ -175,23 +175,38 @@ See [Probe System](docs/probe_system.md) and [API Probes](docs/api_probes.md) fo
 If you use this framework in your research, please cite:
 
 ```bibtex
-@article{miron2025matters,
+@inproceedings{miron2025matters,
   title={What Matters for Bioacoustic Encoding},
-  author={Miron, Marius and Robinson, David and Alizadeh, Milad and Gilsenan-McMahon, Ellen and Narula, Gagan and Pietquin, Olivier and Geist, Matthieu and Chemla, Emmanuel and Cusimano, Maddie and Effenberger, Felix and others},
-  journal={arXiv preprint arXiv:2508.11845},
-  year={2025}
+  author={Miron, Marius and Robinson, David and Alizadeh, Milad and Gilsenan-McMahon, Ellen and Narula, Gagan and Chemla, Emmanuel and Cusimano, Maddie and Effenberger, Felix and Hagiwara, Masato and Hoffman, Benjamin and Keen, Sara and Kim, Diane and Lawton, Jane K. and Liu, Jen-Yu and Raskin, Aza and Pietquin, Olivier and Geist, Matthieu},
+  booktitle={The Fourteen International Conference on Learning Representations},
+  year={2026}
+}
+```
+
+Related ESP papers:
+
+```bibtex
+@inproceedings{miron2026probing,
+  title={Multi-layer attentive probing improves transfer of audio representations for bioacoustics},
+  author={Miron, Marius and Robinson, David and Hagiwara, Masato and Titouan, Parcollet and Cauzinille, Jules and and Narula, Gagan and Alizadeh, Milad and Gilsenan-McMahon, Ellen and Keen, Sara and Chemla, Emmanuel and Hoffman, Benjamin and Cusimano, Maddie and Kim, Diane and Effenberger, Felix and Lawton, Jane K. and Raskin, Aza and Pietquin, Olivier and Geist, Matthieu},
+  booktitle={ICASSP 2026-2026 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={1--5},
+  year={2026},
+  organization={IEEE}
+}
+@inproceedings{hagiwara2023aves,
+  title={Aves: Animal vocalization encoder based on self-supervision},
+  author={Hagiwara, Masato},
+  booktitle={ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages={1--5},
+  year={2023},
+  organization={IEEE}
 }
 ```
 
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Development setup
-- Running tests
-- Code style guidelines
-- Adding new functionality
-- Pull request process
 
 ## License
 
@@ -200,4 +215,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Built on top of PyTorch
-- Integrates with various pre-trained audio models
+- ICLR2026 and ICASSP2026 reviewers for the feedback
+- Titouan Parcollet for templating, engineering feedback
+- Bioacoustics community (IBAC, BioDCASE, ABS)
