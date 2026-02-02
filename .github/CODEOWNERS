@@ -4,12 +4,12 @@
 # NOTE: Teams must have explicit write access to the repository.
 # Order matters - last matching pattern takes precedence.
 
-# Default: AI team owns everything
-*                       @earthspecies/ai-fte
+# Default: infra-humans team + specific users own everything
+*                       @earthspecies/infra-humans @david-rx @nkundiushuti
 
 # Humans team can approve docs and READMEs
 /docs/                  @earthspecies/humans
 *.md                    @earthspecies/humans
 
-# Protect CODEOWNERS itself - requires AI team approval
-/.github/CODEOWNERS     @earthspecies/ai-fte
+# Protect CODEOWNERS itself - requires infra team approval
+/.github/CODEOWNERS     @earthspecies/infra-humans @david-rx @nkundiushuti
