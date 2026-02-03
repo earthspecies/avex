@@ -1,17 +1,17 @@
 # Examples
 
-The `examples/` directory contains comprehensive examples demonstrating various usage patterns:
+The [`examples/`](https://github.com/earthspecies/avex/tree/main/examples) directory contains comprehensive examples demonstrating various usage patterns:
 
 | Example | Description |
 |---------|-------------|
-| `00_quick_start.py` | Basic model loading and testing |
-| `01_basic_model_loading.py` | Loading pre-trained models with checkpoints and class mappings |
-| `02_checkpoint_loading.py` | Working with default and custom checkpoints from YAML configs |
-| `03_custom_model_registration.py` | Creating and registering custom model classes and ModelSpecs |
-| `04_training_and_evaluation.py` | Full training loop and evaluation examples |
-| `05_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
-| `06_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
-| `colab_sl_beats_demo.ipynb` | Google Colab demo for the sl-beats model |
+| [`00_quick_start.py`](https://github.com/earthspecies/avex/blob/main/examples/00_quick_start.py) | Basic model loading and testing |
+| [`01_basic_model_loading.py`](https://github.com/earthspecies/avex/blob/main/examples/01_basic_model_loading.py) | Loading pre-trained models with checkpoints and class mappings |
+| [`02_checkpoint_loading.py`](https://github.com/earthspecies/avex/blob/main/examples/02_checkpoint_loading.py) | Working with default and custom checkpoints from YAML configs |
+| [`03_custom_model_registration.py`](https://github.com/earthspecies/avex/blob/main/examples/03_custom_model_registration.py) | Creating and registering custom model classes and ModelSpecs |
+| [`04_training_and_evaluation.py`](https://github.com/earthspecies/avex/blob/main/examples/04_training_and_evaluation.py) | Full training loop and evaluation examples |
+| [`05_embedding_extraction.py`](https://github.com/earthspecies/avex/blob/main/examples/05_embedding_extraction.py) | Feature extraction with `return_features_only=True` (unpooled features) |
+| [`06_classifier_head_loading.py`](https://github.com/earthspecies/avex/blob/main/examples/06_classifier_head_loading.py) | Understanding classifier head behavior with different `num_classes` settings |
+| [`colab_sl_beats_demo.ipynb`](https://github.com/earthspecies/avex/blob/main/examples/colab_sl_beats_demo.ipynb) | Google Colab demo for the sl-beats model |
 
 ## Package Structure
 

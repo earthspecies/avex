@@ -41,7 +41,7 @@ for epoch in range(num_epochs):
 torch.save(model.state_dict(), "checkpoints/my_model.pt")
 ```
 
-For complete training examples with data loading and evaluation, see `examples/04_training_and_evaluation.py`.
+For complete training examples with data loading and evaluation, see [`examples/04_training_and_evaluation.py`](https://github.com/earthspecies/avex/blob/main/examples/04_training_and_evaluation.py).
 
 ### Evaluation
 
@@ -68,7 +68,7 @@ with torch.no_grad():
             print(f"{label}: {prob.item():.4f}")
 ```
 
-For complete evaluation examples, see `examples/04_training_and_evaluation.py`.
+For complete evaluation examples, see [`examples/04_training_and_evaluation.py`](https://github.com/earthspecies/avex/blob/main/examples/04_training_and_evaluation.py).
 
 ## Script-Based Training and Evaluation
 
@@ -89,7 +89,7 @@ For supervised learning experiments, the framework provides dedicated scripts th
 
 ### Training with `run_train.py`
 
-The [`run_train.py`](../avex/run_train.py) script provides a complete training pipeline with support for:
+The [`run_train.py`](https://github.com/earthspecies/avex/blob/main/avex/run_train.py) script provides a complete training pipeline with support for:
 
 - Distributed training
 - Experiment tracking (MLflow, WandB)
@@ -124,7 +124,7 @@ The script expects a YAML configuration file that defines:
 
 ### Evaluation with `run_evaluate.py`
 
-The [`run_evaluate.py`](../avex/run_evaluate.py) script provides comprehensive evaluation capabilities for:
+The [`run_evaluate.py`](https://github.com/earthspecies/avex/blob/main/avex/run_evaluate.py) script provides comprehensive evaluation capabilities for:
 
 - **Linear probing**: Training linear classifiers on frozen backbones
 - **Fine-tuning**: End-to-end training of backbones with probes

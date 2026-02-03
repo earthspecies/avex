@@ -1,0 +1,162 @@
+/* Import Noto Sans */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+ 
+body, h1, h2, h3, h4, h5, h6 {
+    font-family: 'Noto Sans', sans-serif !important;
+  padding: 0;
+}  
+.content h1 {
+  font-size: 2.05rem;
+  line-height: 1.2;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+}
+
+.content h2 {
+  font-size: 1.55rem;   /* down from ~1.9 */
+  line-height: 1.25;
+  font-weight: 600;
+  margin-top: 2.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.content h3 {
+  font-size: 1.25rem;   /* down from ~1.5 */
+  line-height: 1.3;
+  font-weight: 600;
+  margin-top: 1.6rem;
+  margin-bottom: 0.5rem;
+}
+.content h4 {
+  font-size: 1.05rem;   /* just above body text */
+  line-height: 1.35;
+  font-weight: 600;
+  margin-top: 1.2rem;
+  margin-bottom: 0.35rem;
+  color: var(--color-foreground-secondary);
+}
+.content {
+  font-size: 0.95rem;      /* default ~1rem */
+  line-height: 1.65;       /* keeps it readable */
+}
+.content p {
+  margin: 0.55rem 0;
+}
+.content a.headerlink {
+  display: none !important;
+}
+/* Headings: more space above than below (clean hierarchy) */
+.content h1 { margin: 1 0 1.1rem; }
+.content h2 { margin: 2.0rem 0 0.7rem; }
+.content h3 { margin: 1.4rem 0 0.5rem; }
+.content h4 { margin: 1.1rem 0 0.6rem; }
+
+/* Reduce “double spacing” when a paragraph immediately follows a heading */
+.content h2 + p,
+.content h3 + p,
+.content h4 + p {
+  margin-top: 0.25rem;
+  margin-bottom: 0.15rem;
+}
+
+/* Lists: tighten a bit and align with paragraph rhythm */
+.content ul,
+.content ol {
+  margin: 0.5rem 0 0.8rem;
+  padding-left: 1.2rem;
+}
+.content li { margin: 0.25rem 0; }
+
+/* Code blocks: consistent separation and slightly tighter padding */
+.content pre,
+.content div.highlight {
+  margin: 0.25rem 0 1.1rem;
+} 
+/* Inline code: slightly less “pill-y” look */
+.content code {
+  padding: 0.12em 0.32em;
+  border-radius: 0.3em;
+}
+
+/* Blockquotes / admonitions / notes: align with the same rhythm */
+.content blockquote,
+.content .admonition,
+.content details {
+  margin: 0.9rem 0 1.1rem;
+}
+main {
+  padding-bottom: 2rem;
+}
+.sidebar-brand {
+  padding: 0.6rem 0.75rem;
+}
+
+.sidebar-brand img {
+  max-height: 120px;
+}
+
+.sidebar-brand {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+.hero-links {
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+  display: flex;              /* force one line */
+  align-items: center;
+  gap: 0.75rem;               /* space between items */
+  flex-wrap: nowrap;          /* no wrapping */
+  white-space: nowrap;        /* extra safety */
+}
+
+/* link styling */
+.hero-links {
+  margin-top: 0.15rem;     /* tighter to H1 */
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.95rem;
+  color: var(--color-foreground-secondary);
+}
+
+.hero-links a {
+  color: var(--color-brand-content);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hero-links a:hover {
+  text-decoration: underline;
+}
+
+/* icon size — this is the key */
+.hero-icon {
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+html[data-theme="dark"] .github-icon {
+  filter: invert(1) !important;
+} 
+@media (prefers-color-scheme: dark) {
+  .github-icon {
+    filter: invert(1);
+  }
+}
+.highlight .nn,
+.highlight .nc,
+.highlight a:visited {
+  text-decoration: none !important;
+  border-bottom: none !important;
+}
+pre a,
+code a {
+  text-decoration: none !important;
+  color: inherit !important;
+} 
+
+.bottom-of-page .left-details {
+  display: none !important;
+}

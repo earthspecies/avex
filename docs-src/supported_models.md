@@ -83,4 +83,4 @@ model_spec:
   efficientnet_variant: b0
 ```
 
-These configurations can be loaded directly with `load_model("path/to/config.yml")`. See the [Custom Model Registration](custom_model_registration.md) section for usage examples.
+These configurations can be loaded directly with `load_model("path/to/config.yml")`. See the {doc}`Custom Model Registration <custom_model_registration>` section for usage examples.

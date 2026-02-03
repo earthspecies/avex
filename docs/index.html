@@ -1,0 +1,638 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="API Reference" href="api_reference.html">
+        <link rel="prefetch" href="_static/logo_light_mode.png" as="image">
+        <link rel="prefetch" href="_static/logo_dark_mode.png" as="image">
+
+    <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Earth Species Project - AVEX Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=3b183883" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #007388;
+  --color-brand-content: #007388;
+  --color-brand-visited: #7BC4AD;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #5ecad6;
+  --color-brand-content: #5ecad6;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #5ecad6;
+  --color-brand-content: #5ecad6;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="#"><div class="brand">Earth Species Project - AVEX Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="_static/logo_light_mode.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="_static/logo_dark_mode.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Core Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api_reference.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_models.html">Supported Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Usage Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="training_evaluation.html">Training and Evaluation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="embedding_extraction.html">Embedding Extraction and Feature Representations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Advanced Topics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="probe_system.html">Flexible Probe System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_probes.html">Probe API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="custom_model_registration.html">Custom Model Registration Guide</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/earthspecies/avex" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="avex-animal-vocalization-encoder-library-documentation">
+<h1>AVEX - Animal Vocalization Encoder Library Documentation<a class="headerlink" href="#avex-animal-vocalization-encoder-library-documentation" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<div class="hero-links">
+<a href="https://github.com/earthspecies/avex" target="_blank" rel="noopener">
+  <img src="_static/icons/github.svg" class="hero-icon github-icon" />
+  GitHub
+</a>
+<a href="https://huggingface.co/collections/EarthSpeciesProject/esp-aves2" target="_blank">
+  <img src="_static/icons/hf-logo.svg" class="hero-icon" /> Models
+</a>
+</div>
+<section id="getting-started">
+<h2>Getting Started<a class="headerlink" href="#getting-started" title="Link to this heading">¶</a></h2>
+<section id="what-is-avex">
+<h3>What is AVEX?<a class="headerlink" href="#what-is-avex" title="Link to this heading">¶</a></h3>
+<p>The Animal Vocalization Encoder library AVEX is an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.</p>
+<p>It provides:</p>
+<ul class="simple">
+<li><p><strong>Unified API</strong> for loading and using pre-trained audio models</p></li>
+<li><p><strong>Model Registry</strong> for managing model configurations</p></li>
+<li><p><strong>Plugin Architecture</strong> for custom model registration</p></li>
+<li><p><strong>Training and Evaluation</strong> tools for bioacoustics tasks</p></li>
+<li><p><strong>Embedding Extraction</strong> capabilities for downstream tasks</p></li>
+</ul>
+</section>
+<section id="quick-start">
+<h3>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h3>
+<section id="basic-usage">
+<h4>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">¶</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">avex</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_models</span><span class="p">,</span> <span class="n">load_model</span><span class="p">,</span> <span class="n">describe_model</span>
+
+<span class="c1"># List available models (prints table and returns dict)</span>
+<span class="n">models</span> <span class="o">=</span> <span class="n">list_models</span><span class="p">()</span>  <span class="c1"># Prints table + returns dict with detailed info</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Available models: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get detailed information about a model</span>
+<span class="n">describe_model</span><span class="p">(</span><span class="s2">&quot;esp_aves2_naturelm_audio_v1_beats&quot;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># Shows: model type, whether it has a trained classifier, number of classes, usage examples</span>
+
+<span class="c1"># Load a pre-trained model with checkpoint (num_classes extracted automatically)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;esp_aves2_sl_beats_all&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+
+<span class="c1"># For a new task, load a backbone and attach a probe head (classifier)</span>
+<span class="n">base</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;esp_aves2_naturelm_audio_v1_beats&quot;</span><span class="p">,</span> <span class="n">return_features_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+
+<span class="c1"># Load for embedding extraction (returns unpooled features)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;esp_aves2_naturelm_audio_v1_beats&quot;</span><span class="p">,</span> <span class="n">return_features_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="c1"># Returns (batch, time_steps, 768) for BEATs instead of classification logits</span>
+</pre></div>
+</div>
+</section>
+<section id="probes-heads-on-top-of-backbones">
+<h4>Probes (Heads on Top of Backbones)<a class="headerlink" href="#probes-heads-on-top-of-backbones" title="Link to this heading">¶</a></h4>
+<p>Probes are task-specific heads attached to pretrained backbones for transfer learning:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌─────────────────────────────────────────────────────────┐
+│                    Audio Input                          │
+│              (batch, time_steps)                        │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Pretrained Backbone │
+         │   (e.g., BEATs)       │
+         │                       │
+         │  ┌─────────────────┐  │
+         │  │  Layer 1        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Layer 2        │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  ...            │  │
+         │  └────────┬────────┘  │
+         │           │           │
+         │  ┌────────▼────────┐  │
+         │  │  Last Layer     │◄─┼── target_layers=[&quot;last_layer&quot;]
+         │  └────────┬────────┘  │
+         └───────────┼───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Embeddings          │
+         │   (batch, dim)        │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Probe Head          │
+         │   (linear/MLP/etc.)   │
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Task Predictions    │
+         │   (batch, num_classes)│
+         └───────────────────────┘
+</pre></div>
+</div>
+<p><strong>Key Concepts:</strong></p>
+<ul class="simple">
+<li><p><strong>Backbone</strong>: Pretrained model (frozen or fine-tunable)</p></li>
+<li><p><strong>Probe</strong>: Task-specific head (trained for your task)</p></li>
+<li><p><strong>Target Layers</strong>: Which backbone layers to extract features from</p></li>
+<li><p><strong>Online Training</strong>: Backbone + probe trained together</p></li>
+<li><p><strong>Offline Training</strong>: Embeddings pre-computed, probe trained separately</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">avex</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_model</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">avex.models.probes</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_probe_from_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">avex.configs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProbeConfig</span>
+
+<span class="c1"># Load backbone for feature extraction</span>
+<span class="n">base</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;esp_aves2_naturelm_audio_v1_beats&quot;</span><span class="p">,</span> <span class="n">return_features_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+
+<span class="c1"># Define a simple linear probe on the backbone features</span>
+<span class="n">probe_config</span> <span class="o">=</span> <span class="n">ProbeConfig</span><span class="p">(</span>
+    <span class="n">probe_type</span><span class="o">=</span><span class="s2">&quot;linear&quot;</span><span class="p">,</span>
+    <span class="n">target_layers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;last_layer&quot;</span><span class="p">],</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">,</span>
+    <span class="n">freeze_backbone</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">online_training</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">probe</span> <span class="o">=</span> <span class="n">build_probe_from_config</span><span class="p">(</span>
+    <span class="n">probe_config</span><span class="o">=</span><span class="n">probe_config</span><span class="p">,</span>
+    <span class="n">base_model</span><span class="o">=</span><span class="n">base</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<blockquote>
+<div><p><strong>Note</strong>: Each model expects a specific sample rate (e.g., 16 kHz for BEATs, 32 kHz for Perch). Use <code class="docutils literal notranslate"><span class="pre">describe_model()</span></code> to check, and resample with <code class="docutils literal notranslate"><span class="pre">librosa.resample()</span></code> if needed. See <a class="reference internal" href="configuration.html#audio-requirements"><span class="std std-ref">Audio Requirements</span></a> for details.</p>
+</div></blockquote>
+<p>For more examples, see the <code class="docutils literal notranslate"><span class="pre">examples/</span></code> directory:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">00_quick_start.py</span></code> - Basic model loading and testing</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">01_basic_model_loading.py</span></code> - Loading models with different configurations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">02_checkpoint_loading.py</span></code> - Working with checkpoints and class mappings</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">03_custom_model_registration.py</span></code> - Creating and registering custom models and ModelSpecs</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">04_training_and_evaluation.py</span></code> - Full training loop and evaluation examples</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">05_embedding_extraction.py</span></code> - Feature extraction with <code class="docutils literal notranslate"><span class="pre">return_features_only=True</span></code> (unpooled features)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">06_classifier_head_loading.py</span></code> - Understanding classifier head behavior</p></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>The installation process depends on how you plan to use this package:</p>
+<ul class="simple">
+<li><p><strong>API user</strong>: you just want to load models and run inference.</p></li>
+<li><p><strong>Developer</strong>: you want to clone the repo, modify code, or contribute.</p></li>
+</ul>
+<section id="api-usage">
+<h3>1. API Usage<a class="headerlink" href="#api-usage" title="Link to this heading">¶</a></h3>
+<p>For users who want to install the package and use it as a library (for example to load models and run inference).</p>
+<section id="prerequisites">
+<h4>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Python 3.10, 3.11, or 3.12</p></li>
+</ul>
+</section>
+<section id="install-with-pip">
+<h4>Install with pip<a class="headerlink" href="#install-with-pip" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>avex
+</pre></div>
+</div>
+</section>
+<section id="install-with-uv">
+<h4>Install with uv<a class="headerlink" href="#install-with-uv" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option A: Add and install in one step</span>
+uv<span class="w"> </span>add<span class="w"> </span>avex
+
+<span class="c1"># Option B: If you&#39;ve already added it to [project.dependencies] in pyproject.toml</span>
+uv<span class="w"> </span>sync
+</pre></div>
+</div>
+</section>
+</section>
+<section id="training-setup-esp-internal">
+<h3>2. Training Setup (ESP Internal)<a class="headerlink" href="#training-setup-esp-internal" title="Link to this heading">¶</a></h3>
+<p>Training the original supervised learning models requires <code class="docutils literal notranslate"><span class="pre">esp-data</span></code> for dataset management. This package is currently only available to Earth Species Project team members.</p>
+<section id="id1">
+<h4>Prerequisites<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Python 3.10, 3.11, or 3.12</p></li>
+<li><p>Git</p></li>
+<li><p>GCP authentication:</p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>gcloud<span class="w"> </span>auth<span class="w"> </span>login
+gcloud<span class="w"> </span>auth<span class="w"> </span>application-default<span class="w"> </span>login
+</pre></div>
+</div>
+</section>
+<section id="install-with-uv-recommended">
+<h4>Install with uv (recommended)<a class="headerlink" href="#install-with-uv-recommended" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Install keyring with the Google Artifact Registry plugin (once per machine):</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.google-artifactregistry-auth
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Configure <code class="docutils literal notranslate"><span class="pre">uv</span></code> to use the internal ESP PyPI index. Add the following to your <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>:</p></li>
+</ol>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[[tool.uv.index]]</span>
+<span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;esp-pypi&quot;</span>
+<span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/&quot;</span>
+<span class="n">explicit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="k">[tool.uv.sources]</span>
+<span class="n">avex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;esp-pypi&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="n">esp-data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;esp-pypi&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="n">esp-sweep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;esp-pypi&quot;</span><span class="w"> </span><span class="p">}</span>
+
+<span class="k">[tool.uv]</span>
+<span class="n">keyring-provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;subprocess&quot;</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p>Install with training dependencies:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;avex[dev]&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="id2">
+<h4>Install with pip<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;avex[dev]&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--extra-index-url<span class="w"> </span>https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+</pre></div>
+</div>
+<p>This installs additional dependencies for training:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">esp-data</span></code> – dataset management</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">esp-sweep</span></code> – hyperparameter sweeping</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pytorch-lightning</span></code>, <code class="docutils literal notranslate"><span class="pre">mlflow</span></code>, <code class="docutils literal notranslate"><span class="pre">wandb</span></code> – training infrastructure</p></li>
+</ul>
+<p>For contributing to the codebase, see <a class="reference external" href="https://github.com/earthspecies/avex/blob/main/CONTRIBUTING.md" rel="noreferer noopener" target="_blank">CONTRIBUTING.md</a></p>
+</section>
+</section>
+</section>
+<section id="core-documentation">
+<h2>Core Documentation<a class="headerlink" href="#core-documentation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong><a class="reference internal" href="api_reference.html"><span class="doc">API Reference</span></a></strong> – Complete API documentation for model loading, registry, and management functions</p></li>
+<li><p><strong><a class="reference internal" href="api_architecture.html"><span class="doc">Architecture</span></a></strong> – Framework architecture, core components, and plugin system</p></li>
+<li><p><strong><a class="reference internal" href="supported_models.html"><span class="doc">Supported Models</span></a></strong> – List of supported models and their configurations</p></li>
+<li><p><strong><a class="reference internal" href="configuration.html"><span class="doc">Configuration</span></a></strong> – ModelSpec parameters, audio requirements, and configuration options</p></li>
+</ul>
+</section>
+<section id="usage-guides">
+<h2>Usage Guides<a class="headerlink" href="#usage-guides" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong><a class="reference internal" href="training_evaluation.html"><span class="doc">Training and Evaluation</span></a></strong> – Guide to training and evaluating models</p></li>
+<li><p><strong><a class="reference internal" href="embedding_extraction.html"><span class="doc">Embedding Extraction</span></a></strong> – Working with feature representations and embeddings</p></li>
+<li><p><strong><a class="reference internal" href="examples.html"><span class="doc">Examples</span></a></strong> – Comprehensive examples and use cases</p></li>
+</ul>
+</section>
+<section id="advanced-topics">
+<h2>Advanced Topics<a class="headerlink" href="#advanced-topics" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong><a class="reference internal" href="probe_system.html"><span class="doc">Probe System</span></a></strong> – Understanding and using probes for transfer learning</p></li>
+<li><p><strong><a class="reference internal" href="api_probes.html"><span class="doc">API Probes</span></a></strong> – API reference for probe-related functionality</p></li>
+<li><p><strong><a class="reference internal" href="custom_model_registration.html"><span class="doc">Custom Model Registration</span></a></strong> – Guide on registering custom model classes and loading pre-trained models</p></li>
+</ul>
+</section>
+<section id="contributing">
+<h2>Contributing<a class="headerlink" href="#contributing" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong><a class="reference external" href="https://github.com/earthspecies/avex/blob/main/CONTRIBUTING.md" rel="noreferer noopener" target="_blank">Contributing Guide</a></strong> - Instructions for contributing to the project, including development setup, testing, and pull request process</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="api_reference.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">API Reference</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, Earth Species Project
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">AVEX - Animal Vocalization Encoder Library Documentation</a><ul>
+<li><a class="reference internal" href="#getting-started">Getting Started</a><ul>
+<li><a class="reference internal" href="#what-is-avex">What is AVEX?</a></li>
+<li><a class="reference internal" href="#quick-start">Quick Start</a><ul>
+<li><a class="reference internal" href="#basic-usage">Basic Usage</a></li>
+<li><a class="reference internal" href="#probes-heads-on-top-of-backbones">Probes (Heads on Top of Backbones)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#installation">Installation</a><ul>
+<li><a class="reference internal" href="#api-usage">1. API Usage</a><ul>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#install-with-pip">Install with pip</a></li>
+<li><a class="reference internal" href="#install-with-uv">Install with uv</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#training-setup-esp-internal">2. Training Setup (ESP Internal)</a><ul>
+<li><a class="reference internal" href="#id1">Prerequisites</a></li>
+<li><a class="reference internal" href="#install-with-uv-recommended">Install with uv (recommended)</a></li>
+<li><a class="reference internal" href="#id2">Install with pip</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#core-documentation">Core Documentation</a></li>
+<li><a class="reference internal" href="#usage-guides">Usage Guides</a></li>
+<li><a class="reference internal" href="#advanced-topics">Advanced Topics</a></li>
+<li><a class="reference internal" href="#contributing">Contributing</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=8d563738"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    </body>
+</html>

@@ -462,12 +462,19 @@ python examples/07_probe_training_and_inference.py
 ## Tested Functionality
 
 ✅ **Probe Discovery**: Automatically finds all probe classes
+
 ✅ **Config Loading**: `load_probe_config()` builds `ProbeConfig` from YAML
+
 ✅ **Factory Usage**: `build_probe_from_config()` builds probes from `ProbeConfig` (supports both online and offline modes)
+
 ✅ **Offline Mode**: Creates probes for pre-computed embeddings
+
 ✅ **Online Mode**: Loads and attaches to base models
+
 ✅ **Forward Pass**: Correct output shapes with dummy data
+
 ✅ **No Linter Errors**: All code is ruff-compliant
+
 ✅ **Layer Variants**: `_last` and `_all` variants work correctly
 
 ## Known Issues
@@ -485,7 +492,7 @@ python examples/07_probe_training_and_inference.py
 - `models/probes/utils/factory.py`
 
 ### Examples and Documentation
-- `examples/07_probe_training_and_inference.py`
+- [`examples/07_probe_training_and_inference.py`](https://github.com/earthspecies/avex/blob/main/examples/07_probe_training_and_inference.py)
 - `docs/api_probes.md` (this file)
 
 ## Future Enhancements
@@ -498,7 +505,7 @@ These can be added in future iterations following the same design patterns.
 
 ## See Also
 
-- `examples/07_probe_training_and_inference.py` - Complete usage examples
-- `avex/models/probes/` - Probe implementations
+- [`examples/07_probe_training_and_inference.py`](https://github.com/earthspecies/avex/blob/main/examples/07_probe_training_and_inference.py) - Complete usage examples
+- [`avex/models/probes/`](https://github.com/earthspecies/avex/tree/main/avex/models/probes) - Probe implementations
 - Model API documentation for parallel structure reference
 

@@ -44,7 +44,7 @@ model_spec = ModelSpec(
     eat_norm_std=4.569
 )
 ```
-
+(audio-requirements)=
 ## Audio Requirements
 
 **Sample Rate**: Each model expects audio at a specific sample rate (defined in its `model_spec`).

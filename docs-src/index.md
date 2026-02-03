@@ -1,12 +1,52 @@
 # AVEX - Animal Vocalization Encoder Library Documentation
+```{toctree}
+:maxdepth: 2
+:caption: Core Documentation 
+:hidden:  
 
-Welcome to the Representation Learning Framework documentation. This framework provides an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models.
+api_reference
+api_architecture
+supported_models
+configuration
+```
+```{toctree}
+:maxdepth: 2
+:caption: Usage Guides 
+:hidden:
+
+training_evaluation
+embedding_extraction
+examples
+```
+```{toctree}
+:maxdepth: 2
+:caption: Advanced Topics 
+:hidden:
+
+probe_system
+api_probes
+custom_model_registration
+``` 
+<div class="hero-links">
+
+<a href="https://github.com/earthspecies/avex" target="_blank" rel="noopener">
+  <img src="_static/icons/github.svg" class="hero-icon github-icon" />
+  GitHub
+</a>
+ 
+<a href="https://huggingface.co/collections/EarthSpeciesProject/esp-aves2" target="_blank">
+  <img src="_static/icons/hf-logo.svg" class="hero-icon" /> Models
+</a>
+
+</div>
 
 ## Getting Started
 
 ### What is AVEX?
 
-The Representation Learning Framework is an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models. It provides:
+The Animal Vocalization Encoder library AVEX is an API for model loading and inference, and a Python-based system for training and evaluating bioacoustics representation learning models. 
+
+It provides:
 
 - **Unified API** for loading and using pre-trained audio models
 - **Model Registry** for managing model configurations
@@ -123,7 +163,7 @@ probe = build_probe_from_config(
 )
 ```
 
-> **Note**: Each model expects a specific sample rate (e.g., 16 kHz for BEATs, 32 kHz for Perch). Use `describe_model()` to check, and resample with `librosa.resample()` if needed. See [Audio Requirements](configuration.md#audio-requirements) for details.
+> **Note**: Each model expects a specific sample rate (e.g., 16 kHz for BEATs, 32 kHz for Perch). Use `describe_model()` to check, and resample with `librosa.resample()` if needed. See {ref}`Audio Requirements <audio-requirements>` for details.
 
 For more examples, see the `examples/` directory:
 - `00_quick_start.py` - Basic model loading and testing
@@ -223,27 +263,28 @@ This installs additional dependencies for training:
 - `esp-sweep` – hyperparameter sweeping
 - `pytorch-lightning`, `mlflow`, `wandb` – training infrastructure
 
-For contributing to the codebase, see [CONTRIBUTING.md](../CONTRIBUTING.md)
+For contributing to the codebase, see [CONTRIBUTING.md](https://github.com/earthspecies/avex/blob/main/CONTRIBUTING.md)
 
 ## Core Documentation
 
-- **[API Reference](api_reference.md)** - Complete API documentation for model loading, registry, and management functions
-- **[Architecture](api_architecture.md)** - Framework architecture, core components, and plugin system
-- **[Supported Models](supported_models.md)** - List of supported models and their configurations
-- **[Configuration](configuration.md)** - ModelSpec parameters, audio requirements, and configuration options
+- **{doc}`API Reference <api_reference>`** – Complete API documentation for model loading, registry, and management functions  
+- **{doc}`Architecture <api_architecture>`** – Framework architecture, core components, and plugin system  
+- **{doc}`Supported Models <supported_models>`** – List of supported models and their configurations  
+- **{doc}`Configuration <configuration>`** – ModelSpec parameters, audio requirements, and configuration options  
 
 ## Usage Guides
 
-- **[Training and Evaluation](training_evaluation.md)** - Guide to training and evaluating models
-- **[Embedding Extraction](embedding_extraction.md)** - Working with feature representations and embeddings
-- **[Examples](examples.md)** - Comprehensive examples and use cases
+- **{doc}`Training and Evaluation <training_evaluation>`** – Guide to training and evaluating models  
+- **{doc}`Embedding Extraction <embedding_extraction>`** – Working with feature representations and embeddings  
+- **{doc}`Examples <examples>`** – Comprehensive examples and use cases  
 
 ## Advanced Topics
 
-- **[Probe System](probe_system.md)** - Understanding and using probes for transfer learning
-- **[API Probes](api_probes.md)** - API reference for probe-related functionality
-- **[Custom Model Registration](custom_model_registration.md)** - Guide on registering custom model classes and loading pre-trained models
+- **{doc}`Probe System <probe_system>`** – Understanding and using probes for transfer learning  
+- **{doc}`API Probes <api_probes>`** – API reference for probe-related functionality  
+- **{doc}`Custom Model Registration <custom_model_registration>`** – Guide on registering custom model classes and loading pre-trained models  
+
 
 ## Contributing
 
-- **[Contributing Guide](../CONTRIBUTING.md)** - Instructions for contributing to the project, including development setup, testing, and pull request process
+- **[Contributing Guide](https://github.com/earthspecies/avex/blob/main/CONTRIBUTING.md)** - Instructions for contributing to the project, including development setup, testing, and pull request process

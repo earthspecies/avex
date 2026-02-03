@@ -1,0 +1,493 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Configuration" href="configuration.html"><link rel="prev" title="Architecture" href="api_architecture.html">
+        <link rel="prefetch" href="_static/logo_light_mode.png" as="image">
+        <link rel="prefetch" href="_static/logo_dark_mode.png" as="image">
+
+    <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Supported Models - Earth Species Project - AVEX Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=3b183883" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #007388;
+  --color-brand-content: #007388;
+  --color-brand-visited: #7BC4AD;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #5ecad6;
+  --color-brand-content: #5ecad6;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #5ecad6;
+  --color-brand-content: #5ecad6;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Earth Species Project - AVEX Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="_static/logo_light_mode.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="_static/logo_dark_mode.png" alt="Dark Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Core Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="api_reference.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_architecture.html">Architecture</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Supported Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Usage Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="training_evaluation.html">Training and Evaluation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="embedding_extraction.html">Embedding Extraction and Feature Representations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Advanced Topics</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="probe_system.html">Flexible Probe System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_probes.html">Probe API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="custom_model_registration.html">Custom Model Registration Guide</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/earthspecies/avex" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="supported-models">
+<h1>Supported Models<a class="headerlink" href="#supported-models" title="Link to this heading">¶</a></h1>
+<section id="official-models-esp-aves2">
+<h2>Official Models (ESP-AVES2)<a class="headerlink" href="#official-models-esp-aves2" title="Link to this heading">¶</a></h2>
+<p>The ESP-AVES2 model collection is available on HuggingFace: <a class="reference external" href="https://huggingface.co/collections/EarthSpeciesProject/esp-aves2" rel="noreferer noopener" target="_blank">EarthSpeciesProject/esp-aves2</a></p>
+<section id="available-models">
+<h3>Available Models<a class="headerlink" href="#available-models" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model Name</p></th>
+<th class="head"><p>Architecture</p></th>
+<th class="head"><p>Training Data</p></th>
+<th class="head"><p>HuggingFace</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_sl_beats_all</span></code></p></td>
+<td><p>BEATs</p></td>
+<td><p>All (AudioSet + Bio)</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-beats-all" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_sl_beats_bio</span></code></p></td>
+<td><p>BEATs</p></td>
+<td><p>Bioacoustics</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-beats-bio" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_naturelm_audio_v1_beats</span></code></p></td>
+<td><p>BEATs + NatureLM</p></td>
+<td><p>All</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-naturelm-audio-v1-beats" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_eat_all</span></code></p></td>
+<td><p>EAT</p></td>
+<td><p>All (AudioSet + Bio)</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-eat-all" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_eat_bio</span></code></p></td>
+<td><p>EAT</p></td>
+<td><p>Bioacoustics</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-eat-bio" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_sl_eat_all_ssl_all</span></code></p></td>
+<td><p>EAT (SSL)</p></td>
+<td><p>All</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-eat-all-ssl-all" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_sl_eat_bio_ssl_all</span></code></p></td>
+<td><p>EAT (SSL)</p></td>
+<td><p>Bioacoustics</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-sl-eat-bio-ssl-all" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_effnetb0_all</span></code></p></td>
+<td><p>EfficientNet-B0</p></td>
+<td><p>All (AudioSet + Bio)</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-all" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_effnetb0_bio</span></code></p></td>
+<td><p>EfficientNet-B0</p></td>
+<td><p>Bioacoustics</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-bio" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">esp_aves2_effnetb0_audioset</span></code></p></td>
+<td><p>EfficientNet-B0</p></td>
+<td><p>AudioSet</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-audioset" rel="noreferer noopener" target="_blank">Link</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="supported-architectures">
+<h3>Supported Architectures<a class="headerlink" href="#supported-architectures" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>BEATs</strong>: Bidirectional Encoder representation from Audio Transformers</p></li>
+<li><p><strong>EAT</strong>: Efficient Audio Transformer models</p></li>
+<li><p><strong>EfficientNet</strong>: EfficientNet-based models adapted for audio classification</p></li>
+<li><p><strong>AVES</strong>: AVES model for bioacoustics</p></li>
+<li><p><strong>BirdMAE</strong>: BirdMAE masked autoencoder for bioacoustic representation learning</p></li>
+</ul>
+</section>
+<section id="labels-vs-features-only">
+<h3>Labels vs Features Only<a class="headerlink" href="#labels-vs-features-only" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Classification with labels</strong></p></td>
+<td><p>Model has a trained classifier head and a class mapping (e.g. <code class="docutils literal notranslate"><span class="pre">label_map.json</span></code>). Use <code class="docutils literal notranslate"><span class="pre">load_model(&quot;model_name&quot;,</span> <span class="pre">device=&quot;cpu&quot;)</span></code> to get logits and use <code class="docutils literal notranslate"><span class="pre">model.label_mapping</span></code> for human-readable class names.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Features / embeddings only</strong></p></td>
+<td><p>Any model can be loaded for embedding extraction by passing <code class="docutils literal notranslate"><span class="pre">return_features_only=True</span></code>. The model then returns feature tensors instead of classification logits.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>How to see which models offer what</strong></p>
+<ul class="simple">
+<li><p><strong>At runtime</strong>: Call <code class="docutils literal notranslate"><span class="pre">list_models()</span></code> — the printed table has a “Trained Classifier” column (✅ = has checkpoint + class mapping, ❌ = backbone/features only). The returned dict includes <code class="docutils literal notranslate"><span class="pre">has_trained_classifier</span></code> and <code class="docutils literal notranslate"><span class="pre">num_classes</span></code> per model.</p></li>
+<li><p><strong>Per model</strong>: Call <code class="docutils literal notranslate"><span class="pre">describe_model(&quot;model_name&quot;,</span> <span class="pre">verbose=True)</span></code> to see “Has Trained Classifier”, checkpoint path, class mapping path, and number of classes.</p></li>
+</ul>
+<p>All official ESP-AVES2 models have both a checkpoint and a class mapping, so they support <strong>classification with labels</strong>. They also support <strong>embedding extraction</strong> with <code class="docutils literal notranslate"><span class="pre">load_model(...,</span> <span class="pre">return_features_only=True)</span></code>.</p>
+</section>
+</section>
+<section id="model-configuration">
+<h2>Model Configuration<a class="headerlink" href="#model-configuration" title="Link to this heading">¶</a></h2>
+<p>Models are configured using YAML files which contain the model specifications <code class="docutils literal notranslate"><span class="pre">model_spec</span></code>. The official config files are in the <code class="docutils literal notranslate"><span class="pre">avex/api/configs/official_models/</span></code> directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.</p>
+<p><strong>Minimal Model Configuration:</strong></p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Example: my_model.yml - Minimal configuration for model loading</span>
+<span class="nt">model_spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">efficientnet</span>
+<span class="w">  </span><span class="nt">pretrained</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cuda</span>
+<span class="w">  </span><span class="nt">audio_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">sample_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16000</span>
+<span class="w">    </span><span class="nt">representation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mel_spectrogram</span>
+<span class="w">    </span><span class="nt">n_mels</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">  </span><span class="nt">efficientnet_variant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">b0</span>
+</pre></div>
+</div>
+<p><strong>Full Model Configuration (with checkpoint):</strong></p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Example: esp_aves2_effnetb0_all.yml - Complete configuration</span>
+<span class="c1"># Optional: Default checkpoint path</span>
+<span class="nt">checkpoint_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf://EarthSpeciesProject/esp-aves2-effnetb0-all/esp-aves2-effnetb0-all.safetensors</span>
+
+<span class="c1"># Optional: Label mapping for human-readable predictions</span>
+<span class="nt">class_mapping_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hf://EarthSpeciesProject/esp-aves2-effnetb0-all/label_map.json</span>
+
+<span class="c1"># Required: Model specification</span>
+<span class="nt">model_spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">efficientnet</span>
+<span class="w">  </span><span class="nt">pretrained</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cuda</span>
+<span class="w">  </span><span class="nt">audio_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">sample_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16000</span>
+<span class="w">    </span><span class="nt">representation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mel_spectrogram</span>
+<span class="w">    </span><span class="nt">n_mels</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">    </span><span class="nt">target_length_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">  </span><span class="nt">efficientnet_variant</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">b0</span>
+</pre></div>
+</div>
+<p>These configurations can be loaded directly with <code class="docutils literal notranslate"><span class="pre">load_model(&quot;path/to/config.yml&quot;)</span></code>. See the <a class="reference internal" href="custom_model_registration.html"><span class="doc">Custom Model Registration</span></a> section for usage examples.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="configuration.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Configuration</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="api_architecture.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Architecture</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, Earth Species Project
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Supported Models</a><ul>
+<li><a class="reference internal" href="#official-models-esp-aves2">Official Models (ESP-AVES2)</a><ul>
+<li><a class="reference internal" href="#available-models">Available Models</a></li>
+<li><a class="reference internal" href="#supported-architectures">Supported Architectures</a></li>
+<li><a class="reference internal" href="#labels-vs-features-only">Labels vs Features Only</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#model-configuration">Model Configuration</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=8d563738"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    </body>
+</html>

@@ -28,7 +28,7 @@ The framework supports a plugin architecture that allows users to register custo
 
 **Important**: Registration is only required if you want to use `build_model()` or `build_model_from_spec()` with ModelSpecs. For direct instantiation, registration is not needed.
 
-See [Custom Model Registration](custom_model_registration.md) for detailed guidance on when and why to register custom models.
+See {doc}`Custom Model Registration <custom_model_registration>` for detailed guidance on when and why to register custom models.
 
 ```python
 from avex.models.base_model import ModelBase
