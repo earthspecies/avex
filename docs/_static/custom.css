@@ -140,8 +140,14 @@ main {
 html[data-theme="dark"] .github-icon {
   filter: invert(1) !important;
 } 
+html[data-theme="dark"] .paper-icon {
+  filter: invert(1) !important;
+} 
 @media (prefers-color-scheme: dark) {
   .github-icon {
+    filter: invert(1);
+  }
+  .paper-icon {
     filter: invert(1);
   }
 }

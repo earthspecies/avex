@@ -38,6 +38,9 @@ custom_model_registration
   <img src="_static/icons/hf-logo.svg" class="hero-icon" /> Models
 </a>
 
+<a href="https://arxiv.org/abs/2508.11845" target="_blank">
+  <img src="_static/icons/paper.svg" class="hero-icon paper-icon" /> Paper
+</a>
 </div>
 
 ## Getting Started
