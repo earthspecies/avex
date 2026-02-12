@@ -79,7 +79,7 @@ class TransformerEncoder(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                TransformerSentenceEncoderLayer(
+                _TransformerSentenceEncoderLayer(
                     embedding_dim=self.embedding_dim,
                     ffn_embedding_dim=args.encoder_ffn_embed_dim,
                     num_attention_heads=args.encoder_attention_heads,
@@ -107,7 +107,7 @@ class TransformerEncoder(nn.Module):
         self.layer_norm = LayerNorm(self.embedding_dim)
         self.layerdrop = args.encoder_layerdrop
 
-        self.apply(init_bert_params)
+        self.apply(_init_bert_params)
 
         if args.deep_norm:
             deep_norm_beta = math.pow(8 * args.encoder_layers, -1 / 4)
@@ -221,7 +221,7 @@ class TransformerEncoder(nn.Module):
         return x, layer_results
 
 
-class TransformerSentenceEncoderLayer(nn.Module):
+class _TransformerSentenceEncoderLayer(nn.Module):
     """Transformer sentence encoder layer for BEATs model."""
 
     def __init__(
@@ -249,7 +249,7 @@ class TransformerSentenceEncoderLayer(nn.Module):
 
         self.activation_name = activation_fn
         self.activation_fn = get_activation_fn(activation_fn)
-        self.self_attn = MultiheadAttention(
+        self.self_attn = _MultiheadAttention(
             self.embedding_dim,
             num_attention_heads,
             dropout=attention_dropout,
@@ -360,7 +360,7 @@ class TransformerSentenceEncoderLayer(nn.Module):
         return x, attn, pos_bias
 
 
-class MultiheadAttention(nn.Module):
+class _MultiheadAttention(nn.Module):
     """Multi-headed attention.
 
     See "Attention Is All You Need" for more details.
@@ -672,7 +672,7 @@ class MultiheadAttention(nn.Module):
             if "prev_key_padding_mask" in saved_state:
                 prev_key_padding_mask = saved_state["prev_key_padding_mask"]
             assert k is not None and v is not None
-            key_padding_mask = MultiheadAttention._append_prev_key_padding_mask(
+            key_padding_mask = _MultiheadAttention._append_prev_key_padding_mask(
                 key_padding_mask=key_padding_mask,
                 prev_key_padding_mask=prev_key_padding_mask,
                 batch_size=bsz,
@@ -865,7 +865,7 @@ class MultiheadAttention(nn.Module):
         return attn_weights
 
 
-def init_bert_params(module: nn.Module) -> None:
+def _init_bert_params(module: nn.Module) -> None:
     """Initialize the weights specific to the BERT Model.
 
     This overrides the default initializations depending on the specified arguments.
@@ -900,7 +900,7 @@ def init_bert_params(module: nn.Module) -> None:
         normal_(module.weight.data)
         if module.padding_idx is not None:
             module.weight.data[module.padding_idx].zero_()
-    if isinstance(module, MultiheadAttention):
+    if isinstance(module, _MultiheadAttention):
         normal_(module.q_proj.weight.data)
         normal_(module.k_proj.weight.data)
         normal_(module.v_proj.weight.data)
