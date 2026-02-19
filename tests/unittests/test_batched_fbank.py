@@ -141,7 +141,7 @@ class TestBatchedFbankEquivalence:
         new_fbank = model.preprocess(waveforms)
 
         scaled = waveforms * 2**15
-        old_fbank = _kaldi_fbank_loop(scaled)
-        old_fbank = (old_fbank - 15.41663) / (2 * 6.55582)
+        old_fbank = _kaldi_fbank_loop(scaled, num_mel_bins=cfg.num_mel_bins)
+        old_fbank = (old_fbank - cfg.fbank_mean) / (2 * cfg.fbank_std)
 
         torch.testing.assert_close(new_fbank, old_fbank, atol=1e-4, rtol=1e-4)

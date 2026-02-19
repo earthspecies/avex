@@ -127,9 +127,7 @@ class _LegacyMultiheadAttention(nn.Module):
             self.grep_linear = nn.Linear(self.head_dim, 8)
             self.grep_a = nn.Parameter(torch.ones(1, num_heads, 1, 1))
 
-    def _relative_positions_bucket(
-        self, relative_positions: torch.Tensor, bidirectional: bool = True
-    ) -> torch.Tensor:
+    def _relative_positions_bucket(self, relative_positions: torch.Tensor, bidirectional: bool = True) -> torch.Tensor:
         num_buckets = self.num_buckets
         max_distance = self.max_distance
         relative_buckets = 0
@@ -138,9 +136,7 @@ class _LegacyMultiheadAttention(nn.Module):
             relative_buckets += (relative_positions > 0).to(torch.long) * num_buckets
             relative_positions = torch.abs(relative_positions)
         else:
-            relative_positions = -torch.min(
-                relative_positions, torch.zeros_like(relative_positions)
-            )
+            relative_positions = -torch.min(relative_positions, torch.zeros_like(relative_positions))
         max_exact = num_buckets // 2
         is_small = relative_positions < max_exact
         relative_postion_if_large = max_exact + (
@@ -152,21 +148,15 @@ class _LegacyMultiheadAttention(nn.Module):
             relative_postion_if_large,
             torch.full_like(relative_postion_if_large, num_buckets - 1),
         )
-        relative_buckets += torch.where(
-            is_small, relative_positions, relative_postion_if_large
-        )
+        relative_buckets += torch.where(is_small, relative_positions, relative_postion_if_large)
         return relative_buckets
 
     def compute_bias(self, query_length: int, key_length: int) -> torch.Tensor:
         context_position = torch.arange(query_length, dtype=torch.long)[:, None]
         memory_position = torch.arange(key_length, dtype=torch.long)[None, :]
         relative_position = memory_position - context_position
-        relative_position_bucket = self._relative_positions_bucket(
-            relative_position, bidirectional=True
-        )
-        relative_position_bucket = relative_position_bucket.to(
-            self.relative_attention_bias.weight.device
-        )
+        relative_position_bucket = self._relative_positions_bucket(relative_position, bidirectional=True)
+        relative_position_bucket = relative_position_bucket.to(self.relative_attention_bias.weight.device)
         values = self.relative_attention_bias(relative_position_bucket)
         values = values.permute([2, 0, 1])
         return values
@@ -186,11 +176,7 @@ class _LegacyMultiheadAttention(nn.Module):
 
         if self.has_relative_attention_bias and position_bias is None:
             position_bias = self.compute_bias(tgt_len, src_len)
-            position_bias = (
-                position_bias.unsqueeze(0)
-                .repeat(bsz, 1, 1, 1)
-                .view(bsz * self.num_heads, tgt_len, src_len)
-            )
+            position_bias = position_bias.unsqueeze(0).repeat(bsz, 1, 1, 1).view(bsz * self.num_heads, tgt_len, src_len)
 
         assert self.self_attention
         q = self.q_proj(query)
@@ -200,62 +186,35 @@ class _LegacyMultiheadAttention(nn.Module):
         alpha = 32
         q *= 1 / alpha
 
-        q = (
-            q.contiguous()
-            .view(tgt_len, bsz * self.num_heads, self.q_head_dim)
-            .transpose(0, 1)
-        )
-        k = (
-            k.contiguous()
-            .view(-1, bsz * self.num_heads, self.k_head_dim)
-            .transpose(0, 1)
-        )
-        v = (
-            v.contiguous()
-            .view(-1, bsz * self.num_heads, self.head_dim)
-            .transpose(0, 1)
-        )
+        q = q.contiguous().view(tgt_len, bsz * self.num_heads, self.q_head_dim).transpose(0, 1)
+        k = k.contiguous().view(-1, bsz * self.num_heads, self.k_head_dim).transpose(0, 1)
+        v = v.contiguous().view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
 
         attn_weights = torch.bmm(q, k.transpose(1, 2))
-        attn_weights = (
-            attn_weights - attn_weights.max(dim=-1, keepdim=True)[0]
-        ) * alpha
+        attn_weights = (attn_weights - attn_weights.max(dim=-1, keepdim=True)[0]) * alpha
 
         if attn_mask is not None:
             attn_mask = attn_mask.unsqueeze(0)
             attn_weights += attn_mask
 
         if key_padding_mask is not None:
-            attn_weights = attn_weights.view(
-                bsz, self.num_heads, tgt_len, src_len
-            )
+            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
             attn_weights = attn_weights.masked_fill(
                 key_padding_mask.unsqueeze(1).unsqueeze(2).to(torch.bool),
                 float("-inf"),
             )
-            attn_weights = attn_weights.view(
-                bsz * self.num_heads, tgt_len, src_len
-            )
+            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
         if position_bias is not None:
             attn_mask_rel_pos = position_bias
             if self.gru_rel_pos == 1:
-                query_layer = (
-                    q.view(bsz, self.num_heads, tgt_len, self.q_head_dim)
-                    * alpha
-                    / self.scaling
-                )
+                query_layer = q.view(bsz, self.num_heads, tgt_len, self.q_head_dim) * alpha / self.scaling
                 _B, _H, _L, __ = query_layer.size()
                 gate_a, gate_b = torch.sigmoid(
-                    self.grep_linear(query_layer)
-                    .view(_B, _H, _L, 2, 4)
-                    .sum(-1, keepdim=False)
+                    self.grep_linear(query_layer).view(_B, _H, _L, 2, 4).sum(-1, keepdim=False)
                 ).chunk(2, dim=-1)
                 gate_a_1 = gate_a * (gate_b * self.grep_a - 1.0) + 2.0
-                attn_mask_rel_pos = (
-                    gate_a_1.view(bsz * self.num_heads, tgt_len, 1)
-                    * position_bias
-                )
+                attn_mask_rel_pos = gate_a_1.view(bsz * self.num_heads, tgt_len, 1) * position_bias
 
             attn_mask_rel_pos = attn_mask_rel_pos.view(attn_weights.size())
             attn_weights = attn_weights + attn_mask_rel_pos
@@ -265,9 +224,7 @@ class _LegacyMultiheadAttention(nn.Module):
         attn_probs = self.dropout_module(attn_weights)
 
         attn = torch.bmm(attn_probs, v)
-        attn = (
-            attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-        )
+        attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
         attn = self.out_proj(attn)
 
         return attn, None, position_bias
@@ -284,7 +241,11 @@ def _make_attention_pair(
     has_relative_attention_bias: bool = True,
     gru_rel_pos: bool = True,
 ) -> Tuple[_LegacyMultiheadAttention, _MultiheadAttention]:
-    """Create a legacy and new attention module with shared weights."""
+    """Create a legacy and new attention module with shared weights.
+
+    Returns:
+        Tuple of (legacy, new) attention modules in eval mode with identical weights.
+    """
     kwargs = dict(
         embed_dim=embed_dim,
         num_heads=num_heads,
@@ -307,7 +268,11 @@ def _make_attention_pair(
 
 
 def _swap_to_legacy_attention(model: BEATs) -> BEATs:
-    """Replace all SDPA attention modules with legacy manual attention, preserving weights."""
+    """Replace all SDPA attention modules with legacy manual attention, preserving weights.
+
+    Returns:
+        The same model instance with attention modules swapped in-place.
+    """
     encoder = model.encoder
 
     for layer in encoder.layers:
@@ -328,9 +293,7 @@ def _swap_to_legacy_attention(model: BEATs) -> BEATs:
     if encoder.relative_position_embedding:
         for i in range(1, len(encoder.layers)):
             del encoder.layers[i].self_attn.relative_attention_bias
-            encoder.layers[i].self_attn.relative_attention_bias = (
-                encoder.layers[0].self_attn.relative_attention_bias
-            )
+            encoder.layers[i].self_attn.relative_attention_bias = encoder.layers[0].self_attn.relative_attention_bias
 
     return model
 
@@ -347,9 +310,7 @@ class TestAttentionLayerEquivalence:
     """Verify the SDPA-based attention matches the legacy manual implementation."""
 
     def test_basic_no_mask_no_pos_bias(self) -> None:
-        legacy, new = _make_attention_pair(
-            has_relative_attention_bias=False, gru_rel_pos=False
-        )
+        legacy, new = _make_attention_pair(has_relative_attention_bias=False, gru_rel_pos=False)
         x = torch.randn(50, 2, 768)
 
         with torch.no_grad():
@@ -359,9 +320,7 @@ class TestAttentionLayerEquivalence:
         torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
 
     def test_with_padding_mask(self) -> None:
-        legacy, new = _make_attention_pair(
-            has_relative_attention_bias=False, gru_rel_pos=False
-        )
+        legacy, new = _make_attention_pair(has_relative_attention_bias=False, gru_rel_pos=False)
         x = torch.randn(50, 4, 768)
         pad = torch.zeros(4, 50, dtype=torch.bool)
         pad[0, 40:] = True
@@ -374,9 +333,7 @@ class TestAttentionLayerEquivalence:
         torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
 
     def test_with_position_bias_no_gru(self) -> None:
-        legacy, new = _make_attention_pair(
-            has_relative_attention_bias=True, gru_rel_pos=False
-        )
+        legacy, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=False)
         x = torch.randn(50, 2, 768)
 
         with torch.no_grad():
@@ -384,14 +341,10 @@ class TestAttentionLayerEquivalence:
             out_new, _, pos_new = new(query=x, key=x, value=x)
 
         torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-        torch.testing.assert_close(
-            pos_new.reshape(-1), pos_legacy.reshape(-1), atol=ATOL, rtol=RTOL
-        )
+        torch.testing.assert_close(pos_new.reshape(-1), pos_legacy.reshape(-1), atol=ATOL, rtol=RTOL)
 
     def test_with_position_bias_and_gru(self) -> None:
-        legacy, new = _make_attention_pair(
-            has_relative_attention_bias=True, gru_rel_pos=True
-        )
+        legacy, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=True)
         x = torch.randn(50, 2, 768)
 
         with torch.no_grad():
@@ -401,9 +354,7 @@ class TestAttentionLayerEquivalence:
         torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
 
     def test_full_config_with_padding(self) -> None:
-        legacy, new = _make_attention_pair(
-            has_relative_attention_bias=True, gru_rel_pos=True
-        )
+        legacy, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=True)
         x = torch.randn(100, 3, 768)
         pad = torch.zeros(3, 100, dtype=torch.bool)
         pad[0, 80:] = True
@@ -416,9 +367,7 @@ class TestAttentionLayerEquivalence:
         torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
 
     def test_position_bias_passthrough(self) -> None:
-        _, new = _make_attention_pair(
-            has_relative_attention_bias=True, gru_rel_pos=True
-        )
+        _, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=True)
         x = torch.randn(50, 2, 768)
 
         with torch.no_grad():
@@ -429,8 +378,10 @@ class TestAttentionLayerEquivalence:
 
     def test_small_dim_config(self) -> None:
         legacy, new = _make_attention_pair(
-            embed_dim=256, num_heads=4,
-            has_relative_attention_bias=True, gru_rel_pos=True,
+            embed_dim=256,
+            num_heads=4,
+            has_relative_attention_bias=True,
+            gru_rel_pos=True,
         )
         x = torch.randn(30, 2, 256)
         pad = torch.zeros(2, 30, dtype=torch.bool)
@@ -455,7 +406,11 @@ class TestEndToEndEquivalence:
     E2E_ATOL = 5e-4
 
     def _build_pair(self, cfg: BEATsConfig) -> Tuple[BEATs, BEATs]:
-        """Build SDPA model and a legacy-swapped deep copy with identical weights."""
+        """Build SDPA model and a legacy-swapped deep copy with identical weights.
+
+        Returns:
+            Tuple of (sdpa_model, legacy_model) both in eval mode.
+        """
         sdpa_model = BEATs(cfg)
         sdpa_model.eval()
 
@@ -466,25 +421,29 @@ class TestEndToEndEquivalence:
         return sdpa_model, legacy_model
 
     def _assert_e2e_match(
-        self, cfg: BEATsConfig, audio: torch.Tensor,
+        self,
+        cfg: BEATsConfig,
+        audio: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
     ) -> None:
         sdpa_model, legacy_model = self._build_pair(cfg)
 
         with torch.no_grad():
             out_sdpa, pad_sdpa = sdpa_model.extract_features(
-                audio, padding_mask=padding_mask,
-                feature_only=True, disable_layerdrop=True,
+                audio,
+                padding_mask=padding_mask,
+                feature_only=True,
+                disable_layerdrop=True,
             )
             out_legacy, pad_legacy = legacy_model.extract_features(
-                audio, padding_mask=padding_mask,
-                feature_only=True, disable_layerdrop=True,
+                audio,
+                padding_mask=padding_mask,
+                feature_only=True,
+                disable_layerdrop=True,
             )
 
         max_diff = (out_sdpa - out_legacy).abs().max().item()
-        assert max_diff < self.E2E_ATOL, (
-            f"End-to-end max_diff={max_diff:.2e} exceeds tolerance {self.E2E_ATOL:.0e}"
-        )
+        assert max_diff < self.E2E_ATOL, f"End-to-end max_diff={max_diff:.2e} exceeds tolerance {self.E2E_ATOL:.0e}"
 
     def test_ssl_config_no_padding(self) -> None:
         """BEATs_iter3_plus_AS2M config (deep_norm=True), no padding."""
@@ -525,7 +484,9 @@ class TestEndToEndEquivalence:
 
             with torch.no_grad():
                 features, _ = model.extract_features(
-                    audio, feature_only=True, disable_layerdrop=True,
+                    audio,
+                    feature_only=True,
+                    disable_layerdrop=True,
                 )
 
             assert features.shape[0] == 2, f"{cfg_name}: wrong batch dim"
@@ -548,6 +509,7 @@ class TestPretrainedCheckpointEquivalence:
     def _skip_if_no_checkpoint(self) -> None:
         try:
             from avex.models.utils.registry import get_checkpoint_path
+
             path = get_checkpoint_path("BEATs_iter3_plus_AS2M")
             if path is None:
                 pytest.skip("BEATs checkpoint not in registry")
@@ -576,14 +538,16 @@ class TestPretrainedCheckpointEquivalence:
 
         with torch.no_grad():
             out_sdpa, _ = sdpa_model.extract_features(
-                audio, feature_only=True, disable_layerdrop=True,
+                audio,
+                feature_only=True,
+                disable_layerdrop=True,
             )
             out_legacy, _ = legacy_model.extract_features(
-                audio, feature_only=True, disable_layerdrop=True,
+                audio,
+                feature_only=True,
+                disable_layerdrop=True,
             )
 
         max_diff = (out_sdpa - out_legacy).abs().max().item()
         logger.info(f"Pretrained SSL max_diff={max_diff:.2e}")
-        assert max_diff < self.E2E_ATOL, (
-            f"Pretrained SSL max_diff={max_diff:.2e} exceeds tolerance"
-        )
+        assert max_diff < self.E2E_ATOL, f"Pretrained SSL max_diff={max_diff:.2e} exceeds tolerance"

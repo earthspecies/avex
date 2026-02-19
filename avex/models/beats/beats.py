@@ -76,9 +76,7 @@ class _BatchedFbank(nn.Module):
         self.register_buffer("window", window)
 
         # Mel filterbank [n_fft//2 + 1, num_mel_bins] — matches get_mel_banks
-        mel_fb = self._build_mel_filterbank(
-            n_fft, num_mel_bins, sample_frequency, low_freq, high_freq
-        )
+        mel_fb = self._build_mel_filterbank(n_fft, num_mel_bins, sample_frequency, low_freq, high_freq)
         self.register_buffer("mel_fb", mel_fb)
 
     @staticmethod
@@ -212,6 +210,12 @@ class BEATsConfig(BaseModel):
     max_distance: int = Field(800, description="Maximum distance for relative position embedding")
     gru_rel_pos: bool = Field(True, description="Apply gated relative position embedding")
 
+    # Spectrogram / preprocessing
+    sample_frequency: float = Field(16000.0, description="Audio sample rate in Hz")
+    num_mel_bins: int = Field(128, description="Number of mel filterbank bins")
+    fbank_mean: float = Field(15.41663, description="Mean for filterbank normalization")
+    fbank_std: float = Field(6.55582, description="Standard deviation for filterbank normalization")
+
     # Label predictor (for fine-tuned models)
     finetuned_model: bool = Field(True, description="Whether this is a fine-tuned model")
     predictor_dropout: float = Field(0.0, description="Dropout probability for the predictor")
@@ -243,7 +247,12 @@ class BEATs(nn.Module):
             nn.Linear(self.embed, cfg.encoder_embed_dim) if self.embed != cfg.encoder_embed_dim else None
         )
 
-        self.fbank = _BatchedFbank(num_mel_bins=128)
+        self.fbank = _BatchedFbank(
+            num_mel_bins=cfg.num_mel_bins,
+            sample_frequency=cfg.sample_frequency,
+        )
+        self.fbank_mean = cfg.fbank_mean
+        self.fbank_std = cfg.fbank_std
 
         self.input_patch_size = cfg.input_patch_size
         self.patch_embedding = nn.Conv2d(
@@ -287,12 +296,7 @@ class BEATs(nn.Module):
         padding_mask = padding_mask.all(-1)
         return padding_mask
 
-    def preprocess(
-        self,
-        source: torch.Tensor,
-        fbank_mean: float = 15.41663,
-        fbank_std: float = 6.55582,
-    ) -> torch.Tensor:
+    def preprocess(self, source: torch.Tensor) -> torch.Tensor:
         """Preprocess audio waveforms to filterbank features.
 
         Uses the GPU-native batched fbank that reproduces kaldi's output,
@@ -300,21 +304,17 @@ class BEATs(nn.Module):
 
         Args:
             source: ``[B, T]`` raw waveform tensor
-            fbank_mean: Mean for filterbank normalization
-            fbank_std: Standard deviation for filterbank normalization
 
         Returns:
             ``[B, num_frames, num_mel_bins]`` normalized filterbank features
         """
         fbank = self.fbank(source * 2**15)
-        return (fbank - fbank_mean) / (2 * fbank_std)
+        return (fbank - self.fbank_mean) / (2 * self.fbank_std)
 
     def extract_features(
         self,
         source: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
-        fbank_mean: float = 15.41663,
-        fbank_std: float = 6.55582,
         feature_only: bool = False,
         disable_layerdrop: bool = False,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
@@ -323,8 +323,6 @@ class BEATs(nn.Module):
         Args:
             source: Input audio tensor
             padding_mask: Optional padding mask
-            fbank_mean: Mean for filterbank normalization
-            fbank_std: Standard deviation for filterbank normalization
             feature_only: Whether to return only features (no predictions)
             disable_layerdrop: Whether to disable layerdrop during forward pass
 
@@ -332,7 +330,7 @@ class BEATs(nn.Module):
             Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
                 Features or tuple of (features/logits, padding_mask)
         """
-        fbank = self.preprocess(source, fbank_mean=fbank_mean, fbank_std=fbank_std).to(torch.float32)
+        fbank = self.preprocess(source).to(torch.float32)
 
         if padding_mask is not None:
             padding_mask = self.forward_padding_mask(fbank, padding_mask)
