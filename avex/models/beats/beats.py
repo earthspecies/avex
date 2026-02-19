@@ -213,6 +213,8 @@ class BEATsConfig(BaseModel):
     # Spectrogram / preprocessing
     sample_frequency: float = Field(16000.0, description="Audio sample rate in Hz")
     num_mel_bins: int = Field(128, description="Number of mel filterbank bins")
+    frame_length: float = Field(25.0, description="Frame length in milliseconds")
+    frame_shift: float = Field(10.0, description="Frame shift (hop) in milliseconds")
     fbank_mean: float = Field(15.41663, description="Mean for filterbank normalization")
     fbank_std: float = Field(6.55582, description="Standard deviation for filterbank normalization")
 
@@ -250,6 +252,8 @@ class BEATs(nn.Module):
         self.fbank = _BatchedFbank(
             num_mel_bins=cfg.num_mel_bins,
             sample_frequency=cfg.sample_frequency,
+            frame_length_ms=cfg.frame_length,
+            frame_shift_ms=cfg.frame_shift,
         )
         self.fbank_mean = cfg.fbank_mean
         self.fbank_std = cfg.fbank_std
