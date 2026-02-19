@@ -20,17 +20,149 @@ Based on:
 # --------------------------------------------------------
 
 import logging
+import math
 from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-import torchaudio.compliance.kaldi as ta_kaldi
+import torch.nn.functional as F  # noqa: N812
 from pydantic import BaseModel, ConfigDict, Field
 from torch.nn import LayerNorm
 
 from .backbone import TransformerEncoder
 
 logger = logging.getLogger(__name__)
+
+_FLOAT32_EPS = torch.finfo(torch.float32).eps
+
+
+class _BatchedFbank(nn.Module):
+    """GPU-native batched fbank that reproduces torchaudio.compliance.kaldi.fbank.
+
+    Pre-computes the Povey window and mel filterbank matrix as registered
+    buffers so they follow the module to whatever device the model lives on.
+    All forward-pass operations are batched and differentiable.
+    """
+
+    def __init__(
+        self,
+        num_mel_bins: int = 128,
+        sample_frequency: float = 16000.0,
+        frame_length_ms: float = 25.0,
+        frame_shift_ms: float = 10.0,
+        preemphasis_coefficient: float = 0.97,
+        low_freq: float = 20.0,
+        high_freq: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.preemphasis_coefficient = preemphasis_coefficient
+
+        win_length = int(sample_frequency * frame_length_ms / 1000.0)
+        hop_length = int(sample_frequency * frame_shift_ms / 1000.0)
+        self.win_length = win_length
+        self.hop_length = hop_length
+
+        n_fft = 1
+        while n_fft < win_length:
+            n_fft *= 2
+        self.n_fft = n_fft
+        self._pad_right = n_fft - win_length
+
+        if high_freq <= 0.0:
+            high_freq = sample_frequency / 2.0 + high_freq
+
+        # Povey window: hann^0.85, matching kaldi's _feature_window_function
+        window = torch.hann_window(win_length, periodic=False).pow(0.85)
+        self.register_buffer("window", window)
+
+        # Mel filterbank [n_fft//2 + 1, num_mel_bins] — matches get_mel_banks
+        mel_fb = self._build_mel_filterbank(
+            n_fft, num_mel_bins, sample_frequency, low_freq, high_freq
+        )
+        self.register_buffer("mel_fb", mel_fb)
+
+    @staticmethod
+    def _build_mel_filterbank(
+        n_fft: int,
+        n_mels: int,
+        sample_rate: float,
+        low_freq: float,
+        high_freq: float,
+    ) -> torch.Tensor:
+        """Build triangular mel filterbank identical to kaldi's get_mel_banks.
+
+        Returns:
+            Tensor of shape [n_fft // 2 + 1, n_mels].
+        """
+        num_fft_bins = n_fft // 2
+        fft_bin_width = sample_rate / n_fft
+
+        mel_low = 1127.0 * math.log(1.0 + low_freq / 700.0)
+        mel_high = 1127.0 * math.log(1.0 + high_freq / 700.0)
+        mel_delta = (mel_high - mel_low) / (n_mels + 1)
+
+        # [n_mels, 1]
+        bin_idx = torch.arange(n_mels).unsqueeze(1)
+        left_mel = mel_low + bin_idx * mel_delta
+        center_mel = mel_low + (bin_idx + 1.0) * mel_delta
+        right_mel = mel_low + (bin_idx + 2.0) * mel_delta
+
+        # [1, num_fft_bins] — mel of each FFT bin (excluding Nyquist)
+        freqs = fft_bin_width * torch.arange(num_fft_bins)
+        mel_freqs = (1127.0 * (1.0 + freqs / 700.0).log()).unsqueeze(0)
+
+        up_slope = (mel_freqs - left_mel) / (center_mel - left_mel)
+        down_slope = (right_mel - mel_freqs) / (right_mel - center_mel)
+        fb = torch.max(torch.zeros(1), torch.min(up_slope, down_slope))
+
+        # fb is [n_mels, num_fft_bins]; pad Nyquist column with 0, then transpose
+        fb = F.pad(fb, (0, 1), value=0.0)  # [n_mels, num_fft_bins + 1]
+        return fb.T  # [n_fft//2 + 1, n_mels]
+
+    def forward(self, waveforms: torch.Tensor) -> torch.Tensor:
+        """Compute log-mel filterbank features for a batch of waveforms.
+
+        Reproduces the exact pipeline of ``torchaudio.compliance.kaldi.fbank``
+        with default parameters (snip_edges=True, remove_dc_offset=True,
+        preemphasis=0.97, povey window, use_power=True, use_log_fbank=True,
+        dither=0.0) but operates on the full ``[B, T]`` batch at once.
+
+        Args:
+            waveforms: ``[B, T]`` tensor of raw audio (should already be
+                       scaled by ``2**15`` if that is what kaldi expects).
+
+        Returns:
+            ``[B, num_frames, num_mel_bins]`` log-mel filterbank features.
+        """
+        # 1. Frame: snip_edges=True ⇔ center=False unfold
+        frames = waveforms.unfold(-1, self.win_length, self.hop_length)
+        # frames: [B, num_frames, win_length]
+
+        # 2. Remove DC offset per frame
+        frames = frames - frames.mean(dim=-1, keepdim=True)
+
+        # 3. Pre-emphasis per frame (kaldi's replicate-pad approach)
+        shifted = F.pad(frames, (1, 0), mode="replicate")[..., :-1]
+        frames = frames - self.preemphasis_coefficient * shifted
+
+        # 4. Apply Povey window
+        frames = frames * self.window
+
+        # 5. Zero-pad to n_fft
+        if self._pad_right > 0:
+            frames = F.pad(frames, (0, self._pad_right))
+
+        # 6. Power spectrum: |FFT|^2
+        spectrum = torch.fft.rfft(frames)
+        power = spectrum.abs().pow(2.0)
+        # power: [B, num_frames, n_fft // 2 + 1]
+
+        # 7. Mel filterbank
+        mel_energies = torch.matmul(power, self.mel_fb)
+        # mel_energies: [B, num_frames, num_mel_bins]
+
+        # 8. Log with float32-epsilon floor (matches kaldi)
+        return torch.clamp(mel_energies, min=_FLOAT32_EPS).log()
 
 
 class BEATsConfig(BaseModel):
@@ -111,6 +243,8 @@ class BEATs(nn.Module):
             nn.Linear(self.embed, cfg.encoder_embed_dim) if self.embed != cfg.encoder_embed_dim else None
         )
 
+        self.fbank = _BatchedFbank(num_mel_bins=128)
+
         self.input_patch_size = cfg.input_patch_size
         self.patch_embedding = nn.Conv2d(
             1,
@@ -161,28 +295,19 @@ class BEATs(nn.Module):
     ) -> torch.Tensor:
         """Preprocess audio waveforms to filterbank features.
 
+        Uses the GPU-native batched fbank that reproduces kaldi's output,
+        operating on the full batch in one shot instead of looping per sample.
+
         Args:
-            source: Input waveform tensor
+            source: ``[B, T]`` raw waveform tensor
             fbank_mean: Mean for filterbank normalization
             fbank_std: Standard deviation for filterbank normalization
 
         Returns:
-            torch.Tensor: Preprocessed filterbank features
+            ``[B, num_frames, num_mel_bins]`` normalized filterbank features
         """
-        fbanks = []
-        for waveform in source:
-            waveform = waveform.unsqueeze(0) * 2**15
-            fbank = ta_kaldi.fbank(
-                waveform,
-                num_mel_bins=128,
-                sample_frequency=16000,
-                frame_length=25,
-                frame_shift=10,
-            )
-            fbanks.append(fbank)
-        fbank = torch.stack(fbanks, dim=0)
-        fbank = (fbank - fbank_mean) / (2 * fbank_std)
-        return fbank
+        fbank = self.fbank(source * 2**15)
+        return (fbank - fbank_mean) / (2 * fbank_std)
 
     def extract_features(
         self,
