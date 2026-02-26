@@ -126,10 +126,19 @@ class Model(ModelBase):
             self.backbone.to(device)
             self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
-            # Use default Pydantic config without loading pretrained weights
-            # Weights can be loaded later via load_state_dict (e.g., from HuggingFace checkpoint)
-            logger.info("Initializing BEATs with default config (pretrained=False)")
-            beats_cfg = BEATsConfig()
+            # Load architecture config from the reference checkpoint so the
+            # model is constructed with the correct settings (e.g. deep_norm=True).
+            # Weights are NOT loaded here; they come later via _load_checkpoint.
+            # Falls back to BEATsConfig() defaults when the checkpoint registry
+            # is unavailable (e.g. in isolated unit tests).
+            try:
+                config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
+                beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
+                beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
+                logger.info(f"BEATs reference config loaded (deep_norm={beats_cfg.deep_norm})")
+            except (KeyError, ValueError, FileNotFoundError):
+                beats_cfg = BEATsConfig()
+                logger.warning("Reference checkpoint unavailable; using BEATsConfig() defaults (deep_norm=False)")
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
 
