@@ -129,10 +129,16 @@ class Model(ModelBase):
             # Load architecture config from the reference checkpoint so the
             # model is constructed with the correct settings (e.g. deep_norm=True).
             # Weights are NOT loaded here; they come later via _load_checkpoint.
-            config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
-            beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
-            beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
-            logger.info(f"Initialized BEATs from reference config (pretrained=False, deep_norm={beats_cfg.deep_norm})")
+            # Falls back to BEATsConfig() defaults when the checkpoint registry
+            # is unavailable (e.g. in isolated unit tests).
+            try:
+                config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
+                beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
+                beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
+                logger.info(f"BEATs reference config loaded (deep_norm={beats_cfg.deep_norm})")
+            except (KeyError, ValueError, FileNotFoundError):
+                beats_cfg = BEATsConfig()
+                logger.warning("Reference checkpoint unavailable; using BEATsConfig() defaults (deep_norm=False)")
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
 

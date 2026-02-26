@@ -565,9 +565,7 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
     # Load weights
     result = model.load_state_dict(state_dict, strict=False)
     matched = len(target_keys) - len(result.missing_keys)
-    logger.info(
-        f"Checkpoint loaded: {matched}/{len(target_keys)} params matched, "
-        f"{len(result.unexpected_keys)} unexpected keys"
-    )
+    n_unexpected = len(result.unexpected_keys)
+    logger.info(f"Checkpoint loaded: {matched}/{len(target_keys)} params matched, {n_unexpected} unexpected")
     if result.missing_keys:
         logger.debug(f"Missing keys: {result.missing_keys[:10]}{'...' if len(result.missing_keys) > 10 else ''}")
