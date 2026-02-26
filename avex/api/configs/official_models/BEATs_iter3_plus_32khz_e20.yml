@@ -1,0 +1,16 @@
+---
+# BEATs iter3+ pretrained at 32 kHz with 256 mel bins
+# Self-supervised learning checkpoint trained for 20 epochs at 32 kHz
+checkpoint_path: gs://representation-learning/pretrained/BEATs_iter3_plus_32khz_e20.pt
+
+model_spec:
+  name: beats
+  pretrained: false
+  fine_tuned: false
+  device: cuda
+  audio_config:
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random

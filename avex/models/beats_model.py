@@ -82,6 +82,7 @@ class Model(ModelBase):
         use_naturelm: bool = False,
         fine_tuned: bool = False,
         disable_layerdrop: bool = False,
+        beats_config: Optional[dict] = None,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
@@ -126,10 +127,17 @@ class Model(ModelBase):
             self.backbone.to(device)
             self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
-            # Use default Pydantic config without loading pretrained weights
-            # Weights can be loaded later via load_state_dict (e.g., from HuggingFace checkpoint)
-            logger.info("Initializing BEATs with default config (pretrained=False)")
-            beats_cfg = BEATsConfig()
+            if beats_config is not None:
+                beats_cfg = BEATsConfig(**beats_config)
+                logger.info(
+                    f"Initializing BEATs from checkpoint config "
+                    f"(sample_frequency={beats_cfg.sample_frequency}, "
+                    f"num_mel_bins={beats_cfg.num_mel_bins}, "
+                    f"deep_norm={beats_cfg.deep_norm})"
+                )
+            else:
+                beats_cfg = BEATsConfig()
+                logger.info("Initializing BEATs with default config (pretrained=False)")
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
 

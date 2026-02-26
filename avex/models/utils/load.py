@@ -281,6 +281,14 @@ def _load_from_modelspec(
             "a probe head via build_probe_from_config() instead."
         )
 
+    # For BEATs models loaded from a checkpoint, extract the architecture config
+    # (sample_frequency, num_mel_bins, deep_norm, …) from the checkpoint's "cfg"
+    # key so the model is built with the correct parameters.
+    if model_type == "beats" and checkpoint_path and not model_spec.pretrained:
+        beats_config = _extract_beats_config_from_checkpoint(checkpoint_path, device)
+        if beats_config is not None:
+            model_kwargs["beats_config"] = beats_config
+
     # Create model using factory (backbone; classifier, if any, is defined by the class or checkpoint)
     # ModelSpec contains all static configuration; model_kwargs only contains runtime-determined values
     # (num_classes from checkpoint, return_features_only from user choice - these cannot be in ModelSpec)
@@ -374,6 +382,26 @@ def _get_classification_layer_dim_from_state_dict(state_dict: Dict[str, torch.Te
             logger.info(f"Found num_classes={num_classes} from {last_key}")
             return num_classes
 
+    return None
+
+
+def _extract_beats_config_from_checkpoint(checkpoint_path: str, device: str) -> Optional[dict]:
+    """Extract BEATs architecture config from a checkpoint's ``cfg`` key.
+
+    Args:
+        checkpoint_path: Path to checkpoint file
+        device: Device to load checkpoint on
+
+    Returns:
+        Config dict if found, None otherwise
+    """
+    try:
+        ckpt = universal_torch_load(anypath(checkpoint_path), map_location=device)
+        if isinstance(ckpt, dict) and "cfg" in ckpt and isinstance(ckpt["cfg"], dict):
+            logger.info(f"Extracted BEATs config from checkpoint: {checkpoint_path}")
+            return ckpt["cfg"]
+    except Exception as e:
+        logger.debug(f"Could not extract BEATs config from checkpoint: {e}")
     return None
 
 
