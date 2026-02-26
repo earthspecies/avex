@@ -551,9 +551,23 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         drop_model_prefix=not target_has_model_prefix,
     )
 
+    # Adapt backbone. prefix when checkpoint and model disagree
+    target_has_backbone = any(k.startswith("backbone.") for k in target_keys)
+    ckpt_has_backbone = any(k.startswith("backbone.") for k in state_dict)
+
+    if target_has_backbone and not ckpt_has_backbone:
+        state_dict = {f"backbone.{k}": v for k, v in state_dict.items()}
+        logger.info("Added 'backbone.' prefix to checkpoint keys to match model")
+    elif not target_has_backbone and ckpt_has_backbone:
+        state_dict = {k.removeprefix("backbone."): v for k, v in state_dict.items()}
+        logger.info("Removed 'backbone.' prefix from checkpoint keys to match model")
+
     # Load weights
-    model.load_state_dict(state_dict, strict=False)
-    if keep_classifier:
-        logger.info("Checkpoint loaded successfully with classifier/head weights")
-    else:
-        logger.info("Checkpoint loaded successfully (classifier/head weights removed)")
+    result = model.load_state_dict(state_dict, strict=False)
+    matched = len(target_keys) - len(result.missing_keys)
+    logger.info(
+        f"Checkpoint loaded: {matched}/{len(target_keys)} params matched, "
+        f"{len(result.unexpected_keys)} unexpected keys"
+    )
+    if result.missing_keys:
+        logger.debug(f"Missing keys: {result.missing_keys[:10]}{'...' if len(result.missing_keys) > 10 else ''}")
