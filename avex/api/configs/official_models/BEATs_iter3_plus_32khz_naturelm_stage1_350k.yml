@@ -1,0 +1,16 @@
+---
+# BEATs iter3+ 32 kHz — NatureLM stage-1 distillation (350k steps)
+# Same architecture as BEATs_iter3_plus_32khz_e20 with NatureLM-distilled weights
+checkpoint_path: gs://representation-learning/pretrained/BEATs_iter3_plus_32khz_naturelm_stage1_350k.pt
+
+model_spec:
+  name: beats
+  pretrained: false
+  fine_tuned: false
+  device: cuda
+  audio_config:
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
