@@ -199,3 +199,7 @@ cython_debug/
 # Notebooks
 notebooks/*
 docs/_build/
+
+# macOS
+.DS_Store
+docs-src/_build/

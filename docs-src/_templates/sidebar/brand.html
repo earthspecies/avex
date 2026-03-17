@@ -1,0 +1,13 @@
+<a class="sidebar-brand" href="https://earthspecies.org" target="_blank" rel="noopener noreferrer">
+  <div class="sidebar-logo-container">
+    {%- if theme_light_logo and theme_dark_logo %}
+    <img class="sidebar-logo only-light" src="{{ pathto('_static/' + theme_light_logo, 1) }}" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="{{ pathto('_static/' + theme_dark_logo, 1) }}" alt="Dark Logo"/>
+    {%- elif theme_light_logo %}
+    <img class="sidebar-logo" src="{{ pathto('_static/' + theme_light_logo, 1) }}" alt="Logo"/>
+    {%- endif %}
+  </div>
+  {%- if not theme_sidebar_hide_name %}
+  <div class="sidebar-brand-text">{{ docstitle if docstitle else project }}</div>
+  {%- endif %}
+</a>

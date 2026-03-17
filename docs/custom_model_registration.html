@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="prev" title="Probe API Documentation" href="api_probes.html">
-        <link rel="prefetch" href="_static/logo_light_mode.png" as="image">
-        <link rel="prefetch" href="_static/logo_dark_mode.png" as="image">
+        <link rel="prefetch" href="_static/esp-logotype-only-black.png" as="image">
+        <link rel="prefetch" href="_static/esp-logotype-only-white.png" as="image">
 
     <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>Custom Model Registration Guide - Earth Species Project - AVEX Documentation</title>
@@ -13,7 +13,7 @@
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=3b183883" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=0fe53557" />
     
     
 
@@ -22,25 +22,33 @@
   body {
     --color-code-background: #f2f2f2;
   --color-code-foreground: #1e1e1e;
-  --color-brand-primary: #007388;
-  --color-brand-content: #007388;
-  --color-brand-visited: #7BC4AD;
+  --color-brand-primary: #129C7B;
+  --color-brand-content: #129C7B;
+  --color-brand-visited: #054C3B;
   
   }
   @media not print {
     body[data-theme="dark"] {
       --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-  --color-brand-primary: #5ecad6;
-  --color-brand-content: #5ecad6;
+  --color-brand-primary: #04D78A;
+  --color-brand-content: #04D78A;
+  --color-brand-visited: #A7ED99;
+  --color-foreground-primary: #ffffff;
+  --color-foreground-secondary: #dedede;
+  --color-foreground-muted: #888888;
   
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
         --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-  --color-brand-primary: #5ecad6;
-  --color-brand-content: #5ecad6;
+  --color-brand-primary: #04D78A;
+  --color-brand-content: #04D78A;
+  --color-brand-visited: #A7ED99;
+  --color-foreground-primary: #ffffff;
+  --color-foreground-secondary: #dedede;
+  --color-foreground-muted: #888888;
   
       }
     }
@@ -191,19 +199,19 @@
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
       
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+      <div class="sidebar-sticky"><div class="sidebar-scroll"><a class="sidebar-brand" href="https://earthspecies.org" target="_blank" rel="noopener noreferrer">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="_static/logo_light_mode.png" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="_static/logo_dark_mode.png" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="_static/esp-logotype-only-black.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="_static/esp-logotype-only-white.png" alt="Dark Logo"/>
   </div>
-  
-  
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
   <input type="hidden" name="area" value="default">
 </form>
-<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+<div id="searchbox"></div><div class="sidebar-home-link">
+  <a href="index.html">Home</a>
+</div><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Core Documentation</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="api_reference.html">API Reference</a></li>
@@ -224,9 +232,7 @@
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Custom Model Registration Guide</a></li>
 </ul>
 
-</div>
-</div>
-
+</div></div>
       </div>
       
     </div>

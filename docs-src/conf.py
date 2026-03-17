@@ -44,17 +44,31 @@ html_theme_options = {
     "sidebar_hide_name": True,  
     "source_view_link": "https://github.com/earthspecies/avex",
     "light_css_variables": {
-        "color-brand-primary": "#007388",
-        "color-brand-content": "#007388",
-        "color-brand-visited": "#7BC4AD",
+        "color-brand-primary": "#129C7B",
+        "color-brand-content": "#129C7B",
+        "color-brand-visited": "#054C3B",
     },
     "dark_css_variables": {
-        "color-brand-primary": "#5ecad6",
-        "color-brand-content": "#5ecad6",
+        "color-brand-primary": "#04D78A",
+        "color-brand-content": "#04D78A",
+        "color-brand-visited": "#A7ED99",
+        "color-foreground-primary": "#ffffff",
+        "color-foreground-secondary": "#dedede",
+        "color-foreground-muted": "#888888",
     },
-    "light_logo": "logo_light_mode.png",
-    "dark_logo": "logo_dark_mode.png",  
+    "light_logo": "esp-logotype-only-black.png",
+    "dark_logo": "esp-logotype-only-white.png",  
 }  
+html_sidebars = {
+    "**": [
+        "sidebar/scroll-start.html",
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/home-link.html",
+        "sidebar/navigation.html",
+        "sidebar/scroll-end.html",
+    ]
+}
 html_title = "Earth Species Project - AVEX Documentation"
 html_static_path = ['_static']
 html_css_files = ['custom.css'] 
