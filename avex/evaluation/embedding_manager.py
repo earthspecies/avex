@@ -63,7 +63,7 @@ class EmbeddingDataSource:
         self,
         *,
         save_path: Path,
-        layer_names: List[str],
+        layer_names: List[str | int],
         aggregation: str = "mean",
         config: Optional[EmbeddingDataSourceConfig] = None,
     ) -> None:
@@ -128,6 +128,7 @@ class EmbeddingDataSource:
 
         Raises:
             ValueError: If required parameters are missing or file loading fails.
+            TypeError: If `layer_names` contains a boolean value (bool is not allowed).
         """
         save_path = self.config.save_path
 
@@ -249,6 +250,29 @@ class EmbeddingDataSource:
         # Peek first batch to estimate size and decide strategy
         first_batch = next(iter(dataloader))
         base_model.eval()
+
+        # If layer_names include integer indices, resolve them against this loaded
+        # model once so downstream logic (filtering by keys, filenames, etc.) sees
+        # concrete string names.
+        if any(isinstance(x, int) for x in self.layer_names):
+            if hasattr(base_model, "get_model_layers"):
+                discovered = base_model.get_model_layers()  # type: ignore[attr-defined]
+                resolved: list[str] = []
+                for name in self.layer_names:
+                    if isinstance(name, bool):
+                        raise TypeError("layer_names entries must be str or int (bool is not allowed).")
+                    if isinstance(name, int):
+                        try:
+                            resolved.append(discovered[name])
+                        except IndexError as err:
+                            n = len(discovered)
+                            raise ValueError(
+                                f"Layer index {name} is out of range for {n} layers "
+                                f"(valid indices: 0..{n - 1} and negative indices like -1)."
+                            ) from err
+                    else:
+                        resolved.append(name)
+                self.layer_names = resolved
 
         # Ensure hooks are registered consistently for the preview extraction
         original_disable_layerdrop = None

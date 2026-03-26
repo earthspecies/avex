@@ -183,7 +183,7 @@ def run_experiment(
     # Get training mode and aggregation method from probe configuration
     online_training = need_probe and experiment_cfg.get_training_mode()
 
-    def generate_embedding_filename(split: str, layer_names: List[str]) -> Path:
+    def generate_embedding_filename(split: str, layer_names: List[str | int]) -> Path:
         """Generate embedding filename with layer names.
 
         Args:
@@ -196,7 +196,11 @@ def run_experiment(
         # Create a safe layer identifier from layer names
         if len(layer_names) == 1:
             # Single layer: use the layer name directly
-            layer_id = layer_names[0].replace(".", "_").replace("backbone_", "")
+            layer0 = layer_names[0]
+            if isinstance(layer0, int):
+                layer_id = f"idx{layer0}"
+            else:
+                layer_id = layer0.replace(".", "_").replace("backbone_", "")
         else:
             # Multiple layers: create a combined identifier
             layer_id = f"multi_{len(layer_names)}_layers"

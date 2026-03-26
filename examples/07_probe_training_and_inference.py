@@ -178,6 +178,11 @@ def main(device: str = "cpu") -> None:
     # Using num_heads=1 ensures compatibility with any dimension.
     probe_config = ProbeConfig(
         probe_type="attention",
+        # target_layers supports:
+        # - ["all"] / ["last_layer"] / explicit layer names
+        # - integer indices (0-based, negative indices allowed) into
+        #   backbone.get_model_layers() / list_model_layers(backbone)["layers"].
+        # Example: target_layers=[0, -1] selects the first and last discovered layers.
         target_layers=["all"],
         aggregation="mean",
         input_processing="sequence",  # Attention probe works with sequence inputs

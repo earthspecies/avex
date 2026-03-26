@@ -289,13 +289,11 @@ class Model(ModelBase):
                 self.forward(wav, padding_mask)
 
             # Collect embeddings from hook outputs
-            embeddings = []
-            for layer_name in self._hook_outputs:
-                if layer_name in self._hook_outputs:
-                    embeddings.append(self._hook_outputs[layer_name])
-                    logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
-                else:
-                    logger.warning(f"No output captured for layer: {layer_name}")
+            embeddings: list[torch.Tensor] = []
+            ordered_names = self._hook_layers if self._hook_layers else list(self._hook_outputs.keys())
+            for layer_name in ordered_names:
+                embeddings.append(self._hook_outputs[layer_name])
+                logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 

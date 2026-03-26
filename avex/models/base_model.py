@@ -49,6 +49,42 @@ class ModelBase(nn.Module):
                     self._layer_names.append(name)
             logger.info(f"Discovered {len(self._layer_names)} linear layers: {self._layer_names}")
 
+    def get_model_layers(self) -> list[str]:
+        """Return the discoverable embedding/probe layers for this model instance.
+
+        The layer order defines the indexing used by `target_layers=[...]` in
+        `extract_embeddings` (0-based, supports negative indices).
+
+        Returns
+        -------
+        list[str]
+            Discoverable layer names in index order.
+        """
+        if len(self._layer_names) == 0:
+            self._discover_linear_layers()
+        return self._layer_names.copy()
+
+    def get_model_num_layers(self) -> int:
+        """Return number of discoverable embedding/probe layers.
+
+        Returns
+        -------
+        int
+            Number of discoverable layers for this model instance.
+        """
+        return len(self.get_model_layers())
+
+    def get_model_layer_map(self) -> dict[int, str]:
+        """Return an index-to-layer-name mapping for this model instance.
+
+        Returns
+        -------
+        dict[int, str]
+            Mapping from 0-based layer index to layer name.
+        """
+        layers = self.get_model_layers()
+        return dict(enumerate(layers))
+
     def _create_hook_fn(self, layer_name: str) -> callable:
         """Create a hook function for a specific layer.
 
@@ -73,7 +109,7 @@ class ModelBase(nn.Module):
 
         return hook_fn
 
-    def register_hooks_for_layers(self, layer_names: List[str]) -> List[str]:
+    def register_hooks_for_layers(self, layer_names: List[Union[str, int]]) -> List[str]:
         """Register forward hooks for the specified layers and return them.
 
         Parameters
@@ -92,12 +128,32 @@ class ModelBase(nn.Module):
 
         Raises
         ------
+        TypeError
+            If `layer_names` contains a boolean value (bool is not allowed).
         ValueError
             If a layer name is not found in the model.
         """
         # Discover layers if not already done
         if len(self._layer_names) == 0:
             self._discover_linear_layers()
+
+        # Allow integer indexing into discovered layer list (0-based, negatives allowed)
+        resolved_layer_names: list[str] = []
+        for name in layer_names:
+            if isinstance(name, bool):
+                raise TypeError("Layer names must be str or int (bool is not allowed).")
+            if isinstance(name, int):
+                try:
+                    resolved_layer_names.append(self._layer_names[name])
+                except IndexError as err:
+                    n = len(self._layer_names)
+                    raise ValueError(
+                        f"Layer index {name} is out of range for {n} layers "
+                        f"(valid indices: 0..{n - 1} and negative indices like -1)."
+                    ) from err
+            else:
+                resolved_layer_names.append(name)
+        layer_names = resolved_layer_names
 
         # Handle special cases
         if "all" in layer_names:
@@ -127,6 +183,17 @@ class ModelBase(nn.Module):
                 logger.info(f"Resolved 'last_layer' to actual layer name: '{last_layer}'")
             else:
                 raise ValueError("No layers available for 'last_layer'")
+
+        # Deduplicate while preserving order (important for deterministic concat
+        # and to avoid registering duplicate hooks for the same module name).
+        seen: set[str] = set()
+        unique_layers: list[str] = []
+        for name in layer_names:
+            if name in seen:
+                continue
+            seen.add(name)
+            unique_layers.append(name)
+        layer_names = unique_layers
 
         # Clear existing hooks
         self.deregister_all_hooks()
@@ -334,11 +401,27 @@ class ModelBase(nn.Module):
             self.forward(wav, mask)
 
             # Collect embeddings from hook outputs
-            embeddings = []
+            embeddings: List[torch.Tensor] = []
+            if self._hook_layers:
+                missing = [name for name in self._hook_layers if name not in self._hook_outputs]
+                if missing and not self._hook_outputs:
+                    raise ValueError(f"No layers found matching: {missing}")
+                if missing:
+                    raise ValueError(
+                        "Some requested layers did not produce hook outputs: "
+                        f"{missing}. Available outputs: {list(self._hook_outputs.keys())}"
+                    )
+                ordered_names = self._hook_layers
+            else:
+                ordered_names = list(self._hook_outputs.keys())
 
-            for layer_name in self._hook_outputs.keys():
+            for layer_name in ordered_names:
                 embeddings.append(self._hook_outputs[layer_name])
-                logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
+                logger.debug(
+                    "Found embedding for %s: %s",
+                    layer_name,
+                    self._hook_outputs[layer_name].shape,
+                )
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 

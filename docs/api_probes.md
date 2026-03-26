@@ -182,7 +182,8 @@ All probe configs support (non-exhaustive):
   - `target_layers`: List of layer names to extract embeddings from. Main options:
     - `["last_layer"]`: Uses the final (non-classification) layer of the model. Best for: single-layer probing, baseline experiments, efficient computation.
     - `["all"]`: Uses all discoverable layers in the model. Best for: multi-layer probing, learning optimal layer combinations, maximum expressiveness.
-    - Specific layer names: Use concrete layer names (e.g., `["layer_6", "layer_12"]`). Discover available layers using `list_model_layers(model_name)`. Best for: targeted probing of specific layers, custom layer combinations.
+    - Specific layer names: Use concrete layer names (e.g., `["layer_6", "layer_12"]`). Discover available layers using `list_model_layers(model_instance)` or `model.get_model_layers()`. Best for: targeted probing of specific layers, custom layer combinations.
+    - Layer indices (convenience): `model.register_hooks_for_layers([...])` also supports integer indices (0-based, negative indices allowed) instead of long module names.
   - `aggregation`: `"mean" | "max" | "none" | "cls_token"` - Controls how to reduce the time/sequence dimension of embeddings:
     - `"mean"`: **Average pooling** over the time dimension. Reduces 3D embeddings `(batch, time, features)` to 2D `(batch, features)`. Use with **2D probes** (linear, MLP) that expect fixed-size feature vectors.
     - `"max"`: **Max pooling** over the time dimension. Reduces 3D embeddings `(batch, time, features)` to 2D `(batch, features)`. Alternative to mean pooling, can capture peak activations. Use with **2D probes** (linear, MLP).

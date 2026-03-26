@@ -161,3 +161,27 @@ class TestExtractEmbeddingsAllLayers:
             batch_size,
             expected_features,
         )
+
+
+class TestRegisterHooksLayerIndices:
+    """Test index-based layer selection for register_hooks_for_layers."""
+
+    def test_register_with_zero_based_index(self) -> None:
+        model = SimpleTestModel(device="cpu")
+        resolved = model.register_hooks_for_layers([0])
+        assert resolved == ["linear1"]
+
+    def test_register_with_negative_index(self) -> None:
+        model = SimpleTestModel(device="cpu")
+        resolved = model.register_hooks_for_layers([-1])
+        assert resolved == ["final_layer"]
+
+    def test_register_with_mixed_targets_and_dedup(self) -> None:
+        model = SimpleTestModel(device="cpu")
+        resolved = model.register_hooks_for_layers([0, "last_layer", -1])
+        assert resolved == ["linear1", "final_layer"]
+
+    def test_register_with_out_of_range_index(self) -> None:
+        model = SimpleTestModel(device="cpu")
+        with pytest.raises(ValueError, match=r"out of range"):
+            model.register_hooks_for_layers([999])
