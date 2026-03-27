@@ -218,10 +218,22 @@ class Model(ModelBase):
         x = self.process_audio(x)
 
         # Extract features with optional gradient checkpointing
-        if self.gradient_checkpointing and self.training:
-            features = self._checkpointed_features(x)
+        # Empirically, EfficientNet's backward under CUDA autocast can produce NaN
+        # gradients even when activations and loss are finite. When autocast is
+        # enabled, run the feature extractor in FP32 for stability while keeping
+        # AMP for the rest of the training loop.
+        needs_guard = x.is_cuda and torch.is_autocast_enabled() and torch.get_autocast_dtype("cuda") == torch.float16
+        if needs_guard:
+            with torch.autocast(device_type="cuda", enabled=False):
+                if self.gradient_checkpointing and self.training:
+                    features = self._checkpointed_features(x.float())
+                else:
+                    features = self.model.features(x.float())
         else:
-            features = self.model.features(x)
+            if self.gradient_checkpointing and self.training:
+                features = self._checkpointed_features(x)
+            else:
+                features = self.model.features(x)
 
         # Return unpooled spatial features if requested
         if self.return_features_only:
