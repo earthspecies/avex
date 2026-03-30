@@ -57,10 +57,9 @@ def _build_labeled_audio_batch() -> tuple[torch.Tensor, torch.Tensor]:
         Tuple of `(audio, labels)` where audio has shape `(6, 16000)` and labels
         has shape `(6,)`.
     """
-    torch.manual_seed(7)
     sample_rate = 16_000
-    duration_seconds = 1
-    t = torch.linspace(0.0, float(duration_seconds), steps=sample_rate, dtype=torch.float32)
+    # Discrete-time grid: 16000 samples at 16kHz for 1 second (endpoint excluded).
+    t = torch.arange(sample_rate, dtype=torch.float32) / float(sample_rate)
     freqs = (220.0, 440.0, 880.0)
 
     clips: list[torch.Tensor] = []
@@ -71,7 +70,8 @@ def _build_labeled_audio_batch() -> tuple[torch.Tensor, torch.Tensor]:
             clips.append((amplitude * base).to(torch.float32))
             labels.append(class_index)
 
-    return torch.stack(clips, dim=0), torch.tensor(labels, dtype=torch.long)
+    expected_labels = torch.tensor(labels, dtype=torch.long)
+    return torch.stack(clips, dim=0), expected_labels
 
 
 def _pooled_model_output(model_name: str, audio: torch.Tensor) -> torch.Tensor:
@@ -125,14 +125,35 @@ class TestOfficialModelsOutputRegression:
 
     @pytest.mark.parametrize("model_name", sorted(OFFICIAL_MODEL_OUTPUT_FINGERPRINTS.keys()))
     def test_official_model_output_matches_expected_fingerprint(self, model_name: str) -> None:
-        """Assert model output fingerprint matches expected reference value."""
+        """Assert model output fingerprint matches expected reference value.
+
+        Raises
+        ------
+        ValueError
+            If the model returns an output tensor with unsupported rank.
+        """
         audio, labels = _build_labeled_audio_batch()
         assert labels.shape[0] == audio.shape[0], "Labeled batch must align audio and labels."
+        expected_labels = torch.tensor([0, 0, 1, 1, 2, 2], dtype=torch.long)
+        assert torch.equal(labels, expected_labels), "Labeled batch must have stable, expected labels."
 
         try:
-            pooled = _pooled_model_output(model_name, audio)
-        except Exception as exc:  # pragma: no cover - network/model availability
-            pytest.skip(f"Unable to load/run model {model_name!r}: {exc}")
+            model = load_model(model_name, device="cpu", return_features_only=True)
+        except (OSError, ConnectionError, TimeoutError) as exc:  # pragma: no cover - network/model availability
+            pytest.skip(f"Unable to load model {model_name!r}: {exc}")
+
+        model.eval()
+        with torch.no_grad():
+            output = model(audio)
+
+        if output.dim() == 2:
+            pooled = output
+        elif output.dim() == 3:
+            pooled = output.mean(dim=1)
+        elif output.dim() == 4:
+            pooled = output.mean(dim=(2, 3))
+        else:
+            raise ValueError(f"Unsupported output rank for {model_name}: shape={tuple(output.shape)}")
 
         pooled_np = pooled.detach().cpu().to(torch.float32).numpy()
         rounded = np.round(pooled_np, 4)

@@ -1,7 +1,7 @@
 """Regenerate expected output fingerprints for official ESP HF models.
 
 This utility builds the same deterministic labeled mini-batch used by
-`tests/unittests/test_official_models_output_regression.py`, runs all official
+`tests/integration/test_official_models_output_regression.py`, runs all official
 HF-backed models in feature mode, and prints a Python dictionary literal with
 updated SHA-256 fingerprints.
 
@@ -49,10 +49,9 @@ def _build_labeled_audio_batch(seed: int) -> tuple[torch.Tensor, torch.Tensor]:
     Returns:
         Tuple of `(audio, labels)` with shapes `(6, 16000)` and `(6,)`.
     """
-    torch.manual_seed(seed)
     sample_rate = 16_000
-    duration_seconds = 1
-    t = torch.linspace(0.0, float(duration_seconds), steps=sample_rate, dtype=torch.float32)
+    # Discrete-time grid: 16000 samples at 16kHz for 1 second (endpoint excluded).
+    t = torch.arange(sample_rate, dtype=torch.float32) / float(sample_rate)
     freqs = (220.0, 440.0, 880.0)
 
     clips: list[torch.Tensor] = []
@@ -63,7 +62,8 @@ def _build_labeled_audio_batch(seed: int) -> tuple[torch.Tensor, torch.Tensor]:
             clips.append((amplitude * base).to(torch.float32))
             labels.append(class_index)
 
-    return torch.stack(clips, dim=0), torch.tensor(labels, dtype=torch.long)
+    expected_labels = torch.tensor(labels, dtype=torch.long)
+    return torch.stack(clips, dim=0), expected_labels
 
 
 def _pool_output(output: torch.Tensor, model_name: str) -> torch.Tensor:
