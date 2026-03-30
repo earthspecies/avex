@@ -6,6 +6,7 @@ This module contains utility functions that are used across multiple modules.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import os
@@ -49,11 +50,18 @@ def _get_local_path_for_cloud_file(
 
     if is_cloud_path:
         if cache_mode in ["use", "force"]:
-            # Use cache
-            if "ESP_CACHE_HOME" in os.environ:
-                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
-            else:
-                cache_path = Path.home() / ".cache" / "esp" / path.name
+            cache_root = (
+                Path(os.environ["ESP_CACHE_HOME"]) if "ESP_CACHE_HOME" in os.environ else Path.home() / ".cache" / "esp"
+            )
+
+            # Avoid collisions across repos / buckets / nested paths by hashing the full URI.
+            # This keeps caching predictable even if different repos share the same filename.
+            uri = str(path)
+            digest = hashlib.sha256(uri.encode("utf-8")).hexdigest()[:16]
+            suffix = Path(path.name).suffix
+            cached_name = f"{Path(path.name).stem}-{digest}{suffix}"
+
+            cache_path = cache_root / path.bucket / cached_name
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
@@ -194,7 +202,7 @@ def _load_safetensor(
 def universal_torch_load(
     f: str | os.PathLike | AnyPathT,
     *,
-    cache_mode: Literal["none", "use", "force"] = "none",
+    cache_mode: Literal["none", "use", "force"] = "use",
     **kwargs: Any,  # noqa: ANN401
 ) -> Any:  # noqa: ANN401
     """
@@ -220,7 +228,7 @@ def universal_torch_load(
             "none": No caching (use cloud storage directly)
             "use": Use cache if available, download if not
             "force": Force redownload even if cache exists
-            Defaults to "none".
+            Defaults to "use".
         **kwargs: Additional keyword arguments passed to torch.load() or safetensors.torch.load_file().
                   For safetensors, supports 'device' parameter to load tensors on specific device.
 
@@ -230,6 +238,7 @@ def universal_torch_load(
         returns the object as loaded by torch.load().
     """
     path = anypath(f)
+
     fs = filesystem_from_path(path)
 
     # Check if this is a safetensors file (by extension)
