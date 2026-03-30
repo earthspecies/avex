@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import logging
 import os
 import tempfile
@@ -19,6 +20,153 @@ import torch
 from avex.io import AnyPathT, PureCloudPath, anypath, filesystem_from_path
 
 logger = logging.getLogger(__name__)
+
+CACHE_META_SUFFIX = ".avex_cache_meta.json"
+
+
+def _cache_meta_path(cache_path: Path) -> Path:
+    """Return the sidecar metadata path for a cached file.
+
+    Returns
+    -------
+    Path
+        Sidecar metadata path for ``cache_path``.
+    """
+    return cache_path.with_name(cache_path.name + CACHE_META_SUFFIX)
+
+
+def _read_cache_meta(cache_path: Path) -> dict[str, Any] | None:  # noqa: ANN401
+    """Read cache sidecar metadata if present.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Parsed metadata if the sidecar file exists and can be read, otherwise
+        ``None``.
+    """
+    meta_path = _cache_meta_path(cache_path)
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Failed to read cache meta %s: %s", meta_path, e)
+        return None
+
+
+def _write_cache_meta(cache_path: Path, meta: dict[str, Any]) -> None:  # noqa: ANN401
+    """Write cache sidecar metadata."""
+    meta_path = _cache_meta_path(cache_path)
+    try:
+        meta_path.write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Failed to write cache meta %s: %s", meta_path, e)
+
+
+def _remote_version_token(fs: Any, path: AnyPathT) -> str | None:  # noqa: ANN401
+    """Best-effort remote version token without downloading.
+
+    Uses fsspec filesystem metadata (`fs.info`) when available. Different backends
+    expose different fields; we normalize a token from whichever stable identifiers
+    are present (e.g. etag, md5/crc32c/sha256, generation/versionId).
+
+    Returns
+    -------
+    str | None
+        A stable-ish version token derived from remote metadata when available,
+        otherwise ``None``.
+    """
+    try:
+        info = fs.info(str(path))
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Failed to stat remote path %s: %s", path, e)
+        return None
+
+    if not isinstance(info, dict):
+        return None
+
+    candidates: list[str] = []
+    for key in (
+        "etag",
+        "ETag",
+        "md5",
+        "md5Hash",
+        "crc32c",
+        "sha256",
+        "generation",
+        "versionId",
+        "last_modified",
+        "mtime",
+        "size",
+    ):
+        if key in info and info[key] is not None:
+            candidates.append(f"{key}={info[key]}")
+
+    if not candidates:
+        return None
+
+    return "|".join(candidates)
+
+
+def _download_atomically(fs: Any, src: AnyPathT, dst: Path) -> None:  # noqa: ANN401
+    """Download `src` to `dst` via a temp file + atomic rename.
+
+    This avoids TOCTOU races (check-then-download) and prevents partially written
+    cache files from being treated as valid on subsequent runs.
+    """
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        dir=dst.parent,
+        delete=False,
+        suffix=".tmp",
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+
+    try:
+        fs.get(str(src), str(tmp_path))
+        tmp_path.replace(dst)  # atomic on POSIX (same filesystem)
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.debug("Failed to clean up temp file %s: %s", tmp_path, e)
+        raise
+
+
+def _safe_cache_path(cache_root: Path, bucket: str, filename: str) -> Path:
+    """Build a cache path without trusting user-controlled segments.
+
+    Parameters
+    ----------
+    cache_root:
+        Root directory for cached files.
+    bucket:
+        Bucket / repo identifier from the URI.
+    filename:
+        Target cached filename.
+
+    Returns
+    -------
+    Path
+        A cache path guaranteed (after resolve) to live under ``cache_root``.
+
+    Raises
+    ------
+    ValueError
+        If the resolved cache path would fall outside ``cache_root``.
+    """
+    bucket_digest = hashlib.sha256(bucket.encode("utf-8")).hexdigest()[:16]
+    candidate = cache_root / bucket_digest / filename
+
+    # Defense-in-depth: ensure the resolved path stays within cache_root.
+    root_resolved = cache_root.resolve()
+    candidate_resolved = candidate.resolve()
+    if root_resolved not in candidate_resolved.parents and candidate_resolved != root_resolved:
+        msg = f"Unsafe cache path resolved outside cache_root: {candidate_resolved}"
+        raise ValueError(msg)
+
+    return candidate
 
 
 def _get_local_path_for_cloud_file(
@@ -61,17 +209,63 @@ def _get_local_path_for_cloud_file(
             suffix = Path(path.name).suffix
             cached_name = f"{Path(path.name).stem}-{digest}{suffix}"
 
-            cache_path = cache_root / path.bucket / cached_name
+            cache_path = _safe_cache_path(cache_root, path.bucket, cached_name)
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
                     "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
                 )
                 logger.info(f"{download_msg} to {cache_path}...")
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                fs.get(str(path), str(cache_path))
+                try:
+                    _download_atomically(fs, path, cache_path)
+                except (OSError, PermissionError) as e:
+                    logger.warning(
+                        "Caching is enabled but cache directory is not writable (%s); "
+                        "falling back to direct cloud read for %s.",
+                        e,
+                        path,
+                    )
+                    return None
+                token = _remote_version_token(fs, path)
+                if token is not None:
+                    _write_cache_meta(
+                        cache_path,
+                        {"remote_version_token": token, "source_uri": str(path)},
+                    )
             else:
-                logger.debug(f"Found {cache_path}, using local cache.")
+                # Cache exists. If we can cheaply validate remote metadata, do so.
+                cached_meta = _read_cache_meta(cache_path)
+                cached_token = cached_meta.get("remote_version_token") if isinstance(cached_meta, dict) else None
+                remote_token = _remote_version_token(fs, path)
+
+                if cached_token is None or remote_token is None:
+                    logger.info(
+                        "Cannot validate cache for %s (cached_token=%s, remote_token=%s); using local cache.",
+                        path,
+                        cached_token is not None,
+                        remote_token is not None,
+                    )
+                elif cached_token != remote_token:
+                    logger.info(
+                        "Remote object changed for %s; re-downloading to refresh cache.",
+                        path,
+                    )
+                    try:
+                        _download_atomically(fs, path, cache_path)
+                    except (OSError, PermissionError) as e:
+                        logger.warning(
+                            "Caching is enabled but cache directory is not writable (%s); "
+                            "falling back to direct cloud read for %s.",
+                            e,
+                            path,
+                        )
+                        return None
+                    _write_cache_meta(
+                        cache_path,
+                        {"remote_version_token": remote_token, "source_uri": str(path)},
+                    )
+                else:
+                    logger.debug(f"Found {cache_path}, using local cache.")
             return cache_path
         else:
             # No caching - return None to indicate direct cloud read
@@ -238,7 +432,6 @@ def universal_torch_load(
         returns the object as loaded by torch.load().
     """
     path = anypath(f)
-
     fs = filesystem_from_path(path)
 
     # Check if this is a safetensors file (by extension)
