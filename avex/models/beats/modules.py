@@ -197,7 +197,7 @@ def gelu(x: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: GELU-activated tensor
     """
-    return torch.nn.functional.gelu(x.float()).type_as(x)
+    return torch.nn.functional.gelu(x)
 
 
 def get_activation_fn(

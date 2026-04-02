@@ -7,7 +7,6 @@ repos:
         types: [file, text]
       - id: end-of-file-fixer
         types: [python]
-      - id: requirements-txt-fixer
       - id: mixed-line-ending
         types: [python]
         args: [--fix=no]
@@ -49,7 +48,7 @@ repos:
   #      args: ["-c", "Company, Inc", "*.py"]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.5.5
+    rev: 0.9.22
     hooks:
       - id: uv-lock
         files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
