@@ -277,6 +277,8 @@ def _process_state_dict(state_dict: dict, keep_classifier: bool = False, drop_mo
     # Extract model state dict if wrapped
     if "model_state_dict" in state_dict:
         state_dict = state_dict["model_state_dict"]
+    elif "model" in state_dict and isinstance(state_dict["model"], dict):
+        state_dict = state_dict["model"]
 
     # Conditionally drop common classifier parameter names (different wrappers)
     # These are specific known problematic keys that should be removed when
