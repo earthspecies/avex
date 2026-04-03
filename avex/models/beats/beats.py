@@ -168,12 +168,16 @@ class BEATsConfig(BaseModel):
 
     This Pydantic model defines all configuration options for the BEATs
     (Bidirectional Encoder representation from Audio Transformers) architecture.
-    Default values are set to match the iter3+AS2M fine-tuned variant.
+
+    Field defaults are a convenient baseline for experiments; they do **not** match
+    every released checkpoint (for example official weights use ``deep_norm=True``).
+    For architectures aligned with registry checkpoints, use
+    :func:`official_beats_architecture_config`.
 
     Example:
-        >>> config = BEATsConfig()  # Use defaults
+        >>> config = BEATsConfig()  # Generic defaults
+        >>> config = official_beats_architecture_config(fine_tuned=False)  # SSL / iter3+AS2M
         >>> config = BEATsConfig(encoder_layers=6)  # Override specific fields
-        >>> config = BEATsConfig(**{"encoder_layers": 6})  # Load from dict
     """
 
     # Patch embedding configuration
@@ -225,6 +229,80 @@ class BEATsConfig(BaseModel):
 
     # Allow extra fields from checkpoints that may have additional config keys
     model_config = ConfigDict(extra="allow")
+
+
+def official_beats_architecture_config(*, fine_tuned: bool) -> BEATsConfig:
+    """Architecture matching official BEATs ``.pt`` releases in the model registry.
+
+    Values mirror the ``cfg`` dict shipped inside ``BEATs_iter3_plus_AS2M`` (SSL) and
+    ``BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2`` (fine-tuned) so you can build
+    :class:`BEATs` without opening a checkpoint for configuration.
+
+    Args:
+        fine_tuned: Use the AS2M fine-tuned architecture (predictor head, zero dropout,
+            layer-wise gradient decay). If ``False``, use the SSL / base iter3+AS2M
+            architecture.
+
+    Returns:
+        A new :class:`BEATsConfig` instance suitable for ``load_state_dict`` with
+        weights from the corresponding registry entry.
+
+    Example:
+        >>> cfg = official_beats_architecture_config(fine_tuned=False)
+        >>> model = BEATs(cfg)
+    """
+    if fine_tuned:
+        return BEATsConfig(
+            encoder_layers=12,
+            encoder_embed_dim=768,
+            encoder_ffn_embed_dim=3072,
+            encoder_attention_heads=12,
+            activation_fn="gelu",
+            dropout=0.0,
+            attention_dropout=0.0,
+            activation_dropout=0.0,
+            encoder_layerdrop=0.05,
+            dropout_input=0.0,
+            layer_norm_first=False,
+            deep_norm=True,
+            conv_bias=False,
+            conv_pos=128,
+            conv_pos_groups=16,
+            relative_position_embedding=True,
+            num_buckets=320,
+            max_distance=800,
+            gru_rel_pos=True,
+            input_patch_size=16,
+            embed_dim=512,
+            layer_wise_gradient_decay_ratio=0.6,
+            finetuned_model=True,
+            predictor_dropout=0.0,
+            predictor_class=527,
+        )
+    return BEATsConfig(
+        encoder_layers=12,
+        encoder_embed_dim=768,
+        encoder_ffn_embed_dim=3072,
+        encoder_attention_heads=12,
+        activation_fn="gelu",
+        dropout=0.1,
+        attention_dropout=0.1,
+        activation_dropout=0.0,
+        encoder_layerdrop=0.05,
+        dropout_input=0.1,
+        layer_norm_first=False,
+        deep_norm=True,
+        conv_bias=False,
+        conv_pos=128,
+        conv_pos_groups=16,
+        relative_position_embedding=True,
+        num_buckets=320,
+        max_distance=800,
+        gru_rel_pos=True,
+        input_patch_size=16,
+        embed_dim=512,
+        finetuned_model=False,
+    )
 
 
 class BEATs(nn.Module):

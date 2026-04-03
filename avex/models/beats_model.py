@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from avex.configs import AudioConfig
 from avex.models.base_model import ModelBase
-from avex.models.beats.beats import BEATs, BEATsConfig
+from avex.models.beats.beats import BEATs, official_beats_architecture_config
 from avex.models.utils.registry import get_checkpoint_path
 from avex.utils import universal_torch_load
 
@@ -107,38 +107,23 @@ class Model(ModelBase):
         # 1.  Build the BEATs backbone
         # ------------------------------------------------------------------
 
-        if pretrained:
-            # Load config and weights from registry-based checkpoint paths
-            # For NatureLM, we need to load config from the fine-tuned checkpoint first
-            config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
-            beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
-            beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
-            logger.debug(f"Loaded BEATs config from checkpoint: {beats_cfg.model_dump()}")
+        beats_cfg = official_beats_architecture_config(fine_tuned=fine_tuned)
+        logger.debug("BEATs architecture: %s", beats_cfg.model_dump())
 
+        if pretrained:
             if use_naturelm:
-                # BEATs-NatureLM has no config in its checkpoint, load weights separately
                 naturelm_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=True, fine_tuned=False)
                 beats_ckpt_weights = universal_torch_load(naturelm_checkpoint_path, map_location="cpu")
             else:
+                weight_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
+                beats_ckpt = universal_torch_load(weight_checkpoint_path, cache_mode="use", map_location="cpu")
                 beats_ckpt_weights = beats_ckpt["model"]
 
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
             self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
-            # Load architecture config from the reference checkpoint so the
-            # model is constructed with the correct settings (e.g. deep_norm=True).
-            # Weights are NOT loaded here; they come later via _load_checkpoint.
-            # Falls back to BEATsConfig() defaults when the checkpoint registry
-            # is unavailable (e.g. in isolated unit tests).
-            try:
-                config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
-                beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
-                beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
-                logger.info(f"BEATs reference config loaded (deep_norm={beats_cfg.deep_norm})")
-            except (KeyError, ValueError, FileNotFoundError):
-                beats_cfg = BEATsConfig()
-                logger.warning("Reference checkpoint unavailable; using BEATsConfig() defaults (deep_norm=False)")
+            # Weights are loaded later via _load_checkpoint when applicable.
             self.backbone = BEATs(beats_cfg)
             self.backbone.to(device)
 
