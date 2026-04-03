@@ -18,17 +18,67 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 from avex.models.beats.backbone import _MultiheadAttention
-from avex.models.beats.beats import BEATs, BEATsConfig, official_beats_architecture_config
+from avex.models.beats.beats import BEATs, BEATsConfig
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-#  Registry-aligned configs (single source: official_beats_architecture_config)
+#  Real checkpoint configs extracted from the registry
 # ---------------------------------------------------------------------------
 
-BEATS_SSL_CONFIG = official_beats_architecture_config(fine_tuned=False)
-BEATS_FINETUNED_CONFIG = official_beats_architecture_config(fine_tuned=True)
+BEATS_SSL_CONFIG = BEATsConfig(
+    encoder_layers=12,
+    encoder_embed_dim=768,
+    encoder_ffn_embed_dim=3072,
+    encoder_attention_heads=12,
+    activation_fn="gelu",
+    dropout=0.1,
+    attention_dropout=0.1,
+    activation_dropout=0.0,
+    encoder_layerdrop=0.05,
+    dropout_input=0.1,
+    layer_norm_first=False,
+    deep_norm=True,
+    conv_bias=False,
+    conv_pos=128,
+    conv_pos_groups=16,
+    relative_position_embedding=True,
+    num_buckets=320,
+    max_distance=800,
+    gru_rel_pos=True,
+    input_patch_size=16,
+    embed_dim=512,
+    finetuned_model=False,
+)
+
+BEATS_FINETUNED_CONFIG = BEATsConfig(
+    encoder_layers=12,
+    encoder_embed_dim=768,
+    encoder_ffn_embed_dim=3072,
+    encoder_attention_heads=12,
+    activation_fn="gelu",
+    dropout=0.0,
+    attention_dropout=0.0,
+    activation_dropout=0.0,
+    encoder_layerdrop=0.05,
+    dropout_input=0.0,
+    layer_norm_first=False,
+    deep_norm=True,
+    conv_bias=False,
+    conv_pos=128,
+    conv_pos_groups=16,
+    relative_position_embedding=True,
+    num_buckets=320,
+    max_distance=800,
+    gru_rel_pos=True,
+    input_patch_size=16,
+    embed_dim=512,
+    layer_wise_gradient_decay_ratio=0.6,
+    finetuned_model=True,
+    predictor_dropout=0.0,
+    predictor_class=527,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -413,7 +463,7 @@ class TestEndToEndEquivalence:
         self._assert_e2e_match(BEATS_FINETUNED_CONFIG, audio)
 
     def test_default_pydantic_config(self) -> None:
-        """Bare :class:`BEATsConfig` defaults still run end-to-end (not registry-aligned)."""
+        """Pydantic defaults (deep_norm=False) -- the pretrained=False path."""
         audio = torch.randn(2, 16_000)
         self._assert_e2e_match(BEATsConfig(), audio)
 
@@ -473,7 +523,7 @@ class TestPretrainedCheckpointEquivalence:
 
         path = get_checkpoint_path("BEATs_iter3_plus_AS2M")
         ckpt = universal_torch_load(path, cache_mode="use", map_location="cpu")
-        cfg = official_beats_architecture_config(fine_tuned=False)
+        cfg = BEATsConfig(**ckpt["cfg"])
         weights = ckpt["model"]
 
         sdpa_model = BEATs(cfg)
