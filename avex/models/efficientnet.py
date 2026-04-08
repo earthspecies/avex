@@ -4,6 +4,7 @@ This module provides EfficientNet model implementations for audio classification
 tasks, including B0 and B1 variants with audio-specific preprocessing.
 """
 
+import contextlib
 import logging
 from typing import List, Optional, Union
 
@@ -217,32 +218,34 @@ class Model(ModelBase):
         # Process audio
         x = self.process_audio(x)
 
-        # Extract features with optional gradient checkpointing
-        # Empirically, EfficientNet's backward under CUDA autocast can produce NaN
-        # gradients even when activations and loss are finite. When autocast is
-        # enabled, run the feature extractor in FP32 for stability while keeping
-        # AMP for the rest of the training loop.
-        needs_guard = x.is_cuda and torch.is_autocast_enabled() and torch.get_autocast_dtype("cuda") == torch.float16
-        if needs_guard:
-            with torch.autocast(device_type="cuda", enabled=False):
-                if self.gradient_checkpointing and self.training:
-                    features = self._checkpointed_features(x.float())
-                else:
-                    features = self.model.features(x.float())
-        else:
+        # Empirically, EfficientNet's backward under CUDA FP16 autocast can produce NaN
+        # gradients even when activations and loss are finite. When this is the case, run
+        # the full forward pass in FP32 for stability while keeping AMP for the rest of
+        # the training loop. bfloat16 is excluded because its exponent range matches
+        # float32 and does not exhibit this issue.
+        # The guard is gated on is_grad_enabled() so eval/torch.no_grad() paths retain
+        # full FP16 throughput and memory benefits.
+        needs_guard = (
+            x.is_cuda
+            and torch.is_grad_enabled()
+            and torch.is_autocast_enabled()
+            and torch.get_autocast_dtype("cuda") == torch.float16
+        )
+        ctx = torch.autocast(device_type="cuda", enabled=False) if needs_guard else contextlib.nullcontext()
+        x_in = x.float() if needs_guard else x
+
+        with ctx:
             if self.gradient_checkpointing and self.training:
-                features = self._checkpointed_features(x)
+                features = self._checkpointed_features(x_in)
             else:
-                features = self.model.features(x)
+                features = self.model.features(x_in)
 
-        # Return unpooled spatial features if requested
-        if self.return_features_only:
-            return features
+            if self.return_features_only:
+                return features
 
-        pooled_features = self.model.avgpool(features)
-        flattened_features = torch.flatten(pooled_features, 1)
-        logits = self.model.classifier(flattened_features)
-        return logits
+            pooled_features = self.model.avgpool(features)
+            flattened_features = torch.flatten(pooled_features, 1)
+            return self.model.classifier(flattened_features)
 
     def extract_embeddings(
         self,
