@@ -11,8 +11,10 @@ from __future__ import annotations
 import copy
 import logging
 import math
+from collections.abc import Iterable
 from typing import Optional, Tuple
 
+import pytest
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
@@ -292,7 +294,21 @@ class TestPretrainedCheckpointEquivalence:
         from avex.utils import universal_torch_load
 
         path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=False)
-        ckpt = universal_torch_load(path, cache_mode="use", map_location="cpu")
+        try:
+            ckpt = universal_torch_load(path, cache_mode="use", map_location="cpu")
+        except Exception as e:
+            # CI runners may not have credentials to access private GCS buckets.
+            msg = str(e)
+            skip_tokens: Iterable[str] = (
+                "Anonymous caller",
+                "storage.objects.get",
+                "Permission",
+                "401",
+                "403",
+            )
+            if any(tok in msg for tok in skip_tokens):
+                pytest.skip(f"Skipping: cannot access checkpoint at {path!r} ({msg})")
+            raise
         cfg = BEATsConfig(**ckpt["cfg"])
         weights = ckpt["model"]
 
