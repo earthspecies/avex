@@ -52,7 +52,7 @@ def _get_beats_checkpoint_path(use_naturelm: bool, fine_tuned: bool) -> str:
             package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_finetuned_cpt2"
         )
         checkpoint_path = yaml_data.get("checkpoint_path")
-        if checkpoint_path is None:
+        if not (isinstance(checkpoint_path, str) and checkpoint_path):
             raise ValueError(
                 "No checkpoint_path found in packaged config for BEATs finetuned "
                 "(expected avex/api/configs/checkpoints/beats_iter3_plus_as2m_finetuned_cpt2.yml)."
@@ -61,7 +61,7 @@ def _get_beats_checkpoint_path(use_naturelm: bool, fine_tuned: bool) -> str:
 
     yaml_data = _load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_ssl")
     checkpoint_path = yaml_data.get("checkpoint_path")
-    if checkpoint_path is None:
+    if not (isinstance(checkpoint_path, str) and checkpoint_path):
         raise ValueError(
             "No checkpoint_path found in packaged config for BEATs SSL "
             "(expected avex/api/configs/checkpoints/beats_iter3_plus_as2m_ssl.yml)."
@@ -133,6 +133,11 @@ class Model(ModelBase):
             beats_ckpt = None
             if init_config is not None:
                 cfg = BEATsConfig(**init_config)
+                # Still load the checkpoint for weights (non-NatureLM only; NatureLM weights
+                # are loaded separately below via its own checkpoint path).
+                if not use_naturelm:
+                    weight_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
+                    beats_ckpt = universal_torch_load(weight_checkpoint_path, cache_mode="use", map_location="cpu")
             else:
                 # For NatureLM, we need to load config from the fine-tuned checkpoint first.
                 config_checkpoint_path = _get_beats_checkpoint_path(

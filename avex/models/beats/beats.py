@@ -168,7 +168,8 @@ class BEATsConfig(BaseModel):
 
     This Pydantic model defines all configuration options for the BEATs
     (Bidirectional Encoder representation from Audio Transformers) architecture.
-    Default values are set to match the iter3+AS2M fine-tuned variant.
+    Default values are set to match the BEATs iter3+AS2M SSL pretrained variant
+    (``deep_norm=True``, ``finetuned_model=False``).
 
     Example:
         >>> config = BEATsConfig()  # Use defaults
