@@ -32,14 +32,3 @@ beats_cfg:
   predictor_class: 527
   predictor_dropout: 0.0
   relative_position_embedding: true
-model_spec:
-  name: beats
-  pretrained: true
-  fine_tuned: true
-  device: cuda
-  audio_config:
-    sample_rate: 16000
-    representation: raw
-    normalize: false
-    target_length_seconds: 10
-    window_selection: random

@@ -14,8 +14,8 @@ from avex.configs import AudioConfig
 from avex.models.base_model import ModelBase
 from avex.models.beats.beats import BEATs, BEATsConfig
 from avex.models.utils.registry import (
-    _load_packaged_yaml_mapping,
     get_checkpoint_path,
+    load_packaged_yaml_mapping,
 )
 from avex.utils import universal_torch_load
 
@@ -48,7 +48,7 @@ def _get_beats_checkpoint_path(use_naturelm: bool, fine_tuned: bool) -> str:
         return checkpoint_path
 
     if fine_tuned:
-        yaml_data = _load_packaged_yaml_mapping(
+        yaml_data = load_packaged_yaml_mapping(
             package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_finetuned_cpt2"
         )
         checkpoint_path = yaml_data.get("checkpoint_path")
@@ -59,7 +59,7 @@ def _get_beats_checkpoint_path(use_naturelm: bool, fine_tuned: bool) -> str:
             )
         return checkpoint_path
 
-    yaml_data = _load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_ssl")
+    yaml_data = load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_ssl")
     checkpoint_path = yaml_data.get("checkpoint_path")
     if not (isinstance(checkpoint_path, str) and checkpoint_path):
         raise ValueError(
@@ -148,11 +148,12 @@ class Model(ModelBase):
             logger.debug(f"Loaded BEATs config: {cfg.model_dump()}")
 
             if use_naturelm:
-                # BEATs-NatureLM has no config in its checkpoint, load weights separately
+                # BEATs-NatureLM has no config in its checkpoint, load weights separately.
+                # Legacy GCS checkpoints wrap weights under "model_state_dict"; HF safetensors
+                # are a flat tensor dict.  Handle both.
                 naturelm_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=True, fine_tuned=False)
-                beats_ckpt_weights = universal_torch_load(
-                    naturelm_checkpoint_path, cache_mode="use", map_location="cpu"
-                )["model_state_dict"]
+                raw = universal_torch_load(naturelm_checkpoint_path, cache_mode="use", map_location="cpu")
+                beats_ckpt_weights = raw.get("model_state_dict", raw)
             else:
                 beats_ckpt_weights = beats_ckpt["model"] if beats_ckpt is not None else None
 
@@ -171,7 +172,7 @@ class Model(ModelBase):
                     cfg = BEATsConfig(**init_config)
                 else:
                     cfg_name = "beats_iter3_plus_as2m_finetuned_cpt2" if fine_tuned else "beats_iter3_plus_as2m_ssl"
-                    beats_cfg_raw = _load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name=cfg_name).get(
+                    beats_cfg_raw = load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name=cfg_name).get(
                         "beats_cfg"
                     )
                     if not isinstance(beats_cfg_raw, dict):
