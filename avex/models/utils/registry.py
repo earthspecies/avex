@@ -33,6 +33,39 @@ _MODEL_CLASSES: Dict[str, Type] = {}
 _OFFICIAL_MODELS_PKG = "avex.api.configs.official_models"
 
 
+def _load_packaged_yaml_mapping(*, package: str, name: str) -> dict[str, object]:
+    """Load a packaged YAML file as a mapping.
+
+    Returns an empty dict when the packaged resource does not exist. Raises if
+    the YAML does not parse into a mapping.
+
+    Returns
+    -------
+    dict[str, object]
+        Parsed YAML mapping, or an empty dict if the packaged YAML resource does
+        not exist.
+
+    Raises
+    ------
+    ValueError
+        If PyYAML is unavailable or the YAML content does not parse into a
+        mapping.
+    """
+    if yaml is None:
+        raise ValueError("PyYAML not available to parse YAML files")
+
+    root = resources.files(package)
+    yaml_file = root / f"{name}.yml"
+    if not yaml_file.is_file():
+        return {}
+
+    with yaml_file.open("r", encoding="utf-8") as f:
+        yaml_data = yaml.safe_load(f)
+    if not isinstance(yaml_data, dict):
+        raise ValueError(f"Packaged YAML must define a mapping: package={package!r}, name={name!r}")
+    return yaml_data
+
+
 def _auto_register_from_yaml() -> None:
     """Automatically load packaged YAML configs as ModelSpec objects.
 
@@ -411,18 +444,13 @@ def get_checkpoint_path(name: str) -> Optional[str]:
     if name not in _MODEL_REGISTRY:
         raise KeyError(f"Model '{name}' is not registered")
 
-    # For official models, read checkpoint_path from YAML file packaged in resources
+    # For official models, read checkpoint_path from the packaged YAML resource.
     try:
-        root = resources.files(_OFFICIAL_MODELS_PKG)
-        yaml_file = root / f"{name}.yml"
-        if yaml_file.is_file():
-            # Use entry.open() for zip-safe reading
-            with yaml_file.open("r", encoding="utf-8") as f:
-                yaml_data = yaml.safe_load(f)
-            if isinstance(yaml_data, dict) and "checkpoint_path" in yaml_data:
-                checkpoint_path = yaml_data["checkpoint_path"]
-                if checkpoint_path:
-                    return checkpoint_path
+        yaml_data = _load_packaged_yaml_mapping(package=_OFFICIAL_MODELS_PKG, name=name)
+        checkpoint_path = yaml_data.get("checkpoint_path")
+        if isinstance(checkpoint_path, str) and checkpoint_path:
+            return checkpoint_path
+        return None
     except Exception as e:  # pragma: no cover - defensive
         logger.debug(
             "Failed to read checkpoint_path from packaged resource for %s: %s",
