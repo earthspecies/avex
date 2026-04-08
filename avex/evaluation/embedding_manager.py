@@ -150,7 +150,7 @@ class EmbeddingDataSource:
                 file_size = self.config.memory_limit_bytes + 1  # fallback to HDF5
 
             # Resolve integer layer indices against HDF5 metadata before any path branches
-            if any(isinstance(x, int) for x in self.layer_names):
+            if any(isinstance(x, int) for x in self.layer_names) and "all" not in self.layer_names:
                 try:
                     with h5py.File(str(save_path), "r") as _h5f:
                         file_layer_names = list(_h5f.attrs.get("layer_names", []))

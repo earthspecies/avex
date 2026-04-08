@@ -268,8 +268,6 @@ class Model(ModelBase):
             else:
                 # Keep gradients enabled for fine-tuning
                 embeddings = self.forward(x, padding_mask)
-            if aggregation == "none":
-                return embeddings
             return embeddings
         finally:
             # Restore training mode
