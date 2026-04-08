@@ -5,7 +5,7 @@ Each JSON fixture contains:
 - tensors: a dict mapping state_dict key -> sha256(raw_tensor_bytes)
 
 Test:
-- `tests/integration/test_beats_checkpoint_weight_and_config_fixtures.py`
+- `tests/integration/test_official_models_regression.py`
 
 Regenerate:
 - Load the model via `load_model(<registry_key>, return_features_only=True)`

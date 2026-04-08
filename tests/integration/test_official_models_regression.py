@@ -12,8 +12,10 @@ The intent is to keep a single integration entrypoint that covers:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+from collections.abc import Generator
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -45,10 +47,18 @@ class _ProbeResult:
     final_loss: float
 
 
-def _set_determinism(seed: int) -> None:
+@contextlib.contextmanager
+def _determinism_ctx(seed: int) -> Generator[None, None, None]:
+    prev_det = torch.are_deterministic_algorithms_enabled()
+    prev_threads = torch.get_num_threads()
     torch.manual_seed(seed)
     torch.use_deterministic_algorithms(True)
     torch.set_num_threads(1)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(prev_det)
+        torch.set_num_threads(prev_threads)
 
 
 def _pool_embeddings(feats: torch.Tensor) -> torch.Tensor:
@@ -81,47 +91,46 @@ def _run_linear_probe_smoke(*, model_key: str, device: str, seed: int) -> _Probe
     _ProbeResult
         Initial and final probe losses.
     """
-    _set_determinism(seed)
+    with _determinism_ctx(seed):
+        checkpoint_path = get_checkpoint_path(model_key)
+        if checkpoint_path is None:
+            pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
 
-    checkpoint_path = get_checkpoint_path(model_key)
-    if checkpoint_path is None:
-        pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
+        if not exists(anypath(checkpoint_path)):
+            pytest.skip(f"Checkpoint path not reachable: {checkpoint_path!r}")
 
-    if not exists(anypath(checkpoint_path)):
-        pytest.skip(f"Checkpoint path not reachable: {checkpoint_path!r}")
+        model = load_model(model_key, device=device, return_features_only=True)
+        model.eval()
 
-    model = load_model(model_key, device=device, return_features_only=True)
-    model.eval()
+        batch = 8
+        num_samples = 16_000
+        num_classes = 5
+        audio = torch.randn(batch, num_samples, device=device)
 
-    batch = 8
-    num_samples = 16_000
-    num_classes = 5
-    audio = torch.randn(batch, num_samples, device=device)
+        with torch.no_grad():
+            feats = model(audio)
+            pooled = _pool_embeddings(feats)
 
-    with torch.no_grad():
-        feats = model(audio)
-        pooled = _pool_embeddings(feats)
+        teacher = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
+        torch.nn.init.normal_(teacher.weight, mean=0.0, std=0.02)
+        torch.nn.init.zeros_(teacher.bias)
+        labels = teacher(pooled).argmax(dim=-1)
 
-    teacher = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
-    torch.nn.init.normal_(teacher.weight, mean=0.0, std=0.02)
-    torch.nn.init.zeros_(teacher.bias)
-    labels = teacher(pooled).argmax(dim=-1)
+        probe = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
+        opt = torch.optim.AdamW(probe.parameters(), lr=1e-2, weight_decay=0.0)
 
-    probe = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
-    opt = torch.optim.AdamW(probe.parameters(), lr=1e-2, weight_decay=0.0)
+        def loss_fn() -> torch.Tensor:
+            logits = probe(pooled)
+            return F.cross_entropy(logits, labels)
 
-    def loss_fn() -> torch.Tensor:
-        logits = probe(pooled)
-        return F.cross_entropy(logits, labels)
-
-    initial = float(loss_fn().item())
-    for _ in range(50):
-        opt.zero_grad(set_to_none=True)
-        loss = loss_fn()
-        loss.backward()
-        opt.step()
-    final = float(loss_fn().item())
-    return _ProbeResult(initial_loss=initial, final_loss=final)
+        initial = float(loss_fn().item())
+        for _ in range(50):
+            opt.zero_grad(set_to_none=True)
+            loss = loss_fn()
+            loss.backward()
+            opt.step()
+        final = float(loss_fn().item())
+        return _ProbeResult(initial_loss=initial, final_loss=final)
 
 
 @pytest.mark.parametrize("model_key", sorted(_iter_official_model_keys()))
@@ -153,44 +162,44 @@ def _load_probe_fixture(path: Path) -> _ProbeResult:
 
 
 def _run_beats_probe_with_pinned_losses(*, model_key: str, device: str, seed: int) -> _ProbeResult:
-    _set_determinism(seed)
-    checkpoint_path = get_checkpoint_path(model_key)
-    if checkpoint_path is None:
-        pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
+    with _determinism_ctx(seed):
+        checkpoint_path = get_checkpoint_path(model_key)
+        if checkpoint_path is None:
+            pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
 
-    model = load_model(model_key, device=device, return_features_only=True)
-    model.eval()
+        model = load_model(model_key, device=device, return_features_only=True)
+        model.eval()
 
-    batch = 8
-    num_samples = 16_000
-    num_classes = 5
-    audio = torch.randn(batch, num_samples, device=device)
+        batch = 8
+        num_samples = 16_000
+        num_classes = 5
+        audio = torch.randn(batch, num_samples, device=device)
 
-    with torch.no_grad():
-        feats = model(audio)
-        if feats.ndim != 3:
-            raise AssertionError(f"Expected embeddings of shape (B, T, D), got {tuple(feats.shape)}")
-        pooled = feats.mean(dim=1)
+        with torch.no_grad():
+            feats = model(audio)
+            if feats.ndim != 3:
+                raise AssertionError(f"Expected embeddings of shape (B, T, D), got {tuple(feats.shape)}")
+            pooled = feats.mean(dim=1)
 
-    teacher = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
-    torch.nn.init.normal_(teacher.weight, mean=0.0, std=0.02)
-    torch.nn.init.zeros_(teacher.bias)
-    labels = teacher(pooled).argmax(dim=-1)
+        teacher = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
+        torch.nn.init.normal_(teacher.weight, mean=0.0, std=0.02)
+        torch.nn.init.zeros_(teacher.bias)
+        labels = teacher(pooled).argmax(dim=-1)
 
-    probe = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
-    opt = torch.optim.AdamW(probe.parameters(), lr=1e-2, weight_decay=0.0)
+        probe = torch.nn.Linear(pooled.shape[-1], num_classes, bias=True).to(device)
+        opt = torch.optim.AdamW(probe.parameters(), lr=1e-2, weight_decay=0.0)
 
-    def loss_fn() -> torch.Tensor:
-        logits = probe(pooled)
-        return F.cross_entropy(logits, labels)
+        def loss_fn() -> torch.Tensor:
+            logits = probe(pooled)
+            return F.cross_entropy(logits, labels)
 
-    initial = float(loss_fn().item())
-    for _ in range(50):
-        opt.zero_grad(set_to_none=True)
-        loss = loss_fn()
-        loss.backward()
-        opt.step()
-    final = float(loss_fn().item())
+        initial = float(loss_fn().item())
+        for _ in range(50):
+            opt.zero_grad(set_to_none=True)
+            loss = loss_fn()
+            loss.backward()
+            opt.step()
+        final = float(loss_fn().item())
     return _ProbeResult(initial_loss=initial, final_loss=final)
 
 
