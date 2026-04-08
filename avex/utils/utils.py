@@ -6,10 +6,13 @@ This module contains utility functions that are used across multiple modules.
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Literal
 
@@ -18,6 +21,157 @@ import torch
 from avex.io import AnyPathT, PureCloudPath, anypath, filesystem_from_path
 
 logger = logging.getLogger(__name__)
+
+CACHE_META_SUFFIX = ".avex_cache_meta.json"
+# Default: validate cached remote metadata weekly.
+# Users can override via ESP_CACHE_VALIDATE_TTL_SECONDS.
+DEFAULT_CACHE_VALIDATE_TTL_SECONDS = 7 * 24 * 60 * 60.0
+
+
+def _cache_meta_path(cache_path: Path) -> Path:
+    """Return the sidecar metadata path for a cached file.
+
+    Returns
+    -------
+    Path
+        Sidecar metadata path for ``cache_path``.
+    """
+    return cache_path.with_name(cache_path.name + CACHE_META_SUFFIX)
+
+
+def _read_cache_meta(cache_path: Path) -> dict[str, Any] | None:  # noqa: ANN401
+    """Read cache sidecar metadata if present.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Parsed metadata if the sidecar file exists and can be read, otherwise
+        ``None``.
+    """
+    meta_path = _cache_meta_path(cache_path)
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Failed to read cache meta %s: %s", meta_path, e)
+        return None
+
+
+def _write_cache_meta(cache_path: Path, meta: dict[str, Any]) -> None:  # noqa: ANN401
+    """Write cache sidecar metadata."""
+    meta_path = _cache_meta_path(cache_path)
+    try:
+        meta_path.write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Failed to write cache meta %s: %s", meta_path, e)
+
+
+def _cache_validate_ttl_seconds() -> float:
+    """Return TTL seconds between remote validations.
+
+    Set `ESP_CACHE_VALIDATE_TTL_SECONDS=0` to validate on every cache hit.
+    Set `ESP_CACHE_VALIDATE_TTL_SECONDS=-1` to disable validation entirely.
+
+    Returns
+    -------
+    float
+        TTL in seconds between remote validations. A value of ``0`` means
+        validate on every cache hit; a negative value disables validation.
+    """
+    raw = os.environ.get("ESP_CACHE_VALIDATE_TTL_SECONDS")
+    if raw is None:
+        return DEFAULT_CACHE_VALIDATE_TTL_SECONDS
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid ESP_CACHE_VALIDATE_TTL_SECONDS=%r; using default.", raw)
+        return DEFAULT_CACHE_VALIDATE_TTL_SECONDS
+
+
+def _should_validate_cache(meta: dict[str, Any] | None) -> bool:  # noqa: ANN401
+    ttl = _cache_validate_ttl_seconds()
+    if ttl < 0:
+        return False
+    if ttl == 0:
+        return True
+    if not isinstance(meta, dict):
+        return True
+    last = meta.get("last_validated_unix_s")
+    if not isinstance(last, (int, float)):
+        return True
+    return (time.time() - float(last)) >= ttl
+
+
+def _remote_version_token(fs: Any, path: AnyPathT) -> str | None:  # noqa: ANN401
+    """Best-effort remote version token without downloading.
+
+    Uses fsspec filesystem metadata (`fs.info`) when available. Different backends
+    expose different fields; we normalize a token from whichever stable identifiers
+    are present (e.g. etag, md5/crc32c/sha256, generation/versionId).
+
+    Returns
+    -------
+    str | None
+        A stable-ish version token derived from remote metadata when available,
+        otherwise ``None``.
+    """
+    try:
+        info = fs.info(str(path))
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Failed to stat remote path %s: %s", path, e)
+        return None
+
+    if not isinstance(info, dict):
+        return None
+
+    candidates: list[str] = []
+    for key in (
+        "etag",
+        "ETag",
+        "md5",
+        "md5Hash",
+        "crc32c",
+        "sha256",
+        "generation",
+        "versionId",
+        "last_modified",
+        "mtime",
+        "size",
+    ):
+        if key in info and info[key] is not None:
+            candidates.append(f"{key}={info[key]}")
+
+    if not candidates:
+        return None
+
+    return "|".join(candidates)
+
+
+def _download_atomically(fs: Any, src: AnyPathT, dst: Path) -> None:  # noqa: ANN401
+    """Download `src` to `dst` via a temp file + atomic rename.
+
+    This avoids TOCTOU races (check-then-download) and prevents partially written
+    cache files from being treated as valid on subsequent runs.
+    """
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        dir=dst.parent,
+        delete=False,
+        suffix=".tmp",
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+
+    try:
+        fs.get(str(src), str(tmp_path))
+        tmp_path.replace(dst)  # atomic on POSIX (same filesystem)
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.debug("Failed to clean up temp file %s: %s", tmp_path, e)
+        raise
 
 
 def _get_local_path_for_cloud_file(
@@ -49,21 +203,93 @@ def _get_local_path_for_cloud_file(
 
     if is_cloud_path:
         if cache_mode in ["use", "force"]:
-            # Use cache
-            if "ESP_CACHE_HOME" in os.environ:
-                cache_path = Path(os.environ["ESP_CACHE_HOME"]) / path.name
-            else:
-                cache_path = Path.home() / ".cache" / "esp" / path.name
+            cache_root = (
+                Path(os.environ["ESP_CACHE_HOME"]) if "ESP_CACHE_HOME" in os.environ else Path.home() / ".cache" / "esp"
+            )
+
+            # Avoid collisions across repos / buckets / nested paths by hashing the full URI.
+            # This keeps caching predictable even if different repos share the same filename.
+            uri = str(path)
+            digest = hashlib.sha256(uri.encode("utf-8")).hexdigest()[:16]
+            suffix = Path(path.name).suffix
+            cached_name = f"{Path(path.name).stem}-{digest}{suffix}"
+
+            cache_path = cache_root / cached_name
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
                     "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
                 )
-                logger.info(f"{download_msg} to {cache_path}...")
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                fs.get(str(path), str(cache_path))
+                logger.info("%s to %s...", download_msg, cache_path)
+                try:
+                    _download_atomically(fs, path, cache_path)
+                except Exception as e:
+                    logger.warning(
+                        "Caching is enabled but cache download failed (%s); falling back to direct cloud read for %s.",
+                        e,
+                        path,
+                    )
+                    return None
+                token = _remote_version_token(fs, path)
+                if token is not None:
+                    _write_cache_meta(
+                        cache_path,
+                        {
+                            "remote_version_token": token,
+                            "source_uri": str(path),
+                            "last_validated_unix_s": time.time(),
+                        },
+                    )
             else:
-                logger.debug(f"Found {cache_path}, using local cache.")
+                # Cache exists. If we can cheaply validate remote metadata, do so.
+                cached_meta = _read_cache_meta(cache_path)
+                cached_token = cached_meta.get("remote_version_token") if isinstance(cached_meta, dict) else None
+
+                if _should_validate_cache(cached_meta):
+                    remote_token = _remote_version_token(fs, path)
+
+                    if cached_token is None or remote_token is None:
+                        logger.info(
+                            "Cannot validate cache for %s (cached_token=%s, remote_token=%s); using local cache.",
+                            path,
+                            cached_token is not None,
+                            remote_token is not None,
+                        )
+                    elif cached_token != remote_token:
+                        logger.info(
+                            "Remote object changed for %s; re-downloading to refresh cache.",
+                            path,
+                        )
+                        try:
+                            _download_atomically(fs, path, cache_path)
+                        except Exception as e:
+                            logger.warning(
+                                "Caching is enabled but cache refresh failed (%s); "
+                                "falling back to direct cloud read for %s.",
+                                e,
+                                path,
+                            )
+                            return None
+                        _write_cache_meta(
+                            cache_path,
+                            {
+                                "remote_version_token": remote_token,
+                                "source_uri": str(path),
+                                "last_validated_unix_s": time.time(),
+                            },
+                        )
+                    else:
+                        # Cache validated; update timestamp to avoid repeated checks.
+                        _write_cache_meta(
+                            cache_path,
+                            {
+                                "remote_version_token": cached_token,
+                                "source_uri": str(path),
+                                "last_validated_unix_s": time.time(),
+                            },
+                        )
+
+                logger.debug("Found %s, using local cache.", cache_path)
             return cache_path
         else:
             # No caching - return None to indicate direct cloud read
@@ -194,7 +420,7 @@ def _load_safetensor(
 def universal_torch_load(
     f: str | os.PathLike | AnyPathT,
     *,
-    cache_mode: Literal["none", "use", "force"] = "none",
+    cache_mode: Literal["none", "use", "force"] = "use",
     **kwargs: Any,  # noqa: ANN401
 ) -> Any:  # noqa: ANN401
     """
@@ -220,7 +446,7 @@ def universal_torch_load(
             "none": No caching (use cloud storage directly)
             "use": Use cache if available, download if not
             "force": Force redownload even if cache exists
-            Defaults to "none".
+            Defaults to "use".
         **kwargs: Additional keyword arguments passed to torch.load() or safetensors.torch.load_file().
                   For safetensors, supports 'device' parameter to load tensors on specific device.
 
