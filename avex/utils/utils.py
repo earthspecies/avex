@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Literal
 
@@ -22,6 +23,9 @@ from avex.io import AnyPathT, PureCloudPath, anypath, filesystem_from_path
 logger = logging.getLogger(__name__)
 
 CACHE_META_SUFFIX = ".avex_cache_meta.json"
+# Default: validate cached remote metadata weekly.
+# Users can override via ESP_CACHE_VALIDATE_TTL_SECONDS.
+DEFAULT_CACHE_VALIDATE_TTL_SECONDS = 7 * 24 * 60 * 60.0
 
 
 def _cache_meta_path(cache_path: Path) -> Path:
@@ -61,6 +65,42 @@ def _write_cache_meta(cache_path: Path, meta: dict[str, Any]) -> None:  # noqa: 
         meta_path.write_text(json.dumps(meta, sort_keys=True), encoding="utf-8")
     except Exception as e:  # pragma: no cover - defensive
         logger.debug("Failed to write cache meta %s: %s", meta_path, e)
+
+
+def _cache_validate_ttl_seconds() -> float:
+    """Return TTL seconds between remote validations.
+
+    Set `ESP_CACHE_VALIDATE_TTL_SECONDS=0` to validate on every cache hit.
+    Set `ESP_CACHE_VALIDATE_TTL_SECONDS=-1` to disable validation entirely.
+
+    Returns
+    -------
+    float
+        TTL in seconds between remote validations. A value of ``0`` means
+        validate on every cache hit; a negative value disables validation.
+    """
+    raw = os.environ.get("ESP_CACHE_VALIDATE_TTL_SECONDS")
+    if raw is None:
+        return DEFAULT_CACHE_VALIDATE_TTL_SECONDS
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid ESP_CACHE_VALIDATE_TTL_SECONDS=%r; using default.", raw)
+        return DEFAULT_CACHE_VALIDATE_TTL_SECONDS
+
+
+def _should_validate_cache(meta: dict[str, Any] | None) -> bool:  # noqa: ANN401
+    ttl = _cache_validate_ttl_seconds()
+    if ttl < 0:
+        return False
+    if ttl == 0:
+        return True
+    if not isinstance(meta, dict):
+        return True
+    last = meta.get("last_validated_unix_s")
+    if not isinstance(last, (int, float)):
+        return True
+    return (time.time() - float(last)) >= ttl
 
 
 def _remote_version_token(fs: Any, path: AnyPathT) -> str | None:  # noqa: ANN401
@@ -134,41 +174,6 @@ def _download_atomically(fs: Any, src: AnyPathT, dst: Path) -> None:  # noqa: AN
         raise
 
 
-def _safe_cache_path(cache_root: Path, bucket: str, filename: str) -> Path:
-    """Build a cache path without trusting user-controlled segments.
-
-    Parameters
-    ----------
-    cache_root:
-        Root directory for cached files.
-    bucket:
-        Bucket / repo identifier from the URI.
-    filename:
-        Target cached filename.
-
-    Returns
-    -------
-    Path
-        A cache path guaranteed (after resolve) to live under ``cache_root``.
-
-    Raises
-    ------
-    ValueError
-        If the resolved cache path would fall outside ``cache_root``.
-    """
-    bucket_digest = hashlib.sha256(bucket.encode("utf-8")).hexdigest()[:16]
-    candidate = cache_root / bucket_digest / filename
-
-    # Defense-in-depth: ensure the resolved path stays within cache_root.
-    root_resolved = cache_root.resolve()
-    candidate_resolved = candidate.resolve()
-    if root_resolved not in candidate_resolved.parents and candidate_resolved != root_resolved:
-        msg = f"Unsafe cache path resolved outside cache_root: {candidate_resolved}"
-        raise ValueError(msg)
-
-    return candidate
-
-
 def _get_local_path_for_cloud_file(
     path: AnyPathT,
     fs: Any,  # noqa: ANN401
@@ -209,19 +214,18 @@ def _get_local_path_for_cloud_file(
             suffix = Path(path.name).suffix
             cached_name = f"{Path(path.name).stem}-{digest}{suffix}"
 
-            cache_path = _safe_cache_path(cache_root, path.bucket, cached_name)
+            cache_path = cache_root / cached_name
 
             if not cache_path.exists() or cache_mode == "force":
                 download_msg = (
                     "Force downloading" if cache_mode == "force" else "Cache file does not exist, downloading"
                 )
-                logger.info(f"{download_msg} to {cache_path}...")
+                logger.info("%s to %s...", download_msg, cache_path)
                 try:
                     _download_atomically(fs, path, cache_path)
-                except (OSError, PermissionError) as e:
+                except Exception as e:
                     logger.warning(
-                        "Caching is enabled but cache directory is not writable (%s); "
-                        "falling back to direct cloud read for %s.",
+                        "Caching is enabled but cache download failed (%s); falling back to direct cloud read for %s.",
                         e,
                         path,
                     )
@@ -230,42 +234,62 @@ def _get_local_path_for_cloud_file(
                 if token is not None:
                     _write_cache_meta(
                         cache_path,
-                        {"remote_version_token": token, "source_uri": str(path)},
+                        {
+                            "remote_version_token": token,
+                            "source_uri": str(path),
+                            "last_validated_unix_s": time.time(),
+                        },
                     )
             else:
                 # Cache exists. If we can cheaply validate remote metadata, do so.
                 cached_meta = _read_cache_meta(cache_path)
                 cached_token = cached_meta.get("remote_version_token") if isinstance(cached_meta, dict) else None
-                remote_token = _remote_version_token(fs, path)
 
-                if cached_token is None or remote_token is None:
-                    logger.info(
-                        "Cannot validate cache for %s (cached_token=%s, remote_token=%s); using local cache.",
-                        path,
-                        cached_token is not None,
-                        remote_token is not None,
-                    )
-                elif cached_token != remote_token:
-                    logger.info(
-                        "Remote object changed for %s; re-downloading to refresh cache.",
-                        path,
-                    )
-                    try:
-                        _download_atomically(fs, path, cache_path)
-                    except (OSError, PermissionError) as e:
-                        logger.warning(
-                            "Caching is enabled but cache directory is not writable (%s); "
-                            "falling back to direct cloud read for %s.",
-                            e,
+                if _should_validate_cache(cached_meta):
+                    remote_token = _remote_version_token(fs, path)
+
+                    if cached_token is None or remote_token is None:
+                        logger.info(
+                            "Cannot validate cache for %s (cached_token=%s, remote_token=%s); using local cache.",
+                            path,
+                            cached_token is not None,
+                            remote_token is not None,
+                        )
+                    elif cached_token != remote_token:
+                        logger.info(
+                            "Remote object changed for %s; re-downloading to refresh cache.",
                             path,
                         )
-                        return None
-                    _write_cache_meta(
-                        cache_path,
-                        {"remote_version_token": remote_token, "source_uri": str(path)},
-                    )
-                else:
-                    logger.debug(f"Found {cache_path}, using local cache.")
+                        try:
+                            _download_atomically(fs, path, cache_path)
+                        except Exception as e:
+                            logger.warning(
+                                "Caching is enabled but cache refresh failed (%s); "
+                                "falling back to direct cloud read for %s.",
+                                e,
+                                path,
+                            )
+                            return None
+                        _write_cache_meta(
+                            cache_path,
+                            {
+                                "remote_version_token": remote_token,
+                                "source_uri": str(path),
+                                "last_validated_unix_s": time.time(),
+                            },
+                        )
+                    else:
+                        # Cache validated; update timestamp to avoid repeated checks.
+                        _write_cache_meta(
+                            cache_path,
+                            {
+                                "remote_version_token": cached_token,
+                                "source_uri": str(path),
+                                "last_validated_unix_s": time.time(),
+                            },
+                        )
+
+                logger.debug("Found %s, using local cache.", cache_path)
             return cache_path
         else:
             # No caching - return None to indicate direct cloud read
