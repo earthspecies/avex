@@ -13,37 +13,58 @@ import torch.nn as nn
 from avex.configs import AudioConfig
 from avex.models.base_model import ModelBase
 from avex.models.beats.beats import BEATs, BEATsConfig
-from avex.models.utils.registry import get_checkpoint_path
+from avex.models.utils.registry import (
+    _load_packaged_yaml_mapping,
+    get_checkpoint_path,
+)
 from avex.utils import universal_torch_load
 
 logger = logging.getLogger(__name__)
 
 
+_CHECKPOINT_CONFIGS_PKG = "avex.api.configs.checkpoints"
+
+
 def _get_beats_checkpoint_path(use_naturelm: bool, fine_tuned: bool) -> str:
-    """Get the checkpoint path for a BEATs model variant from the registry.
+    """Get the checkpoint path for a BEATs model variant.
 
     Args:
         use_naturelm: Whether to use NatureLM variant
         fine_tuned: Whether to use fine-tuned (AS2M) variant
 
     Returns:
-        Checkpoint path from the registry
+        Checkpoint path (typically a `gs://` URI for BEATs official weights).
 
     Raises:
-        ValueError: If no checkpoint path is found in the registry
+        ValueError: If the expected registry/config entry is missing a checkpoint path.
     """
     if use_naturelm:
-        model_name = "esp_aves2_naturelm_audio_v1_beats"
-    elif fine_tuned:
-        model_name = "BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2"
-    else:
-        model_name = "BEATs_iter3_plus_AS2M"
+        checkpoint_path = get_checkpoint_path("esp_aves2_naturelm_audio_v1_beats")
+        if checkpoint_path is None:
+            raise ValueError(
+                "No checkpoint path found for 'esp_aves2_naturelm_audio_v1_beats' "
+                "in registry. Ensure the YAML exists in avex/api/configs/official_models/."
+            )
+        return checkpoint_path
 
-    checkpoint_path = get_checkpoint_path(model_name)
+    if fine_tuned:
+        yaml_data = _load_packaged_yaml_mapping(
+            package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_finetuned_cpt2"
+        )
+        checkpoint_path = yaml_data.get("checkpoint_path")
+        if checkpoint_path is None:
+            raise ValueError(
+                "No checkpoint_path found in packaged config for BEATs finetuned "
+                "(expected avex/api/configs/checkpoints/beats_iter3_plus_as2m_finetuned_cpt2.yml)."
+            )
+        return checkpoint_path
+
+    yaml_data = _load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name="beats_iter3_plus_as2m_ssl")
+    checkpoint_path = yaml_data.get("checkpoint_path")
     if checkpoint_path is None:
         raise ValueError(
-            f"No checkpoint path found for '{model_name}' in registry. "
-            f"Ensure the YAML config exists in avex/api/configs/official_models/"
+            "No checkpoint_path found in packaged config for BEATs SSL "
+            "(expected avex/api/configs/checkpoints/beats_iter3_plus_as2m_ssl.yml)."
         )
     return checkpoint_path
 
@@ -82,6 +103,7 @@ class Model(ModelBase):
         use_naturelm: bool = False,
         fine_tuned: bool = False,
         disable_layerdrop: bool = False,
+        init_config: Optional[dict[str, object]] = None,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
@@ -108,23 +130,31 @@ class Model(ModelBase):
         # ------------------------------------------------------------------
 
         if pretrained:
-            # Load config and weights from registry-based checkpoint paths
-            # For NatureLM, we need to load config from the fine-tuned checkpoint first
-            config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
-            beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
-            beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
-            logger.debug(f"Loaded BEATs config from checkpoint: {beats_cfg.model_dump()}")
+            beats_ckpt = None
+            if init_config is not None:
+                cfg = BEATsConfig(**init_config)
+            else:
+                # For NatureLM, we need to load config from the fine-tuned checkpoint first.
+                config_checkpoint_path = _get_beats_checkpoint_path(
+                    use_naturelm=False, fine_tuned=(fine_tuned or use_naturelm)
+                )
+                beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
+                cfg = BEATsConfig(**beats_ckpt["cfg"])
+            logger.debug(f"Loaded BEATs config: {cfg.model_dump()}")
 
             if use_naturelm:
                 # BEATs-NatureLM has no config in its checkpoint, load weights separately
                 naturelm_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=True, fine_tuned=False)
-                beats_ckpt_weights = universal_torch_load(naturelm_checkpoint_path, map_location="cpu")
+                beats_ckpt_weights = universal_torch_load(
+                    naturelm_checkpoint_path, cache_mode="use", map_location="cpu"
+                )["model_state_dict"]
             else:
-                beats_ckpt_weights = beats_ckpt["model"]
+                beats_ckpt_weights = beats_ckpt["model"] if beats_ckpt is not None else None
 
-            self.backbone = BEATs(beats_cfg)
+            self.backbone = BEATs(cfg)
             self.backbone.to(device)
-            self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
+            if beats_ckpt_weights is not None:
+                self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
             # Load architecture config from the reference checkpoint so the
             # model is constructed with the correct settings (e.g. deep_norm=True).
@@ -132,14 +162,24 @@ class Model(ModelBase):
             # Falls back to BEATsConfig() defaults when the checkpoint registry
             # is unavailable (e.g. in isolated unit tests).
             try:
-                config_checkpoint_path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=fine_tuned)
-                beats_ckpt = universal_torch_load(config_checkpoint_path, cache_mode="use", map_location="cpu")
-                beats_cfg = BEATsConfig(**beats_ckpt["cfg"])
-                logger.info(f"BEATs reference config loaded (deep_norm={beats_cfg.deep_norm})")
-            except (KeyError, ValueError, FileNotFoundError):
-                beats_cfg = BEATsConfig()
+                if init_config is not None:
+                    cfg = BEATsConfig(**init_config)
+                else:
+                    cfg_name = "beats_iter3_plus_as2m_finetuned_cpt2" if fine_tuned else "beats_iter3_plus_as2m_ssl"
+                    beats_cfg_raw = _load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name=cfg_name).get(
+                        "beats_cfg"
+                    )
+                    if not isinstance(beats_cfg_raw, dict):
+                        raise ValueError(f"Missing/invalid beats_cfg in packaged YAML: {cfg_name}.yml")
+                    cfg = BEATsConfig(**beats_cfg_raw)
+                    if use_naturelm:
+                        # NatureLM uses BEATs weights but expects the fine-tuned model mode.
+                        cfg = cfg.model_copy(update={"finetuned_model": True})
+                logger.info(f"BEATs reference config loaded (deep_norm={cfg.deep_norm})")
+            except (KeyError, ValueError, FileNotFoundError, TypeError):
+                cfg = BEATsConfig()
                 logger.warning("Reference checkpoint unavailable; using BEATsConfig() defaults (deep_norm=False)")
-            self.backbone = BEATs(beats_cfg)
+            self.backbone = BEATs(cfg)
             self.backbone.to(device)
 
         # ------------------------------------------------------------------

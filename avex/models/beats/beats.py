@@ -61,7 +61,7 @@ class BEATsConfig(BaseModel):
     # Training dynamics
     layer_wise_gradient_decay_ratio: float = Field(1.0, description="Ratio for layer-wise gradient decay")
     layer_norm_first: bool = Field(False, description="Apply layernorm first in the transformer")
-    deep_norm: bool = Field(False, description="Apply deep_norm first in the transformer")
+    deep_norm: bool = Field(True, description="Apply deep_norm first in the transformer")
 
     # Dropout configuration
     dropout: float = Field(0.1, description="Dropout probability for the transformer")
@@ -81,7 +81,7 @@ class BEATsConfig(BaseModel):
     gru_rel_pos: bool = Field(True, description="Apply gated relative position embedding")
 
     # Label predictor (for fine-tuned models)
-    finetuned_model: bool = Field(True, description="Whether this is a fine-tuned model")
+    finetuned_model: bool = Field(False, description="Whether this is a fine-tuned model")
     predictor_dropout: float = Field(0.0, description="Dropout probability for the predictor")
     predictor_class: int = Field(527, description="Target class number for the predictor")
 
