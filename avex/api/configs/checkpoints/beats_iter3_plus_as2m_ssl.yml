@@ -30,14 +30,3 @@ beats_cfg:
   max_distance: 800
   num_buckets: 320
   relative_position_embedding: true
-model_spec:
-  name: beats
-  pretrained: true
-  fine_tuned: false
-  device: cuda
-  audio_config:
-    sample_rate: 16000
-    representation: raw
-    normalize: false
-    target_length_seconds: 10
-    window_selection: random

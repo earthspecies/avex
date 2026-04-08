@@ -33,7 +33,7 @@ _MODEL_CLASSES: Dict[str, Type] = {}
 _OFFICIAL_MODELS_PKG = "avex.api.configs.official_models"
 
 
-def _load_packaged_yaml_mapping(*, package: str, name: str) -> dict[str, object]:
+def load_packaged_yaml_mapping(*, package: str, name: str) -> dict[str, object]:
     """Load a packaged YAML file as a mapping.
 
     Returns an empty dict when the packaged resource does not exist. Raises if
@@ -446,7 +446,7 @@ def get_checkpoint_path(name: str) -> Optional[str]:
 
     # For official models, read checkpoint_path from the packaged YAML resource.
     try:
-        yaml_data = _load_packaged_yaml_mapping(package=_OFFICIAL_MODELS_PKG, name=name)
+        yaml_data = load_packaged_yaml_mapping(package=_OFFICIAL_MODELS_PKG, name=name)
         checkpoint_path = yaml_data.get("checkpoint_path")
         if isinstance(checkpoint_path, str) and checkpoint_path:
             return checkpoint_path
