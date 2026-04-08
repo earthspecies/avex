@@ -178,7 +178,7 @@ class Model(ModelBase):
                 logger.info(f"BEATs reference config loaded (deep_norm={cfg.deep_norm})")
             except (KeyError, ValueError, FileNotFoundError, TypeError):
                 cfg = BEATsConfig()
-                logger.warning("Reference checkpoint unavailable; using BEATsConfig() defaults (deep_norm=False)")
+                logger.warning("Reference checkpoint unavailable; using BEATsConfig() defaults")
             self.backbone = BEATs(cfg)
             self.backbone.to(device)
 
