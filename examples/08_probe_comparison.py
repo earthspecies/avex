@@ -56,7 +56,7 @@ def compute_embeddings(
     model: nn.Module,
     dataloader: DataLoader,
     device: str,
-    target_layers: list[str | int] = None,
+    target_layers: list[str | int] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Pre-compute embeddings from a backbone model.
 
