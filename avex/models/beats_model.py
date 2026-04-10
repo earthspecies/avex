@@ -162,11 +162,11 @@ class Model(ModelBase):
             if beats_ckpt_weights is not None:
                 self.backbone.load_state_dict(beats_ckpt_weights, strict=False)
         else:
-            # Load architecture config from the reference checkpoint so the
-            # model is constructed with the correct settings (e.g. deep_norm=True).
-            # Weights are NOT loaded here; they come later via _load_checkpoint.
-            # Falls back to BEATsConfig() defaults when the checkpoint registry
-            # is unavailable (e.g. in isolated unit tests).
+            # Build an *uninitialized* BEATs backbone. When models are constructed via
+            # `avex.models.utils.load.load_model(...)` with a `checkpoint_path`,
+            # weights are injected later by that loader (via its internal checkpoint
+            # loading function). Here we only ensure the architecture matches the
+            # expected checkpoint/config (e.g. deep_norm=True).
             try:
                 if init_config is not None:
                     cfg = BEATsConfig(**init_config)
@@ -179,7 +179,8 @@ class Model(ModelBase):
                         raise ValueError(f"Missing/invalid beats_cfg in packaged YAML: {cfg_name}.yml")
                     cfg = BEATsConfig(**beats_cfg_raw)
                     if use_naturelm:
-                        # NatureLM uses BEATs weights but expects the fine-tuned model mode.
+                        # NatureLM runs with BEATs-style weights but expects the
+                        # fine-tuned predictor mode to be enabled.
                         cfg = cfg.model_copy(update={"finetuned_model": True})
                 logger.info(f"BEATs reference config loaded (deep_norm={cfg.deep_norm})")
             except (KeyError, ValueError, FileNotFoundError, TypeError):
