@@ -245,15 +245,14 @@ def _load_from_modelspec(
                 num_classes = len(label_mapping["label_to_index"])
                 model_kwargs["num_classes"] = num_classes
                 logger.info(f"Extracted num_classes={num_classes} from label mapping")
-        else:
-            # Checkpoint exists but no num_classes found - likely a backbone-only checkpoint
-            # Automatically enable embedding mode for models that support it
-            if supports_return_features_only:
-                return_features_only = True
-                model_kwargs["return_features_only"] = True
-                logger.info(
-                    f"Checkpoint found but no classifier detected; loading {model_type} in embedding extraction mode"
-                )
+        # If we still couldn't determine num_classes, treat this as a backbone-only
+        # checkpoint and fall back to embedding extraction for models that support it.
+        if "num_classes" not in model_kwargs and supports_return_features_only:
+            return_features_only = True
+            model_kwargs["return_features_only"] = True
+            logger.info(
+                f"Checkpoint found but no classifier detected; loading {model_type} in embedding extraction mode"
+            )
 
     # If pretrained=True, pretrained weights are typically backbone-only (no classifier)
     # Automatically enable embedding mode for models that support it

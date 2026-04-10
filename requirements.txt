@@ -32,7 +32,7 @@ attrs==25.4.0
 audioread==3.1.0
     # via librosa
 birdnetlib==0.18.0
-    # via representation-learning
+    # via avex
 bitsandbytes==0.48.2 ; sys_platform != 'darwin'
 botocore==1.40.70
     # via aiobotocore
@@ -57,7 +57,7 @@ decorator==5.2.1
     #   gcsfs
     #   librosa
 einops==0.8.1
-    # via representation-learning
+    # via avex
 filelock==3.20.0
     # via
     #   huggingface-hub
@@ -74,15 +74,15 @@ frozenlist==1.8.0
     #   aiosignal
 fsspec==2025.10.0
     # via
+    #   avex
     #   gcsfs
     #   huggingface-hub
-    #   representation-learning
     #   s3fs
     #   torch
 gast==0.6.0
     # via tensorflow
 gcsfs==2025.10.0
-    # via representation-learning
+    # via avex
 google-api-core==2.28.1
     # via
     #   google-cloud-core
@@ -116,13 +116,14 @@ grpcio==1.76.0
     #   tensorflow
 h5py==3.15.1
     # via
+    #   avex
     #   keras
-    #   representation-learning
     #   tensorflow
 hf-xet==1.2.0 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
     # via huggingface-hub
 huggingface-hub==0.36.0
     # via
+    #   avex
     #   timm
     #   tokenizers
     #   transformers
@@ -149,7 +150,7 @@ lazy-loader==0.4
 libclang==18.1.1
     # via tensorflow
 librosa==0.11.0
-    # via representation-learning
+    # via avex
 llvmlite==0.45.1
     # via numba
 markdown==3.10
@@ -187,6 +188,7 @@ numba==0.62.1
     # via librosa
 numpy==1.26.4
     # via
+    #   avex
     #   bitsandbytes
     #   contourpy
     #   h5py
@@ -196,7 +198,6 @@ numpy==1.26.4
     #   ml-dtypes
     #   numba
     #   pandas
-    #   representation-learning
     #   scikit-learn
     #   scipy
     #   soundfile
@@ -242,7 +243,7 @@ nvidia-nvtx-cu12==12.4.127 ; platform_machine == 'x86_64' and sys_platform == 'l
 oauthlib==3.3.1
     # via requests-oauthlib
 omegaconf==2.3.0
-    # via representation-learning
+    # via avex
 opt-einsum==3.4.0
     # via tensorflow
 optree==0.18.0
@@ -259,7 +260,7 @@ packaging==25.0
     #   tensorflow
     #   transformers
 pandas==2.3.3
-    # via representation-learning
+    # via avex
 pillow==11.3.0
     # via
     #   matplotlib
@@ -292,12 +293,12 @@ pycparser==2.23 ; implementation_name != 'PyPy'
     # via cffi
 pydantic==2.12.3
     # via
+    #   avex
     #   pydantic-settings
-    #   representation-learning
 pydantic-core==2.41.4
     # via pydantic
 pydantic-settings==2.12.0
-    # via representation-learning
+    # via avex
 pydub==0.25.1
     # via birdnetlib
 pygments==2.19.2
@@ -316,9 +317,9 @@ pytz==2025.2
     # via pandas
 pyyaml==6.0.3
     # via
+    #   avex
     #   huggingface-hub
     #   omegaconf
-    #   representation-learning
     #   timm
     #   transformers
 regex==2025.11.3
@@ -341,7 +342,7 @@ rich==14.2.0
 rsa==4.9.1
     # via google-auth
 s3fs==2025.10.0
-    # via representation-learning
+    # via avex
 safetensors==0.7.0
     # via
     #   timm
@@ -370,8 +371,8 @@ six==1.17.0
     #   tensorflow
 soundfile==0.13.1
     # via
+    #   avex
     #   librosa
-    #   representation-learning
 soxr==1.0.0
     # via librosa
 sympy==1.13.1
@@ -382,10 +383,10 @@ tensorboard-data-server==0.7.2
     # via tensorboard
 tensorflow==2.17.0
     # via
-    #   representation-learning
+    #   avex
     #   tf-keras
 tensorflow-hub==0.16.1
-    # via representation-learning
+    # via avex
 tensorflow-io-gcs-filesystem==0.37.1 ; python_full_version < '3.12'
     # via tensorflow
 termcolor==3.2.0
@@ -395,29 +396,29 @@ tf-keras==2.17.0
 threadpoolctl==3.6.0
     # via scikit-learn
 timm==1.0.22
-    # via representation-learning
+    # via avex
 tokenizers==0.22.1
     # via transformers
 torch==2.5.0
     # via
+    #   avex
     #   bitsandbytes
-    #   representation-learning
     #   timm
     #   torchaudio
     #   torchvision
 torchaudio==2.5.0
-    # via representation-learning
+    # via avex
 torchvision==0.20.0
     # via
-    #   representation-learning
+    #   avex
     #   timm
 tqdm==4.67.1
     # via
+    #   avex
     #   huggingface-hub
-    #   representation-learning
     #   transformers
 transformers==4.57.3
-    # via representation-learning
+    # via avex
 triton==3.1.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
 typing-extensions==4.15.0

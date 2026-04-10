@@ -40,6 +40,7 @@ def _add_model_spec_params(init_kwargs: dict, model_spec: ModelSpec) -> None:
         "efficientnet_variant",
         "use_naturelm",
         "fine_tuned",
+        "init_config",
         "language",
         "model_id",
     ]

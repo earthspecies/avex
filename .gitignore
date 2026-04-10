@@ -1,6 +1,6 @@
 # Generated data
 benchmark/
-checkpoints/
+/checkpoints/
 evaluation_results/
 .pretrained/
 pretrained/
@@ -8,6 +8,8 @@ runs/
 static/
 labels/
 wandb/
+
+### ex
 
 # VSCode
 .vscode/
