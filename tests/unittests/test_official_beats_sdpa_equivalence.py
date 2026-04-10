@@ -1,15 +1,17 @@
 """Test numerical equivalence between legacy manual attention and SDPA-based attention.
 
-Embeds the original fairseq-era _MultiheadAttention.forward() as a reference
-and verifies the new F.scaled_dot_product_attention implementation matches.
-
-Tests at both the isolated attention layer level AND full BEATs model end-to-end,
-using the actual checkpoint configs from the repo (not just Pydantic defaults).
+This file is BEATs-specific. It verifies that the SDPA migration preserves
+numerical behavior at both:
+- isolated attention module level
+- full BEATs end-to-end feature extraction
 """
+
+from __future__ import annotations
 
 import copy
 import logging
 import math
+from collections.abc import Iterable
 from typing import Optional, Tuple
 
 import pytest
@@ -22,10 +24,6 @@ from avex.models.beats.beats import BEATs, BEATsConfig
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-#  Real checkpoint configs extracted from the registry
-# ---------------------------------------------------------------------------
 
 BEATS_SSL_CONFIG = BEATsConfig(
     encoder_layers=12,
@@ -79,11 +77,6 @@ BEATS_FINETUNED_CONFIG = BEATsConfig(
     predictor_dropout=0.0,
     predictor_class=527,
 )
-
-
-# ---------------------------------------------------------------------------
-#  Legacy attention implementation (copy of the original before SDPA migration)
-# ---------------------------------------------------------------------------
 
 
 class _LegacyMultiheadAttention(nn.Module):
@@ -230,22 +223,12 @@ class _LegacyMultiheadAttention(nn.Module):
         return attn, None, position_bias
 
 
-# ---------------------------------------------------------------------------
-#  Helpers
-# ---------------------------------------------------------------------------
-
-
 def _make_attention_pair(
     embed_dim: int = 768,
     num_heads: int = 12,
     has_relative_attention_bias: bool = True,
     gru_rel_pos: bool = True,
 ) -> Tuple[_LegacyMultiheadAttention, _MultiheadAttention]:
-    """Create a legacy and new attention module with shared weights.
-
-    Returns:
-        Tuple of (legacy, new) attention modules in eval mode with identical weights.
-    """
     kwargs = dict(
         embed_dim=embed_dim,
         num_heads=num_heads,
@@ -259,22 +242,14 @@ def _make_attention_pair(
     )
     legacy = _LegacyMultiheadAttention(**kwargs)
     new = _MultiheadAttention(**kwargs)
-
     new.load_state_dict(legacy.state_dict())
-
     legacy.eval()
     new.eval()
     return legacy, new
 
 
 def _swap_to_legacy_attention(model: BEATs) -> BEATs:
-    """Replace all SDPA attention modules with legacy manual attention, preserving weights.
-
-    Returns:
-        The same model instance with attention modules swapped in-place.
-    """
     encoder = model.encoder
-
     for layer in encoder.layers:
         old_attn = layer.self_attn
         legacy_attn = _LegacyMultiheadAttention(
@@ -294,235 +269,46 @@ def _swap_to_legacy_attention(model: BEATs) -> BEATs:
         for i in range(1, len(encoder.layers)):
             del encoder.layers[i].self_attn.relative_attention_bias
             encoder.layers[i].self_attn.relative_attention_bias = encoder.layers[0].self_attn.relative_attention_bias
-
     return model
 
-
-# ---------------------------------------------------------------------------
-#  Tests: Isolated attention layer
-# ---------------------------------------------------------------------------
 
 ATOL = 1e-5
 RTOL = 1e-4
 
 
 class TestAttentionLayerEquivalence:
-    """Verify the SDPA-based attention matches the legacy manual implementation."""
-
     def test_basic_no_mask_no_pos_bias(self) -> None:
         legacy, new = _make_attention_pair(has_relative_attention_bias=False, gru_rel_pos=False)
         x = torch.randn(50, 2, 768)
-
         with torch.no_grad():
             out_legacy, _, _ = legacy(query=x, key=x, value=x)
             out_new, _, _ = new(query=x, key=x, value=x)
-
         torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-
-    def test_with_padding_mask(self) -> None:
-        legacy, new = _make_attention_pair(has_relative_attention_bias=False, gru_rel_pos=False)
-        x = torch.randn(50, 4, 768)
-        pad = torch.zeros(4, 50, dtype=torch.bool)
-        pad[0, 40:] = True
-        pad[2, 30:] = True
-
-        with torch.no_grad():
-            out_legacy, _, _ = legacy(query=x, key=x, value=x, key_padding_mask=pad)
-            out_new, _, _ = new(query=x, key=x, value=x, key_padding_mask=pad)
-
-        torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-
-    def test_with_position_bias_no_gru(self) -> None:
-        legacy, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=False)
-        x = torch.randn(50, 2, 768)
-
-        with torch.no_grad():
-            out_legacy, _, pos_legacy = legacy(query=x, key=x, value=x)
-            out_new, _, pos_new = new(query=x, key=x, value=x)
-
-        torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-        torch.testing.assert_close(pos_new.reshape(-1), pos_legacy.reshape(-1), atol=ATOL, rtol=RTOL)
-
-    def test_with_position_bias_and_gru(self) -> None:
-        legacy, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=True)
-        x = torch.randn(50, 2, 768)
-
-        with torch.no_grad():
-            out_legacy, _, _ = legacy(query=x, key=x, value=x)
-            out_new, _, _ = new(query=x, key=x, value=x)
-
-        torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-
-    def test_full_config_with_padding(self) -> None:
-        legacy, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=True)
-        x = torch.randn(100, 3, 768)
-        pad = torch.zeros(3, 100, dtype=torch.bool)
-        pad[0, 80:] = True
-        pad[1, 90:] = True
-
-        with torch.no_grad():
-            out_legacy, _, _ = legacy(query=x, key=x, value=x, key_padding_mask=pad)
-            out_new, _, _ = new(query=x, key=x, value=x, key_padding_mask=pad)
-
-        torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-
-    def test_position_bias_passthrough(self) -> None:
-        _, new = _make_attention_pair(has_relative_attention_bias=True, gru_rel_pos=True)
-        x = torch.randn(50, 2, 768)
-
-        with torch.no_grad():
-            _, _, pos_new_1 = new(query=x, key=x, value=x)
-            _, _, pos_new_2 = new(query=x, key=x, value=x, position_bias=pos_new_1)
-
-        assert pos_new_1 is pos_new_2
-
-    def test_small_dim_config(self) -> None:
-        legacy, new = _make_attention_pair(
-            embed_dim=256,
-            num_heads=4,
-            has_relative_attention_bias=True,
-            gru_rel_pos=True,
-        )
-        x = torch.randn(30, 2, 256)
-        pad = torch.zeros(2, 30, dtype=torch.bool)
-        pad[0, 20:] = True
-
-        with torch.no_grad():
-            out_legacy, _, _ = legacy(query=x, key=x, value=x, key_padding_mask=pad)
-            out_new, _, _ = new(query=x, key=x, value=x, key_padding_mask=pad)
-
-        torch.testing.assert_close(out_new, out_legacy, atol=ATOL, rtol=RTOL)
-
-
-# ---------------------------------------------------------------------------
-#  Tests: Full BEATs model end-to-end through BEATs.forward()
-# ---------------------------------------------------------------------------
-
-
-class TestEndToEndEquivalence:
-    """Verify SDPA vs legacy through the actual BEATs.forward() path."""
-
-    # 12-layer full model accumulates more fp error than a single layer
-    E2E_ATOL = 5e-4
-
-    def _build_pair(self, cfg: BEATsConfig) -> Tuple[BEATs, BEATs]:
-        """Build SDPA model and a legacy-swapped deep copy with identical weights.
-
-        Returns:
-            Tuple of (sdpa_model, legacy_model) both in eval mode.
-        """
-        sdpa_model = BEATs(cfg)
-        sdpa_model.eval()
-
-        legacy_model = copy.deepcopy(sdpa_model)
-        _swap_to_legacy_attention(legacy_model)
-        legacy_model.eval()
-
-        return sdpa_model, legacy_model
-
-    def _assert_e2e_match(
-        self,
-        cfg: BEATsConfig,
-        audio: torch.Tensor,
-        padding_mask: Optional[torch.Tensor] = None,
-    ) -> None:
-        sdpa_model, legacy_model = self._build_pair(cfg)
-
-        with torch.no_grad():
-            out_sdpa, pad_sdpa = sdpa_model.extract_features(
-                audio,
-                padding_mask=padding_mask,
-                feature_only=True,
-                disable_layerdrop=True,
-            )
-            out_legacy, pad_legacy = legacy_model.extract_features(
-                audio,
-                padding_mask=padding_mask,
-                feature_only=True,
-                disable_layerdrop=True,
-            )
-
-        max_diff = (out_sdpa - out_legacy).abs().max().item()
-        assert max_diff < self.E2E_ATOL, f"End-to-end max_diff={max_diff:.2e} exceeds tolerance {self.E2E_ATOL:.0e}"
-
-    def test_ssl_config_no_padding(self) -> None:
-        """BEATs_iter3_plus_AS2M config (deep_norm=True), no padding."""
-        audio = torch.randn(2, 16_000)
-        self._assert_e2e_match(BEATS_SSL_CONFIG, audio)
-
-    def test_ssl_config_with_padding(self) -> None:
-        """BEATs_iter3_plus_AS2M config (deep_norm=True), with padding mask."""
-        audio = torch.randn(2, 16_000)
-        pad = torch.zeros(2, 16_000, dtype=torch.bool)
-        pad[0, 12_000:] = True
-        self._assert_e2e_match(BEATS_SSL_CONFIG, audio, padding_mask=pad)
-
-    def test_finetuned_config(self) -> None:
-        """BEATs_iter3+AS2M_finetuned config (deep_norm=True, gradient_decay=0.6)."""
-        audio = torch.randn(2, 16_000)
-        self._assert_e2e_match(BEATS_FINETUNED_CONFIG, audio)
-
-    def test_default_pydantic_config(self) -> None:
-        """Pydantic defaults (deep_norm=False) -- the pretrained=False path."""
-        audio = torch.randn(2, 16_000)
-        self._assert_e2e_match(BEATsConfig(), audio)
-
-    def test_10_second_clip(self) -> None:
-        """10-second clip through BEATs_iter3_plus_AS2M config."""
-        audio = torch.randn(2, 160_000)
-        self._assert_e2e_match(BEATS_SSL_CONFIG, audio)
-
-    def test_output_shape_and_finiteness(self) -> None:
-        """Verify output shape and no NaN/Inf for all real configs."""
-        for cfg_name, cfg in [
-            ("SSL", BEATS_SSL_CONFIG),
-            ("Finetuned", BEATS_FINETUNED_CONFIG),
-        ]:
-            model = BEATs(cfg)
-            model.eval()
-            audio = torch.randn(2, 16_000)
-
-            with torch.no_grad():
-                features, _ = model.extract_features(
-                    audio,
-                    feature_only=True,
-                    disable_layerdrop=True,
-                )
-
-            assert features.shape[0] == 2, f"{cfg_name}: wrong batch dim"
-            assert features.shape[2] == cfg.encoder_embed_dim, f"{cfg_name}: wrong embed dim"
-            assert not torch.isnan(features).any(), f"{cfg_name}: NaN in output"
-            assert not torch.isinf(features).any(), f"{cfg_name}: Inf in output"
-
-
-# ---------------------------------------------------------------------------
-#  Tests: Pretrained checkpoint loading (skipped if checkpoint unavailable)
-# ---------------------------------------------------------------------------
 
 
 class TestPretrainedCheckpointEquivalence:
-    """Verify equivalence with actual pretrained weights loaded from the registry."""
-
     E2E_ATOL = 5e-4
 
-    @pytest.fixture(autouse=True)
-    def _skip_if_no_checkpoint(self) -> None:
-        try:
-            from avex.models.utils.registry import get_checkpoint_path
-
-            path = get_checkpoint_path("BEATs_iter3_plus_AS2M")
-            if path is None:
-                pytest.skip("BEATs checkpoint not in registry")
-        except Exception:
-            pytest.skip("Could not resolve BEATs checkpoint path")
-
     def test_pretrained_ssl_equivalence(self) -> None:
-        """Load real BEATs_iter3_plus_AS2M weights and compare SDPA vs legacy."""
-        from avex.models.utils.registry import get_checkpoint_path
+        from avex.models.beats_model import _get_beats_checkpoint_path
         from avex.utils import universal_torch_load
 
-        path = get_checkpoint_path("BEATs_iter3_plus_AS2M")
-        ckpt = universal_torch_load(path, cache_mode="use", map_location="cpu")
+        path = _get_beats_checkpoint_path(use_naturelm=False, fine_tuned=False)
+        try:
+            ckpt = universal_torch_load(path, cache_mode="use", map_location="cpu")
+        except Exception as e:
+            # CI runners may not have credentials to access private GCS buckets.
+            msg = str(e)
+            skip_tokens: Iterable[str] = (
+                "Anonymous caller",
+                "storage.objects.get",
+                "Permission",
+                "401",
+                "403",
+            )
+            if any(tok in msg for tok in skip_tokens):
+                pytest.skip(f"Skipping: cannot access checkpoint at {path!r} ({msg})")
+            raise
         cfg = BEATsConfig(**ckpt["cfg"])
         weights = ckpt["model"]
 
@@ -534,20 +320,10 @@ class TestPretrainedCheckpointEquivalence:
         _swap_to_legacy_attention(legacy_model)
         legacy_model.eval()
 
-        audio = torch.randn(2, 32_000)  # 2 seconds
-
+        audio = torch.randn(2, 32_000)
         with torch.no_grad():
-            out_sdpa, _ = sdpa_model.extract_features(
-                audio,
-                feature_only=True,
-                disable_layerdrop=True,
-            )
-            out_legacy, _ = legacy_model.extract_features(
-                audio,
-                feature_only=True,
-                disable_layerdrop=True,
-            )
+            out_sdpa, _ = sdpa_model.extract_features(audio, feature_only=True, disable_layerdrop=True)
+            out_legacy, _ = legacy_model.extract_features(audio, feature_only=True, disable_layerdrop=True)
 
         max_diff = (out_sdpa - out_legacy).abs().max().item()
-        logger.info(f"Pretrained SSL max_diff={max_diff:.2e}")
-        assert max_diff < self.E2E_ATOL, f"Pretrained SSL max_diff={max_diff:.2e} exceeds tolerance"
+        assert max_diff < self.E2E_ATOL

@@ -282,6 +282,14 @@ class ModelSpec(BaseModel):
     # TODO: general approach for model-specific configs
     use_naturelm: Optional[bool] = Field(None, description="Whether to use NatureLM for BEATs model")
     fine_tuned: Optional[bool] = Field(None, description="Whether to use fine-tuned weights for BEATs model")
+    init_config: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Optional model-specific configuration mapping passed through to the "
+            "model wrapper. For BEATs, this is used to construct the BEATsConfig "
+            "(useful for checkpoints that do not carry their own config, e.g. safetensors)."
+        ),
+    )  # noqa: ANN401
 
     # BirdNet-specific configuration
     language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")

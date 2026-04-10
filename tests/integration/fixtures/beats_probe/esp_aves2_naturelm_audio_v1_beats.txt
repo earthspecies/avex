@@ -1,0 +1,2 @@
+initial_loss=1.70959008
+final_loss=0.00000000

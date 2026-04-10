@@ -812,3 +812,35 @@ class TestLoadFromModelSpec:
 
         registry._MODEL_CLASSES.clear()
         registry._MODEL_REGISTRY.clear()
+
+    def test_falls_back_to_embedding_mode_when_checkpoint_has_no_classifier(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Test fallback to embedding mode for backbone-only checkpoints.
+
+        This matches the failure mode of some official EAT models where a checkpoint
+        exists but does not contain a classifier head and there is no label mapping.
+        In that case, we should automatically enable return_features_only=True for
+        models that support it.
+        """
+        checkpoint_path = tmp_path / "backbone_only.pt"
+        # No classifier/head keys: _extract_num_classes_from_checkpoint should return None.
+        torch.save({"backbone.some_weight": torch.randn(2, 2)}, checkpoint_path)
+
+        model_spec = ModelSpec(
+            name="test_model_type",
+            pretrained=False,
+            device="cpu",
+        )
+
+        model = _load_from_modelspec(
+            model_spec,
+            device="cpu",
+            checkpoint_path=str(checkpoint_path),
+            registry_key="test_model",
+            return_features_only=False,
+        )
+
+        assert isinstance(model, ModelBase)
+        assert getattr(model, "return_features_only", False) is True

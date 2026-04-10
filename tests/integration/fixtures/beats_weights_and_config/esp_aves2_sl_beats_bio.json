@@ -1,0 +1,36 @@
+{
+  "config": {
+    "activation_dropout": 0.0,
+    "activation_fn": "gelu",
+    "attention_dropout": 0.0,
+    "conv_bias": false,
+    "conv_pos": 128,
+    "conv_pos_groups": 16,
+    "deep_norm": true,
+    "dropout": 0.0,
+    "dropout_input": 0.0,
+    "embed_dim": 512,
+    "encoder_attention_heads": 12,
+    "encoder_embed_dim": 768,
+    "encoder_ffn_embed_dim": 3072,
+    "encoder_layerdrop": 0.05,
+    "encoder_layers": 12,
+    "finetuned_model": true,
+    "gru_rel_pos": true,
+    "input_patch_size": 16,
+    "layer_norm_first": false,
+    "layer_wise_gradient_decay_ratio": 0.6,
+    "max_distance": 800,
+    "num_buckets": 320,
+    "predictor_class": 527,
+    "predictor_dropout": 0.0,
+    "relative_position_embedding": true
+  },
+  "tensors": {
+    "backbone.encoder.layers.0.fc1.weight": "a9560f3f459095250d47da0b36e061e38851179cfaffa7716889d34b6bbb735d",
+    "backbone.encoder.layers.0.fc2.weight": "b34c27baf7ba93cab9fba3fa13121b3d50e0ff139fef093fda0f3ca7a9161210",
+    "backbone.encoder.layers.0.self_attn.q_proj.weight": "50ec5ea3d61ee9c201de316dfeed46deb2159d9521e83304913d43859c1b026c",
+    "backbone.patch_embedding.weight": "4a08d3831392d353360d340bfb740138ce2b22e9c18f874d0480b78203a46c82",
+    "backbone.post_extract_proj.weight": "01977964930d69a346615701999c3a3f927d927f9ad930b3865a7460d8fb3b19"
+  }
+}

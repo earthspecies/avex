@@ -60,6 +60,13 @@ class Model(ModelBase):
     SAMPLE_RATE = 48_000
     CHUNK_SEC = 3.0  # fixed window length inside the model
 
+    @property
+    def input_sr(self) -> int:
+        """Actual sample rate of audio arriving at this model."""
+        if self.audio_processor is not None:
+            return self.audio_processor.sr
+        return self.SAMPLE_RATE
+
     def __init__(
         self,
         num_classes: Optional[int] = None,
@@ -347,8 +354,15 @@ class Model(ModelBase):
         # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
         from birdnetlib import Recording
 
+        sr = self.input_sr
+
+        # Pad short clips to at least CHUNK_SEC so birdnetlib produces chunks
+        min_samples = int(self.CHUNK_SEC * sr)
+        if len(mono_wave) < min_samples:
+            mono_wave = np.pad(mono_wave, (0, min_samples - len(mono_wave)))
+
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
+            sf.write(tmp.name, mono_wave, sr)
             with suppress_stdout_stderr():
                 rec = Recording(self._analyzer, tmp.name, min_conf=0.0)
                 rec.analyze()
@@ -379,19 +393,36 @@ class Model(ModelBase):
         ValueError
             If embedding output tensor cannot be found in model.
         """
+        sr = self.input_sr
+
+        # Bug 3 fix: pad short clips to at least CHUNK_SEC so birdnetlib
+        # produces at least one chunk (it requires >= 1.5 s of audio).
+        min_samples = int(self.CHUNK_SEC * sr)
+        if len(mono_wave) < min_samples:
+            mono_wave = np.pad(mono_wave, (0, min_samples - len(mono_wave)))
+
         # Use the analyzer's built-in embedding extraction method if available
         if hasattr(self._analyzer, "extract_embeddings_for_recording"):
             # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
             from birdnetlib import Recording
 
             with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-                sf.write(tmp.name, mono_wave, self.SAMPLE_RATE)
+                # Bug 1 fix: write with actual input sample rate, not hardcoded 48 kHz
+                sf.write(tmp.name, mono_wave, sr)
                 try:
-                    # Create Recording object, analyze, and extract embeddings
-                    with suppress_stdout_stderr():
-                        recording = Recording(self._analyzer, tmp.name)
-                        recording.analyze()
-                        recording.extract_embeddings()
+                    # Bug 2 fix: temporarily swap the analyzer's interpreter with
+                    # our fixed one (experimental_preserve_all_tensors=True) so
+                    # that extract_embeddings() reads valid tensor data.
+                    original_interpreter = self._analyzer.interpreter
+                    self._analyzer.interpreter = self._interpreter
+                    try:
+                        # Create Recording object, analyze, and extract embeddings
+                        with suppress_stdout_stderr():
+                            recording = Recording(self._analyzer, tmp.name)
+                            recording.analyze()
+                            recording.extract_embeddings()
+                    finally:
+                        self._analyzer.interpreter = original_interpreter
 
                     # Get embeddings from the recording
                     embeddings_data = recording.embeddings
@@ -423,7 +454,7 @@ class Model(ModelBase):
 
         # Feed through RecordingBuffer which handles resampling + spectrograms
         with suppress_stdout_stderr():
-            buf = RecordingBuffer(self._analyzer, mono_wave, self.SAMPLE_RATE)
+            buf = RecordingBuffer(self._analyzer, mono_wave, sr)
             buf.analyze()
 
         # Ensure tensors are allocated
