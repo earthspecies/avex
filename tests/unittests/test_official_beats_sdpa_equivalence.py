@@ -19,7 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from avex.models.beats.backbone import _MultiheadAttention
+from avex.models.beats.backbone import MultiheadAttention as _MultiheadAttention
 from avex.models.beats.beats import BEATs, BEATsConfig
 
 logger = logging.getLogger(__name__)
@@ -255,7 +255,7 @@ def _swap_to_legacy_attention(model: BEATs) -> BEATs:
         legacy_attn = _LegacyMultiheadAttention(
             embed_dim=old_attn.embed_dim,
             num_heads=old_attn.num_heads,
-            dropout=old_attn.dropout_p,
+            dropout=getattr(old_attn, "dropout_p", old_attn.dropout_module.p),
             self_attention=True,
             has_relative_attention_bias=old_attn.has_relative_attention_bias,
             num_buckets=old_attn.num_buckets,
