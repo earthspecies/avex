@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from avex.configs import AudioConfig
@@ -74,6 +75,32 @@ def test_efficientnet_float64_audio_input() -> None:
     assert output.dtype == torch.float32, "Output should be float32"
     assert len(output.shape) == 4, "Output should be 4D (B, C, H, W)"
     print(f"Successfully processed float64 audio input. Output shape: {output.shape}")
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_efficientnet_amp_guard() -> None:
+    """Test that the FP32 guard activates during FP16 autocast training but not during eval/no_grad.
+
+    During training with FP16 autocast, EfficientNet's feature extractor is forced to FP32
+    to avoid NaN gradients. During eval or torch.no_grad(), gradients are absent so the
+    guard should not activate, preserving FP16 throughput/memory benefits.
+    """
+    device = torch.device("cuda")
+    model = EfficientNet(num_classes=10, pretrained=False, device=device, return_features_only=True)
+    model.to(device)
+    dummy_input = torch.randn(2, 3, 224, 224, device=device)
+
+    # Training + FP16 autocast: guard should activate → features in FP32
+    model.train()
+    with torch.autocast(device_type="cuda", dtype=torch.float16):
+        features = model(dummy_input)
+    assert features.dtype == torch.float32, f"Expected FP32 features during training+autocast, got {features.dtype}"
+
+    # Eval + no_grad + FP16 autocast: guard should NOT activate → features in FP16
+    model.eval()
+    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16):
+        features = model(dummy_input)
+    assert features.dtype == torch.float16, f"Expected FP16 features during eval+no_grad+autocast, got {features.dtype}"
 
 
 if __name__ == "__main__":

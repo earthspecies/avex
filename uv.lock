@@ -528,7 +528,7 @@ project-dev = [
 requires-dist = [
     { name = "birdnetlib", specifier = ">=0.18.0" },
     { name = "einops", specifier = ">=0.8.1" },
-    { name = "esp-data", marker = "extra == 'dev'", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", marker = "extra == 'dev'", specifier = ">=1.8.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "esp-sweep", marker = "extra == 'dev'", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "fsspec", specifier = ">=2024.2.0" },
     { name = "gcsfs", specifier = ">=2024.2.0" },
@@ -572,7 +572,7 @@ dev = [
 ]
 gpu = [{ name = "bitsandbytes", marker = "sys_platform != 'darwin'", specifier = ">=0.45.5" }]
 project-dev = [
-    { name = "esp-data", specifier = ">=1.5.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "esp-data", specifier = ">=1.8.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "esp-sweep", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
     { name = "gradio", specifier = ">=4.0.0" },
     { name = "gradio-leaderboard", specifier = ">=0.0.13" },
