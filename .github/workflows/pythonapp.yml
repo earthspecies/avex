@@ -1,6 +1,5 @@
 # Boiler plate test suit for ESP projects
 # NOTE: Caching should be benchmarked, unsure about the benefits
-# TODO (OSS): change my_dummy_library with the folder of your
 # own library to test.
 
 name: ESP Project CI

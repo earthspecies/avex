@@ -1,0 +1,34 @@
+---
+# BEATs iter3+AS2M fine-tuned backbone (GCS source-of-truth).
+#
+# This file is intentionally NOT part of `official_models` (i.e. it is not
+# auto-registered as a user-facing model). It exists solely to provide a
+# schema-validated place to store checkpoint URIs used internally by
+# `avex.models.beats_model`.
+checkpoint_path: gs://foundation-models/beats_ckpts/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt
+beats_cfg:
+  activation_dropout: 0.0
+  activation_fn: gelu
+  attention_dropout: 0.0
+  conv_bias: false
+  conv_pos: 128
+  conv_pos_groups: 16
+  deep_norm: true
+  dropout: 0.0
+  dropout_input: 0.0
+  embed_dim: 512
+  encoder_attention_heads: 12
+  encoder_embed_dim: 768
+  encoder_ffn_embed_dim: 3072
+  encoder_layerdrop: 0.05
+  encoder_layers: 12
+  finetuned_model: true
+  gru_rel_pos: true
+  input_patch_size: 16
+  layer_norm_first: false
+  layer_wise_gradient_decay_ratio: 0.6
+  max_distance: 800
+  num_buckets: 320
+  predictor_class: 527
+  predictor_dropout: 0.0
+  relative_position_embedding: true
