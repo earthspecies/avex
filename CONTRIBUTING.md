@@ -16,8 +16,10 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ### Prerequisites
 
-- Python 3.10, 3.11, or 3.12
+- Python 3.10, 3.11, 3.12, or 3.13 (supported range is `>=3.10,<3.14` in `pyproject.toml`)
 - Git
+
+Continuous integration runs tests on **Python 3.10** and **3.13**. Slow official-model output regression tests use profiled expected fingerprints for **3.10–3.12** vs **3.13+** (`tests/integration/test_official_models_output_regression.py`); regenerate with `scripts/regenerate_official_model_output_fingerprints.py` if you change the numerical stack.
 
 ### Clone the Repository
 
