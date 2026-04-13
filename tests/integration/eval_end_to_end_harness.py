@@ -171,7 +171,7 @@ def create_probe_eval_config(
         },
     }
 
-    target_layers = ["last_layer"] if layers == "last_layer" else ["last_layer"]
+    target_layers = ["last_layer"]
     root = project_root()
     run_config_path = (root / "configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml").resolve()
 
@@ -194,10 +194,6 @@ def create_probe_eval_config(
                 "activation": "relu",
             }
         )
-    if training_mode == "offline":
-        probe_cfg["freeze_backbone"] = True
-    else:
-        probe_cfg["freeze_backbone"] = False
 
     experiment: dict[str, object] = {
         "run_name": f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}",
