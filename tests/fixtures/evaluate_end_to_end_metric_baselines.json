@@ -1,0 +1,8 @@
+{
+  "comment": "Populate profiles after running scripts/record_evaluate_end_to_end_metrics.py on each Python band.",
+  "tolerances": {
+    "atol": 0.12,
+    "rtol": 0.05
+  },
+  "profiles": {}
+}
