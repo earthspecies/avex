@@ -117,6 +117,14 @@ uv run pytest tests/unittests
 # Integration tests (excluding slow tests)
 uv run pytest tests/integration -m "not slow"
 
+# Evaluate pipeline metrics vs recorded baselines (requires esp_data; slow).
+# Without baselines in tests/fixtures/evaluate_end_to_end_metric_baselines.json the test skips strict checks but still prints AVEX_EVAL_METRICS_SNAPSHOT.
+uv run pytest tests/integration/test_run_evaluate_cross_version_metrics.py -m slow -s
+
+# Record metrics on current Python for baseline JSON / cross-version diff:
+uv run python scripts/record_evaluate_end_to_end_metrics.py record
+uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_310.json snap_313.json
+
 # Consistency tests
 uv run pytest tests/consistency --base_folder avex
 

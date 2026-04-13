@@ -16,9 +16,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
-import yaml
+
+from tests.integration.eval_end_to_end_harness import (
+    create_probe_eval_config,
+    create_test_data_config,
+    run_linear_offline_probe_evaluate,
+)
 
 # Skip entire module if esp_data is not installed (internal dependency)
 # These tests use build_dataloaders which loads real datasets via esp_data
@@ -41,87 +45,7 @@ class TestRunEvaluateEndToEnd:
         Uses real beans dataset but with aggressive subsampling to only 3 classes
         and very few samples for speed. No label mapping - uses original string labels.
         """
-        test_data_config = {
-            "benchmark_name": "bioacoustic_benchmark_single_test",
-            "evaluation_sets": [
-                {
-                    "name": "tiny_test",
-                    "train": {
-                        "dataset_name": "beans",
-                        "split": "dogs_train",
-                        "type": "classification",
-                        "label_column": "label",
-                        "audio_path_col": "path",
-                        "multi_label": False,
-                        "label_type": "supervised",
-                        "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
-                        "transformations": [
-                            {
-                                "type": "rl_subsample",
-                                "ratio": 0.05,  # Very small ratio for CI speed
-                                "max_samples": 10,  # Very minimal samples for CI - still enough for multiple classes
-                            },
-                            {
-                                "type": "label_from_feature",
-                                "feature": "label",  # Automatically maps string labels to integers
-                                "override": True,  # Replace existing label column with integer-mapped version
-                            },
-                        ],
-                    },
-                    "validation": {
-                        "dataset_name": "beans",
-                        "split": "dogs_validation",
-                        "type": "classification",
-                        "label_column": "label",
-                        "audio_path_col": "path",
-                        "multi_label": False,
-                        "label_type": "supervised",
-                        "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
-                        "transformations": [
-                            {
-                                "type": "rl_subsample",
-                                "ratio": 0.05,  # Very small ratio for CI speed
-                                "max_samples": 8,  # Very minimal samples for CI
-                            },
-                            {
-                                "type": "label_from_feature",
-                                "feature": "label",  # Automatically maps string labels to integers
-                                "override": True,  # Replace existing label column with integer-mapped version
-                            },
-                        ],
-                    },
-                    "test": {
-                        "dataset_name": "beans",
-                        "split": "dogs_test",
-                        "type": "classification",
-                        "label_column": "label",
-                        "audio_path_col": "path",
-                        "multi_label": False,
-                        "label_type": "supervised",
-                        "audio_max_length_seconds": 1,  # Minimal audio length for CI speed
-                        "transformations": [
-                            {
-                                "type": "rl_subsample",
-                                "ratio": 0.05,  # Very small ratio for CI speed
-                                "max_samples": 8,  # Very minimal samples for CI
-                            },
-                            {
-                                "type": "label_from_feature",
-                                "feature": "label",  # Automatically maps string labels to integers
-                                "override": True,  # Replace existing label column with integer-mapped version
-                            },
-                        ],
-                    },
-                    "metrics": [
-                        "accuracy",
-                        "balanced_accuracy",
-                    ],
-                }
-            ],
-        }
-
-        with open(data_config_path, "w") as f:
-            yaml.dump(test_data_config, f, default_flow_style=False)
+        create_test_data_config(data_config_path)
 
     def _create_test_config(
         self,
@@ -138,91 +62,7 @@ class TestRunEvaluateEndToEnd:
         Path
             Path to the created configuration file.
         """
-        config_path = temp_output_dir / f"test_config_{probe_type}_{freeze_backbone}_{layers}_{training_mode}.yml"
-
-        data_config_path = temp_output_dir / "test_data_config.yml"
-        self._create_test_data_config(data_config_path)
-
-        base_config = {
-            "dataset_config": str(data_config_path),
-            "training_params": {
-                "train_epochs": 1,
-                "lr": 0.0003,
-                "batch_size": 2,  # Smaller batch for CI speed
-                "optimizer": "adamw",
-                "weight_decay": 0.01,
-                "amp": False,
-                "amp_dtype": "bf16",
-            },
-            "save_dir": str(temp_output_dir / "results"),
-            "device": "cpu",
-            "seed": 42,
-            "num_workers": 0,  # Faster startup for small dataset
-            "eval_modes": ["probe"],
-            "offline_embeddings": {
-                "overwrite_embeddings": True,
-                "use_streaming_embeddings": False,  # Use in-memory for tiny dataset - much faster, no disk I/O
-                "memory_limit_gb": 2,  # Lower limit for CI
-                "streaming_chunk_size": 100,  # Not used when streaming is false, but required by schema
-                "hdf5_compression": "gzip",
-                "hdf5_compression_level": 4,
-                "auto_chunk_size": True,
-                "max_chunk_size": 200,
-                "min_chunk_size": 100,  # Minimum allowed value
-                "batch_chunk_size": 5,
-                "cache_size_limit_gb": 1,  # Lower cache for CI
-            },
-        }
-
-        target_layers = ["last_layer"] if layers == "last_layer" else ["last_layer"]
-
-        # Resolve run_config path relative to project root
-        # Use an efficientnet config that's tracked in git
-        project_root = Path(__file__).parent.parent.parent
-        # Use sl_efficientnet_animalspeak.yml which is tracked in git
-        run_config_relative = Path("configs/run_configs/aaai_train/sl_efficientnet_animalspeak.yml")
-        run_config_path = (project_root / run_config_relative).resolve()
-
-        # Use absolute path in the config to ensure it works in CI
-        experiment = {
-            "run_name": f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}",
-            "run_config": str(run_config_path),
-            "probe_config": {
-                "probe_type": probe_type,
-                "aggregation": "mean",
-                "input_processing": "pooled",
-                "target_layers": target_layers,
-                "freeze_backbone": freeze_backbone,
-            },
-            "pretrained": True,
-        }
-
-        if probe_type == "linear":
-            experiment["probe_config"].update(
-                {"hidden_dims": [32], "dropout_rate": 0.1, "activation": "relu"}
-            )  # Smaller probe for speed
-        elif probe_type == "attention":
-            experiment["probe_config"].update(
-                {
-                    "num_heads": 4,
-                    "attention_dim": 256,
-                    "num_layers": 2,
-                    "dropout_rate": 0.1,
-                    "activation": "relu",
-                }
-            )
-
-        if training_mode == "offline":
-            experiment["probe_config"]["freeze_backbone"] = True
-        else:
-            experiment["probe_config"]["freeze_backbone"] = False
-
-        base_config["experiments"] = [experiment]
-
-        with open(config_path, "w") as f:
-            yaml.dump(base_config, f, default_flow_style=False)
-
-        return config_path
+        return create_probe_eval_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
 
     def _load_eval_config(self, config_path: Path) -> Any:  # noqa: ANN401
         """Helper to load EvaluateConfig with proper working directory.
@@ -300,52 +140,14 @@ class TestRunEvaluateEndToEnd:
         training_mode: str,
         temp_output_dir: Path,
     ) -> None:
-        import os
-
-        from avex.run_evaluate import main
-
-        config_path = self._create_test_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
-
-        test_output_dir = temp_output_dir / f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}"
-        test_output_dir.mkdir(exist_ok=True)
-
-        patches = (
-            f"save_dir={test_output_dir}",
-            "device=cpu",
-            "seed=42",
-            "training_params.train_epochs=1",
-            "training_params.batch_size=1",
-            "offline_embeddings.use_streaming_embeddings=false",  # Use in-memory for tiny dataset - much faster
-            "offline_embeddings.memory_limit_gb=2",  # Lower limit for CI
-            "offline_embeddings.cache_size_limit_gb=1",  # Lower cache for CI
-        )
-
-        # Ensure we're in project root when running main (it loads configs)
-        project_root = Path(__file__).parent.parent.parent
-        original_cwd = os.getcwd()
-        try:
-            os.chdir(project_root)
-            main(config_path, patches)
-        finally:
-            os.chdir(original_cwd)
-
-        summary_csvs = list(test_output_dir.rglob("*summary*.csv"))
-        assert summary_csvs, f"No summary CSVs found in {test_output_dir}"
-        summary_csv = summary_csvs[0]
-        df = pd.read_csv(summary_csv)
-
-        expected_metrics = [
-            "test_accuracy",
-            "test_balanced_accuracy",
-        ]
-        for metric in expected_metrics:
-            assert metric in df.columns, f"Missing metric column: {metric}"
-
-        for metric in [
-            "test_accuracy",
-            "test_balanced_accuracy",
-        ]:
-            val = df[metric].iloc[0]
-            if pd.isna(val):
-                continue
+        assert (probe_type, freeze_backbone, layers, training_mode) == (
+            "linear",
+            True,
+            "last_layer",
+            "offline",
+        ), "Harness only implements the linear/offline/last_layer path."
+        metrics = run_linear_offline_probe_evaluate(temp_output_dir)
+        for metric in ("test_accuracy", "test_balanced_accuracy"):
+            assert metric in metrics, f"Missing metric column: {metric}"
+            val = metrics[metric]
             assert 0.0 <= val <= 1.0, f"{metric} out of range: {val}"
