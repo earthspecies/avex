@@ -1,5 +1,6 @@
 """Custom transforms for representation learning data processing."""
 
+import random
 from typing import Literal, Optional, Tuple
 
 import pandas as pd
@@ -169,7 +170,10 @@ class RLSubsampleConfig(BaseModel):
         ge=1,
         description="Maximum total number of samples to keep",
     )
-    random_state: Optional[int] = Field(default=42, description="Random state for reproducible sampling")
+    random_state: Optional[int] = Field(
+        default=42,
+        description=("Random seed for reproducible sampling. If None, sampling is non-deterministic."),
+    )
 
 
 class RLSubsampleTransform:
@@ -239,8 +243,8 @@ class RLSubsampleTransform:
         Raises
         ------
         TypeError
-            If ``data`` is neither a pandas DataFrame nor convertible via
-            ``to_pandas()``.
+            If ``data`` is neither a pandas DataFrame nor a backend object that
+            provides ``sample_rows(n=..., seed=...)``.
         """
         sample_rows = getattr(data, "sample_rows", None)
         if not isinstance(data, pd.DataFrame) and not callable(sample_rows):
@@ -270,10 +274,10 @@ class RLSubsampleTransform:
 
         # Perform random sampling
         if callable(sample_rows):
-            seed = 42 if self.random_state is None else int(self.random_state)
-            sampled_data = (
-                data.sample_rows(n=n_samples, seed=seed) if n_samples > 0 else data.sample_rows(n=0, seed=seed)
-            )
+            # esp_data backends require an `int` seed. Preserve non-determinism
+            # when random_state is None by picking a fresh seed each call.
+            seed = random.randint(0, 2**32 - 1) if self.random_state is None else int(self.random_state)
+            sampled_data = data.sample_rows(n=n_samples, seed=seed)
         elif n_samples > 0:
             sampled_data = data.sample(
                 n=n_samples,
