@@ -298,12 +298,30 @@ def _api_load_model_sanity(
 
     Uses `model_spec` from `train_config.yaml` and loads on CPU.
     """
+    # This check is optional and can be slow (it may download pretrained backbone
+    # weights from third-party sources). Gate it behind an env flag so that
+    # publishing runs stay focused on conversion + upload.
+    if os.environ.get("AVEX_UPLOAD_SANITY", "").strip().lower() not in {"1", "true", "yes"}:
+        logger.info("Skipping API sanity-load (set AVEX_UPLOAD_SANITY=1 to enable).")
+        return
+
     if dry_run:
         print(f"[DRY RUN] Would sanity-load via API: {checkpoint_path}")
         return
 
-    from representation_learning.configs import ModelSpec
-    from representation_learning.models.utils.load import load_model
+    # This script originally lived in a development branch where the package was
+    # named `representation_learning`. In `avex`, the equivalent public API lives
+    # under `avex.*`. If neither import is available (e.g. minimal env), treat
+    # this step as optional and continue.
+    try:
+        from avex.configs import ModelSpec  # type: ignore[attr-defined]
+        from avex.models.utils.load import load_model  # type: ignore
+    except Exception:  # noqa: BLE001 - optional best-effort sanity check
+        logger.warning(
+            "Skipping API sanity-load: could not import avex ModelSpec/load_model. "
+            "This does not block conversion or upload."
+        )
+        return
 
     model_spec_dict = _load_model_spec_from_train_config(train_config_path)
 

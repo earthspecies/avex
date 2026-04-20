@@ -90,11 +90,89 @@ def extract_state_dict(checkpoint: dict[str, Any]) -> dict[str, torch.Tensor]:
     -------
     dict[str, torch.Tensor]
         The model state dictionary
+
+    Raises
+    ------
+    ValueError
+        If the checkpoint does not contain a recognizable model state dict under
+        common keys (for example, ``model_state_dict``, ``state_dict``, or
+        ``model``).
     """
-    if "model_state_dict" in checkpoint:
+    # Common full-checkpoint formats.
+    if "model_state_dict" in checkpoint and isinstance(checkpoint["model_state_dict"], dict):
         return checkpoint["model_state_dict"]
-    # If it's already a state dict, return as is
-    return checkpoint
+
+    # PyTorch Lightning / some training loops.
+    if "state_dict" in checkpoint and isinstance(checkpoint["state_dict"], dict):
+        return checkpoint["state_dict"]
+
+    # Fairseq-style checkpoints typically store weights under "model".
+    if "model" in checkpoint and isinstance(checkpoint["model"], dict):
+        return checkpoint["model"]
+
+    # Otherwise, if the checkpoint itself looks like a state dict (all tensors or None),
+    # return it and let normalization handle None entries.
+    if all((v is None) or isinstance(v, torch.Tensor) for v in checkpoint.values()):
+        return checkpoint
+
+    raise ValueError(
+        "Unsupported checkpoint format: could not locate a model state dict under "
+        "any of: ['model_state_dict', 'state_dict', 'model']"
+    )
+
+
+def _normalize_state_dict(state_dict: dict[str, Any]) -> dict[str, torch.Tensor]:
+    """Normalize a checkpoint state dict to a pure tensor mapping.
+
+    Safetensors can only store tensors, but some real-world checkpoints may include
+    `None` entries (e.g. placeholders) or other non-tensor values.
+
+    Parameters
+    ----------
+    state_dict : dict[str, Any]
+        Raw mapping extracted from a checkpoint.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        Mapping containing only tensors.
+
+    Raises
+    ------
+    ValueError
+        If any non-tensor values (other than `None`) are present.
+    """
+    out: dict[str, torch.Tensor] = {}
+    non_tensor_keys: list[str] = []
+    none_keys: list[str] = []
+
+    for k, v in state_dict.items():
+        # Fairseq checkpoints may include EMA payloads under `_ema*` keys that are
+        # not part of the model weights and are not tensors. Skip them.
+        if k.startswith("_ema"):
+            continue
+        if v is None:
+            none_keys.append(k)
+            continue
+        if not isinstance(v, torch.Tensor):
+            non_tensor_keys.append(k)
+            continue
+        out[k] = v
+
+    if none_keys:
+        logger.warning(
+            "State dict contains %d None entries; skipping them (first 10): %s",
+            len(none_keys),
+            none_keys[:10],
+        )
+
+    if non_tensor_keys:
+        raise ValueError(
+            "State dict contains non-tensor entries that cannot be saved to safetensors. "
+            f"Count={len(non_tensor_keys)} first_10={non_tensor_keys[:10]}"
+        )
+
+    return out
 
 
 def build_safetensors_metadata(
@@ -434,7 +512,8 @@ def convert_checkpoint_to_safetensors(
         raise ValueError(f"Checkpoint must be a dictionary, got {type(checkpoint)}")
 
     # Extract state dict
-    state_dict = extract_state_dict(checkpoint)
+    state_dict_any = extract_state_dict(checkpoint)
+    state_dict = _normalize_state_dict(state_dict_any)
 
     if not state_dict:
         raise ValueError("Checkpoint does not contain a valid state dictionary")

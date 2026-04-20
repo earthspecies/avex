@@ -18,8 +18,8 @@ from avex.models.utils.registry import get_checkpoint_path, list_models
 # Expected pooled-output fingerprints from deterministic labeled mini-batch.
 # Fingerprint is SHA-256 of np.round(output, 4).tobytes().
 OFFICIAL_MODEL_OUTPUT_FINGERPRINTS: dict[str, str] = {
-    "esp_aves2_eat_all": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
-    "esp_aves2_eat_bio": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
+    "esp_aves2_eat_all": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+    "esp_aves2_eat_bio": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
     "esp_aves2_effnetb0_all": "7f1e8cc046287f79a3a2b7413042ff121a3f32c115cf3a487d2b5348e09a4931",
     "esp_aves2_effnetb0_audioset": "8ba36f99b5e8245d7b61fc472339f5760fabca19d63a51e835309c11a379eab6",
     "esp_aves2_effnetb0_bio": "c91dde6bee57788951a0fb9044703d301cb295e83fdc5e064874b63c99c70493",

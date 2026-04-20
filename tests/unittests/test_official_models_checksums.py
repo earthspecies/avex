@@ -19,8 +19,8 @@ from avex.models.utils.registry import get_checkpoint_path, list_models
 # Keys = official model name (YAML stem); values are 64-digit lowercase hex.
 # Update from the .safetensors.sha256 files when official models are (re-)uploaded.
 OFFICIAL_MODEL_CHECKSUMS: dict[str, str] = {
-    "esp_aves2_eat_all": "7cd1d643345bfd14d6d8489350d0337f00c97485f23442d21a15d9ad5667cf42",
-    "esp_aves2_eat_bio": "1279c1dbca6240a84b8bbbda0205bab58b9b58119ea0c2c57a67bce8576c29a1",
+    "esp_aves2_eat_all": "56159edf43111cd81522bee625dd79c43da80ba795bba85bf394ea1ba182c337",
+    "esp_aves2_eat_bio": "3d01d4c834683c3b0d098b09535fbc629c042cfd64b442637a4851d9deb4d62c",
     "esp_aves2_effnetb0_all": "a9ab2bf0896493a4bf325dbd739a7fbd58971513ac171bded880a81f7982bdc1",
     "esp_aves2_effnetb0_audioset": "58455bac5346a8c8d705b20210edfd14a5f6151fed9dd61320bda2e31030119c",
     "esp_aves2_effnetb0_bio": "e34db5a8951f28f4d90cb06b396f4a4e716dd79e48a54e672017d832804868d7",
