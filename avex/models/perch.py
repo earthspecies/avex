@@ -139,6 +139,14 @@ class PerchModel(ModelBase):
                     "Only the optional PyTorch classifier layer can be discovered."
                 )
 
+    def register_hooks_for_layers(self, layer_names: list[str | int]) -> list[str]:
+        """Perch does not support PyTorch forward hooks for TF-Hub internals."""
+        raise NotImplementedError(
+            "PerchModel does not support intermediate layer hooks. "
+            "This backbone is TensorFlow Hub based; use extract_embeddings() "
+            "without hook registration."
+        )
+
     def _discover_embedding_layers(self) -> None:
         """Discover and cache layers for Perch model.
 
@@ -298,7 +306,6 @@ class PerchModel(ModelBase):
         Raises:
             ValueError: If unsupported aggregation method is provided.
         """
-
         if isinstance(x, dict):
             audio = x["raw_wav"]
         else:

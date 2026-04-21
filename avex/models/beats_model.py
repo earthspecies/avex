@@ -402,8 +402,9 @@ class Model(ModelBase):
             logger.debug(f"Forward pass completed. Hook outputs: {list(self._hook_outputs.keys())}")
 
             # Collect embeddings from hook outputs
-            embeddings = []
-            for layer_name in self._hook_outputs.keys():
+            embeddings: list[torch.Tensor] = []
+            ordered_names = self._hook_layers if self._hook_layers else list(self._hook_outputs.keys())
+            for layer_name in ordered_names:
                 embedding = self._hook_outputs[layer_name]
                 embeddings.append(embedding)
                 logger.debug(f"Found embedding for {layer_name}: {embedding.shape}")

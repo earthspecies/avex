@@ -620,3 +620,27 @@ class TestListModelLayers:
         # Should be the same (cached)
         assert layers1 == layers2
         assert len(layers1) == len(layers2)
+
+
+class TestProbeConfigTargetLayersType:
+    """Test ProbeConfig target_layers supports integer indices."""
+
+    def test_probe_config_accepts_int_target_layers(self) -> None:
+        cfg = ProbeConfig(
+            probe_type="linear",
+            target_layers=[0, -1, "last_layer"],
+            aggregation="mean",
+            freeze_backbone=True,
+            online_training=True,
+        )
+        assert cfg.target_layers == [0, -1, "last_layer"]
+
+    def test_probe_config_rejects_bool_target_layers(self) -> None:
+        with pytest.raises(ValueError):
+            ProbeConfig(
+                probe_type="linear",
+                target_layers=[True],  # type: ignore[list-item]
+                aggregation="mean",
+                freeze_backbone=True,
+                online_training=True,
+            )

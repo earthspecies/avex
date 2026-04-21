@@ -183,6 +183,14 @@ class Model(ModelBase):
                     "Only the optional PyTorch classifier layer can be discovered."
                 )
 
+    def register_hooks_for_layers(self, layer_names: list[str | int]) -> list[str]:
+        """BirdNET does not support PyTorch forward hooks for TFLite internals."""
+        raise NotImplementedError(
+            "BirdNET does not support intermediate layer hooks. "
+            "This backbone is TensorFlow Lite based; use extract_embeddings() "
+            "without hook registration."
+        )
+
     # --------------------------------------------------------------------- #
     #                       NN.Module / ModelBase hooks                     #
     # --------------------------------------------------------------------- #
