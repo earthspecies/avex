@@ -22,7 +22,7 @@ The Animal Vocalization Encoder library AVEX provides a unified interface for wo
 
 ### Prerequisites
 
-- Python 3.10, 3.11, or 3.12
+- Python 3.10, 3.11, 3.12, or 3.13 (see `requires-python` in `pyproject.toml`; CI runs **3.10** and **3.13** on Ubuntu)
 
 ### Install with pip
 

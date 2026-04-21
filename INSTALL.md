@@ -2,6 +2,8 @@
 
 This guide explains how to install the `avex` package.
 
+**Supported Python versions:** 3.10, 3.11, 3.12, and 3.13 (`requires-python` in `pyproject.toml`).
+
 The installation process depends on how you plan to use this package:
 
 - **API user**: you just want to load models and run inference.
@@ -13,7 +15,7 @@ For users who want to install the package and use it as a library (for example t
 
 ### 1.1 Prerequisites
 
-- Python 3.10, 3.11, or 3.12
+- Python 3.10, 3.11, 3.12, or 3.13
 - ESP GCP authentication:
 
 ```bash
@@ -123,7 +125,7 @@ For contributors or power users who clone the repository and want the full devel
 
 ### 2.1 Prerequisites
 
-- Python 3.10, 3.11, or 3.12
+- Python 3.10, 3.11, 3.12, or 3.13
 - Git
 - GCP authentication:
 

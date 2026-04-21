@@ -2,11 +2,16 @@
 
 This utility builds the same deterministic labeled mini-batch used by
 `tests/integration/test_official_models_output_regression.py`, runs all official
-HF-backed models in feature mode, and prints a Python dictionary literal with
-updated SHA-256 fingerprints.
+HF-backed models in feature mode, and prints a Python snippet for the selected
+**profile** inside ``_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE`` (bands
+like ``py310_312`` vs ``py313_plus``, not one file per Python minor).
 
 Usage:
-    uv run python scripts/regenerate_official_model_output_fingerprints.py
+    # From a 3.12 venv (updates the py310_312 band):
+    uv run python scripts/regenerate_official_model_output_fingerprints.py --profile py310_312
+
+    # From a 3.13+ venv (updates the py313_plus band):
+    uv run python scripts/regenerate_official_model_output_fingerprints.py --profile py313_plus
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 
 import numpy as np
 import torch
@@ -22,6 +28,20 @@ from avex import load_model
 from avex.models.utils.registry import get_checkpoint_path, list_models
 
 _HF_PREFIX = "hf://"
+
+_VALID_PROFILES: tuple[str, ...] = ("py310_312", "py313_plus")
+
+
+def _profile_from_interpreter() -> str:
+    """Match ``tests/integration/test_official_models_output_regression.py``.
+
+    Returns:
+        ``py310_312`` when ``sys.version_info < (3, 13)``, otherwise
+        ``py313_plus``.
+    """
+    if sys.version_info < (3, 13):
+        return "py310_312"
+    return "py313_plus"
 
 
 def _official_hf_model_names() -> list[str]:
@@ -142,6 +162,16 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description="Regenerate official model output fingerprints.")
     parser.add_argument(
+        "--profile",
+        choices=_VALID_PROFILES,
+        default=None,
+        help=(
+            "Fingerprint band to print (must match a key in "
+            "_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE). "
+            "Default: infer from running Python (3.10–3.12 → py310_312, else py313_plus)."
+        ),
+    )
+    parser.add_argument(
         "--decimals",
         type=int,
         default=4,
@@ -166,6 +196,7 @@ def main() -> int:
         ValueError: If the labeled audio batch and labels have mismatched lengths.
     """
     args = parse_args()
+    profile = args.profile if args.profile is not None else _profile_from_interpreter()
     model_names = _official_hf_model_names()
     audio, labels = _build_labeled_audio_batch(seed=7)
     if labels.shape[0] != audio.shape[0]:
@@ -174,12 +205,16 @@ def main() -> int:
     fingerprints, errors = _compute_fingerprints(model_names, audio=audio, decimals=args.decimals)
 
     if args.json:
-        print(json.dumps(fingerprints, indent=2, sort_keys=True))
+        print(json.dumps({"profile": profile, "fingerprints": fingerprints}, indent=2, sort_keys=True))
     else:
-        print("OFFICIAL_MODEL_OUTPUT_FINGERPRINTS: dict[str, str] = {")
+        print(
+            f"# Paste/replace the inner dict for profile {profile!r} in "
+            "tests/integration/test_official_models_output_regression.py"
+        )
+        print(f'    "{profile}": {{')
         for name in sorted(fingerprints.keys()):
-            print(f'    "{name}": "{fingerprints[name]}",')
-        print("}")
+            print(f'        "{name}": "{fingerprints[name]}",')
+        print("    },")
 
     if errors:
         print("\nErrors (models skipped):")
