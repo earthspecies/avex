@@ -1,0 +1,30 @@
+{
+  "n_calls": 1529,
+  "n_individuals": 5,
+  "training_free": {
+    "beats_last": {
+      "nmi": 0.4878029486840504,
+      "ari": 0.35042939816581586,
+      "r_auc": 0.7614547471905029
+    },
+    "beats_all_layers": {
+      "nmi": 0.3796612109353989,
+      "ari": 0.31498710887614934,
+      "r_auc": 0.7303112253503229
+    },
+    "effnet": {
+      "nmi": 0.646193364816498,
+      "ari": 0.45658957388950316,
+      "r_auc": 0.7857849421063979
+    }
+  },
+  "linear_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer) | individual_id": 0.9804,
+    "esp_aves2_sl_beats_all (all layers avg) | individual_id": 0.9673,
+    "esp_aves2_effnetb0_all | individual_id": 0.9902
+  },
+  "attention_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer) | individual_id": 0.9673,
+    "esp_aves2_sl_beats_all (all layers avg) | individual_id": 0.9804
+  }
+}

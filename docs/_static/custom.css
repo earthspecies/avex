@@ -363,4 +363,139 @@ html[data-theme="dark"] :target > h4 {
     background-color: #2e2e2e !important;
   }
 }
+
+/* Notebook spacing */
+div.cell {
+  margin-bottom: 1.5rem;
+}
+div.cell_input {
+  margin-bottom: 0.4rem;
+}
+div.cell_output {
+  margin-top: 0.4rem;
+}
+div.cell_output img {
+  display: block;
+  margin: 1rem auto 0.5rem;
+}
+div.cell_output .output + .output {
+  margin-top: 1rem;
+}
+.cell + section,
+.cell + h2,
+section + .cell {
+  margin-top: 2rem;
+}
+.content p + div.cell {
+  margin-top: 1.25rem;
+}
+
+/* Notebook cell styling */
+:root {
+  --mystnb-source-margin-color: #129C7B;
+}
+html[data-theme="dark"] {
+  --mystnb-source-margin-color: #04D78A;
+}
+
+/* Notebook cell output styling */
+.cell_output .output.stderr {
+  background: #fff0f0 !important;
+  border: none !important;
+  border-left: 3px solid #f5acad !important;
+}
+.cell_output .output.stream,
+.cell_output .output.text_plain {
+  background: #f7f7f7 !important;
+  border: none !important;
+}
+html[data-theme="dark"] .cell_output .output.stderr {
+  background: #3a0a0a !important;
+  border: none !important;
+  border-left: 3px solid #850010 !important;
+}
+html[data-theme="dark"] .cell_output .output.stream,
+html[data-theme="dark"] .cell_output .output.text_plain {
+  background: #2d2d2d !important;
+  border: none !important;
+}
+
+/* Tips / Objective card */
+.tips-card {
+  background-color: var(--color-background-secondary);
+  border: 1px solid var(--color-background-border);
+  border-radius: 0.6rem;
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0 2rem;
+}
+.tips-card.tips-card--green {
+  background-color: #A7ED9915;
+  border-color: #129C7B33;
+}
+.tips-card .tips-card-heading {
+  font-size: 0.65rem !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-foreground-muted);
+  margin: 0 !important;
+}
+.tips-card.tips-card--green .tips-card-heading {
+  color: #129C7B;
+}
+.tips-card p:not(.tips-card-heading) {
+  font-size: 0.88rem;
+  margin: 0 !important;
+  margin-top: 0.75rem !important;
+  line-height: 1.6;
+}
+.tips-card-meta {
+  font-size: 0.78rem !important;
+  color: var(--color-foreground-secondary);
+  margin: 0.5rem 0 0 !important;
+  letter-spacing: 0.01em;
+}
+.tips-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.tips-card li {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 0.3rem;
+}
+.tips-card li:last-child {
+  margin-bottom: 0;
+}
+
+/* Tutorial header (injected by template) */
+.tutorial-header {
+  margin-bottom: 1.5rem;
+}
+
+.colab-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Euclid Circular B', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-foreground-primary);
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-background-border);
+  border-radius: 0.35rem;
+  padding: 0.3em 0.75em;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.colab-button:hover {
+  background: var(--color-background-hover);
+  border-color: var(--color-brand-content);
+  color: var(--color-brand-content) !important;
+}
+
+.colab-icon {
+  width: 18px;
+  height: 18px;
 }

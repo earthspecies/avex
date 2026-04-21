@@ -1,0 +1,23 @@
+dataset:
+  url: "https://archive.org/download/giant-otter-vocalisations/Audio_S1.zip"
+  audio_dir: "data/giant_otter/audio"
+  sample_rate: 16000
+  window_seconds: 3.0
+
+models:
+  - name: "esp_aves2_sl_beats_all"
+    pooling: "mean"          # mean | cls | max
+  - name: "esp_aves2_effnetb0_all"
+    pooling: "mean"
+
+probe:
+  type: "linear"             # linear | mlp
+  test_size: 0.2
+  random_state: 42
+  max_iter: 1000
+
+output:
+  embeddings_dir: "data/embeddings"
+  checkpoints_dir: "data/checkpoints"
+  artifacts_dir: "artifacts"
+  metrics_json: "giant_otter_metrics.json"

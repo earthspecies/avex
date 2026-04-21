@@ -1,0 +1,35 @@
+{
+  "n_calls": 2931,
+  "n_call_types": 15,
+  "training_free": {
+    "beats_last": {
+      "nmi": 0.5684879199312876,
+      "ari": 0.38461772219873214,
+      "r_auc": 0.5789112350774052
+    },
+    "beats_all_layers": {
+      "nmi": 0.5748106427513563,
+      "ari": 0.3874038175849747,
+      "r_auc": 0.5740648583105752
+    },
+    "effnet": {
+      "nmi": 0.46952346101802345,
+      "ari": 0.2959915570773657,
+      "r_auc": 0.48035612304424025
+    }
+  },
+  "linear_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer) | call_type": 0.8944,
+    "esp_aves2_sl_beats_all (last layer) | age_group": NaN,
+    "esp_aves2_sl_beats_all (all layers avg) | call_type": 0.891,
+    "esp_aves2_sl_beats_all (all layers avg) | age_group": NaN,
+    "esp_aves2_effnetb0_all | call_type": 0.9131,
+    "esp_aves2_effnetb0_all | age_group": NaN
+  },
+  "attention_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer) | call_type": 0.8756,
+    "esp_aves2_sl_beats_all (last layer) | age_group": NaN,
+    "esp_aves2_sl_beats_all (all layers avg) | call_type": 0.8807,
+    "esp_aves2_sl_beats_all (all layers avg) | age_group": NaN
+  }
+}

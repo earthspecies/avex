@@ -1,0 +1,31 @@
+dataset:
+  zenodo_record: "10930931"
+  selections_csv: "data/selections.csv"
+  audio_zip: "data/selections_wavs.zip"
+  audio_dir: "data/audio"
+  metadata_csv: "data/metadata.csv"
+
+models:
+  beats:
+    name: "esp_aves2_sl_beats_all"
+  effnet:
+    name: "esp_aves2_effnetb0_all"
+
+audio:
+  target_sr: 16000
+
+embeddings:
+  dir: "data/embeddings"
+  beats_file: "beats_embeddings.npy"
+  effnet_file: "effnet_embeddings.npy"
+
+probe:
+  random_state: 42
+  test_size: 0.2
+  max_iter: 1000
+  lodo_group_col: "deploy_id"
+  label_col: "call_type"
+
+output:
+  dir: "artifacts"
+  metrics_json: "woodcock_metrics.json"

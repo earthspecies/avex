@@ -1,0 +1,28 @@
+{
+  "n_recordings": 542,
+  "n_species": 51,
+  "training_free": {
+    "beats_last": {
+      "nmi": 0.5895448573200358,
+      "ari": 0.1669165008354379,
+      "r_auc": 0.3024702448771911
+    },
+    "beats_all_layers": {
+      "nmi": 0.6142897600231132,
+      "ari": 0.21321259908240628,
+      "r_auc": 0.294062382025359
+    },
+    "effnet": {
+      "nmi": 0.5767412042458369,
+      "ari": 0.17283000404906018,
+      "r_auc": 0.2974254609618143
+    }
+  },
+  "mean_balanced_accuracy_per_model": {
+    "esp_aves2_effnetb0_all": 0.7218,
+    "esp_aves2_sl_beats_all (all layers avg)": 0.6328,
+    "esp_aves2_sl_beats_all (all layers avg) \u2014 attention": 0.738,
+    "esp_aves2_sl_beats_all (last layer)": 0.722,
+    "esp_aves2_sl_beats_all (last layer) \u2014 attention": 0.76
+  }
+}

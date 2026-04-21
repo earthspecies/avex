@@ -1,8 +1,14 @@
 # AVEX - Animal Vocalization Encoder Library Documentation
 ```{toctree}
+:maxdepth: 1
+:hidden:
+
+model_selector
+```
+```{toctree}
 :maxdepth: 2
-:caption: Core Documentation 
-:hidden:  
+:caption: Core Documentation
+:hidden:
 
 api_reference
 api_architecture
@@ -11,12 +17,27 @@ configuration
 ```
 ```{toctree}
 :maxdepth: 2
-:caption: Usage Guides 
+:caption: Usage Guides
 :hidden:
 
 training_evaluation
 embedding_extraction
 examples
+```
+```{toctree}
+:maxdepth: 2
+:caption: Tutorials
+:hidden:
+
+tutorials/01_giant_otter_classifier/index
+tutorials/02_embed_audio/index
+tutorials/03_macaques_individual_id/macaques_individual_id_with_results
+tutorials/04_nips4b_birds/nips4b_birds_with_results
+tutorials/05_zebra_finch/zebra_finch_with_results
+tutorials/08_woodcock_call_types/woodcock_call_types_with_results
+tutorials/06_beats_layer_analysis/beats_layer_analysis_with_results
+tutorials/07_interactive_visualization/visualize_with_results
+tutorials/09_ungulate_valence/index
 ```
 ```{toctree}
 :maxdepth: 2

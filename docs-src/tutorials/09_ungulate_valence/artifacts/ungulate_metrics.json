@@ -1,0 +1,93 @@
+{
+  "n_calls": 3181,
+  "n_species": 6,
+  "species": [
+    "Cow",
+    "Goat",
+    "Horse",
+    "Pig",
+    "Sheep",
+    "Wild Boar"
+  ],
+  "valence_counts": {
+    "negative": 2508,
+    "positive": 673
+  },
+  "training_free": {
+    "esp_aves2_sl_beats_all (last layer) | valence": {
+      "nmi": 0.09195029738644615,
+      "ari": 0.2134394737043969,
+      "r_auc": 0.7249592204742495
+    },
+    "esp_aves2_sl_beats_all (all layers avg) | valence": {
+      "nmi": 0.13074208499756476,
+      "ari": 0.27813072795653465,
+      "r_auc": 0.740027908429574
+    },
+    "esp_aves2_effnetb0_all | valence": {
+      "nmi": 0.09873445739437098,
+      "ari": 0.1892731045886134,
+      "r_auc": 0.7070770115010216
+    },
+    "esp_aves2_sl_beats_all (last layer) | species": {
+      "nmi": 0.7849335732203595,
+      "ari": 0.6410637375049065,
+      "r_auc": 0.7847370989591989
+    },
+    "esp_aves2_sl_beats_all (all layers avg) | species": {
+      "nmi": 0.7508503386327811,
+      "ari": 0.6804533022654217,
+      "r_auc": 0.7967263351428524
+    },
+    "esp_aves2_effnetb0_all | species": {
+      "nmi": 0.58127056353657,
+      "ari": 0.4459020997333865,
+      "r_auc": 0.6740893821441934
+    }
+  },
+  "linear_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer) | valence": 0.733,
+    "esp_aves2_sl_beats_all (last layer) | species": 0.9888,
+    "esp_aves2_sl_beats_all (all layers avg) | valence": 0.7398,
+    "esp_aves2_sl_beats_all (all layers avg) | species": 0.9922,
+    "esp_aves2_effnetb0_all | valence": 0.7536,
+    "esp_aves2_effnetb0_all | species": 0.9701
+  },
+  "attention_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer) | valence": 0.7729,
+    "esp_aves2_sl_beats_all (last layer) | species": 0.98,
+    "esp_aves2_sl_beats_all (all layers avg) | valence": 0.7664,
+    "esp_aves2_sl_beats_all (all layers avg) | species": 0.9912
+  },
+  "loso_cross_species": {
+    "esp_aves2_sl_beats_all (last layer)": {
+      "Cow": 0.5625,
+      "Goat": 0.4859,
+      "Horse": 0.4901,
+      "Pig": 0.493,
+      "Sheep": 0.5614,
+      "Wild Boar": 0.548
+    },
+    "esp_aves2_sl_beats_all (all layers avg)": {
+      "Cow": 0.509,
+      "Goat": 0.4365,
+      "Horse": 0.5107,
+      "Pig": 0.5719,
+      "Sheep": 0.4985,
+      "Wild Boar": 0.5024
+    },
+    "esp_aves2_effnetb0_all": {
+      "Cow": 0.5344,
+      "Goat": 0.3786,
+      "Horse": 0.5306,
+      "Pig": 0.5139,
+      "Sheep": 0.5,
+      "Wild Boar": 0.598
+    }
+  },
+  "loso_cross_species_mean": {
+    "esp_aves2_sl_beats_all (last layer)": 0.5235,
+    "esp_aves2_sl_beats_all (all layers avg)": 0.5049,
+    "esp_aves2_effnetb0_all": 0.5092
+  }
+}

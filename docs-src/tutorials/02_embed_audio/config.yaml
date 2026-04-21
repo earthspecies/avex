@@ -1,0 +1,13 @@
+audio:
+  input_dir: "data/audio"
+  sample_rate: 16000
+  window_seconds: 5.0
+  hop_seconds: 2.5           # overlap between windows
+
+models:
+  - name: "esp_aves2_sl_beats_all"
+  - name: "esp_aves2_effnetb0_all"
+
+output:
+  embeddings_dir: "outputs/embeddings"
+  format: "pt"               # pt | npy

@@ -1,0 +1,30 @@
+{
+  "n_files": 453,
+  "n_classes": 30,
+  "training_free": {
+    "beats_last": {
+      "nmi": 0.6070449485193148,
+      "ari": 0.3153747431723179,
+      "r_auc": 0.36756887472312416
+    },
+    "beats_all_layers": {
+      "nmi": 0.619173722441328,
+      "ari": 0.3021595203965501,
+      "r_auc": 0.3828221830716006
+    },
+    "effnet": {
+      "nmi": 0.5500572424268267,
+      "ari": 0.23862109428095532,
+      "r_auc": 0.34192256013006506
+    }
+  },
+  "linear_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer)": 0.6154,
+    "esp_aves2_sl_beats_all (all layers avg)": 0.6374,
+    "esp_aves2_effnetb0_all": 0.5934
+  },
+  "attention_probe_accuracy": {
+    "esp_aves2_sl_beats_all (last layer)": 0.6593,
+    "esp_aves2_sl_beats_all (all layers avg)": 0.6264
+  }
+}

@@ -1,0 +1,26 @@
+{% extends "!page.html" %}
+
+{% macro tutorial_header(meta) %}
+<div class="tutorial-header">
+  <a href="{{ meta.colab_url }}" target="_blank" rel="noopener" class="colab-button">
+    <img src="{{ pathto('_static/icons/colab.svg', 1) }}" alt="" class="colab-icon" />
+    Open in Colab
+  </a>
+</div>
+{% endmacro %}
+
+{% block content %}
+{%- if tutorial_meta %}
+  {%- if '</h1>' in body %}
+    {%- set parts = body.split('</h1>', 1) %}
+    {{ parts[0] }}</h1>
+    {{ tutorial_header(tutorial_meta) }}
+    {{ parts[1] }}
+  {%- else %}
+    {{ tutorial_header(tutorial_meta) }}
+    {{ body }}
+  {%- endif %}
+{%- else %}
+{{ body }}
+{%- endif %}
+{% endblock %}

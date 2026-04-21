@@ -1,0 +1,26 @@
+model:
+  name: "esp_aves2_sl_beats_all"
+  device: "cpu"
+
+datasets:
+  giant_otter:
+    embeddings_dir: "outputs/giant_otter/embeddings"
+    labels_file: "data/giant_otter/labels.csv"
+    display_name: "Giant Otter (21 call types)"
+  zebra_finch:
+    embeddings_dir: "outputs/zebra_finch/embeddings"
+    labels_file: "data/zebra_finch/labels.csv"
+    display_name: "Zebra Finch (11 call types)"
+
+probe:
+  test_size: 0.2
+  random_state: 42
+  max_iter: 1000
+
+visualization:
+  umap_layers: [0, 5, 11]   # layer indices to show in the UMAP grid
+  n_neighbors: 15
+  min_dist: 0.1
+
+output:
+  figures_dir: "outputs/beats_layer_analysis"
