@@ -1,5 +1,6 @@
 """Custom transforms for representation learning data processing."""
 
+import random
 from typing import Literal, Optional, Tuple
 
 import pandas as pd
@@ -169,7 +170,10 @@ class RLSubsampleConfig(BaseModel):
         ge=1,
         description="Maximum total number of samples to keep",
     )
-    random_state: Optional[int] = Field(default=42, description="Random state for reproducible sampling")
+    random_state: Optional[int] = Field(
+        default=42,
+        description=("Random seed for reproducible sampling. If None, sampling is non-deterministic."),
+    )
 
 
 class RLSubsampleTransform:
@@ -221,21 +225,33 @@ class RLSubsampleTransform:
         """
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    def __call__(self, data: object) -> Tuple[object, dict]:
         """Apply the subsampling transform.
 
         Parameters
         ----------
-        data : pd.DataFrame
-            Input dataset to sample from
+        data : object
+            Input dataset to sample from.
 
         Returns
         -------
-        Tuple[pd.DataFrame, dict]
+        Tuple[object, dict]
             Tuple containing:
-            - Sampled data (DataFrame, not tuple)
+            - Sampled data (backend object or DataFrame, not tuple)
             - Metadata dictionary with sampling information
+
+        Raises
+        ------
+        TypeError
+            If ``data`` is neither a pandas DataFrame nor a backend object that
+            provides ``sample_rows(n=..., seed=...)``.
         """
+        sample_rows = getattr(data, "sample_rows", None)
+        if not isinstance(data, pd.DataFrame) and not callable(sample_rows):
+            raise TypeError(
+                f"rl_subsample expects a pandas DataFrame or a backend object with `sample_rows()`, got {type(data)!r}"
+            )
+
         if len(data) == 0:
             return data, {
                 "rl_subsample": {
@@ -257,7 +273,12 @@ class RLSubsampleTransform:
             n_samples = min(n_samples, self.max_samples)
 
         # Perform random sampling
-        if n_samples > 0:
+        if callable(sample_rows):
+            # esp_data backends require an `int` seed. Preserve non-determinism
+            # when random_state is None by picking a fresh seed each call.
+            seed = random.randint(0, 2**32 - 1) if self.random_state is None else int(self.random_state)
+            sampled_data = data.sample_rows(n=n_samples, seed=seed)
+        elif n_samples > 0:
             sampled_data = data.sample(
                 n=n_samples,
                 random_state=self.random_state,
@@ -275,7 +296,7 @@ class RLSubsampleTransform:
             }
         }
 
-        # Return DataFrame (not tuple) to ensure compatibility with dataset structure
+        # Return data object (not tuple) to ensure compatibility with dataset structure
         return sampled_data, metadata
 
 
