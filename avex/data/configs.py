@@ -72,20 +72,21 @@ class DatasetCollectionConfig(BaseModel):
             "If False, treat each test dataset separately."
         ),
     )
-    concatenate_method: Literal["hard", "overlap", "soft"] = Field(
+    concatenate_method: Literal["hard", "overlap", "soft", "chain"] = Field(
         "soft",
         description=(
-            "Method to use when concatenating datasets:"
+            "Method to use when combining datasets:"
             "'hard' for strict concatenation (all columns must match),"
             "'overlap' for overlapping columns only,"
-            "'soft' to allow any columns to be present in any dataset"
+            "'soft' to allow any columns to be present in any dataset,"
+            "'chain' to use ChainedDataset (no schema merging; per-source transforms only)"
         ),
     )
     transformations: list | None = Field(
         None,
         description=(
             "Optional list of transformations to apply to the concatenated dataset. "
-            "These transformations are applied before concatenation."
+            "These transformations are applied after concatenation."
         ),
     )
     model_config = ConfigDict(extra="forbid")

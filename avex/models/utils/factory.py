@@ -31,6 +31,7 @@ def _add_model_spec_params(init_kwargs: dict, model_spec: ModelSpec) -> None:
         "text_model_name",
         "projection_dim",
         "temperature",
+        "audio_encoder_init_from",
         "eat_cfg",
         "pretraining_mode",
         "handle_padding",

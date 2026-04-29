@@ -1,0 +1,23 @@
+# CLAP training on Xeno-canto using species names as text labels
+
+train_datasets:
+  - dataset_name: xeno-canto
+    split: train
+    sample_rate: 16000
+
+val_datasets:
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 16000
+
+concatenate_train: false
+concatenate_val: false
+concatenate_method: soft
+
+# Generate text labels from species name columns only
+transformations:
+  - type: text_label_from_features
+    features: [species_common, canonical_name]
+    output_feature: text_label
+    listify: true
+    override: true

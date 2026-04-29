@@ -24,4 +24,10 @@ except ImportError:
         "API-only installations."
     )
 else:
-    from . import transforms  # noqa: F401
+    from . import (
+        add_jsonl_caption,  # noqa: F401
+        filter_text_length,  # noqa: F401
+        synthetic_captions,  # noqa: F401
+        text_label_from_features,  # noqa: F401
+        transforms,  # noqa: F401
+    )

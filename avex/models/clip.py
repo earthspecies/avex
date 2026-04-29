@@ -4,6 +4,7 @@ This module provides a CLIP (Contrastive Language-Image Pre-training) model
 that combines audio and text encoders for multimodal representation learning.
 """
 
+import logging
 import math
 from typing import Any, Dict, Optional, Tuple
 
@@ -17,6 +18,8 @@ from avex.models.efficientnet import (
     Model as EfficientNet,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class CLIPModel(ModelBase):
     """CLAP model combining EfficientNet for audio and RoBERTa for text."""
@@ -29,6 +32,7 @@ class CLIPModel(ModelBase):
         projection_dim: int = 512,
         temperature: float = 0.07,
         efficientnet_variant: str = "b0",
+        audio_encoder_init_from: Optional[str] = None,
     ) -> None:
         super().__init__(device, audio_config)
 
@@ -38,6 +42,12 @@ class CLIPModel(ModelBase):
             return_features_only=True,  # Get features before classifier
             efficientnet_variant=efficientnet_variant,
         )
+
+        # Optionally overwrite the EfficientNet feature-extractor weights with a
+        # registered ESP model checkpoint (e.g. esp_aves2_effnetb0_all). The
+        # classifier head is dropped — only `model.features` weights are loaded.
+        if audio_encoder_init_from:
+            self._init_audio_encoder_from(audio_encoder_init_from, device)
 
         self.text_encoder = AutoModel.from_pretrained(text_model_name)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
@@ -67,6 +77,46 @@ class CLIPModel(ModelBase):
         self.audio_projection.to(device)
         self.text_projection.to(device)
 
+    def _init_audio_encoder_from(self, source: str, device: str) -> None:
+        """Initialize ``self.audio_encoder.model.features`` from a registered model.
+
+        ``source`` is anything :pyfunc:`avex.models.utils.load.load_model` accepts —
+        a registered name like ``"esp_aves2_effnetb0_all"`` or a YAML path.
+        Only the EfficientNet feature-extractor (``model.features.*``) tensors are
+        copied; the classifier head and any unrelated keys are ignored.
+        """
+        from avex.models.utils.load import load_model
+
+        logger.info("CLIPModel: initializing audio encoder from %s", source)
+        src = load_model(source, device=device, return_features_only=True)
+
+        # Both source and target are avex EfficientNet wrappers; the torchvision
+        # backbone lives at `.model.features`.
+        try:
+            src_features = src.model.features
+            dst_features = self.audio_encoder.model.features
+        except AttributeError as e:
+            raise RuntimeError(
+                f"Cannot transfer weights: source ({type(src).__name__}) or target "
+                "audio encoder is not an EfficientNet wrapper exposing `model.features`."
+            ) from e
+
+        src_state = {k: v for k, v in src_features.state_dict().items()}
+        missing, unexpected = dst_features.load_state_dict(src_state, strict=False)
+        if missing or unexpected:
+            logger.warning(
+                "CLIPModel audio-encoder transfer: missing=%d, unexpected=%d "
+                "(missing first 3: %s)",
+                len(missing),
+                len(unexpected),
+                missing[:3],
+            )
+        logger.info(
+            "CLIPModel: copied %d feature-extractor tensors from %s",
+            len(src_state),
+            source,
+        )
+
     def enable_gradient_checkpointing(self) -> None:
         """Enable gradient checkpointing for both audio and text encoders."""
         # Enable checkpointing for audio encoder (EfficientNet)
@@ -88,7 +138,10 @@ class CLIPModel(ModelBase):
         torch.Tensor
             Normalized audio embeddings
         """
-        features = self.audio_encoder(audio, padding_mask)
+        features = self.audio_encoder(audio, padding_mask)  # (B, C, H, W)
+        # Global average pool spatial dims → (B, C)
+        if features.dim() == 4:
+            features = F.adaptive_avg_pool2d(features, 1).flatten(1)
         return F.normalize(self.audio_projection(features), dim=-1)
 
     def encode_text(self, text: list[str]) -> torch.Tensor:
@@ -184,6 +237,8 @@ class CLIPModel(ModelBase):
 
         # Extract audio features and apply projection
         audio_features = self.audio_encoder(raw_wav, p_mask)
+        if audio_features.dim() == 4:
+            audio_features = F.adaptive_avg_pool2d(audio_features, 1).flatten(1)
         projected_features = self.audio_projection(audio_features)
 
         return projected_features

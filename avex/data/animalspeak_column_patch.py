@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # as soon as the CSV is loaded.
 
 _KEEP_COLUMNS: List[str] = [
-    "local_path",  # relative audio filepath – must be present
+    "local_path",  # relative audio filepath – used by AnimalSpeak._process()
     "caption",  # primary caption (ASR annotated)
     "caption2",  # secondary caption / free-text
     "species_common",  # e.g. "Black-capped Chickadee"
@@ -75,28 +75,14 @@ def _patched_load(self: "AnimalSpeak") -> None:  # type: ignore[override] – mo
             available_cols,
         )
 
-    self._data = self._data[available_cols].copy().dropna(subset=["canonical_name"])
-    # exclude AudioCaps and WavCaps
-    # self._data = self._data[~self._data["source"].isin(["AudioCaps", "WavCaps"])]
-    self._data.reset_index(drop=True, inplace=True)
-    # ------------------------------------------------------------------ #
-    #  Add a unified 'labels' column so concatenation with AudioSet works #
-    # ------------------------------------------------------------------ #
-    if "canonical_name" in self._data.columns and "labels" not in self._data.columns:
-        # Wrap each canonical_name in a single-element list so schema matches
-        # AudioSet's list-of-strings format.
-        self._data["labels"] = self._data["canonical_name"].apply(
-            lambda x: [x] if isinstance(x, str) and x.strip() else []
-        )
-        logger.info("AnimalSpeak column-patch: created 'labels' column from 'canonical_name'")
+    # Use backend-agnostic methods (works with both Polars and Pandas backends)
+    self._data = self._data.select_columns(available_cols).dropna(subset=["canonical_name"])
+
     logger.info(
-        "AnimalSpeak column-patch applied ⇒ kept %d columns: %s",
+        "AnimalSpeak column-patch applied => kept %d columns: %s",
         len(available_cols),
         available_cols,
     )
-    if "source" in self._data.columns:
-        # print unique values of source
-        print(self._data["source"].unique())
 
 
 def apply_animalspeak_column_patch() -> bool:  # noqa: D401 – simple status helper

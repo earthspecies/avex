@@ -83,6 +83,7 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             projection_dim=getattr(model_config, "projection_dim", 512),
             temperature=getattr(model_config, "temperature", 0.07),
             efficientnet_variant=getattr(model_config, "efficientnet_variant", "b0"),
+            audio_encoder_init_from=getattr(model_config, "audio_encoder_init_from", None),
         )
     elif model_name == "perch":
         return PerchModel(

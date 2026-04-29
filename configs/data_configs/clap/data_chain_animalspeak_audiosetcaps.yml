@@ -1,0 +1,47 @@
+# CLAP training data: AnimalSpeak + AudioSetCaps.
+# Chain mode — each source produces its own text_label column.
+# - AnimalSpeak: text_label rotates between caption, caption2, species_common,
+#   and canonical_name (Collater picks one at random per sample).
+# - AudioSet v0.2.0: keep only rows whose AudioSetCaps caption is 1..150 chars,
+#   then text_label = audiosetcaps_caption.
+
+train_datasets:
+  - dataset_name: animalspeak
+    split: train
+    sample_rate: 16000
+    transformations:
+      - type: text_label_from_features
+        features: [caption, caption2, species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+  # - dataset_name: audioset
+  #   split: train
+  #   sample_rate: 16000
+  #   version: "0.2.0"
+  #   transformations:
+  #     - type: filter_text_length
+  #       column: audiosetcaps_caption
+  #       min_chars: 1
+  #       max_chars: 150
+  #     - type: text_label_from_features
+  #       features: [audiosetcaps_caption]
+  #       output_feature: text_label
+  #       listify: false
+  #       override: true
+
+val_datasets:
+  - dataset_name: animalspeak
+    split: validation
+    sample_rate: 16000
+    transformations:
+      - type: text_label_from_features
+        features: [caption, caption2, species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+concatenate_train: true
+concatenate_val: false
+concatenate_method: chain

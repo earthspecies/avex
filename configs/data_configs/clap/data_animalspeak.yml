@@ -1,0 +1,25 @@
+# CLAP training on AnimalSpeak only
+# Uses captions and species names as text labels
+
+train_datasets:
+  - dataset_name: animalspeak
+    split: train
+    sample_rate: 16000
+
+val_datasets:
+  - dataset_name: animalspeak
+    split: validation
+    sample_rate: 16000
+
+concatenate_train: false
+concatenate_val: false
+concatenate_method: soft
+
+# Generate text labels: per-sample rotation between full caption,
+# common species name, and canonical name (Collater picks one at random)
+transformations:
+  - type: text_label_from_features
+    features: [caption, species_common, canonical_name]
+    output_feature: text_label
+    listify: true
+    override: true

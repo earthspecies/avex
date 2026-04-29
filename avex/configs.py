@@ -241,6 +241,12 @@ class ModelSpec(BaseModel):
     projection_dim: Optional[int] = None
     temperature: Optional[float] = None
 
+    # Initialize the CLIP audio encoder from a registered model name
+    # (e.g. "esp_aves2_effnetb0_all") or a checkpoint path. Classifier head
+    # weights are dropped; only the EfficientNet feature-extractor weights
+    # are loaded into the audio encoder.
+    audio_encoder_init_from: Optional[str] = None
+
     # Free-form overrides for the EAT backbone (Data2VecMultiConfig).
     eat_cfg: Optional[dict[str, Any]] = None  # noqa: ANN401
 

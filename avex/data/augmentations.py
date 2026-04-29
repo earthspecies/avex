@@ -125,8 +125,11 @@ class AugmentationProcessor:
     def _list_noise_files(
         noise_dirs: Sequence[str],
         max_noise_samples: int = 10000,
-    ) -> list[Path]:
-        """Enumerate all candidate noise files across noise directories.
+    ) -> list[str]:
+        """Enumerate candidate noise files across local and remote (gs://) dirs.
+
+        Uses esp-data's fsspec-backed filesystem so directories on GCS, R2, etc.
+        work the same as local paths.
 
         Parameters
         ----------
@@ -137,25 +140,34 @@ class AugmentationProcessor:
 
         Returns
         -------
-        list[Path]
-            List of noise file paths found in the directories.
+        list[str]
+            List of noise file paths (strings — gs:// for cloud, plain for local).
 
         Raises
         ------
         FileNotFoundError
             If any of the specified noise directories do not exist.
-
         """
-        noise_paths: list[Path] = []
+        from esp_data.io.filesystem import filesystem_from_path
+
+        noise_paths: list[str] = []
         for dir_str in noise_dirs:
-            dir_path: AnyPathT = anypath(dir_str)
-            if not dir_path.exists():
-                msg = f"Noise directory not found: {dir_str}"
-                raise FileNotFoundError(msg)
+            dir_str = dir_str.rstrip("/")
+            fs = filesystem_from_path(dir_str)
+            if not fs.exists(dir_str):
+                raise FileNotFoundError(f"Noise directory not found: {dir_str}")
+
+            scheme_prefix = ""
+            if "://" in dir_str:
+                # gcsfs.glob returns bare paths (no scheme); preserve it.
+                scheme_prefix = dir_str.split("://", 1)[0] + "://"
 
             for ext in (".wav", ".mp3", ".flac", ".ogg"):
-                noise_files = list(dir_path.glob(f"*{ext}"))[:max_noise_samples]
-                noise_paths.extend(noise_files)
+                matches = fs.glob(f"{dir_str}/*{ext}")[:max_noise_samples]
+                for m in matches:
+                    if scheme_prefix and not m.startswith(scheme_prefix):
+                        m = scheme_prefix + m
+                    noise_paths.append(m)
         logger.info("Found %d noise files", len(noise_paths))
         return noise_paths
 
@@ -225,50 +237,37 @@ class AugmentationProcessor:
             Processed noise audio tensor.
 
         """
-        info = sf.info(str(noise_path))
-        target_frames = min(int(self.sr * max_window_sec), audio_len)
-
-        # Handle edge case where audio_len is 0 or very small
-        if target_frames <= 0:
-            # Use a minimum reasonable segment size (e.g. 0.1 seconds)
-            min_frames = int(self.sr * 0.1)  # 0.1 seconds minimum
-            target_frames = min(min_frames, info.frames)
-
-        if info.frames <= target_frames:
-            frame_offset, num_frames = 0, info.frames
-        else:
-            frame_offset = random.randint(0, info.frames - target_frames)  # noqa: S311
-            num_frames = target_frames
-
-        # Final safeguard: ensure num_frames is valid
-        if num_frames <= 0:
-            logger.warning(
-                f"Invalid num_frames={num_frames} for noise file {noise_path}, "
-                f"audio_len={audio_len}, info.frames={info.frames}, "
-                f"target_frames={target_frames}. Using full file."
-            )
-            frame_offset, num_frames = 0, info.frames
-
-        # If still invalid, skip this noise file
-        if num_frames <= 0:
-            logger.error(f"Noise file {noise_path} has no frames (info.frames={info.frames}). Returning empty tensor.")
-            return torch.zeros((1, 1), dtype=torch.float32)
+        # Use esp-data's read_audio so gs://, r2://, etc. work alongside local paths.
+        from esp_data.io import read_audio
 
         try:
-            noise_wav, noise_sr = torchaudio.load(
-                noise_path,
-                frame_offset=frame_offset,
-                num_frames=num_frames,
-            )
+            noise_np, noise_sr = read_audio(noise_path)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to load noise file %s: %s", noise_path, exc)
             if audio_len <= 0:
                 audio_len = 1
             return torch.zeros((1, audio_len), dtype=torch.float32)
 
-        # Convert to mono
-        if noise_wav.shape[0] > 1:
-            noise_wav = noise_wav.mean(dim=0, keepdim=True)
+        # Mono: average channels if multi-channel
+        if noise_np.ndim == 2:
+            noise_np = noise_np.mean(axis=-1)
+
+        total_frames = noise_np.shape[0]
+        target_frames = min(int(self.sr * max_window_sec), audio_len)
+        if target_frames <= 0:
+            target_frames = min(int(self.sr * 0.1), total_frames)
+
+        if total_frames <= target_frames:
+            seg = noise_np
+        else:
+            offset = random.randint(0, total_frames - target_frames)  # noqa: S311
+            seg = noise_np[offset : offset + target_frames]
+
+        if seg.size == 0:
+            logger.error("Noise file %s produced empty segment", noise_path)
+            return torch.zeros((1, 1), dtype=torch.float32)
+
+        noise_wav = torch.from_numpy(seg.astype(np.float32, copy=False)).unsqueeze(0)
 
         # Resample if needed
         if noise_sr != self.sr:

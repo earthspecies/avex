@@ -1,0 +1,56 @@
+# CLAP training data: ChainedDataset over synthetic captions + Xeno-canto + iNaturalist.
+# Each source is loaded independently and yields its own text_label column.
+# - Synthetic caption splits produce text_label = the caption string directly.
+# - XC and iNat use per-dataset text_label_from_features that rotates between
+#   caption / species_common / canonical_name (Collater picks one at random).
+
+train_datasets:
+  # Synthetic acoustic captions
+  - dataset_name: t1_synthetic_captions
+    split: pseudovox            # 121K rows, absolute gs:// paths
+    sample_rate: 16000
+
+  - dataset_name: t1_synthetic_captions
+    split: field_notes_inat     # 5K rows, paths under iNat default root
+    sample_rate: 16000
+
+  # NOTE: field_notes_xc (7K rows) is excluded — JSONL audio paths are
+  # URL-encoded species-name paths that don't resolve under the standard XC
+  # root. Set a custom data_root with matching layout to enable.
+
+  # Xeno-canto: caption rotation across caption / common / canonical
+  - dataset_name: xeno-canto
+    split: train
+    sample_rate: 16000
+    transformations:
+      - type: text_label_from_features
+        features: [caption, species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+  # iNaturalist: same rotation
+  - dataset_name: inaturalist
+    split: train
+    sample_rate: 16000
+    transformations:
+      - type: text_label_from_features
+        features: [caption, species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+val_datasets:
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 16000
+    transformations:
+      - type: text_label_from_features
+        features: [species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+concatenate_train: true
+concatenate_val: false
+concatenate_method: chain

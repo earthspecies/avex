@@ -20,6 +20,7 @@ from esp_data import (
     DatasetConfig,
     dataset_from_config,
 )
+from esp_data.chain import ChainedDataset
 
 # Temporary patch for AnimalSpeak for compatibility
 # with dataset concatenation while relevant issue is raised in esp-data.
@@ -136,8 +137,12 @@ def _build_one_dataset_split(
             ds_list.append((ds, metadata))
 
         if concatenate and len(ds_list) > 1:
-            # Concatenate all training datasets into one
-            ds = ConcatenatedDataset([d[0] for d in ds_list], merge_level=concatenate_method)
+            if concatenate_method == "chain":
+                # ChainedDataset iterates each source in turn — no schema merge,
+                # no top-level transforms. Per-source transforms still apply.
+                ds = ChainedDataset([d[0] for d in ds_list])
+            else:
+                ds = ConcatenatedDataset([d[0] for d in ds_list], merge_level=concatenate_method)
 
             return ds, ds_list[0][1]  # return first metadata as representative
 
@@ -146,6 +151,26 @@ def _build_one_dataset_split(
             return ds_list[0]
     except Exception as e:
         raise ValueError(f"Failed to load training datasets.Error: {e}\nCheck your dataset configurations.") from e
+
+
+def _validate_collection_transforms(transforms: list) -> list:
+    """Validate raw transform dicts into registered config objects.
+
+    DatasetCollectionConfig.transformations may contain raw dicts (not validated
+    by Pydantic) since the transform registry is populated at runtime.  This
+    helper converts them into proper config objects so that
+    ``Dataset.apply_transformations`` can look them up.
+
+    Returns
+    -------
+    list
+        Transforms with any dict entries converted to validated config objects.
+    """
+    from esp_data.transforms.registry import RegisteredTransformConfigs
+    from pydantic import TypeAdapter
+
+    adapter = TypeAdapter(RegisteredTransformConfigs)
+    return [adapter.validate_python(t) if isinstance(t, dict) else t for t in transforms]
 
 
 def _build_datasets(
@@ -165,13 +190,23 @@ def _build_datasets(
     Returns
     -------
     """
+    # Validate collection-level transforms (may be raw dicts from YAML)
+    validated_transforms = _validate_collection_transforms(cfg.transformations) if cfg.transformations else None
+
+    if validated_transforms and cfg.concatenate_method == "chain":
+        raise ValueError(
+            "Collection-level `transformations` are not supported with "
+            "concatenate_method='chain'. Move transforms into each dataset's own "
+            "`transformations` list (per-source transforms run before chaining)."
+        )
+
     # Build train
     train_ds, train_metadata = _build_one_dataset_split(
         cfg.train_datasets, cfg.concatenate_train, cfg.concatenate_method
     )
 
-    if cfg.transformations:
-        additional_metadata = train_ds.apply_transformations(cfg.transformations)
+    if validated_transforms:
+        additional_metadata = train_ds.apply_transformations(validated_transforms)
         if additional_metadata:
             train_metadata = train_metadata or {}
             train_metadata.update(additional_metadata)
@@ -196,10 +231,10 @@ def _build_datasets(
             num_classes = len(label_map)
 
         # Apply same transformations to val/test datasets to ensure consistency
-        if val_ds and cfg.transformations:
-            val_ds.apply_transformations(cfg.transformations)
-        if test_ds and cfg.transformations:
-            test_ds.apply_transformations(cfg.transformations)
+        if val_ds and validated_transforms:
+            val_ds.apply_transformations(validated_transforms)
+        if test_ds and validated_transforms:
+            test_ds.apply_transformations(validated_transforms)
 
     # Handle single-label case - check for label_from_feature transform metadata
     elif "label_from_feature" in train_metadata:
@@ -211,10 +246,10 @@ def _build_datasets(
             num_classes = len(label_map)
 
         # Apply same transformations to val/test datasets to ensure consistency
-        if val_ds and cfg.transformations:
-            val_ds.apply_transformations(cfg.transformations)
-        if test_ds and cfg.transformations:
-            test_ds.apply_transformations(cfg.transformations)
+        if val_ds and validated_transforms:
+            val_ds.apply_transformations(validated_transforms)
+        if test_ds and validated_transforms:
+            test_ds.apply_transformations(validated_transforms)
 
     train_ds = AudioDataset(
         train_ds,
@@ -575,7 +610,7 @@ def build_dataloaders(
     g.manual_seed(cfg.seed)
 
     # Force "spawn" start method even if the global context is already locked
-    ctx = multiprocessing.get_context("spawn")
+    ctx = multiprocessing.get_context("spawn") if cfg.num_workers > 0 else None
 
     train_dl = DataLoader(
         ds_train,

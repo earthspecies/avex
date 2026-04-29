@@ -1,0 +1,94 @@
+# CLAP training data — XC + iNat (train_unseen) + T1 pseudovox + AudioSetCaps.
+#
+# Audio loading is delegated entirely to esp-data's built-in dataset classes
+# (XenoCanto, INaturalist, AudioSet). T1 field-notes captions and T3 semantic
+# captions are joined onto the XC/iNat metadata as caption columns; their
+# audio comes from the underlying esp-data dataset.
+#
+# Per-source text_label rules:
+# - XC / iNat: rotation over [t1_caption, t3_caption, species_common,
+#   canonical_name]. Null entries are skipped — rows with no caption fall
+#   back to species names only.
+# - T1 pseudovox: caption-only standalone source (separate audio resource,
+#   not covered by any esp-data dataset).
+# - AudioSetCaps: text_label = audiosetcaps_caption, length 1..150 chars.
+#
+# Chain mode: each source produces its own text_label column independently.
+
+train_datasets:
+  # ----- Xeno-canto (train_unseen), enriched with T1 + T3 captions -----
+  - dataset_name: xeno-canto
+    split: train_unseen
+    sample_rate: 16000
+    transformations:
+      - type: add_jsonl_caption
+        jsonl_path: gs://foundation-model-data/synthetic/T1_with_captions_train/acoustic_caption_field_notes_xc_train_unseen_v1_clean.jsonl
+        left_id_column: xc_id
+        output_column: t1_caption
+      - type: add_jsonl_caption
+        jsonl_path: gs://foundation-model-data/synthetic/data-synth/tier3_semantic_caption_xc_train_unseen_v1_clean.jsonl
+        left_id_column: xc_id
+        output_column: t3_caption
+      - type: text_label_from_features
+        features: [t1_caption, t3_caption, species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+  # ----- iNaturalist (train_unseen), enriched with T1 + T3 captions -----
+  - dataset_name: inaturalist
+    split: train_unseen
+    sample_rate: 16000
+    transformations:
+      - type: add_jsonl_caption
+        jsonl_path: gs://foundation-model-data/synthetic/T1_with_captions_train/acoustic_caption_field_notes_inat_train_unseen_v1_clean.jsonl
+        left_id_column: sound_id
+        output_column: t1_caption
+      - type: add_jsonl_caption
+        jsonl_path: gs://foundation-model-data/synthetic/data-synth/tier3_semantic_caption_inat_train_unseen_v1_clean.jsonl
+        left_id_column: sound_id
+        output_column: t3_caption
+      - type: text_label_from_features
+        features: [t1_caption, t3_caption, species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+  # ----- Tier-1 pseudovox (separate clipped-audio resource) -----
+  # Pseudovox audio is NOT covered by any built-in esp-data dataset, so it
+  # remains as a standalone source backed by avex's T1SyntheticCaptions class.
+  # Removing this would drop ~121K caption pairs.
+  - dataset_name: t1_synthetic_captions
+    split: pseudovox
+    sample_rate: 16000
+
+  # ----- AudioSetCaps (filtered to short captions) -----
+  # - dataset_name: audioset
+  #   split: train
+  #   sample_rate: 16000
+  #   version: "0.2.0"
+  #   transformations:
+  #     - type: filter_text_length
+  #       column: audiosetcaps_caption
+  #       min_chars: 1
+  #       max_chars: 150
+  #     - type: text_label_from_features
+  #       features: [audiosetcaps_caption]
+  #       output_feature: text_label
+  #       listify: false
+  #       override: true
+
+val_datasets:
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 16000
+    transformations:
+      - type: text_label_from_features
+        features: [species_common, canonical_name]
+        output_feature: text_label
+        listify: true
+        override: true
+
+concatenate_train: true
+concatenate_val: false
+concatenate_method: chain
