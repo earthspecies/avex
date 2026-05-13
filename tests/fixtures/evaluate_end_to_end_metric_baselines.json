@@ -1,0 +1,21 @@
+{
+  "comment": "Baselines for tests/integration/test_run_evaluate_cross_version_metrics.py. Tolerances are intentionally loose enough to absorb small cross-version/library drift, but should still catch meaningful changes. Note: the evaluate harness's tiny_test ends up with 6 test samples (you'll see logs like 'Test data size : 6 samples'), so test_accuracy moves in steps of 1/6≈0.167; atol=0.12 is set below that so a single-sample swing is still flagged.",
+  "tolerances": {
+    "atol": 0.12,
+    "rtol": 0.05
+  },
+    "profiles": {
+    "torch_2_5_0": {
+      "test_accuracy": 0.1666666666666666,
+      "test_balanced_accuracy": 0.2
+    },
+    "torch_2_6_0": {
+      "test_accuracy": 0.1666666666666666,
+      "test_balanced_accuracy": 0.2
+    },
+    "torch_2_11_0": {
+      "test_accuracy": 0.1666666666666666,
+      "test_balanced_accuracy": 0.2
+    }
+  }
+}

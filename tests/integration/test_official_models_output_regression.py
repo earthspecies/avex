@@ -7,6 +7,7 @@ also produce stable numerical outputs on a deterministic labeled mini-batch.
 from __future__ import annotations
 
 import hashlib
+from typing import Final
 
 import numpy as np
 import pytest
@@ -14,21 +15,102 @@ import torch
 
 from avex import load_model
 from avex.models.utils.registry import get_checkpoint_path, list_models
+from tests.integration.torch_numerics_profiles import (
+    TORCH_FINGERPRINT_PROFILES,
+    torch_fingerprint_profile,
+)
 
 # Expected pooled-output fingerprints from deterministic labeled mini-batch.
 # Fingerprint is SHA-256 of np.round(output, 4).tobytes().
-OFFICIAL_MODEL_OUTPUT_FINGERPRINTS: dict[str, str] = {
-    "esp_aves2_eat_all": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
-    "esp_aves2_eat_bio": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
-    "esp_aves2_effnetb0_all": "7f1e8cc046287f79a3a2b7413042ff121a3f32c115cf3a487d2b5348e09a4931",
-    "esp_aves2_effnetb0_audioset": "8ba36f99b5e8245d7b61fc472339f5760fabca19d63a51e835309c11a379eab6",
-    "esp_aves2_effnetb0_bio": "c91dde6bee57788951a0fb9044703d301cb295e83fdc5e064874b63c99c70493",
-    "esp_aves2_naturelm_audio_v1_beats": "c1689532213d32cc16b0f7eb1774239c4d4bbd91a0500b551d4468acf52cb9d1",
-    "esp_aves2_sl_beats_all": "b6231fdcb855734ebfddf26e793a46d8e4b3bf61ee950273fdd85affcf85eefe",
-    "esp_aves2_sl_beats_bio": "1ad22272d36f3e74d64c5fb98ec31810c9281c1c32e9a2178f10c08004c8bcd6",
-    "esp_aves2_sl_eat_all_ssl_all": "0832f0c78523167e0a5439b9a4e96caf115131118549ff9161a01bd6d03a5b2e",
-    "esp_aves2_sl_eat_bio_ssl_all": "a9302a12a55bb6c1379b2dc42a22c15150eab12d039f7ad8c8d793a5dc31af70",
+#
+# Profiles follow the installed PyTorch release band. When a dependency bump
+# changes numerics, add a new profile key below and extend
+# ``torch_fingerprint_profile()`` — not one fixture file per Python minor.
+_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]] = {
+    "torch_2_5_0": {
+        "esp_aves2_eat_all": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
+        "esp_aves2_eat_bio": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
+        "esp_aves2_effnetb0_all": "7f1e8cc046287f79a3a2b7413042ff121a3f32c115cf3a487d2b5348e09a4931",
+        "esp_aves2_effnetb0_audioset": "8ba36f99b5e8245d7b61fc472339f5760fabca19d63a51e835309c11a379eab6",
+        "esp_aves2_effnetb0_bio": "c91dde6bee57788951a0fb9044703d301cb295e83fdc5e064874b63c99c70493",
+        "esp_aves2_naturelm_audio_v1_beats": "c1689532213d32cc16b0f7eb1774239c4d4bbd91a0500b551d4468acf52cb9d1",
+        "esp_aves2_sl_beats_all": "b6231fdcb855734ebfddf26e793a46d8e4b3bf61ee950273fdd85affcf85eefe",
+        "esp_aves2_sl_beats_bio": "1ad22272d36f3e74d64c5fb98ec31810c9281c1c32e9a2178f10c08004c8bcd6",
+        "esp_aves2_sl_eat_all_ssl_all": "0832f0c78523167e0a5439b9a4e96caf115131118549ff9161a01bd6d03a5b2e",
+        "esp_aves2_sl_eat_bio_ssl_all": "a9302a12a55bb6c1379b2dc42a22c15150eab12d039f7ad8c8d793a5dc31af70",
+    },
+    # torch 2.6.x through 2.9.x CPU probes (2.6.0, 2.7.1, 2.8.0, 2.9.1).
+    "torch_2_6_0": {
+        "esp_aves2_eat_all": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+        "esp_aves2_eat_bio": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+        "esp_aves2_effnetb0_all": "801ebab010118dd0f07f0a07d0f18f5aa64f2f1270fe4bc2123342c081fa1b53",
+        "esp_aves2_effnetb0_audioset": "1fbe57dd3b795aea08c66ed5c45731cce5a08835b9c33676057d6e5d361c52ae",
+        "esp_aves2_effnetb0_bio": "3123856a920e27271a26fe29437119a90e2ebd5436d4bb9a4629d08828fef8ef",
+        "esp_aves2_naturelm_audio_v1_beats": "248a36d3772d847119b44969be19a4ba70a6302557f58a700dc9fd14ff0af9f3",
+        "esp_aves2_sl_beats_all": "c01e92839305633644aa62346b3b3a4cf086e46083ae6db2b7f4b3fede3a8f5d",
+        "esp_aves2_sl_beats_bio": "1c9e8459e2cf0038a0d062b3f414d18678d10997db95300aa7f1dc7288411fb2",
+        "esp_aves2_sl_eat_all_ssl_all": "cc2ce5ffe5a91c79552cddd5401fe001bcaf28abeb79f39dddae69c14cd93b73",
+        "esp_aves2_sl_eat_bio_ssl_all": "5c241d38231194d10648a2556fb9859bb8eb28993e6b9ab78d59c423740ade1b",
+    },
+    # torch 2.10.x and 2.11.x stack from the current locked dependency set (see uv.lock).
+    "torch_2_11_0": {
+        "esp_aves2_eat_all": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+        "esp_aves2_eat_bio": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+        "esp_aves2_effnetb0_all": "801ebab010118dd0f07f0a07d0f18f5aa64f2f1270fe4bc2123342c081fa1b53",
+        "esp_aves2_effnetb0_audioset": "1fbe57dd3b795aea08c66ed5c45731cce5a08835b9c33676057d6e5d361c52ae",
+        "esp_aves2_effnetb0_bio": "3123856a920e27271a26fe29437119a90e2ebd5436d4bb9a4629d08828fef8ef",
+        "esp_aves2_naturelm_audio_v1_beats": "f747f0f5b8590253b600eb04ae369c1440e4ed1be5ca65515d296f4f88d447b8",
+        "esp_aves2_sl_beats_all": "930e2b1ed2168db90ba4279f3ca3563bf77f81559906d6a43c9951503da73c21",
+        "esp_aves2_sl_beats_bio": "f5fc0b8815267b7ae8fbb3adbadcb3caa85f970f7f1abe1ec746e069228b3b97",
+        "esp_aves2_sl_eat_all_ssl_all": "cc21667c9aca79fc2fb946685b28c7ef5dfee587181297d52fc5110832e05616",
+        "esp_aves2_sl_eat_bio_ssl_all": "61f01e24bfa200f109063bd68af78ad9fd38a0d5422a12919e65efd263a12ecf",
+    },
 }
+
+
+def _expected_official_output_fingerprints() -> dict[str, str]:
+    """Fingerprints for the current PyTorch numerics profile.
+
+    Returns:
+        Model name to expected SHA-256 fingerprint for
+        ``torch_fingerprint_profile()``.
+
+    Raises:
+        KeyError: If the active PyTorch profile has no fingerprint table.
+    """
+    profile = torch_fingerprint_profile()
+    if profile not in _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE:
+        known = ", ".join(sorted(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE))
+        raise KeyError(
+            f"No official output fingerprints for PyTorch profile {profile!r}. "
+            f"Known profiles: {known}. Regenerate with "
+            "scripts/regenerate_official_model_output_fingerprints.py."
+        )
+    return _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE[profile]
+
+
+def _validate_fingerprint_profile_tables() -> None:
+    """Ensure every profile defines the same set of model names."""
+    profiles = list(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE.items())
+    reference_name, reference_table = profiles[0]
+    reference_keys = set(reference_table.keys())
+    for name, table in profiles[1:]:
+        keys = set(table.keys())
+        assert keys == reference_keys, (
+            f"Fingerprint keys for profile {name!r} differ from {reference_name!r}: "
+            f"only-in-first={sorted(reference_keys - keys)} "
+            f"only-in-second={sorted(keys - reference_keys)}"
+        )
+
+
+_validate_fingerprint_profile_tables()
+
+assert set(TORCH_FINGERPRINT_PROFILES) == set(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE)
+
+# Same keys in every profile (enforced above); any profile works for parametrization.
+_OFFICIAL_MODEL_NAMES_FOR_OUTPUT_REGRESSION: Final[tuple[str, ...]] = tuple(
+    sorted(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE["torch_2_5_0"].keys())
+)
 
 _HF_PREFIX = "hf://"
 
@@ -116,14 +198,14 @@ class TestOfficialModelsOutputRegression:
     def test_reference_table_covers_all_official_hf_models(self) -> None:
         """Ensure every official HF model has an expected output fingerprint."""
         official = set(_official_hf_model_names())
-        expected = set(OFFICIAL_MODEL_OUTPUT_FINGERPRINTS.keys())
+        expected = set(_expected_official_output_fingerprints().keys())
         assert expected == official, (
-            "Fingerprint table mismatch. Update OFFICIAL_MODEL_OUTPUT_FINGERPRINTS to "
+            "Fingerprint table mismatch. Update _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE to "
             f"exactly match official HF models.\nExpected-only: {sorted(expected - official)}\n"
             f"Official-only: {sorted(official - expected)}"
         )
 
-    @pytest.mark.parametrize("model_name", sorted(OFFICIAL_MODEL_OUTPUT_FINGERPRINTS.keys()))
+    @pytest.mark.parametrize("model_name", _OFFICIAL_MODEL_NAMES_FOR_OUTPUT_REGRESSION)
     def test_official_model_output_matches_expected_fingerprint(self, model_name: str) -> None:
         """Assert model output fingerprint matches expected reference value.
 
@@ -158,7 +240,7 @@ class TestOfficialModelsOutputRegression:
         pooled_np = pooled.detach().cpu().to(torch.float32).numpy()
         rounded = np.round(pooled_np, 4)
         digest = hashlib.sha256(rounded.tobytes()).hexdigest()
-        expected_digest = OFFICIAL_MODEL_OUTPUT_FINGERPRINTS[model_name]
+        expected_digest = _expected_official_output_fingerprints()[model_name]
 
         assert digest == expected_digest, (
             f"Output fingerprint mismatch for {model_name}. "

@@ -7,49 +7,51 @@ cfgv==3.5.0
 click==8.1.7
 colorama==0.4.6 ; sys_platform == 'win32'
 comm==0.2.3
-debugpy==1.8.17
+debugpy==1.8.20
 decorator==5.2.1
 distlib==0.4.0
 exceptiongroup==1.3.1 ; python_full_version < '3.11'
 executing==2.2.1
-filelock==3.20.0
-identify==2.6.15
+filelock==3.25.2
+identify==2.6.18
 iniconfig==2.3.0
-ipykernel==7.1.0
-ipython==8.37.0 ; python_full_version < '3.11'
-ipython==9.7.0 ; python_full_version >= '3.11'
+ipykernel==7.2.0
+ipython==8.39.0 ; python_full_version < '3.11'
+ipython==9.10.1 ; python_full_version == '3.11.*'
+ipython==9.12.0 ; python_full_version >= '3.12'
 ipython-pygments-lexers==1.1.1 ; python_full_version >= '3.11'
 isort==5.13.2
 jedi==0.19.2
-jupyter-client==8.6.3
+jupyter-client==8.8.0
 jupyter-core==5.9.1
 matplotlib-inline==0.2.1
 nest-asyncio==1.6.0
-nodeenv==1.9.1
-packaging==25.0
-parso==0.8.5
-pathspec==0.12.1
+nodeenv==1.10.0
+packaging==26.0
+parso==0.8.6
+pathspec==1.0.4
 pexpect==4.9.0 ; sys_platform != 'emscripten' and sys_platform != 'win32'
-platformdirs==4.5.0
+platformdirs==4.9.6
 pluggy==1.6.0
 pre-commit==4.2.0
 prompt-toolkit==3.0.52
-psutil==7.1.3
+psutil==7.2.2
 ptyprocess==0.7.0 ; sys_platform != 'emscripten' and sys_platform != 'win32'
 pure-eval==0.2.3
-pycparser==2.23 ; implementation_name == 'pypy'
-pygments==2.19.2
+pycparser==3.0 ; implementation_name == 'pypy'
+pygments==2.20.0
 pytest==7.4.0
 python-dateutil==2.9.0.post0
+python-discovery==1.2.2
 pyyaml==6.0.3
 pyzmq==27.1.0
 ruff==0.11.2
 six==1.17.0
 stack-data==0.6.3
-tomli==2.3.0 ; python_full_version < '3.11'
-tornado==6.5.2
+tomli==2.4.1 ; python_full_version < '3.11'
+tornado==6.5.5
 traitlets==5.14.3
 typing-extensions==4.15.0 ; python_full_version < '3.12'
-virtualenv==20.35.4
-wcwidth==0.2.14
+virtualenv==21.2.1
+wcwidth==0.6.0
 yamllint==1.35.1
