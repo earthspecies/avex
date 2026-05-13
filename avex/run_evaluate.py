@@ -183,39 +183,39 @@ def run_experiment(
     # Get training mode and aggregation method from probe configuration
     online_training = need_probe and experiment_cfg.get_training_mode()
 
-    def generate_embedding_filename(split: str, layer_names: List[str | int]) -> Path:
+    def generate_embedding_filename(split: str, target_layers: List[str | int]) -> Path:
         """Generate embedding filename with layer names.
 
         Args:
             split: Dataset split ('train', 'val', 'test')
-            layer_names: List of layer names to extract embeddings from
+            target_layers: Target layers to extract embeddings from
 
         Returns:
             Path object for the embedding file
         """
         # Create a safe layer identifier from layer names
-        if len(layer_names) == 1:
+        if len(target_layers) == 1:
             # Single layer: use the layer name directly
-            layer0 = layer_names[0]
+            layer0 = target_layers[0]
             if isinstance(layer0, int):
                 layer_id = f"idx{layer0}"
             else:
                 layer_id = layer0.replace(".", "_").replace("backbone_", "")
         else:
             # Multiple layers: create a combined identifier
-            layer_id = f"multi_{len(layer_names)}_layers"
+            layer_id = f"multi_{len(target_layers)}_layers"
 
         # Create filename: embedding_{split}_{layer_id}.h5
         filename = f"embedding_{split}_{layer_id}.h5"
         return emb_base_dir / filename
 
-    # Get layer names for filename generation
-    layer_names = experiment_cfg.get_target_layers()
+    # Get target layers for filename generation
+    target_layers = experiment_cfg.get_target_layers()
 
-    # Generate filenames based on layer names
-    train_path = generate_embedding_filename("train", layer_names)
-    val_path = generate_embedding_filename("val", layer_names)
-    test_path = generate_embedding_filename("test", layer_names)
+    # Generate filenames based on target layers
+    train_path = generate_embedding_filename("train", target_layers)
+    val_path = generate_embedding_filename("val", target_layers)
+    test_path = generate_embedding_filename("test", target_layers)
     test_path_clustering = emb_base_dir / "embedding_test_clustering.h5"
     train_path_clustering = emb_base_dir / "embedding_train_clustering.h5"
 
@@ -490,10 +490,7 @@ def run_experiment(
     # ------------------------------------------------------------------ #
     #  Layer selection
     # ------------------------------------------------------------------ #
-    # Do not reset layer_names when base_model is None; keep experiment config
-    if base_model is not None:
-        layer_names = experiment_cfg.get_target_layers()
-    logger.info(f"Target layers for experiment: {layer_names}")
+    logger.info(f"Target layers for experiment: {target_layers}")
 
     # ------------------------------------------------------------------ #
     #  Calculate target_length for probes
@@ -554,19 +551,19 @@ def run_experiment(
 
         train_src = EmbeddingDataSource(
             save_path=train_path,
-            layer_names=layer_names,
+            target_layers=target_layers,
             aggregation=aggregation_method,
             config=EmbeddingDataSourceConfig(save_path=train_path, **base_cfg_common),
         )
         val_src = EmbeddingDataSource(
             save_path=val_path,
-            layer_names=layer_names,
+            target_layers=target_layers,
             aggregation=aggregation_method,
             config=EmbeddingDataSourceConfig(save_path=val_path, **base_cfg_common),
         )
         test_src = EmbeddingDataSource(
             save_path=test_path,
-            layer_names=layer_names,
+            target_layers=target_layers,
             aggregation=aggregation_method,
             config=EmbeddingDataSourceConfig(save_path=test_path, **base_cfg_common),
         )
@@ -639,7 +636,7 @@ def run_experiment(
                 test_ds,
                 train_embeds_dims_for_offline,
                 num_labels,
-                layer_names,
+                target_layers,
                 eval_cfg,
                 device,
                 exp_logger,
@@ -673,7 +670,7 @@ def run_experiment(
                 test_dl_raw,
                 base_model,
                 num_labels,
-                layer_names,
+                target_layers,
                 eval_cfg,
                 device,
                 exp_logger,
@@ -740,7 +737,7 @@ def run_experiment(
             else:
                 aggregation_method_retrieval = aggregation_method
 
-            logger.info(f"Using EmbeddingDataSource for train embeddings (retrieval) (layers: {len(layer_names)})")
+            logger.info(f"Using EmbeddingDataSource for train embeddings (retrieval) (layers: {len(target_layers)})")
             # Use in-memory configuration for clustering/retrieval
             retrieval_cfg_common = dict(
                 memory_limit_bytes=memory_limit_bytes,
@@ -759,7 +756,7 @@ def run_experiment(
             # Use EmbeddingDataSource for consistency with training phase
             train_src_retrieval = EmbeddingDataSource(
                 save_path=train_path_clustering,
-                layer_names=layer_names,
+                target_layers=target_layers,
                 aggregation=aggregation_method_retrieval,
                 config=EmbeddingDataSourceConfig(save_path=train_path_clustering, **retrieval_cfg_common),
             )
@@ -817,7 +814,7 @@ def run_experiment(
             else:
                 aggregation_method_retrieval = aggregation_method
 
-            logger.info(f"Using EmbeddingDataSource for test embeddings (retrieval) (layers: {len(layer_names)})")
+            logger.info(f"Using EmbeddingDataSource for test embeddings (retrieval) (layers: {len(target_layers)})")
             # Use in-memory configuration for clustering/retrieval
             retrieval_cfg_common = dict(
                 memory_limit_bytes=memory_limit_bytes,
@@ -836,7 +833,7 @@ def run_experiment(
             # Use EmbeddingDataSource for consistency with training phase
             test_src_retrieval = EmbeddingDataSource(
                 save_path=test_embeds_path,
-                layer_names=layer_names,
+                target_layers=target_layers,
                 aggregation=aggregation_method_retrieval,
                 config=EmbeddingDataSourceConfig(save_path=test_embeds_path, **retrieval_cfg_common),
             )

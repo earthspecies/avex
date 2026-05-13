@@ -99,12 +99,12 @@ class ModelBase(nn.Module):
 
         return hook_fn
 
-    def register_hooks_for_layers(self, layer_names: List[Union[str, int]]) -> List[str]:
+    def register_hooks_for_layers(self, target_layers: List[Union[str, int]]) -> List[str]:
         """Register forward hooks for the specified layers and return them.
 
         Parameters
         ----------
-        layer_names : List[Union[str, int]]
+        target_layers : List[Union[str, int]]
             Layer selectors to register hooks for. Entries may be concrete layer
             names or 0-based indices into `get_model_layers()` (negative indices
             allowed). Special string values:
@@ -120,7 +120,7 @@ class ModelBase(nn.Module):
         Raises
         ------
         TypeError
-            If `layer_names` contains a boolean value (bool is not allowed).
+            If `target_layers` contains a boolean value (bool is not allowed).
         ValueError
             If a layer name is not found in the model.
         """
@@ -129,48 +129,49 @@ class ModelBase(nn.Module):
             self._discover_linear_layers()
 
         # Allow integer indexing into discovered layer list (0-based, negatives allowed)
-        resolved_layer_names: list[str] = []
-        for name in layer_names:
-            if isinstance(name, bool):
-                raise TypeError("Layer names must be str or int (bool is not allowed).")
-            if isinstance(name, int):
+        resolved_layers: list[str] = []
+        for layer in target_layers:
+            if isinstance(layer, bool):
+                raise TypeError("target_layers entries must be str or int (bool is not allowed).")
+            if isinstance(layer, int):
                 try:
-                    resolved_layer_names.append(self._layer_names[name])
+                    resolved_layers.append(self._layer_names[layer])
                 except IndexError as err:
                     n = len(self._layer_names)
                     raise ValueError(
-                        f"Layer index {name} is out of range for {n} layers "
+                        f"Layer index {layer} is out of range for {n} layers "
                         f"(valid indices: 0..{n - 1} and negative indices like -1)."
                     ) from err
             else:
-                resolved_layer_names.append(name)
-        layer_names = resolved_layer_names
+                resolved_layers.append(layer)
 
         # Handle special cases
-        if "all" in layer_names:
+        if "all" in resolved_layers:
             # Replace 'all' with all discoverable layers, excluding the final
             # classification layer
             all_layers = self._layer_names.copy()
             # Remove 'all' from the list and add all discoverable layers
-            layer_names = [name for name in layer_names if name != "all"]
-            layer_names.extend(all_layers)
+            resolved_layers = [name for name in resolved_layers if name != "all"]
+            resolved_layers.extend(all_layers)
             # Remove duplicates while preserving order
             seen = set()
             unique_layers = []
-            for name in layer_names:
+            for name in resolved_layers:
                 if name not in seen:
                     seen.add(name)
                     unique_layers.append(name)
-            layer_names = unique_layers
-            logger.info(f"Resolved 'all' to {len(layer_names)} layers: {layer_names}")
+            resolved_layers = unique_layers
+            logger.info(f"Resolved 'all' to {len(resolved_layers)} layers: {resolved_layers}")
 
-        if "last_layer" in layer_names:
+        if "last_layer" in resolved_layers:
             # Replace 'last_layer' with the last non-classification layer
             last_layer = self._get_last_non_classification_layer()
 
             if last_layer:
                 # Replace 'last_layer' with the actual layer name
-                layer_names = [name if name != "last_layer" else last_layer for name in layer_names]
+                resolved_layers = [
+                    name if name != "last_layer" else last_layer for name in resolved_layers
+                ]
                 logger.info(f"Resolved 'last_layer' to actual layer name: '{last_layer}'")
             else:
                 raise ValueError("No layers available for 'last_layer'")
@@ -179,21 +180,21 @@ class ModelBase(nn.Module):
         # and to avoid registering duplicate hooks for the same module name).
         seen: set[str] = set()
         unique_layers: list[str] = []
-        for name in layer_names:
+        for name in resolved_layers:
             if name in seen:
                 continue
             seen.add(name)
             unique_layers.append(name)
-        layer_names = unique_layers
+        resolved_layers = unique_layers
 
         # Clear existing hooks
         self.deregister_all_hooks()
 
         # Store the target layers
-        self._hook_layers = layer_names
+        self._hook_layers = resolved_layers
 
         # Register hooks for each layer
-        for layer_name in layer_names:
+        for layer_name in resolved_layers:
             try:
                 module = self.get_submodule(layer_name)
                 hook_handle = module.register_forward_hook(self._create_hook_fn(layer_name))
@@ -201,7 +202,7 @@ class ModelBase(nn.Module):
             except AttributeError as err:
                 raise ValueError(f"Layer '{layer_name}' not found in model") from err
 
-        return layer_names
+        return resolved_layers
 
     def ensure_hooks_registered(self) -> None:
         """Ensure hooks are registered for previously requested layers.

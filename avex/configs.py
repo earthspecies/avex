@@ -377,7 +377,7 @@ class ProbeConfig(BaseModel):
 
     **Core Parameters:**
         probe_type: Type of probe to use ("linear", "mlp", "attention", "lstm", "transformer")
-        target_layers: List of layer names to extract embeddings from (required)
+        target_layers: List of layer identifiers to extract embeddings from (required)
             - Use "last_layer" for the final layer
             - Use "all" for all discoverable layers
             - Use specific layer names from list_model_layers()
@@ -1074,7 +1074,7 @@ class ExperimentConfig(BaseModel):
         Returns
         -------
         List[str]
-            List of target layer names
+            List of target layer identifiers
 
         Raises
         ------

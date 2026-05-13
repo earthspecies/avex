@@ -139,7 +139,7 @@ class PerchModel(ModelBase):
                     "Only the optional PyTorch classifier layer can be discovered."
                 )
 
-    def register_hooks_for_layers(self, layer_names: list[str | int]) -> list[str]:
+    def register_hooks_for_layers(self, target_layers: list[str | int]) -> list[str]:
         """Perch does not support PyTorch forward hooks for TF-Hub internals."""
         raise NotImplementedError(
             "PerchModel does not support intermediate layer hooks. "
