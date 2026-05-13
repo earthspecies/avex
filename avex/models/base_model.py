@@ -64,16 +64,6 @@ class ModelBase(nn.Module):
             self._discover_linear_layers()
         return self._layer_names.copy()
 
-    def get_model_num_layers(self) -> int:
-        """Return number of discoverable embedding/probe layers.
-
-        Returns
-        -------
-        int
-            Number of discoverable layers for this model instance.
-        """
-        return len(self.get_model_layers())
-
     def get_model_layer_map(self) -> dict[int, str]:
         """Return an index-to-layer-name mapping for this model instance.
 
@@ -114,9 +104,10 @@ class ModelBase(nn.Module):
 
         Parameters
         ----------
-        layer_names : List[str]
-            List of layer names to register hooks for.
-            Special values:
+        layer_names : List[Union[str, int]]
+            Layer selectors to register hooks for. Entries may be concrete layer
+            names or 0-based indices into `get_model_layers()` (negative indices
+            allowed). Special string values:
             - 'all': Register hooks for all discoverable layers
             - 'last_layer': Register hooks for only the last (non-classification) layer
 
