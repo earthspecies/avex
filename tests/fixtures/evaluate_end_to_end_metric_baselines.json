@@ -9,6 +9,10 @@
       "test_accuracy": 0.1666666666666666,
       "test_balanced_accuracy": 0.2
     },
+    "torch_2_6_0": {
+      "test_accuracy": 0.1666666666666666,
+      "test_balanced_accuracy": 0.2
+    },
     "torch_2_11_0": {
       "test_accuracy": 0.1666666666666666,
       "test_balanced_accuracy": 0.2

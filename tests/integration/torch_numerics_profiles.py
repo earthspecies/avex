@@ -10,7 +10,11 @@ from typing import Final
 
 import torch
 
-TORCH_FINGERPRINT_PROFILES: Final[tuple[str, ...]] = ("torch_2_5_0", "torch_2_11_0")
+TORCH_FINGERPRINT_PROFILES: Final[tuple[str, ...]] = (
+    "torch_2_5_0",
+    "torch_2_6_0",
+    "torch_2_11_0",
+)
 
 
 def torch_release_tuple(torch_version: str | None = None) -> tuple[int, int, int]:
@@ -39,10 +43,12 @@ def torch_fingerprint_profile(torch_version: str | None = None) -> str:
         torch_version: Optional version string. Defaults to ``torch.__version__``.
 
     Returns:
-        ``torch_2_11_0`` when the release is at least 2.11.0, otherwise
-        ``torch_2_5_0``.
+        ``torch_2_11_0`` for releases at least 2.10.0, ``torch_2_6_0`` for
+        releases from 2.6.0 through 2.9.x, otherwise ``torch_2_5_0``.
     """
     release = torch_release_tuple(torch_version)
-    if release >= (2, 11, 0):
+    if release >= (2, 10, 0):
         return "torch_2_11_0"
+    if release >= (2, 6, 0):
+        return "torch_2_6_0"
     return "torch_2_5_0"

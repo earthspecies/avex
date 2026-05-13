@@ -4,13 +4,16 @@ This utility builds the same deterministic labeled mini-batch used by
 `tests/integration/test_official_models_output_regression.py`, runs all official
 HF-backed models in feature mode, and prints a Python snippet for the selected
 **profile** inside ``_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE`` (bands
-like ``torch_2_5_0`` vs ``torch_2_11_0``, not one file per Python minor).
+like ``torch_2_5_0``, ``torch_2_6_0``, and ``torch_2_11_0``, not one file per Python minor).
 
 Usage:
     # From a torch 2.5.x environment (updates the torch_2_5_0 band):
     uv run python scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_5_0
 
-    # From a torch 2.11.x environment (updates the torch_2_11_0 band):
+    # From a torch 2.6.x through 2.9.x environment (updates the torch_2_6_0 band):
+    uv run python scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_6_0
+
+    # From a torch 2.10.x or 2.11.x environment (updates the torch_2_11_0 band):
     uv run python scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_11_0
 """
 
@@ -30,7 +33,7 @@ from avex.models.utils.registry import get_checkpoint_path, list_models
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _HF_PREFIX = "hf://"
-_VALID_PROFILES: tuple[str, ...] = ("torch_2_5_0", "torch_2_11_0")
+_VALID_PROFILES: tuple[str, ...] = ("torch_2_5_0", "torch_2_6_0", "torch_2_11_0")
 
 
 def _ensure_repo_on_path() -> None:

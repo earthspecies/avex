@@ -11,7 +11,7 @@ Compare two snapshots produced by ``record``::
     uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_310.json snap_313.json
 
 Merge ``record`` output into ``tests/fixtures/evaluate_end_to_end_metric_baselines.json``
-under ``profiles.<torch_2_5_0|torch_2_11_0>`` to enable strict checks in
+under ``profiles.<torch_2_5_0|torch_2_6_0|torch_2_11_0>`` to enable strict checks in
 ``tests/integration/test_run_evaluate_cross_version_metrics.py``.
 """
 

@@ -19,7 +19,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 - Python 3.10, 3.11, 3.12, or 3.13 (supported range is `>=3.10,<3.14` in `pyproject.toml`)
 - Git
 
-Continuous integration runs tests on **Python 3.13**. Slow official-model output regression tests use profiled expected fingerprints for **torch 2.5.x** vs **torch 2.11.x** (`tests/integration/test_official_models_output_regression.py`); regenerate with `scripts/regenerate_official_model_output_fingerprints.py` if you change the numerical stack.
+Continuous integration runs tests on **Python 3.13**. Slow official-model output regression tests use profiled expected fingerprints for **torch 2.5.x**, **2.6.x–2.9.x**, and **2.10.x+** (`tests/integration/test_official_models_output_regression.py`); regenerate with `scripts/regenerate_official_model_output_fingerprints.py` if you change the numerical stack.
 
 ### Clone the Repository
 
