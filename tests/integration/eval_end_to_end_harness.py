@@ -8,12 +8,13 @@ pipeline runs in tests and when recording per-Python metric baselines.
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 from typing import Final
 
 import pandas as pd
 import yaml
+
+from tests.integration.torch_numerics_profiles import torch_fingerprint_profile
 
 EVAL_SUMMARY_METRIC_KEYS: Final[tuple[str, ...]] = (
     "test_accuracy",
@@ -31,17 +32,13 @@ def project_root() -> Path:
 
 
 def python_metrics_profile() -> str:
-    """Return metric-baseline profile for the running interpreter.
+    """Return metric-baseline profile for the active PyTorch release band.
 
     Returns:
-        ``py310_312`` for Python 3.10–3.12, ``py313_plus`` for 3.13 and newer.
-        Kept aligned with output fingerprint profiles in
+        Profile key aligned with output fingerprint profiles in
         ``test_official_models_output_regression.py``.
     """
-    vi = sys.version_info
-    if vi < (3, 13):
-        return "py310_312"
-    return "py313_plus"
+    return torch_fingerprint_profile()
 
 
 def create_test_data_config(data_config_path: Path) -> None:

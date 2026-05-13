@@ -4,12 +4,12 @@
     "atol": 0.12,
     "rtol": 0.05
   },
-  "profiles": {
-    "py310_312": {
+    "profiles": {
+    "torch_2_5_0": {
       "test_accuracy": 0.1666666666666666,
       "test_balanced_accuracy": 0.2
     },
-    "py313_plus": {
+    "torch_2_11_0": {
       "test_accuracy": 0.1666666666666666,
       "test_balanced_accuracy": 0.2
     }

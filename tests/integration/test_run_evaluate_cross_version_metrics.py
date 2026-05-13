@@ -4,7 +4,7 @@ The minimal end-to-end job in `eval_end_to_end_harness` can yield slightly
 different ``test_accuracy`` / ``test_balanced_accuracy`` when PyTorch, NumPy,
 or TensorFlow versions differ. This module:
 
-- Always logs a one-line JSON snapshot of the current interpreter's metrics
+- Always logs a one-line JSON snapshot of the current PyTorch numerics profile
   (grep CI logs for ``AVEX_EVAL_METRICS_SNAPSHOT``).
 - Optionally asserts closeness to values in
   ``tests/fixtures/evaluate_end_to_end_metric_baselines.json`` when the active
@@ -15,7 +15,7 @@ Record baselines per band::
 
     uv run python scripts/record_evaluate_end_to_end_metrics.py record
 
-Compare two recorded snapshots (e.g. from Python 3.10 vs 3.13 venvs)::
+Compare two recorded snapshots (e.g. from different PyTorch stacks)::
 
     uv run python scripts/record_evaluate_end_to_end_metrics.py diff a.json b.json
 """

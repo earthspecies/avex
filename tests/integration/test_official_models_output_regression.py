@@ -7,7 +7,6 @@ also produce stable numerical outputs on a deterministic labeled mini-batch.
 from __future__ import annotations
 
 import hashlib
-import sys
 from typing import Final
 
 import numpy as np
@@ -16,16 +15,19 @@ import torch
 
 from avex import load_model
 from avex.models.utils.registry import get_checkpoint_path, list_models
+from tests.integration.torch_numerics_profiles import (
+    TORCH_FINGERPRINT_PROFILES,
+    torch_fingerprint_profile,
+)
 
 # Expected pooled-output fingerprints from deterministic labeled mini-batch.
 # Fingerprint is SHA-256 of np.round(output, 4).tobytes().
 #
-# Different Python bands can share one table when the locked numerical stack
-# (torch, numpy, tensorflow, etc.) yields identical rounded outputs. When a new
-# Python or dependency bump changes numerics, add a new profile key below and
-# map it in _fingerprint_profile() — no per-minor-version fixture files.
+# Profiles follow the installed PyTorch release band. When a dependency bump
+# changes numerics, add a new profile key below and extend
+# ``torch_fingerprint_profile()`` — not one fixture file per Python minor.
 _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]] = {
-    "py310_312": {
+    "torch_2_5_0": {
         "esp_aves2_eat_all": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
         "esp_aves2_eat_bio": "d5d462c560352c1c3c9f498a0951f56ec9924e50f8fe1f0f0a4d285e316c17c8",
         "esp_aves2_effnetb0_all": "7f1e8cc046287f79a3a2b7413042ff121a3f32c115cf3a487d2b5348e09a4931",
@@ -37,8 +39,8 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         "esp_aves2_sl_eat_all_ssl_all": "0832f0c78523167e0a5439b9a4e96caf115131118549ff9161a01bd6d03a5b2e",
         "esp_aves2_sl_eat_bio_ssl_all": "a9302a12a55bb6c1379b2dc42a22c15150eab12d039f7ad8c8d793a5dc31af70",
     },
-    # Python 3.13+ with tensorflow>=2.21, torch 2.11.x stack (see uv.lock on branch).
-    "py313_plus": {
+    # torch 2.11.x stack from the current locked dependency set (see uv.lock).
+    "torch_2_11_0": {
         "esp_aves2_eat_all": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
         "esp_aves2_eat_bio": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
         "esp_aves2_effnetb0_all": "801ebab010118dd0f07f0a07d0f18f5aa64f2f1270fe4bc2123342c081fa1b53",
@@ -53,26 +55,25 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
 }
 
 
-def _fingerprint_profile() -> str:
-    """Return which fingerprint table applies to this interpreter.
-
-    Returns:
-        Key into ``_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE``. Extend this
-        when a new Python line or stack bump diverges from existing bands.
-    """
-    if sys.version_info < (3, 13):
-        return "py310_312"
-    return "py313_plus"
-
-
 def _expected_official_output_fingerprints() -> dict[str, str]:
-    """Fingerprints for the current runtime profile.
+    """Fingerprints for the current PyTorch numerics profile.
 
     Returns:
         Model name to expected SHA-256 fingerprint for
-        ``_fingerprint_profile()``.
+        ``torch_fingerprint_profile()``.
+
+    Raises:
+        KeyError: If the active PyTorch profile has no fingerprint table.
     """
-    return _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE[_fingerprint_profile()]
+    profile = torch_fingerprint_profile()
+    if profile not in _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE:
+        known = ", ".join(sorted(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE))
+        raise KeyError(
+            f"No official output fingerprints for PyTorch profile {profile!r}. "
+            f"Known profiles: {known}. Regenerate with "
+            "scripts/regenerate_official_model_output_fingerprints.py."
+        )
+    return _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE[profile]
 
 
 def _validate_fingerprint_profile_tables() -> None:
@@ -91,9 +92,11 @@ def _validate_fingerprint_profile_tables() -> None:
 
 _validate_fingerprint_profile_tables()
 
+assert set(TORCH_FINGERPRINT_PROFILES) == set(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE)
+
 # Same keys in every profile (enforced above); any profile works for parametrization.
 _OFFICIAL_MODEL_NAMES_FOR_OUTPUT_REGRESSION: Final[tuple[str, ...]] = tuple(
-    sorted(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE["py310_312"].keys())
+    sorted(_OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE["torch_2_5_0"].keys())
 )
 
 _HF_PREFIX = "hf://"
