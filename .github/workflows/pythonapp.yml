@@ -20,10 +20,6 @@ jobs:
         env:
             HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
-        # 3.10: baseline; 3.13: supported line (tensorflow>=2.21 cp313 wheels, profiled fingerprints)
-        strategy:
-            matrix:
-                python-version: ["3.10", "3.13"]
         steps:
             - uses: actions/checkout@v2
 
@@ -47,13 +43,13 @@ jobs:
               with:
                   enable-cache: true
 
-            - name: Set up Python ${{ matrix.python-version }}
+            - name: Set up Python 3.13
               uses: actions/setup-python@v5
               with:
-                  python-version: ${{ matrix.python-version }}
+                  python-version: "3.13"
 
             - name: Install dependencies
-              run: uv sync --python ${{ matrix.python-version }}
+              run: uv sync --python 3.13
 
             - name: Display Python version
               run: python -c "import sys; print(sys.version)"
