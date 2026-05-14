@@ -98,6 +98,26 @@ class TrainingParams(BaseModel):
         description=("Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided."),
     )
 
+    # Prototypical two-stage training (phase 2)
+    prototypical_phase2: bool = Field(
+        False,
+        description=(
+            "If True and freeze_backbone_epochs > 0, phase 2 replaces the model head "
+            "with a prototype-based head (PrototypicalWrapper) instead of unfreezing "
+            "the backbone. Requires a ConvNeXt, EfficientNet, or AudioProtoPNet backbone."
+        ),
+    )
+    num_prototypes_per_class: int = Field(
+        10,
+        ge=1,
+        description="Number of prototype vectors per class used in prototypical phase 2.",
+    )
+    orthogonal_loss_weight: float = Field(
+        1e-4,
+        ge=0,
+        description="Weight for the orthogonal regularisation loss during prototypical phase 2.",
+    )
+
     # Skip validation during training
     skip_validation: bool = Field(
         False,
@@ -294,12 +314,15 @@ class ModelSpec(BaseModel):
     # BirdNet-specific configuration
     language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")
 
-    # EAT HF model ID for HuggingFace model loading
+    # HuggingFace model repository ID or local path.  Models that load from HF
+    # (e.g. EAT, AudioProtoPNet, ConvNeXt variants) should set this explicitly
+    # in their YAML config; the default is None (no HF hub loading).
     model_id: Optional[str] = Field(
-        "worstchan/EAT-base_epoch30_pretrain",
+        None,
         description=(
-            "HuggingFace model repository ID or local path for EAT HF model "
-            "(e.g., 'worstchan/EAT-base_epoch30_pretrain')"
+            "HuggingFace model repository ID or local path "
+            "(e.g. 'DBD-research-group/AudioProtoPNet-20-BirdSet-XCL'). "
+            "Models that need a specific hub repo must set this in their YAML config."
         ),
     )
 
@@ -471,6 +494,7 @@ class ProbeConfig(BaseModel):
         "attention",
         "lstm",
         "transformer",
+        "prototypical",
     ] = Field("linear", description="Type of probe to use")
 
     aggregation: Literal["mean", "max", "cls_token", "none"] = Field(
@@ -510,6 +534,13 @@ class ProbeConfig(BaseModel):
     lstm_hidden_size: Optional[int] = Field(None, ge=1, description="Hidden size for LSTM probe")
 
     bidirectional: bool = Field(False, description="Whether to use bidirectional LSTM")
+
+    # Prototypical probe parameters
+    num_prototypes_per_class: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Number of prototype vectors per class (required for prototypical probe)",
+    )
 
     # Sequence processing parameters
     max_sequence_length: Optional[int] = Field(
@@ -601,6 +632,11 @@ class ProbeConfig(BaseModel):
                 raise ValueError("LSTM probe requires lstm_hidden_size to be specified")
             if self.num_layers is None:
                 raise ValueError("LSTM probe requires num_layers to be specified")
+
+        # Validate prototypical-specific parameters
+        if self.probe_type == "prototypical":
+            if self.num_prototypes_per_class is None:
+                raise ValueError("prototypical probe requires num_prototypes_per_class to be specified")
 
         # Enforce: offline training requires a frozen backbone
         # If online_training is explicitly set to False (offline), the backbone
@@ -813,6 +849,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         "contrastive",
         "clip",
         "focal",
+        "asymmetric",
+        "asl",
     ]
 
     # Enable multi-label classification
@@ -917,8 +955,10 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
             v = "bce"
 
         # Check if multilabel is True but loss function isn't BCE/Focal
-        if data.get("multilabel", False) and v not in {"bce", "focal"}:
-            raise ValueError(f"When multilabel=True, loss_function must be 'bce' or 'focal' (got '{v}' instead)")
+        if data.get("multilabel", False) and v not in {"bce", "focal", "asymmetric", "asl"}:
+            raise ValueError(
+                f"When multilabel=True, loss_function must be 'bce', 'focal', or 'asymmetric' (got '{v}' instead)"
+            )
 
         # For self-supervised runs we don't impose any loss-type restrictions
         if data.get("label_type") == "self_supervised":

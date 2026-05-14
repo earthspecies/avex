@@ -8,6 +8,7 @@ runs/
 static/
 labels/
 wandb/
+.torch-fingerprint-probes/
 
 ### ex
 

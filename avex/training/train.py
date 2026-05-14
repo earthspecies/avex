@@ -133,6 +133,9 @@ class Trainer:
         self.second_stage_lr: float | None = getattr(config.training_params, "second_stage_lr", None)
         self.second_stage_warmup_steps: int | None = getattr(config.training_params, "second_stage_warmup_steps", None)
         self._second_stage_active = self.freeze_backbone_epochs == 0  # Already unfrozen
+        self._prototypical_phase2_active: bool = False
+        self._orthogonal_criterion: Optional[nn.Module] = None
+        self._orthogonal_loss_weight: float = getattr(config.training_params, "orthogonal_loss_weight", 1e-4)
 
         # Initialize clustering evaluator if enabled
         self.clustering_evaluator = None
@@ -173,7 +176,10 @@ class Trainer:
                     and self.freeze_backbone_epochs > 0
                     and epoch > self.freeze_backbone_epochs
                 ):
-                    self._activate_second_stage(current_epoch=epoch)
+                    if getattr(self.config.training_params, "prototypical_phase2", False):
+                        self._activate_prototypical_phase2(current_epoch=epoch)
+                    else:
+                        self._activate_second_stage(current_epoch=epoch)
 
                 # Run training and validation epochs
                 train_loss, train_metrics = self._run_epoch(train=True, epoch=epoch)
@@ -310,6 +316,21 @@ class Trainer:
         with autocast(enabled=self.amp_enabled, dtype=self.amp_dtype):
             result = self.strategy.forward(self.model, batch)
 
+        # Add orthogonal regularisation in prototypical phase 2
+        if self._prototypical_phase2_active and self._orthogonal_criterion is not None:
+            unwrapped = self.model.module if hasattr(self.model, "module") else self.model
+            if hasattr(unwrapped, "head") and hasattr(unwrapped.head, "prototype_vectors"):
+                orth_loss = self._orthogonal_criterion(unwrapped.head.prototype_vectors)
+                total_loss = result.loss + self._orthogonal_loss_weight * orth_loss
+                extra = dict(result.additional_metrics or {})
+                extra["orth_loss"] = orth_loss.item()
+                result = TrainingResult(
+                    loss=total_loss,
+                    metrics_data=result.metrics_data,
+                    batch_size=result.batch_size,
+                    additional_metrics=extra,
+                )
+
         # Debug: Log after forward pass
         if (
             is_main_process()
@@ -336,6 +357,9 @@ class Trainer:
 
         if self.scheduler is not None:
             self.scheduler.step()
+
+        if self._prototypical_phase2_active:
+            self._clamp_prototype_last_layer()
 
     def _log_batch_progress(self, step: int, total_steps: int) -> None:
         """Log batch-level progress."""
@@ -749,3 +773,65 @@ class Trainer:
             new_lr,
             self.config.scheduler.warmup_steps,
         )
+
+    def _activate_prototypical_phase2(self, *, current_epoch: int) -> None:
+        """Replace model head with PrototypicalWrapper and set up orthogonal loss.
+
+        Raises
+        ------
+        ValueError
+            If the model does not expose a ``num_classes`` attribute.
+        """
+        from avex.training.losses import OrthogonalLoss
+        from avex.training.prototypical_utils import PrototypicalWrapper
+
+        logger.info(
+            "[Prototypical phase 2] Activating at epoch %d – backbone frozen, prototype head initialised",
+            current_epoch,
+        )
+
+        backbone = self.model.module if hasattr(self.model, "module") else self.model
+        num_classes = getattr(backbone, "num_classes", None)
+        if num_classes is None:
+            raise ValueError(
+                f"Model must expose num_classes for prototypical phase 2. Got model type: {type(backbone).__name__}"
+            )
+
+        num_proto = getattr(self.config.training_params, "num_prototypes_per_class", 10)
+        new_model = PrototypicalWrapper.build(
+            backbone=backbone,
+            num_classes=num_classes,
+            num_prototypes_per_class=num_proto,
+        ).to(self.device)
+        self.model = self._wrap_model_for_distributed(new_model)
+
+        orth_weight = getattr(self.config.training_params, "orthogonal_loss_weight", 1e-4)
+        self._orthogonal_criterion = OrthogonalLoss(num_classes, num_proto).to(self.device)
+        self._orthogonal_loss_weight = orth_weight
+        self._prototypical_phase2_active = True
+
+        new_lr = self.second_stage_lr if self.second_stage_lr is not None else float(self.config.training_params.lr)
+        self.config.training_params.lr = new_lr
+        trainable = [p for p in self.model.parameters() if p.requires_grad]
+        self.optimizer = get_optimizer(trainable, self.config.training_params)
+
+        remaining = self.config.training_params.train_epochs - current_epoch + 1
+        total_steps = len(self.train_dataloader) * remaining
+        if self.second_stage_warmup_steps is not None:
+            self.config.scheduler.warmup_steps = self.second_stage_warmup_steps
+        self.scheduler = build_scheduler(self.optimizer, self.config, total_steps)
+
+        self._second_stage_active = True
+        logger.info(
+            "[Prototypical phase 2] Initialised: num_classes=%d, num_proto=%d, lr=%s, orth_weight=%s",
+            num_classes,
+            num_proto,
+            new_lr,
+            orth_weight,
+        )
+
+    def _clamp_prototype_last_layer(self) -> None:
+        """Enforce non-negativity of correct-class prototype connections after each step."""
+        unwrapped = self.model.module if hasattr(self.model, "module") else self.model
+        if hasattr(unwrapped, "head") and hasattr(unwrapped.head, "clamp_last_layer"):
+            unwrapped.head.clamp_last_layer()
