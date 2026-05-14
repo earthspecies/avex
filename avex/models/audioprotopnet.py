@@ -165,7 +165,7 @@ class Model(ConvNextModel):
             self._layer_names,
         )
 
-    def process_audio(self, x: torch.Tensor) -> dict:
+    def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """Convert raw 32 kHz waveform using the HuggingFace feature extractor.
 
         Parameters
@@ -175,30 +175,8 @@ class Model(ConvNextModel):
 
         Returns
         -------
-        dict
-            ``BatchFeature`` mapping (e.g. ``{"input_values": tensor}``),
-            with all tensors on ``self.device``.
+        torch.Tensor
+            Preprocessed tensor on ``self.device``.
         """
         samples = [x[i].cpu().numpy() for i in range(x.shape[0])]
         return self.feature_extractor(samples, return_tensors="pt").to(self.device)
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        padding_mask: object = None,
-    ) -> torch.Tensor:
-        """Run the forward pass.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Raw waveform, shape ``(batch_size, time_steps)``.
-        padding_mask : object
-            Unused; kept for API compatibility.
-
-        Returns
-        -------
-        torch.Tensor
-            Classification logits, shape ``(batch_size, num_classes)``.
-        """
-        return self.model(**self.process_audio(x)).logits
