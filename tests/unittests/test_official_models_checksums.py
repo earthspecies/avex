@@ -9,11 +9,18 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tempfile
+from pathlib import Path
 
 import pytest
 
 from avex.io import filesystem_from_path
 from avex.models.utils.registry import get_checkpoint_path, list_models
+from avex.utils.safetensors_validation import (
+    MIN_PUBLISHED_SAFETENSORS_BYTES,
+    SafetensorsWeightsError,
+    assert_safetensors_has_weights,
+)
 
 # Expected SHA-256 (hex) of each official model's safetensors file.
 # Keys = official model name (YAML stem); values are 64-digit lowercase hex.
@@ -188,9 +195,11 @@ class TestOfficialModelsSafetensorsMatchHardcodedChecksum:
         fs = filesystem_from_path(checkpoint_path)
         path_for_fs = _path_for_hf_fs(checkpoint_path)
         h = hashlib.sha256()
+        artifact_bytes = bytearray()
         with fs.open(path_for_fs, mode="rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
+                artifact_bytes.extend(chunk)
         actual_hex = h.hexdigest().lower()
 
         assert actual_hex == expected_hex, (
@@ -198,3 +207,19 @@ class TestOfficialModelsSafetensorsMatchHardcodedChecksum:
             f"expected {expected_hex}, got {actual_hex}. "
             "Re-upload may have changed the file; update OFFICIAL_MODEL_CHECKSUMS."
         )
+
+        assert len(artifact_bytes) >= MIN_PUBLISHED_SAFETENSORS_BYTES, (
+            f"Safetensors artifact for {model_name} is too small "
+            f"({len(artifact_bytes)} bytes < {MIN_PUBLISHED_SAFETENSORS_BYTES} bytes)."
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".safetensors", delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            tmp_file.write(artifact_bytes)
+
+        try:
+            assert_safetensors_has_weights(tmp_path)
+        except SafetensorsWeightsError as exc:
+            pytest.fail(f"Safetensors artifact for {model_name} has no model weights: {exc}")
+        finally:
+            tmp_path.unlink(missing_ok=True)

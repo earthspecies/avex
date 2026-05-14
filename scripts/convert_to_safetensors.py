@@ -49,12 +49,30 @@ from safetensors.torch import load_file, save_file
 
 from avex.io import AnyPathT, PureCloudPath, anypath, exists, filesystem_from_path
 from avex.utils import universal_torch_load
+from avex.utils.safetensors_validation import (
+    SafetensorsWeightsError,
+    assert_safetensors_has_weights,
+)
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _assert_published_safetensors_weights(local_path: Path) -> None:
+    """Raise when a converted artifact would publish without model weights.
+
+    Raises
+    ------
+    RuntimeError
+        If the artifact is too small or contains no tensors.
+    """
+    try:
+        assert_safetensors_has_weights(local_path)
+    except SafetensorsWeightsError as exc:
+        raise RuntimeError(f"Safetensors artifact failed publish validation: {exc}") from exc
 
 
 def is_state_dict_only(checkpoint: dict[str, Any]) -> bool:
@@ -340,6 +358,7 @@ def verify_safetensors(
                         meta = f.metadata() or {}
                     if meta.get("format") != "safetensors":
                         raise RuntimeError("Embedded metadata missing or invalid: format != safetensors")
+                    _assert_published_safetensors_weights(tmp_path)
                 finally:
                     if tmp_path.exists():
                         tmp_path.unlink()
@@ -349,6 +368,7 @@ def verify_safetensors(
                     meta = f.metadata() or {}
                 if meta.get("format") != "safetensors":
                     raise RuntimeError("Embedded metadata missing or invalid: format != safetensors")
+                _assert_published_safetensors_weights(Path(safetensors_path))
             logger.info("✓ Verification successful: file exists and metadata is readable (none)")
             return True
         except Exception as e:
@@ -396,6 +416,7 @@ def verify_safetensors(
                 raise RuntimeError(
                     f"Embedded metadata num_tensors mismatch: {meta['num_tensors']} != {len(original_state_dict)}"
                 )
+            _assert_published_safetensors_weights(local_path)
     except Exception as e:
         raise RuntimeError(f"Failed to load safetensors file: {e}") from e
     finally:

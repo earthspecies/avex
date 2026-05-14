@@ -33,6 +33,11 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from avex.utils.safetensors_validation import (
+    SafetensorsWeightsError,
+    assert_safetensors_has_weights,
+)
+
 logger = logging.getLogger(__name__)
 
 # Models to skip when uploading (e.g. deprecated, not for public release, or invalid HF repo id).
@@ -691,6 +696,13 @@ def main() -> None:
                 model_name=p.model_name,
                 dry_run=dry_run,
             )
+            if not dry_run:
+                try:
+                    assert_safetensors_has_weights(safetensors_path)
+                except SafetensorsWeightsError as exc:
+                    raise RuntimeError(
+                        f"Refusing to publish {p.model_name}: safetensors artifact has no model weights: {exc}"
+                    ) from exc
             _cleanup_nested_conversion_dir(
                 local_dir=local_dir,
                 checkpoint_stem=checkpoint_pt.stem,
