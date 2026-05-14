@@ -34,7 +34,6 @@ from typing import Optional
 import torch
 
 from avex.models.base_model import ModelBase
-from avex.models.utils.registry import load_packaged_yaml_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,8 @@ def _load_convnext_base_yaml() -> dict:
     ValueError
         If the packaged YAML is missing or malformed.
     """
+    from avex.models.utils.registry import load_packaged_yaml_mapping
+
     data = load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name=_CONVNEXT_BASE_YAML)
     if not data:
         raise ValueError(
