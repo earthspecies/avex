@@ -16,6 +16,7 @@ wandb/
 .vscode/
 *.code-workspace
 .cursorrules
+.codex
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
