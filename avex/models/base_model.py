@@ -169,9 +169,7 @@ class ModelBase(nn.Module):
 
             if last_layer:
                 # Replace 'last_layer' with the actual layer name
-                resolved_layers = [
-                    name if name != "last_layer" else last_layer for name in resolved_layers
-                ]
+                resolved_layers = [name if name != "last_layer" else last_layer for name in resolved_layers]
                 logger.info(f"Resolved 'last_layer' to actual layer name: '{last_layer}'")
             else:
                 raise ValueError("No layers available for 'last_layer'")
