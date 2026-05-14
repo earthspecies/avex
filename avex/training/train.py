@@ -137,6 +137,12 @@ class Trainer:
         self._orthogonal_criterion: Optional[nn.Module] = None
         self._orthogonal_loss_weight: float = getattr(config.training_params, "orthogonal_loss_weight", 1e-4)
 
+        if getattr(config.training_params, "prototypical_phase2", False) and self.freeze_backbone_epochs == 0:
+            logger.warning(
+                "prototypical_phase2=True but freeze_backbone_epochs=0: "
+                "phase-2 gate never fires. Set freeze_backbone_epochs > 0."
+            )
+
         # Initialize clustering evaluator if enabled
         self.clustering_evaluator = None
         if hasattr(config, "clustering_eval") and config.clustering_eval and config.clustering_eval.enabled:
@@ -737,11 +743,12 @@ class Trainer:
         )
 
         # Unfreeze backbone parameters
-        if hasattr(self.model, "backbone"):
-            for p in self.model.backbone.parameters():  # type: ignore[attr-defined]
+        backbone_obj = getattr(self.model, "backbone", None) or getattr(self.model, "model", None)
+        if backbone_obj is not None:
+            for p in backbone_obj.parameters():
                 p.requires_grad = True
         else:
-            logger.warning("Model has no attribute 'backbone'; skipping unfreeze")
+            logger.warning("Model has no 'backbone' or 'model' attribute; skipping unfreeze")
 
         # ------------------------------------------------------------------
         # Re-initialise optimiser with full parameter set

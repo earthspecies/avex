@@ -12,7 +12,7 @@ from esp_data.io import anypath, filesystem_from_path
 
 from avex.configs import RunConfig
 from avex.data.dataset import build_dataloaders
-from avex.models.get_model import get_model
+from avex.models.utils.factory import build_model_from_spec
 from avex.training.distributed import (
     get_local_device_index,
     init_distributed,
@@ -99,22 +99,22 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
         # Pydantic models are immutable by default – use copy(update=...)
         config.model_spec = config.model_spec.model_copy(update={"pretraining_mode": True})
 
-    # Build the model using the legacy get_model factory for backwards compatibility
     config.model_spec.device = str(device)
-    model = get_model(
-        config.model_spec,
-        num_classes=num_labels,
-    ).to(device)
+    model = build_model_from_spec(config.model_spec, str(device), num_classes=num_labels).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
 
     # --------------------------------------------------------------
     # Optional 1st-stage backbone freeze for two-stage fine-tuning
     # --------------------------------------------------------------
     freeze_epochs = getattr(config.training_params, "freeze_backbone_epochs", 0)
-    if freeze_epochs > 0 and hasattr(model, "backbone"):
-        logger.info("Freezing backbone for the first %d epochs", freeze_epochs)
-        for p in model.backbone.parameters():  # type: ignore[attr-defined]
-            p.requires_grad = False
+    if freeze_epochs > 0:
+        backbone_obj = getattr(model, "backbone", None) or getattr(model, "model", None)
+        if backbone_obj is not None:
+            logger.info("Freezing backbone for the first %d epochs", freeze_epochs)
+            for p in backbone_obj.parameters():
+                p.requires_grad = False
+        else:
+            logger.warning("No 'backbone' or 'model' attribute found; skipping initial freeze")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 

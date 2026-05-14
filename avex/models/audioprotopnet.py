@@ -69,9 +69,27 @@ class Model(ConvNextModel):
         self.model_id = model_id or _DEFAULT_AUDIOPROTOPNET_MODEL_ID
 
         if pretrained:
-            logger.info("Loading AudioProtoPNet weights from %s", self.model_id)
-            self.model = AutoModelForSequenceClassification.from_pretrained(self.model_id, trust_remote_code=True)
-            self.num_classes: int = self.model.config.num_classes
+            if num_classes is not None:
+                logger.info(
+                    "Loading AudioProtoPNet backbone from %s (overriding num_classes=%d)",
+                    self.model_id,
+                    num_classes,
+                )
+                hf_config = AutoConfig.from_pretrained(self.model_id, trust_remote_code=True)
+                hf_config.num_classes = num_classes
+                hf_config.id2label = {i: str(i) for i in range(num_classes)}
+                hf_config.label2id = {str(i): i for i in range(num_classes)}
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_id,
+                    config=hf_config,
+                    trust_remote_code=True,
+                    ignore_mismatched_sizes=True,
+                )
+                self.num_classes: int = num_classes
+            else:
+                logger.info("Loading AudioProtoPNet weights from %s", self.model_id)
+                self.model = AutoModelForSequenceClassification.from_pretrained(self.model_id, trust_remote_code=True)
+                self.num_classes = self.model.config.num_classes
         else:
             if num_classes is None:
                 raise ValueError(
@@ -147,7 +165,7 @@ class Model(ConvNextModel):
             self._layer_names,
         )
 
-    def process_audio(self, x: torch.Tensor) -> torch.Tensor:
+    def process_audio(self, x: torch.Tensor) -> dict:
         """Convert raw 32 kHz waveform using the HuggingFace feature extractor.
 
         Parameters
@@ -157,8 +175,30 @@ class Model(ConvNextModel):
 
         Returns
         -------
-        torch.Tensor
-            Preprocessed tensor on ``self.device``.
+        dict
+            ``BatchFeature`` mapping (e.g. ``{"input_values": tensor}``),
+            with all tensors on ``self.device``.
         """
         samples = [x[i].cpu().numpy() for i in range(x.shape[0])]
-        return self.feature_extractor(samples).to(self.device)
+        return self.feature_extractor(samples, return_tensors="pt").to(self.device)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: object = None,
+    ) -> torch.Tensor:
+        """Run the forward pass.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Raw waveform, shape ``(batch_size, time_steps)``.
+        padding_mask : object
+            Unused; kept for API compatibility.
+
+        Returns
+        -------
+        torch.Tensor
+            Classification logits, shape ``(batch_size, num_classes)``.
+        """
+        return self.model(**self.process_audio(x)).logits

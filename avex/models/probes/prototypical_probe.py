@@ -59,7 +59,7 @@ class PrototypicalHead(nn.Module):
         self.num_prototypes = num_classes * num_prototypes_per_class
 
         self.prototype_vectors = nn.Parameter(torch.randn(self.num_prototypes, embedding_dim))
-        nn.init.xavier_uniform_(self.prototype_vectors.unsqueeze(0))
+        nn.init.xavier_uniform_(self.prototype_vectors)
 
         self.register_buffer(
             "prototype_class_identity",
@@ -80,9 +80,9 @@ class PrototypicalHead(nn.Module):
     def clamp_last_layer(self) -> None:
         """Enforce non-negativity of correct-class connections. Call after each optimizer step."""
         with torch.no_grad():
-            for p in range(self.num_prototypes):
-                c = int(self.prototype_class_identity[p].item())
-                self.last_layer.weight[c, p].clamp_(min=0)
+            class_ids = self.prototype_class_identity
+            proto_ids = torch.arange(self.num_prototypes, device=class_ids.device)
+            self.last_layer.weight[class_ids, proto_ids].clamp_(min=0)
 
     def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
         e = F.normalize(embeddings, dim=-1)

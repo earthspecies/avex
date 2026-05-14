@@ -199,7 +199,7 @@ class Model(ModelBase):
                 )
             )
 
-        self.num_classes = num_classes
+        self.num_classes = num_classes if num_classes is not None else self.model.config.num_labels
 
         mel = _parse_mel_params(audio_config)
         self._mel_params = mel

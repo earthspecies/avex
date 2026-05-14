@@ -4,6 +4,7 @@ This module provides various loss functions used in representation learning
 tasks, including contrastive losses, focal loss, and distributed training utilities.
 """
 
+import contextlib
 import os
 from typing import Dict, Optional, Tuple, Union
 
@@ -399,13 +400,11 @@ class AsymmetricLoss(nn.Module):
         loss = targets * torch.log(xs_pos.clamp(min=self.eps)) + (1 - targets) * torch.log(xs_neg.clamp(min=self.eps))
 
         if self.gamma_neg > 0 or self.gamma_pos > 0:
-            if self.disable_torch_grad_focal_loss:
-                torch._C.set_grad_enabled(False)
-            pt = xs_pos * targets + xs_neg * (1 - targets)
-            one_sided_gamma = self.gamma_pos * targets + self.gamma_neg * (1 - targets)
-            loss *= torch.pow(1 - pt, one_sided_gamma)
-            if self.disable_torch_grad_focal_loss:
-                torch._C.set_grad_enabled(True)
+            ctx = torch.no_grad() if self.disable_torch_grad_focal_loss else contextlib.nullcontext()
+            with ctx:
+                pt = xs_pos * targets + xs_neg * (1 - targets)
+                one_sided_gamma = self.gamma_pos * targets + self.gamma_neg * (1 - targets)
+                loss *= torch.pow(1 - pt, one_sided_gamma)
 
         if self.reduction == "mean":
             return -loss.mean()
@@ -463,7 +462,10 @@ class OrthogonalLoss(nn.Module):
             torch.eye(self.num_prototypes_per_class, device=gram.device).unsqueeze(0).expand(self.num_classes, -1, -1)
         )
         off_diag = gram - identity
-        return torch.norm(off_diag) / off_diag.numel()
+        # Mean per-class Frobenius norm, normalised by K*K so loss is
+        # invariant to both num_classes and num_prototypes_per_class.
+        per_class = torch.linalg.norm(off_diag.view(self.num_classes, -1), dim=-1)
+        return per_class.mean() / (self.num_prototypes_per_class**2)
 
 
 def build_criterion(loss_name: str) -> nn.Module:
