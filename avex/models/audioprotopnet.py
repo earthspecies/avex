@@ -97,6 +97,10 @@ class Model(ConvNextModel):
                     "The model architecture is still fetched from the HuggingFace repo "
                     "(config + code only, no checkpoint weights)."
                 )
+            # NOTE: pretrained=False still requires network access (or a warm HF cache)
+            # because the prototype head is implemented as remote custom code in the
+            # DBD-research-group repo.  Tests using this path are therefore
+            # network/cache-dependent.
             logger.info(
                 "Creating AudioProtoPNet with random weights from %s (num_classes=%d)",
                 self.model_id,
@@ -140,6 +144,11 @@ class Model(ConvNextModel):
             return dict(ebird_codes)
 
         return {idx: taxonomy[code]["common_name"] if code in taxonomy else code for idx, code in ebird_codes.items()}
+
+    @property
+    def backbone(self) -> "torch.nn.Module":
+        """ConvNeXt backbone only (no prototype head) — used by freeze_backbone_epochs."""
+        return self.model.model.backbone
 
     def _discover_linear_layers(self) -> None:
         """Discover the four ConvNeXt encoder stages for hook-based probing.

@@ -2,36 +2,40 @@
 
 ConvNextForImageClassification (1 audio channel, N-class head).
 
-Architecture and preprocessing are fully configured via the YAML ``model_spec``
-block.  When ``init_config`` or ``audio_config`` are omitted, defaults are read
-from the packaged ``checkpoints/convnext_base.yml`` (same package as BEATs).
+Architecture is configured via ``init_config``; mel preprocessing via
+``convnext_cfg``.  Both default to the packaged ``checkpoints/convnext_base.yml``
+when omitted.
 
 YAML quick-start::
 
     checkpoint_path: /path/to/convnext.ckpt
+    convnext_cfg:
+      sample_rate: 32000
+      n_fft: 2048
+      hop_length: 256
+      n_mels: 256
+      norm_mean: -13.369
+      norm_std: 13.162
     model_spec:
       name: convnext
       pretrained: false
       init_config:
         depths: [3, 3, 27, 3]
         hidden_sizes: [128, 256, 512, 1024]
-      audio_config:
-        sample_rate: 32000
-        n_fft: 2048
-        hop_length: 256
-        n_mels: 256
-        extra_config:
-          norm_mean: -13.369
-          norm_std: 13.162
 
 See ``avex/api/configs/checkpoints/convnext_base.yml`` for a ready-to-use
 ConvNeXt-Base config that matches the BirdSet XCL training setup.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
+
+if TYPE_CHECKING:
+    from avex.configs import ConvNextCfg
 
 from avex.models.base_model import ModelBase
 
@@ -43,80 +47,43 @@ _CONVNEXT_BASE_YAML = "convnext_base"
 
 
 def _load_convnext_base_yaml() -> dict:
-    """Load and return the packaged convnext_base.yml mapping.
-
-    Returns
-    -------
-    dict
-        Parsed YAML content.
-
-    Raises
-    ------
-    ValueError
-        If the packaged YAML is missing or malformed.
-    """
     from avex.models.utils.registry import load_packaged_yaml_mapping
 
     data = load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name=_CONVNEXT_BASE_YAML)
     if not data:
         raise ValueError(
             f"Packaged YAML '{_CONVNEXT_BASE_YAML}.yml' not found in "
-            f"'{_CHECKPOINT_CONFIGS_PKG}'.  Cannot resolve default architecture "
-            "or mel parameters."
+            f"'{_CHECKPOINT_CONFIGS_PKG}'.  Cannot resolve default architecture."
         )
     return data
 
 
-def _parse_mel_params(audio_config: object) -> dict:
-    """Return mel preprocessing parameters.
-
-    If ``audio_config`` is None, parameters are loaded from the packaged
-    ``convnext_base.yml``.  Otherwise ``audio_config`` values override the
-    YAML defaults.
+def _build_convnext_cfg(convnext_cfg: Optional[dict], yaml_data: Optional[dict] = None) -> "ConvNextCfg":
+    """Build a ConvNextCfg from the provided dict or a packaged YAML fallback.
 
     Parameters
     ----------
-    audio_config : AudioConfig | dict | None
+    convnext_cfg:
+        Explicit override dict; validated strictly (errors propagate).
+    yaml_data:
+        Pre-loaded YAML mapping to read ``convnext_cfg`` from.  When ``None``,
+        falls back to ``convnext_base.yml``.
 
     Returns
     -------
-    dict
-        Keys: ``n_fft``, ``hop_length``, ``n_mels``, ``sample_rate``,
-        ``norm_mean``, ``norm_std``.
+    ConvNextCfg
+        Mel preprocessing configuration.
     """
-    yaml_data = _load_convnext_base_yaml()
-    yaml_audio = yaml_data.get("model_spec", {}).get("audio_config", {}) or {}
-    yaml_extra = yaml_audio.get("extra_config", {}) or {}
-    params = {
-        "n_fft": yaml_audio["n_fft"],
-        "hop_length": yaml_audio["hop_length"],
-        "n_mels": yaml_audio["n_mels"],
-        "sample_rate": yaml_audio["sample_rate"],
-        "norm_mean": yaml_extra["norm_mean"],
-        "norm_std": yaml_extra["norm_std"],
-    }
+    from avex.configs import ConvNextCfg
 
-    if audio_config is None:
-        return params
-
-    if hasattr(audio_config, "model_dump"):
-        cfg = audio_config.model_dump()
-    elif isinstance(audio_config, dict):
-        cfg = audio_config
-    else:
-        return params
-
-    for key in ("n_fft", "hop_length", "n_mels", "sample_rate"):
-        if cfg.get(key) is not None:
-            params[key] = cfg[key]
-
-    extra = cfg.get("extra_config") or {}
-    if "norm_mean" in extra:
-        params["norm_mean"] = extra["norm_mean"]
-    if "norm_std" in extra:
-        params["norm_std"] = extra["norm_std"]
-
-    return params
+    if convnext_cfg is not None:
+        return ConvNextCfg(**convnext_cfg)
+    try:
+        raw = (yaml_data if yaml_data is not None else _load_convnext_base_yaml()).get("convnext_cfg") or {}
+        return ConvNextCfg(**raw)
+    except Exception as e:
+        logger.warning("convnext_cfg not found or invalid in packaged YAML, using defaults: %s", e)
+        return ConvNextCfg()
 
 
 class Model(ModelBase):
@@ -139,6 +106,7 @@ class Model(ModelBase):
         num_classes: Optional[int] = None,
         model_id: Optional[str] = None,
         init_config: Optional[dict] = None,
+        convnext_cfg: Optional[dict] = None,
         **kwargs: object,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
@@ -201,13 +169,20 @@ class Model(ModelBase):
 
         self.num_classes = num_classes if num_classes is not None else self.model.config.num_labels
 
-        mel = _parse_mel_params(audio_config)
+        mel = _build_convnext_cfg(convnext_cfg)
         self._mel_params = mel
-        self._spec_transform = T.Spectrogram(n_fft=mel["n_fft"], hop_length=mel["hop_length"], power=2.0)
-        self._mel_scale = T.MelScale(n_mels=mel["n_mels"], sample_rate=mel["sample_rate"], n_stft=mel["n_fft"] // 2 + 1)
-        self._db_scale = T.AmplitudeToDB(stype="power", top_db=80)
+        self._spec_transform = T.Spectrogram(n_fft=mel.n_fft, hop_length=mel.hop_length, power=2.0).to(device)
+        self._mel_scale = T.MelScale(n_mels=mel.n_mels, sample_rate=mel.sample_rate, n_stft=mel.n_fft // 2 + 1).to(
+            device
+        )
+        self._db_scale = T.AmplitudeToDB(stype="power", top_db=80).to(device)
 
         self.model = self.model.to(device)
+
+    @property
+    def backbone(self) -> "torch.nn.Module":
+        """ConvNeXt encoder only (no classifier head) — used by freeze_backbone_epochs."""
+        return self.model.convnext
 
     def load_state_dict(self, state_dict: dict, strict: bool = False) -> object:
         """Load weights, transparently handling PyTorch-Lightning checkpoints.
@@ -259,11 +234,10 @@ class Model(ModelBase):
         torch.Tensor
             Shape ``(batch_size, 1, n_mels, T)``, on ``self.device``.
         """
-        mel = self._mel_params
-        audio = x.cpu().float()
+        audio = x.to(self.device).float()
         spec = self._spec_transform(audio)
         mel_db = self._db_scale(self._mel_scale(spec))
-        return ((mel_db - mel["norm_mean"]) / mel["norm_std"]).unsqueeze(1).to(self.device)
+        return ((mel_db - self._mel_params.norm_mean) / self._mel_params.norm_std).unsqueeze(1)
 
     def extract_embeddings(
         self,

@@ -26,6 +26,8 @@ The ESP-AVES2 model collection is available on HuggingFace: [EarthSpeciesProject
 - **EfficientNet**: EfficientNet-based models adapted for audio classification
 - **AVES**: AVES model for bioacoustics
 - **BirdMAE**: BirdMAE masked autoencoder for bioacoustic representation learning
+- **AudioProtoPNet**: ConvNeXt-Base + prototype head for interpretable clip-level species classification (9 736 eBird classes, loads from HuggingFace hub)
+- **AudioProtoPNet SED**: ConvNeXt-Base + spatial prototype head for frame-level sound event detection; `forward_frames()` returns per-second species probabilities
 
 ### Labels vs Features Only
 

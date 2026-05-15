@@ -7,8 +7,16 @@
 #                     Use for training from scratch; supply a checkpoint_path to
 #                     resume or checkpoint_path is omitted for a fresh run.
 #
-# The audio_config matches the BirdSet XCL training setup used by AudioProtoPNet.
+# convnext_cfg matches the BirdSet XCL training setup used by AudioProtoPNet.
 # Adjust norm_mean / norm_std if training on a dataset with different statistics.
+
+convnext_cfg:
+  sample_rate: 32000
+  n_fft: 2048
+  hop_length: 256
+  n_mels: 256
+  norm_mean: -13.369
+  norm_std: 13.162
 
 model_spec:
   name: convnext
@@ -16,11 +24,3 @@ model_spec:
   init_config:
     depths: [3, 3, 27, 3]
     hidden_sizes: [128, 256, 512, 1024]
-  audio_config:
-    sample_rate: 32000
-    n_fft: 2048
-    hop_length: 256
-    n_mels: 256
-    extra_config:
-      norm_mean: -13.369
-      norm_std: 13.162

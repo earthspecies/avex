@@ -43,6 +43,8 @@ def _add_model_spec_params(init_kwargs: dict, model_spec: ModelSpec) -> None:
         "init_config",
         "language",
         "model_id",
+        "convnext_cfg",
+        "checkpoint_dir",
     ]
 
     for param_name in param_names:

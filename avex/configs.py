@@ -248,6 +248,23 @@ class AudioConfig(BaseModel):
         return v
 
 
+class ConvNextCfg(BaseModel):
+    """Mel-spectrogram preprocessing configuration for ConvNeXt-based models.
+
+    Defaults match the BirdSet XCL training setup used by AudioProtoPNet.
+    Used by ``convnext`` and ``audioprotopnet_sed`` models.
+    """
+
+    sample_rate: int = Field(32000, gt=0)
+    n_fft: int = Field(2048, gt=0)
+    hop_length: int = Field(256, gt=0)
+    n_mels: int = Field(256, gt=0)
+    norm_mean: float = -13.369
+    norm_std: float = 13.162
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ModelSpec(BaseModel):
     """All parameters required to *instantiate* the network."""
 
@@ -311,8 +328,30 @@ class ModelSpec(BaseModel):
         ),
     )  # noqa: ANN401
 
+    # ConvNeXt mel preprocessing configuration (convnext and audioprotopnet_sed).
+    # When provided, overrides the convnext_cfg block in the packaged YAML.
+    convnext_cfg: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Mel preprocessing configuration for ConvNeXt-based models "
+            "(convnext, audioprotopnet_sed). Overrides the convnext_cfg block "
+            "in the packaged checkpoint YAML. Keys: sample_rate, n_fft, "
+            "hop_length, n_mels, norm_mean, norm_std."
+        ),
+    )  # noqa: ANN401
+
     # BirdNet-specific configuration
     language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")
+
+    # AudioProtoPNet SED checkpoint directory (three .pt files).
+    checkpoint_dir: Optional[str] = Field(
+        None,
+        description=(
+            "Path to a directory containing config.pt, backbone_state_dict.pt, "
+            "head_state_dict.pt (AudioProtoPNet SED).  Overrides checkpoint_dir "
+            "in the packaged YAML."
+        ),
+    )
 
     # HuggingFace model repository ID or local path.  Models that load from HF
     # (e.g. EAT, AudioProtoPNet, ConvNeXt variants) should set this explicitly

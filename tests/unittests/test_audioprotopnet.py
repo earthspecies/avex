@@ -72,7 +72,7 @@ def plain_convnext_model() -> ConvNextModel:
     Returns
     -------
     ConvNextModel
-        Model in eval mode.
+        Randomly-initialised model in eval mode.
     """
     m = ConvNextModel(
         pretrained=False,
@@ -82,6 +82,18 @@ def plain_convnext_model() -> ConvNextModel:
     )
     m.eval()
     return m
+
+
+@pytest.fixture(scope="module")
+def plain_convnext_audio() -> torch.Tensor:
+    """Batch of two 5-second random waveforms at 32 kHz for CPU ConvNeXt tests.
+
+    Returns
+    -------
+    torch.Tensor
+        Shape ``(2, sample_rate * clip_seconds)``.
+    """
+    return torch.randn(2, _SAMPLE_RATE * _CLIP_SECONDS)
 
 
 # =========================================================================== #
@@ -314,10 +326,9 @@ def test_plain_convnext_architecture_matches_hf_pretrained() -> None:
         assert local_model.state_dict()[k].shape == hf_model.state_dict()[k].shape, f"Shape mismatch for {k}"
 
 
-def test_plain_convnext_forward_shape(plain_convnext_model: ConvNextModel) -> None:
-    audio = torch.randn(2, _SAMPLE_RATE * _CLIP_SECONDS)
+def test_plain_convnext_forward_shape(plain_convnext_model: ConvNextModel, plain_convnext_audio: torch.Tensor) -> None:
     with torch.no_grad():
-        logits = plain_convnext_model(audio)
+        logits = plain_convnext_model(plain_convnext_audio)
     assert logits.shape == (2, _NUM_CLASSES)
 
 
@@ -347,25 +358,52 @@ def test_plain_convnext_load_state_dict_lightning_remapping(
     assert not result.unexpected_keys
 
 
-def test_plain_convnext_mel_params_from_audio_config() -> None:
-    """Mel params in audio_config override the module-level defaults."""
-    from avex.configs import AudioConfig
-
-    cfg = AudioConfig(
-        sample_rate=32000,
-        n_fft=1024,
-        hop_length=128,
-        n_mels=128,
-        extra_config={"norm_mean": 0.0, "norm_std": 1.0},
-    )
+def test_plain_convnext_mel_params_from_convnext_cfg() -> None:
+    """convnext_cfg overrides the ConvNextCfg defaults."""
     m = ConvNextModel(
         pretrained=False,
         device="cpu",
-        audio_config=cfg,
         num_classes=10,
+        convnext_cfg={
+            "sample_rate": 32000,
+            "n_fft": 1024,
+            "hop_length": 128,
+            "n_mels": 128,
+            "norm_mean": 0.0,
+            "norm_std": 1.0,
+        },
     )
-    assert m._mel_params["n_fft"] == 1024
-    assert m._mel_params["hop_length"] == 128
-    assert m._mel_params["n_mels"] == 128
-    assert m._mel_params["norm_mean"] == 0.0
-    assert m._mel_params["norm_std"] == 1.0
+    assert m._mel_params.n_fft == 1024
+    assert m._mel_params.hop_length == 128
+    assert m._mel_params.n_mels == 128
+    assert m._mel_params.norm_mean == 0.0
+    assert m._mel_params.norm_std == 1.0
+
+
+# =========================================================================== #
+#  ConvNextCfg                                                                 #
+# =========================================================================== #
+
+
+def test_convnext_cfg_defaults() -> None:
+    """ConvNextCfg defaults match the BirdSet XCL setup."""
+    from avex.configs import ConvNextCfg
+
+    cfg = ConvNextCfg()
+    assert cfg.sample_rate == 32000
+    assert cfg.n_fft == 2048
+    assert cfg.hop_length == 256
+    assert cfg.n_mels == 256
+    assert cfg.norm_mean == pytest.approx(-13.369)
+    assert cfg.norm_std == pytest.approx(13.162)
+
+
+def test_convnext_cfg_overrides() -> None:
+    from avex.configs import ConvNextCfg
+
+    cfg = ConvNextCfg(sample_rate=16000, n_fft=1024, hop_length=128, n_mels=128, norm_mean=0.0, norm_std=1.0)
+    assert cfg.sample_rate == 16000
+    assert cfg.n_fft == 1024
+    assert cfg.n_mels == 128
+    assert cfg.norm_mean == pytest.approx(0.0)
+    assert cfg.norm_std == pytest.approx(1.0)
