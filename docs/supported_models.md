@@ -84,3 +84,27 @@ model_spec:
 ```
 
 These configurations can be loaded directly with `load_model("path/to/config.yml")`. See the [Custom Model Registration](custom_model_registration.md) section for usage examples.
+
+## External Models
+
+### ONNX-based (no extra dependencies)
+
+| Model name | Description | Source |
+|------------|-------------|--------|
+| `birdnet` | BirdNet v2.4 — 6 522 species, 1 024-d embeddings, 48 kHz | [justinchuby/BirdNET-onnx](https://huggingface.co/justinchuby/BirdNET-onnx) |
+| `perch2` | Google Perch v2 — 14 795 species, 1 536-d embeddings, 32 kHz | [justinchuby/Perch-onnx](https://huggingface.co/justinchuby/Perch-onnx) |
+
+### TensorFlow-based *(deprecated)*
+
+The following models use TensorFlow Hub and require an optional extra:
+
+```bash
+pip install 'avex[tensorflow]'
+```
+
+| Model name | Description | Status |
+|------------|-------------|--------|
+| `perch` | Google Perch v1 — 10 932 species, 1 280-d embeddings, 32 kHz | Deprecated — migrate to `perch2` |
+| `surfperch` | SurfPerch via TensorFlow Hub | Deprecated — no ONNX export available yet |
+
+These models emit a `DeprecationWarning` on instantiation. TensorFlow support will be removed in a future release.

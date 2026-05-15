@@ -1,0 +1,16 @@
+{
+  "fingerprints": {
+    "esp_aves2_eat_all": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+    "esp_aves2_eat_bio": "c4b84d7f28b6d4fee28702c1d051aecb1109b272028926752cac0ee19df979b5",
+    "esp_aves2_effnetb0_all": "801ebab010118dd0f07f0a07d0f18f5aa64f2f1270fe4bc2123342c081fa1b53",
+    "esp_aves2_effnetb0_audioset": "1fbe57dd3b795aea08c66ed5c45731cce5a08835b9c33676057d6e5d361c52ae",
+    "esp_aves2_effnetb0_bio": "3123856a920e27271a26fe29437119a90e2ebd5436d4bb9a4629d08828fef8ef",
+    "esp_aves2_naturelm_audio_v1_beats": "248a36d3772d847119b44969be19a4ba70a6302557f58a700dc9fd14ff0af9f3",
+    "esp_aves2_sl_beats_all": "c01e92839305633644aa62346b3b3a4cf086e46083ae6db2b7f4b3fede3a8f5d",
+    "esp_aves2_sl_beats_bio": "1c9e8459e2cf0038a0d062b3f414d18678d10997db95300aa7f1dc7288411fb2",
+    "esp_aves2_sl_eat_all_ssl_all": "cc2ce5ffe5a91c79552cddd5401fe001bcaf28abeb79f39dddae69c14cd93b73",
+    "esp_aves2_sl_eat_bio_ssl_all": "5c241d38231194d10648a2556fb9859bb8eb28993e6b9ab78d59c423740ade1b"
+  },
+  "profile": "torch_2_5_0",
+  "requested_torch_release": "2.7.1"
+}

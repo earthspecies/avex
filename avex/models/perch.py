@@ -7,6 +7,7 @@ https://tfhub.dev/google/bird-vocalization-classifier/4
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any, Dict, Optional
 
 import torch
@@ -38,8 +39,9 @@ def _load_tf_model() -> Any:  # noqa: ANN401
             import tensorflow_hub as hub
         except ModuleNotFoundError as e:  # pragma: no cover
             raise ImportError(
-                "TensorFlow and tensorflow-hub are required for the Perch model\n"
-                "pip install tensorflow>=2.12 tensorflow-hub"
+                "TensorFlow is required for Perch v1 but is not installed.\n"
+                "Install the optional extra:  pip install 'avex[tensorflow]'\n"
+                "Or migrate to Perch v2 (ONNX, no TensorFlow):  use model name 'perch2'."
             ) from e
 
         logger.info("Downloading Perch model from TF-Hub …")
@@ -91,6 +93,15 @@ class PerchModel(ModelBase):
             freeze_backbone: Whether to freeze the backbone (currently unused)
             return_features_only: If True, force feature extraction mode (num_classes=0)
         """
+        warnings.warn(
+            "PerchModel (Perch v1) requires TensorFlow and is deprecated. "
+            "Migrate to Perch2Model (Perch v2) which runs via ONNX with no TensorFlow dependency: "
+            "use model name 'perch2' or import avex.models.perch2. "
+            "If you still need Perch v1, install the optional extra: pip install 'avex[tensorflow]'. "
+            "TensorFlow support will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(device, audio_config)
 
         self.num_classes = num_classes
