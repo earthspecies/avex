@@ -34,7 +34,7 @@ class TestAVESModel:
 
     def test_model_initialization_and_layer_discovery(self, aves_model: AVESModel) -> None:
         """Test model initialization and layer discovery."""
-        aves_model._discover_linear_layers()
+        aves_model._discover_embedding_layers()
         assert hasattr(aves_model, "_layer_names")
         assert isinstance(aves_model._layer_names, list)
         assert len(aves_model._layer_names) >= 0
@@ -74,7 +74,7 @@ class TestAVESModel:
 
     def test_extract_embeddings_layer_selection(self, aves_model: AVESModel, sample_audio: torch.Tensor) -> None:
         """Test extraction with specific layers and all layers."""
-        aves_model._discover_linear_layers()
+        aves_model._discover_embedding_layers()
         layer_name = "model.encoder.transformer.layers.0.feed_forward.intermediate_dense"
 
         # Specific layer
@@ -98,7 +98,7 @@ class TestAVESModel:
 
     def test_extract_embeddings_aggregation_modes(self, aves_model: AVESModel, sample_audio: torch.Tensor) -> None:
         """Test mean and none aggregation modes."""
-        aves_model._discover_linear_layers()
+        aves_model._discover_embedding_layers()
         layer_name = (
             aves_model._layer_names[0]
             if aves_model._layer_names

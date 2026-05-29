@@ -36,18 +36,18 @@ class ModelBase(nn.Module):
         self._layer_names: List[str] = []
         self._hook_layers: List[str] = []  # Standardized property name for all models
 
-    def _discover_linear_layers(self) -> None:
-        """Discover and cache all linear layer names in the model.
+    def _discover_embedding_layers(self) -> None:
+        """Discover and cache all embedding layer names in the model.
 
-        This method can be overridden by subclasses to discover additional
-        layer types beyond just nn.Linear layers.
+        This method can be overridden by subclasses to discover the specific
+        layer types useful for embedding extraction.
         """
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
             for name, module in self.named_modules():
                 if isinstance(module, nn.Linear):
                     self._layer_names.append(name)
-            logger.info(f"Discovered {len(self._layer_names)} linear layers: {self._layer_names}")
+            logger.info(f"Discovered {len(self._layer_names)} embedding layers: {self._layer_names}")
 
     def get_model_layers(self) -> list[str]:
         """Return the discoverable embedding/probe layers for this model instance.
@@ -60,8 +60,7 @@ class ModelBase(nn.Module):
         list[str]
             Discoverable layer names in index order.
         """
-        if len(self._layer_names) == 0:
-            self._discover_linear_layers()
+        self._discover_embedding_layers()
         return self._layer_names.copy()
 
     def get_model_layer_map(self) -> dict[int, str]:
@@ -124,9 +123,7 @@ class ModelBase(nn.Module):
         ValueError
             If a layer name is not found in the model.
         """
-        # Discover layers if not already done
-        if len(self._layer_names) == 0:
-            self._discover_linear_layers()
+        self._discover_embedding_layers()
 
         # Allow integer indexing into discovered layer list (0-based, negatives allowed)
         resolved_layers: list[str] = []

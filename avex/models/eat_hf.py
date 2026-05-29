@@ -215,21 +215,16 @@ class EATHFModel(ModelBase):
         # -------------------------------------------------------------- #
         #  Pre-discover MLP layers for efficient hook management        #
         # -------------------------------------------------------------- #
-        # MLP layers will be discovered in _discover_linear_layers override
+        # MLP layers will be discovered in _discover_embedding_layers override
 
-    def _discover_linear_layers(self) -> None:
+    def _discover_embedding_layers(self) -> None:
         """Discover and cache only the EAT layers that are useful for embeddings.
         This method is called when target_layers=["all"] is used.
         Specifically:
-        - backbone.model.blocks.{i}.mlp.fc2 (only fc2 layers from transformer blocks)
+        - backbone.model.blocks.{i}.attn.proj (attention projection layers)
         """
         if len(self._layer_names) == 0:  # Only discover once
             self._layer_names = []
-
-            # Discover standard linear layers
-            # for name, module in self.named_modules():
-            #     if isinstance(module, torch.nn.Linear):
-            #         self._layer_names.append(name)
 
             for name, _module in self.named_modules():
                 # Keep only the fc2 layers from transformer blocks
@@ -238,28 +233,6 @@ class EATHFModel(ModelBase):
                     if name not in self._layer_names:
                         self._layer_names.append(name)
 
-            logger.info(f"Discovered {len(self._layer_names)} embedding layers in EAT model: {self._layer_names}")
-
-    def _discover_embedding_layers(self) -> None:
-        """
-        Discover and cache only the EAT layers that are useful for embeddings.
-        Specifically:
-        - backbone.model.blocks.{i}.mlp.fc2 (only fc2 layers from transformer blocks)
-        """
-        if len(self._layer_names) == 0:  # Only discover once
-            self._layer_names = []
-
-            # Discover standard linear layers
-            # for name, module in self.named_modules():
-            #     if isinstance(module, torch.nn.Linear):
-            #         self._layer_names.append(name)
-
-            for name, _module in self.named_modules():
-                # Keep only the fc2 layers from transformer blocks
-                # Pattern: backbone.model.blocks.{i}.mlp.fc2
-                if name.endswith("attn.proj") and "backbone.model.blocks." in name:
-                    if name not in self._layer_names:
-                        self._layer_names.append(name)
             logger.info(f"Discovered {len(self._layer_names)} embedding layers in EAT model: {self._layer_names}")
 
     # ------------------------------------------------------------------ #

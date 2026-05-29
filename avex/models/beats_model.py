@@ -154,9 +154,9 @@ class Model(ModelBase):
         # ------------------------------------------------------------------
         # 3.  Pre-discover MLP (fc1, fc2) layers for efficient hook management
         # ------------------------------------------------------------------
-        # MLP layers will be discovered in _discover_linear_layers override
+        # MLP layers will be discovered in _discover_embedding_layers override
 
-    def _discover_linear_layers(self) -> None:
+    def _discover_embedding_layers(self) -> None:
         """
         Discover and cache only the BEATs layers that are useful for embeddings.
         This method is called when target_layers=["all"] is used.
@@ -176,34 +176,6 @@ class Model(ModelBase):
                 # Pattern: backbone.encoder.layers.{i}.fc2
                 elif name.endswith(".fc2") and "backbone.encoder.layers." in name:
                     self._layer_names.append(name)
-
-            logger.info(f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}")
-
-    def _discover_embedding_layers(self) -> None:
-        """
-        Discover and cache only the BEATs layers that are useful for embeddings.
-        Specifically:
-        - backbone.post_extract_proj
-        - backbone.encoder.layers.{i}.fc2 (only fc2 layers from encoder blocks)
-        """
-        if len(self._layer_names) == 0:  # Only discover once
-            self._layer_names = []
-
-            # # Discover standard linear layers
-            # for name, module in self.named_modules():
-            #     if isinstance(module, torch.nn.Linear):
-            #         self._layer_names.append(name)
-
-            for name, _module in self.named_modules():
-                # # Keep the initial projection after conv frontend
-                # if name.endswith("post_extract_proj"):
-                #     self._layer_names.append(name)
-
-                # Keep only the fc2 layers from transformer encoder blocks
-                # Pattern: backbone.encoder.layers.{i}.fc2
-                if name.endswith(".fc2") and "backbone.encoder.layers." in name:
-                    if name not in self._layer_names:
-                        self._layer_names.append(name)
 
             logger.info(f"Discovered {len(self._layer_names)} embedding layers in BEATs: {self._layer_names}")
 
