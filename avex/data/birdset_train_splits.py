@@ -13,7 +13,6 @@ from typing import Any
 
 import librosa
 import numpy as np
-
 from esp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
 from esp_data.backends import BackendType
 from esp_data.io import AnyPathT, anypath, audio_stereo_to_mono, read_audio
@@ -113,18 +112,19 @@ class BirdSetTrainSplits(Dataset):
         return list(self.info.split_paths.keys())
 
     def _load(self) -> None:
-        """Load the requested split manifest."""
+        """Load the requested split manifest.
+
+        Raises
+        ------
+        LookupError
+            If ``split`` is not in the registered split paths.
+        """
         if self.split not in self.info.split_paths:
-            raise LookupError(
-                f"Invalid split: {self.split}. Expected one of "
-                f"{list(self.info.split_paths.keys())}"
-            )
+            raise LookupError(f"Invalid split: {self.split}. Expected one of {list(self.info.split_paths.keys())}")
 
         location = self.info.split_paths[self.split]
         if anypath(location).suffix == ".jsonl":
-            self._data = self._backend_class.from_json(
-                location, lines=True, streaming=self._streaming
-            )
+            self._data = self._backend_class.from_json(location, lines=True, streaming=self._streaming)
         else:
             self._data = self._backend_class.from_csv(
                 location,
@@ -132,10 +132,14 @@ class BirdSetTrainSplits(Dataset):
             )
 
     @classmethod
-    def from_config(
-        cls, dataset_config: DatasetConfig
-    ) -> tuple["BirdSetTrainSplits", dict[str, Any]]:
-        """Build a dataset instance from a ``DatasetConfig``."""
+    def from_config(cls, dataset_config: DatasetConfig) -> tuple["BirdSetTrainSplits", dict[str, Any]]:
+        """Build a dataset instance from a ``DatasetConfig``.
+
+        Returns
+        -------
+        tuple[BirdSetTrainSplits, dict[str, Any]]
+            Dataset instance and transformation metadata.
+        """
         cfg = dataset_config.model_dump(exclude={"dataset_name", "transformations"})
         # Benchmark transforms (train_val_split, etc.) use pandas-style column access.
         backend: BackendType = cfg["backend"]
@@ -158,13 +162,22 @@ class BirdSetTrainSplits(Dataset):
         return ds, {}
 
     def __len__(self) -> int:
-        """Return the number of rows in the loaded split."""
+        """Return the number of rows in the loaded split.
+
+        Returns
+        -------
+        int
+            Row count.
+
+        Raises
+        ------
+        RuntimeError
+            If the split has not been loaded yet.
+        """
         if self._data is None:
             raise RuntimeError("No split has been loaded yet. Call load() first.")
         if self._streaming:
-            raise NotImplementedError(
-                "Length is not available in streaming mode. Iterate over the dataset."
-            )
+            raise NotImplementedError("Length is not available in streaming mode. Iterate over the dataset.")
         return len(self._data)
 
     def _process(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -195,17 +208,35 @@ class BirdSetTrainSplits(Dataset):
         return row
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
-        """Return one processed sample."""
+        """Return one processed sample.
+
+        Returns
+        -------
+        dict[str, Any]
+            Processed sample with audio and metadata.
+        """
         row = self._data[idx]
         return self._process(row)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
-        """Iterate over processed samples."""
+        """Iterate over processed samples.
+
+        Yields
+        ------
+        dict[str, Any]
+            Processed sample with audio and metadata.
+        """
         for row in self._data:
             yield self._process(row)
 
     def __str__(self) -> str:
-        """Return a short human-readable description."""
+        """Return a short human-readable description.
+
+        Returns
+        -------
+        str
+            Human-readable summary of name, version, split, and available splits.
+        """
         return (
             f"{self.info.name} (v{self.info.version}), split={self.split}\n"
             f"Description: {self.info.description}\n"

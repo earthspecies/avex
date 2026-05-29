@@ -21,12 +21,13 @@ from esp_data import (
     dataset_from_config,
 )
 
+from avex.data import birdset_train_splits  # noqa: F401 - registers birdset_train
+
 # Temporary patch for AnimalSpeak for compatibility
 # with dataset concatenation while relevant issue is raised in esp-data.
 from avex.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
-from avex.data import birdset_train_splits  # noqa: F401 - registers birdset_train
 
 # apply_cloudpathlib_patch()
 apply_animalspeak_column_patch()
@@ -462,6 +463,10 @@ def build_dataloaders(
         Whether we're in evaluation context (run_evaluate.py) vs training context
         (run_train.py). In evaluation context, augmentations are disabled by default
         for train/val unless enable_eval_augmentations=True. Defaults to False.
+
+    worker_timeout : int, optional
+        Timeout in seconds for DataLoader workers (maps to PyTorch DataLoader
+        ``timeout``). 0 means no timeout. Defaults to 0.
 
     Returns
     -------

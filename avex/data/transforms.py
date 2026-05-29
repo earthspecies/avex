@@ -64,13 +64,14 @@ class TrainValSplitTransform:
     def from_config(cls, cfg: TrainValSplitConfig) -> "TrainValSplitTransform":
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: Any) -> Tuple[Any, dict]:
+    def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
         n = len(data)
 
         if n == 0:
             return data, {"subset": self.subset, "original_size": 0, "split_size": 0}
 
         rng = np.random.default_rng(self.random_state)
+        is_dataframe = isinstance(data, pd.DataFrame)
 
         if self.stratify_column is not None:
             if self.stratify_column not in data.columns:
@@ -78,18 +79,26 @@ class TrainValSplitTransform:
                     f"Stratify column '{self.stratify_column}' not found in data. "
                     f"Available columns: {list(data.columns)}"
                 )
-            # Per-class proportional split via backend API
-            indexed = data.add_column("__row_idx__", list(range(n)))
             train_idxs: list[int] = []
             val_idxs: list[int] = []
 
-            for class_val in indexed.get_unique(self.stratify_column):
-                group = indexed.filter_isin(self.stratify_column, [class_val])
-                group_row_idxs = [row["__row_idx__"] for row in group]
-                perm = rng.permutation(len(group_row_idxs)).tolist()
-                n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
-                train_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train)])
-                val_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train, len(perm))])
+            if is_dataframe:
+                for class_val in data[self.stratify_column].unique():
+                    group_pos = list(np.where(data[self.stratify_column] == class_val)[0])
+                    perm = rng.permutation(len(group_pos)).tolist()
+                    n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
+                    train_idxs.extend([group_pos[perm[i]] for i in range(n_train)])
+                    val_idxs.extend([group_pos[perm[i]] for i in range(n_train, len(perm))])
+            else:
+                # Per-class proportional split via esp_data backend API
+                indexed = data.add_column("__row_idx__", list(range(n)))
+                for class_val in indexed.get_unique(self.stratify_column):
+                    group = indexed.filter_isin(self.stratify_column, [class_val])
+                    group_row_idxs = [row["__row_idx__"] for row in group]
+                    perm = rng.permutation(len(group_row_idxs)).tolist()
+                    n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
+                    train_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train)])
+                    val_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train, len(perm))])
 
             selected = sorted(train_idxs) if self.subset == "train" else sorted(val_idxs)
         else:
@@ -97,7 +106,7 @@ class TrainValSplitTransform:
             n_train = int(n * self.train_size)
             selected = sorted(perm[:n_train]) if self.subset == "train" else sorted(perm[n_train:])
 
-        result = data[selected]
+        result = data.iloc[selected].reset_index(drop=True) if is_dataframe else data[selected]
 
         return result, {
             "subset": self.subset,
@@ -158,7 +167,7 @@ class RLSubsampleTransform:
     def from_config(cls, cfg: RLSubsampleConfig) -> "RLSubsampleTransform":
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: Any) -> Tuple[Any, dict]:
+    def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
         n_total = len(data)
 
         if n_total == 0:
@@ -189,8 +198,14 @@ class RLSubsampleTransform:
         }
 
 
-def _is_empty_labels(val: Any) -> bool:
-    """Return True when a labels_as_list cell carries no usable string labels."""
+def _is_empty_labels(val: Any) -> bool:  # noqa: ANN401
+    """Return True when a labels_as_list cell carries no usable string labels.
+
+    Returns
+    -------
+    bool
+        True when the cell is None, NaN, an empty list, or a list of only None values.
+    """
     if val is None:
         return True
     if isinstance(val, float):
@@ -235,7 +250,7 @@ class FillLabelsFromAnswer:
     def from_config(cls, cfg: FillLabelsFromAnswerConfig) -> "FillLabelsFromAnswer":
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: Any) -> Tuple[Any, dict]:
+    def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
         # Unwrap to pandas for row-wise label fix
         if hasattr(data, "unwrap"):
             frame = data.unwrap
