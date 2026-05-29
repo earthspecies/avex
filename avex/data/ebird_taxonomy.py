@@ -40,7 +40,9 @@ def load(version: EbirdTaxonomyVersion) -> dict[str, dict[str, str]]:
     Returns
     -------
     dict[str, dict[str, str]]
-        ``{ebird_code: {"common_name": ..., "sci_name": ...}}``
+        ``{ebird_code: {"common_name": ..., "sci_name": ...}}``. The mapping is
+        cached (``lru_cache``) and shared across callers; treat it as read-only
+        and copy before mutating.
 
     Raises
     ------

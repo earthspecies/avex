@@ -185,6 +185,8 @@ class RLSubsampleTransform:
         if self.max_samples is not None:
             n = min(n, self.max_samples)
 
+        # Datasets are always loaded through an esp_data backend (pandas or
+        # polars); both expose the unified `sample_rows(n, seed=...)` API.
         seed = self.random_state if self.random_state is not None else 42
         result = data[0:0] if n == 0 else data.sample_rows(n, seed=seed)
 
@@ -208,11 +210,13 @@ def _is_empty_labels(val: Any) -> bool:  # noqa: ANN401
     """
     if val is None:
         return True
-    if isinstance(val, float):
-        return True  # pandas NaN
     if isinstance(val, (list, np.ndarray)):
         return len(val) == 0 or all(x is None for x in val)
-    return False
+    # Scalar: treat only NaN as empty (a legitimate float label must survive).
+    try:
+        return bool(pd.isna(val))
+    except (TypeError, ValueError):
+        return False
 
 
 class FillLabelsFromAnswerConfig(BaseModel):
@@ -251,7 +255,10 @@ class FillLabelsFromAnswer:
         return cls(**cfg.model_dump(exclude=("type",)))
 
     def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
-        # Unwrap to pandas for row-wise label fix
+        # Unwrap to pandas for row-wise label fix.
+        # Note: collect() materializes a lazy/polars frame fully into memory
+        # before converting to pandas; large splits can blow up here. Kept as a
+        # deliberate workaround for the Polars replace_strict/List(Null) bug.
         if hasattr(data, "unwrap"):
             frame = data.unwrap
             if hasattr(frame, "collect"):
@@ -265,22 +272,23 @@ class FillLabelsFromAnswer:
         if self.source not in df.columns:
             raise ValueError(f"Source column '{self.source}' not found in data.")
 
+        # Single explicit pass: row-wise apply can double-invoke during dtype
+        # inference (inflating `filled`) and is slow on large frames.
         filled = 0
-
-        def _fix(row: pd.Series) -> list:
-            nonlocal filled
-            if _is_empty_labels(row[self.target]):
-                answer = row[self.source]
-                if answer and isinstance(answer, str) and answer not in self.ignore_answers:
+        new_labels: list[list] = []
+        for tgt, answer in zip(df[self.target].tolist(), df[self.source].tolist(), strict=False):
+            if _is_empty_labels(tgt):
+                if isinstance(answer, str) and answer and answer not in self.ignore_answers:
                     filled += 1
                     # BEANS train often uses comma-separated names in answer (e.g. enabirds).
-                    return [part.strip() for part in answer.split(",") if part.strip()]
-                return []
-            val = row[self.target]
-            return list(val) if not isinstance(val, list) else val
+                    new_labels.append([part.strip() for part in answer.split(",") if part.strip()])
+                else:
+                    new_labels.append([])
+            else:
+                new_labels.append(list(tgt) if not isinstance(tgt, list) else tgt)
 
         df = df.copy()
-        df[self.target] = df.apply(_fix, axis=1)
+        df[self.target] = new_labels
 
         # Always return PandasBackend so downstream multilabel_from_features
         # uses the pandas path, avoiding the Polars replace_strict/List(Null) bug.
