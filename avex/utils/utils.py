@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any, Literal
 
+import h5py
 import torch
 
 from avex.io import AnyPathT, PureCloudPath, anypath, filesystem_from_path
@@ -471,6 +472,38 @@ def universal_torch_load(
 # -------------------------------------------------------------------- #
 #  Checkpoint sanitiser helper                                         #
 # -------------------------------------------------------------------- #
+
+
+def _embedding_cache_matches(path: Path, *, expected_aggregation: str) -> bool:
+    """Check whether an embedding cache file exists and matches the expected aggregation.
+
+    Returns
+    -------
+    bool
+        True if the file exists, is complete, and was stored with the expected aggregation.
+    """
+    if not path.exists():
+        logger.info("Embedding cache miss (file absent): %s", path)
+        return False
+    try:
+        with h5py.File(str(path), "r") as h5f:
+            stored_aggregation = str(h5f.attrs.get("embedding_aggregation", h5f.attrs.get("aggregation", "none")))
+            complete = bool(h5f.attrs.get("extraction_complete", False))
+    except Exception as exc:
+        logger.warning("Could not inspect embedding cache metadata at %s: %s", path, exc)
+        return False
+    if not complete:
+        logger.info("Embedding cache %s is incomplete (extraction_complete missing/false); recomputing.", path)
+        return False
+    if stored_aggregation != expected_aggregation:
+        logger.info(
+            "Embedding cache %s was stored with aggregation=%s, expected %s; recomputing.",
+            path,
+            stored_aggregation,
+            expected_aggregation,
+        )
+        return False
+    return True
 
 
 def _process_state_dict(state_dict: dict, keep_classifier: bool = False, drop_model_prefix: bool = True) -> dict:
