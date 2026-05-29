@@ -426,7 +426,6 @@ class Model(ModelBase):
             self.last_layer = _LinearLayerWithoutNegativeConnections(
                 in_features=n_protos, out_features=n_classes, bias=True
             )
-            self.prototype_vectors = nn.Parameter(torch.empty(n_protos, backbone_cfg.hidden_sizes[-1], 1, 1))
 
             if ckpt_format == "split":
                 backbone_sd = universal_torch_load(
@@ -444,6 +443,9 @@ class Model(ModelBase):
                 self.last_layer.weight.data.copy_(head_sd["last_layer.weight"])
                 self.last_layer.bias.data.copy_(head_sd["last_layer.bias"])
             else:
+                # birdcode path: register the parameter so load_state_dict can
+                # fill it (split path constructs it directly from head_sd above).
+                self.prototype_vectors = nn.Parameter(torch.empty(n_protos, backbone_cfg.hidden_sizes[-1], 1, 1))
                 remapped = _remap_birdcode_state_dict(raw_sd)
                 load_result = self.load_state_dict(remapped, strict=False)
                 if load_result.unexpected_keys:

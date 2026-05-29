@@ -996,7 +996,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         # Check if multilabel is True but loss function isn't BCE/Focal
         if data.get("multilabel", False) and v not in {"bce", "focal", "asymmetric", "asl"}:
             raise ValueError(
-                f"When multilabel=True, loss_function must be 'bce', 'focal', or 'asymmetric' (got '{v}' instead)"
+                f"When multilabel=True, loss_function must be 'bce', 'focal', 'asymmetric', or 'asl' "
+                f"(got '{v}' instead)"
             )
 
         # For self-supervised runs we don't impose any loss-type restrictions

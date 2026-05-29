@@ -29,8 +29,13 @@ class PrototypicalWrapper(nn.Module):
         Prototype classification head.
     embedding_layer : str
         Layer name passed to ``register_hooks_for_layers`` for embedding
-        extraction (``"last_layer"`` resolves automatically via the backbone's
-        ``_discover_linear_layers`` logic).
+        extraction. ``"last_layer"`` is a true virtual hook (pre-classifier
+        prototype activations) only on AudioProtoPNet / AudioProtoPNetSED.
+        On plain ConvNeXt / EfficientNet there is no virtual ``last_layer``;
+        it falls back to the base ``_get_last_non_classification_layer``
+        discovery, which resolves to the last discovered conv/linear layer.
+        Pass an explicit layer name for those backbones if that fallback does
+        not select the intended tap.
     """
 
     def __init__(
@@ -62,6 +67,24 @@ class PrototypicalWrapper(nn.Module):
         self.backbone.eval()
         return self
 
+    @staticmethod
+    def _infer_dummy_length(backbone: nn.Module, default: int = 32_000 * 5) -> int:
+        """Infer a valid dummy-clip length (in samples) from the backbone audio config.
+
+        Returns
+        -------
+        int
+            Number of samples for the dim-probing dummy input. Falls back to
+            ``default`` (5 s @ 32 kHz) when no audio config is available.
+        """
+        ap = getattr(backbone, "audio_processor", None)
+        if ap is not None:
+            seconds = getattr(ap, "target_length_seconds", None)
+            sr = getattr(ap, "sr", None)
+            if seconds and sr:
+                return int(seconds * sr)
+        return default
+
     @classmethod
     def build(
         cls,
@@ -81,7 +104,10 @@ class PrototypicalWrapper(nn.Module):
         backbone.eval()
         backbone.register_hooks_for_layers([embedding_layer])
 
-        dummy = torch.zeros(1, 32_000 * 5, device=backbone_device)
+        # Prototype-pooled extraction is input-length-independent, so this only
+        # needs a valid forward length. Derive it from the backbone's audio
+        # config when available instead of assuming 32 kHz x 5 s.
+        dummy = torch.zeros(1, cls._infer_dummy_length(backbone), device=backbone_device)
         with torch.no_grad():
             emb = backbone.extract_embeddings(dummy, aggregation="mean", freeze_backbone=True)
         embedding_dim = emb.shape[-1]

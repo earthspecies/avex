@@ -4,6 +4,12 @@ Prototype-based classifier (ConvNeXt backbone + prototype head) loaded from
 HuggingFace hub via ``AutoModelForSequenceClassification`` with
 ``trust_remote_code=True``.
 
+.. warning::
+    ``trust_remote_code=True`` executes custom model code hosted in the
+    ``DBD-research-group/*`` HuggingFace repos on load. Only load model_ids you
+    trust. Pass ``revision="<commit-sha>"`` to pin a specific revision and
+    harden against upstream changes to that remote code.
+
 Inherits Lightning checkpoint loading, gradient checkpointing, hook-based
 probing, and embedding extraction from :class:`~avex.models.convnext.Model`.
 Overrides model loading, audio preprocessing (via ``AutoFeatureExtractor``),
@@ -53,6 +59,7 @@ class Model(ConvNextModel):
         num_classes: Optional[int] = None,
         model_id: Optional[str] = None,
         ebird_taxonomy_version: EbirdTaxonomyVersion = _EBIRD_TAXONOMY_VERSION,
+        revision: Optional[str] = None,
         init_config: Optional[dict] = None,  # unused; absorbed for API compatibility
         **kwargs: object,
     ) -> None:
@@ -71,6 +78,8 @@ class Model(ConvNextModel):
 
         self.gradient_checkpointing = False
         self.model_id = model_id or _DEFAULT_AUDIOPROTOPNET_MODEL_ID
+        # Pin a HF revision to harden the trust_remote_code load (None = default branch).
+        self.revision = revision
 
         if pretrained:
             if num_classes is not None:
@@ -79,7 +88,7 @@ class Model(ConvNextModel):
                     self.model_id,
                     num_classes,
                 )
-                hf_config = AutoConfig.from_pretrained(self.model_id, trust_remote_code=True)
+                hf_config = AutoConfig.from_pretrained(self.model_id, trust_remote_code=True, revision=self.revision)
                 hf_config.num_classes = num_classes
                 hf_config.id2label = {i: str(i) for i in range(num_classes)}
                 hf_config.label2id = {str(i): i for i in range(num_classes)}
@@ -87,12 +96,15 @@ class Model(ConvNextModel):
                     self.model_id,
                     config=hf_config,
                     trust_remote_code=True,
+                    revision=self.revision,
                     ignore_mismatched_sizes=True,
                 )
                 self.num_classes: int = num_classes
             else:
                 logger.info("Loading AudioProtoPNet weights from %s", self.model_id)
-                self.model = AutoModelForSequenceClassification.from_pretrained(self.model_id, trust_remote_code=True)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_id, trust_remote_code=True, revision=self.revision
+                )
                 self.num_classes = self.model.config.num_classes
         else:
             if num_classes is None:
@@ -110,14 +122,16 @@ class Model(ConvNextModel):
                 self.model_id,
                 num_classes,
             )
-            config = AutoConfig.from_pretrained(self.model_id, trust_remote_code=True)
+            config = AutoConfig.from_pretrained(self.model_id, trust_remote_code=True, revision=self.revision)
             config.num_classes = num_classes
             config.id2label = {i: str(i) for i in range(num_classes)}
             config.label2id = {str(i): i for i in range(num_classes)}
             self.model = AutoModelForSequenceClassification.from_config(config, trust_remote_code=True)
             self.num_classes = num_classes
 
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(self.model_id, trust_remote_code=True)
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(
+            self.model_id, trust_remote_code=True, revision=self.revision
+        )
 
         if hasattr(self.model.config, "id2label") and self.model.config.id2label:
             self.ebird_codes: dict[int, str] = {int(k): v for k, v in self.model.config.id2label.items()}
