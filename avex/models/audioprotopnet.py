@@ -24,12 +24,15 @@ from typing import Optional
 
 import torch
 
+from avex.data.ebird_taxonomy import EbirdTaxonomyVersion
 from avex.models.base_model import ModelBase
 from avex.models.convnext import Model as ConvNextModel
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_AUDIOPROTOPNET_MODEL_ID = "DBD-research-group/AudioProtoPNet-20-BirdSet-XCL"
+# BirdSet XCL species codes follow the eBird taxonomy v2021 release.
+_EBIRD_TAXONOMY_VERSION: EbirdTaxonomyVersion = "v2021"
 
 
 class Model(ConvNextModel):
@@ -49,6 +52,7 @@ class Model(ConvNextModel):
         audio_config: object = None,
         num_classes: Optional[int] = None,
         model_id: Optional[str] = None,
+        ebird_taxonomy_version: EbirdTaxonomyVersion = _EBIRD_TAXONOMY_VERSION,
         init_config: Optional[dict] = None,  # unused; absorbed for API compatibility
         **kwargs: object,
     ) -> None:
@@ -117,7 +121,7 @@ class Model(ConvNextModel):
 
         if hasattr(self.model.config, "id2label") and self.model.config.id2label:
             self.ebird_codes: dict[int, str] = {int(k): v for k, v in self.model.config.id2label.items()}
-            self.label_mapping = self._build_label_mapping(self.ebird_codes)
+            self.label_mapping = self._build_label_mapping(self.ebird_codes, ebird_taxonomy_version)
         else:
             self.ebird_codes = {}
             self.label_mapping = None
@@ -125,10 +129,20 @@ class Model(ConvNextModel):
         self.model = self.model.to(device)
 
     @staticmethod
-    def _build_label_mapping(ebird_codes: dict[int, str]) -> dict[int, str]:
+    def _build_label_mapping(
+        ebird_codes: dict[int, str],
+        taxonomy_version: EbirdTaxonomyVersion = _EBIRD_TAXONOMY_VERSION,
+    ) -> dict[int, str]:
         """Return ``{class_id: common_name}`` using the bundled eBird taxonomy.
 
         Falls back to the raw eBird code for any code not found in the taxonomy.
+
+        Parameters
+        ----------
+        ebird_codes
+            Class index to eBird species code.
+        taxonomy_version
+            eBird/Clements release used when the model was trained.
 
         Returns
         -------
@@ -138,9 +152,13 @@ class Model(ConvNextModel):
         from avex.data.ebird_taxonomy import load as load_taxonomy
 
         try:
-            taxonomy = load_taxonomy()
+            taxonomy = load_taxonomy(taxonomy_version)
         except Exception as exc:
-            logger.warning("Could not load eBird taxonomy, using raw eBird codes: %s", exc)
+            logger.warning(
+                "Could not load eBird taxonomy %s, using raw eBird codes: %s",
+                taxonomy_version,
+                exc,
+            )
             return dict(ebird_codes)
 
         return {idx: taxonomy[code]["common_name"] if code in taxonomy else code for idx, code in ebird_codes.items()}
@@ -149,6 +167,83 @@ class Model(ConvNextModel):
     def backbone(self) -> "torch.nn.Module":
         """ConvNeXt backbone only (no prototype head) — used by freeze_backbone_epochs."""
         return self.model.model.backbone
+
+    def _get_last_non_classification_layer(self) -> str:
+        """Resolve ``last_layer`` to the prototype vector before the classifier.
+
+        Returns
+        -------
+        str
+            Virtual layer name used by AudioProtoPNet probing.
+        """
+        return "last_layer"
+
+    def register_hooks_for_layers(self, layer_names: list[str]) -> list[str]:
+        """Register probe targets.
+
+        ``last_layer`` is virtual for AudioProtoPNet: the pre-classifier
+        prototype activation vector is computed inside the head, not emitted by
+        a submodule that can be hooked cleanly.
+
+        Returns
+        -------
+        list[str]
+            Resolved layer names.
+        """
+        if layer_names == ["last_layer"]:
+            self.deregister_all_hooks()
+            self._hook_layers = ["last_layer"]
+            return ["last_layer"]
+        return super().register_hooks_for_layers(layer_names)
+
+    def _extract_pre_classifier_embeddings(self, x: torch.Tensor | dict) -> torch.Tensor:
+        """Return pooled prototype activations passed directly to the classifier.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``[batch, num_prototypes]``.
+        """
+        wav = x["raw_wav"] if isinstance(x, dict) else x
+        processed = self.process_audio(wav)
+        if isinstance(processed, dict):
+            input_values = processed.get("input_values")
+            if input_values is None:
+                input_values = next(iter(processed.values()))
+        else:
+            input_values = processed
+
+        backbone_outputs = self.model.model(input_values)
+        last_hidden_state = backbone_outputs[0]
+        _, info = self.model.head(last_hidden_state)
+        return info[0]
+
+    def extract_embeddings(
+        self,
+        x: torch.Tensor | dict,
+        *,
+        padding_mask: Optional[torch.Tensor] = None,
+        aggregation: str = "none",
+        freeze_backbone: bool = True,
+    ) -> torch.Tensor | list[torch.Tensor]:
+        """Extract embeddings, with ``last_layer`` as pre-classifier activations.
+
+        Returns
+        -------
+        torch.Tensor | list[torch.Tensor]
+            Probe embeddings.
+        """
+        if self._hook_layers == ["last_layer"]:
+            if freeze_backbone:
+                with torch.no_grad():
+                    return self._extract_pre_classifier_embeddings(x)
+            return self._extract_pre_classifier_embeddings(x)
+        return super().extract_embeddings(
+            x,
+            padding_mask=padding_mask,
+            aggregation=aggregation,
+            freeze_backbone=freeze_backbone,
+        )
 
     def _discover_linear_layers(self) -> None:
         """Discover the four ConvNeXt encoder stages for hook-based probing.

@@ -265,6 +265,23 @@ def test_audioprotopnet_hook_embedding_extraction(
     audioprotopnet_model.deregister_all_hooks()
 
 
+def test_audioprotopnet_last_layer_is_pre_classifier_vector(
+    audioprotopnet_model: AudioProtoPNetModel, dummy_audio: torch.Tensor
+) -> None:
+    resolved = audioprotopnet_model.register_hooks_for_layers(["last_layer"])
+    assert resolved == ["last_layer"]
+    assert not audioprotopnet_model._hooks
+
+    with torch.no_grad():
+        emb = audioprotopnet_model.extract_embeddings(dummy_audio, aggregation="mean")
+        logits = audioprotopnet_model(dummy_audio)
+
+    assert emb.dim() == 2
+    assert emb.shape[0] == 2
+    assert torch.allclose(audioprotopnet_model.model.head.last_layer(emb), logits, atol=1e-5)
+    audioprotopnet_model.deregister_all_hooks()
+
+
 # =========================================================================== #
 #  Plain ConvNeXt — architecture and forward                                   #
 # =========================================================================== #
