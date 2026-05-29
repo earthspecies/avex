@@ -2,11 +2,12 @@
 # AudioProtoPNet SED (Sound Event Detection) variant.
 # ConvNeXt-Base backbone + 2x bilinear add-on layers + spatial cosine prototype head.
 #
-# Checkpoint directory — three .pt files:
-#   <checkpoint_dir>/config.pt
-#   <checkpoint_dir>/backbone_state_dict.pt
-#   <checkpoint_dir>/head_state_dict.pt
-checkpoint_dir: gs://representation-learning/models/sed/audioprotopnet-20/
+# Checkpoint directory — birdcode training export:
+#   <checkpoint_dir>/best_model.pt
+#   <checkpoint_dir>/labels.txt
+# (Split weights config.pt / backbone_state_dict.pt / head_state_dict.pt also supported.)
+checkpoint_dir: gs://sound-event-detection/checkpoints/birdcode/
+# birdcode labels use eBird taxonomy v2025 (see AudioProtoPNetSEDModel).
 
 convnext_cfg:
   sample_rate: 32000

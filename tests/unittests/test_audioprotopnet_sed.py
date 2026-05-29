@@ -25,7 +25,9 @@ from avex.models.audioprotopnet_sed import (
 )
 from avex.models.audioprotopnet_sed import (
     _cosine_activation,
+    _detect_checkpoint_format,
     _LinearLayerWithoutNegativeConnections,
+    _remap_birdcode_state_dict,
 )
 
 _SAMPLE_RATE = 32_000
@@ -275,6 +277,23 @@ def test_extract_embeddings_no_aggregation(
     assert emb.shape[0] == 2
 
 
+def test_last_layer_resolves_to_pre_classifier_prototype_vector(
+    model: AudioProtoPNetSEDModel,
+    audio_batch: torch.Tensor,
+) -> None:
+    resolved = model.register_hooks_for_layers(["last_layer"])
+    assert resolved == ["last_layer"]
+    assert not model._hooks
+
+    with torch.no_grad():
+        emb = model.extract_embeddings(audio_batch, aggregation="mean")
+        logits = model(audio_batch)
+
+    assert emb.shape == (2, model.prototype_vectors.shape[0])
+    assert torch.allclose(model.last_layer(emb), logits, atol=1e-5)
+    model.deregister_all_hooks()
+
+
 # =========================================================================== #
 #  _cosine_activation                                                          #
 # =========================================================================== #
@@ -376,3 +395,53 @@ def test_model_is_registered() -> None:
     from avex.models.utils.registry import get_model_class
 
     assert get_model_class("audioprotopnet_sed") is AudioProtoPNetSEDModel
+
+
+def test_remap_birdcode_state_dict() -> None:
+    state_dict = {
+        "encoder.backbone.embeddings.weight": torch.zeros(2),
+        "encoder.prototype_vectors": torch.zeros(4, 8, 1, 1),
+        "classifier.weight": torch.zeros(3, 4),
+        "classifier.bias": torch.zeros(3),
+    }
+    remapped = _remap_birdcode_state_dict(state_dict)
+    assert set(remapped) == {
+        "backbone.embeddings.weight",
+        "prototype_vectors",
+        "last_layer.weight",
+        "last_layer.bias",
+    }
+
+
+def test_detect_checkpoint_format_split(tmp_path) -> None:  # noqa: ANN001
+    (tmp_path / "config.pt").write_bytes(b"x")
+    assert _detect_checkpoint_format(str(tmp_path)) == "split"
+
+
+def test_detect_checkpoint_format_birdcode(tmp_path) -> None:  # noqa: ANN001
+    (tmp_path / "best_model.pt").write_bytes(b"x")
+    assert _detect_checkpoint_format(str(tmp_path)) == "birdcode"
+
+
+@pytest.mark.integration
+def test_pretrained_load_from_packaged_birdcode_yaml() -> None:
+    """Load the packaged YAML pointing at the birdcode GCS checkpoint."""
+    from importlib import resources
+
+    from avex import load_model
+
+    yaml_path = resources.files("avex.api.configs.checkpoints") / "audioprotopnet_sed.yml"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    with resources.as_file(yaml_path) as path:
+        model = load_model(str(path), device=device)
+    assert model.num_classes == 9422
+    assert model.prototype_vectors.shape[0] == 188_440
+    audio = torch.randn(1, _SAMPLE_RATE * _CLIP_SECONDS, device=device)
+    model.eval()
+    with torch.no_grad():
+        logits = model(audio)
+        frames = model.forward_frames(audio)
+    assert logits.shape == (1, model.num_classes)
+    assert frames.shape[0] == 1
+    assert frames.shape[2] == model.num_classes
+    assert frames.min() >= 0.0 and frames.max() <= 1.0

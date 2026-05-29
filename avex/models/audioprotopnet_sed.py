@@ -10,12 +10,17 @@ head.  Differs from the BirdSet AudioProtoPNet in three key ways:
 3. Two forward modes: clip-level (global H×W max-pool → logits) and
    frame-level (frequency max-pool only → sigmoid probabilities ``[B, T, C]``).
 
-Checkpoint format — a local directory with three ``.pt`` files::
+Checkpoint format — either split weights (``extract_weights.py``) or a birdcode
+training export::
 
     checkpoint_dir/
         config.pt                # dict {"num_classes", "num_prototypes", "labels"}
         backbone_state_dict.pt   # ConvNextModel weights (may carry "backbone." prefix)
         head_state_dict.pt       # {"prototype_vectors", "last_layer.weight", "last_layer.bias"}
+
+    # birdcode / sound-event-detection training export (e.g. gs://.../birdcode/):
+        best_model.pt            # {"model_state_dict": FrameDetector weights, ...}
+        labels.txt               # one scientific name per line
 
 YAML quick-start::
 
@@ -44,6 +49,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from avex.data.ebird_taxonomy import EbirdTaxonomyVersion
 from avex.models.base_model import ModelBase
 from avex.models.convnext import _build_convnext_cfg, _load_convnext_base_yaml
 from avex.utils import universal_torch_load
@@ -52,6 +58,8 @@ logger = logging.getLogger(__name__)
 
 _CHECKPOINT_CONFIGS_PKG = "avex.api.configs.checkpoints"
 _APN_SED_YAML = "audioprotopnet_sed"
+# birdcode SED labels use the current eBird taxonomy (v2025).
+_EBIRD_TAXONOMY_VERSION: EbirdTaxonomyVersion = "v2025"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -79,6 +87,82 @@ def _build_backbone_config() -> object:
         hidden_sizes=arch["hidden_sizes"],
         num_channels=1,
     )
+
+
+def _remote_path_exists(path: str) -> bool:
+    """Return whether a local or cloud path exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the path exists.
+    """
+    from avex.io import anypath, filesystem_from_path
+
+    resolved = anypath(path)
+    fs = filesystem_from_path(resolved)
+    return bool(fs.exists(str(resolved)))
+
+
+def _read_labels_file(labels_path: str) -> list[str]:
+    """Read a newline-delimited label file from local or cloud storage.
+
+    Returns
+    -------
+    list[str]
+        Non-empty stripped labels.
+    """
+    from avex.io import anypath, filesystem_from_path
+
+    resolved = anypath(labels_path)
+    fs = filesystem_from_path(resolved)
+    with fs.open(str(resolved), encoding="utf-8") as handle:
+        return [line.strip() for line in handle if line.strip()]
+
+
+def _detect_checkpoint_format(base: str) -> str:
+    """Return ``'split'`` or ``'birdcode'`` based on files in ``checkpoint_dir``.
+
+    Returns
+    -------
+    str
+        Either ``"split"`` or ``"birdcode"``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If neither supported layout is present.
+    """
+    root = base.rstrip("/")
+    if _remote_path_exists(f"{root}/config.pt"):
+        return "split"
+    if _remote_path_exists(f"{root}/best_model.pt"):
+        return "birdcode"
+    msg = (
+        f"No supported checkpoint files in {root!r}. "
+        "Expected split weights (config.pt, backbone_state_dict.pt, head_state_dict.pt) "
+        "or a birdcode export (best_model.pt, labels.txt)."
+    )
+    raise FileNotFoundError(msg)
+
+
+def _remap_birdcode_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Map sound-event-detection ``FrameDetector`` keys to avex module names.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        State dict using this module's parameter names.
+    """
+    remapped: dict[str, torch.Tensor] = {}
+    for key, value in state_dict.items():
+        if key.startswith("encoder.backbone."):
+            remapped["backbone." + key.removeprefix("encoder.backbone.")] = value
+        elif key == "encoder.prototype_vectors":
+            remapped["prototype_vectors"] = value
+        elif key.startswith("classifier."):
+            remapped["last_layer." + key.removeprefix("classifier.")] = value
+    return remapped
 
 
 def _get_sed_checkpoint_dir(checkpoint_dir: Optional[str]) -> str:
@@ -255,6 +339,7 @@ class Model(ModelBase):
         checkpoint_dir: Optional[str] = None,
         convnext_cfg: Optional[dict] = None,
         num_classes: Optional[int] = None,
+        ebird_taxonomy_version: EbirdTaxonomyVersion = _EBIRD_TAXONOMY_VERSION,
         **kwargs: object,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
@@ -282,36 +367,95 @@ class Model(ModelBase):
             logger.info("Loading AudioProtoPNet SED weights from %s", resolved)
 
             base = resolved.rstrip("/")
-            metadata = universal_torch_load(f"{base}/config.pt", cache_mode="use", weights_only=False)
-            n_classes: int = metadata["num_classes"]
-            n_protos: int = metadata["num_prototypes"]
-            ebird_labels: list[str] = metadata["labels"]
+            ckpt_format = _detect_checkpoint_format(base)
+            logger.info("Detected checkpoint format: %s", ckpt_format)
+
+            if ckpt_format == "split":
+                metadata = universal_torch_load(f"{base}/config.pt", cache_mode="use", weights_only=False)
+                n_classes = int(metadata["num_classes"])
+                n_protos = int(metadata["num_prototypes"])
+                class_labels: list[str] = metadata["labels"]
+            else:
+                ckpt = universal_torch_load(
+                    f"{base}/best_model.pt",
+                    cache_mode="use",
+                    weights_only=False,
+                    map_location=device,
+                )
+                raw_sd = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
+                if not isinstance(raw_sd, dict):
+                    raise TypeError(f"Expected state dict in best_model.pt, got {type(raw_sd)}")
+                proto_tensor = raw_sd.get("encoder.prototype_vectors")
+                if proto_tensor is None:
+                    raise KeyError("best_model.pt is missing encoder.prototype_vectors")
+                classifier_weight = raw_sd.get("classifier.weight")
+                if classifier_weight is None:
+                    raise KeyError("best_model.pt is missing classifier.weight")
+                n_protos = int(proto_tensor.shape[0])
+                n_classes = int(classifier_weight.shape[0])
+                protos_per_class = int(classifier_weight.shape[1])
+                if n_protos != n_classes * protos_per_class:
+                    raise ValueError(
+                        f"Prototype count {n_protos} does not match "
+                        f"{n_classes} classes × {protos_per_class} prototypes/class"
+                    )
+
+                labels_path = f"{base}/labels.txt"
+                if _remote_path_exists(labels_path):
+                    file_labels = _read_labels_file(labels_path)
+                    if len(file_labels) == n_classes:
+                        class_labels = file_labels
+                    else:
+                        logger.warning(
+                            "labels.txt has %d entries but checkpoint has %d classes; "
+                            "using scientific names for the first %d indices only",
+                            len(file_labels),
+                            n_classes,
+                            min(len(file_labels), n_classes),
+                        )
+                        class_labels = [file_labels[i] if i < len(file_labels) else str(i) for i in range(n_classes)]
+                else:
+                    logger.warning("No labels.txt in %s; class indices will be used as names", base)
+                    class_labels = [str(i) for i in range(n_classes)]
 
             backbone_cfg = _build_backbone_config()
             self.backbone = HFConvNextModel(backbone_cfg)
-            backbone_sd = universal_torch_load(f"{base}/backbone_state_dict.pt", cache_mode="use", weights_only=True)
-            backbone_sd = {k.removeprefix("backbone."): v for k, v in backbone_sd.items()}
-            result = self.backbone.load_state_dict(backbone_sd, strict=False)
-            if result.unexpected_keys:
-                logger.warning("Unexpected keys in backbone checkpoint: %s", result.unexpected_keys)
-            if result.missing_keys:
-                logger.warning("Missing keys in backbone checkpoint: %s", result.missing_keys)
-
             self.add_on_layers: nn.Module = nn.Upsample(scale_factor=2, mode="bilinear")
-
-            head_sd = universal_torch_load(f"{base}/head_state_dict.pt", cache_mode="use", weights_only=True)
-            self.prototype_vectors = nn.Parameter(head_sd["prototype_vectors"].to(device))
-
-            protos_per_class = n_protos // n_classes
+            if ckpt_format == "split":
+                protos_per_class = n_protos // n_classes
             self.last_layer = _LinearLayerWithoutNegativeConnections(
                 in_features=n_protos, out_features=n_classes, bias=True
             )
-            self.last_layer.weight.data.copy_(head_sd["last_layer.weight"])
-            self.last_layer.bias.data.copy_(head_sd["last_layer.bias"])
+            self.prototype_vectors = nn.Parameter(torch.empty(n_protos, backbone_cfg.hidden_sizes[-1], 1, 1))
+
+            if ckpt_format == "split":
+                backbone_sd = universal_torch_load(
+                    f"{base}/backbone_state_dict.pt", cache_mode="use", weights_only=True
+                )
+                backbone_sd = {k.removeprefix("backbone."): v for k, v in backbone_sd.items()}
+                result = self.backbone.load_state_dict(backbone_sd, strict=False)
+                if result.unexpected_keys:
+                    logger.warning("Unexpected keys in backbone checkpoint: %s", result.unexpected_keys)
+                if result.missing_keys:
+                    logger.warning("Missing keys in backbone checkpoint: %s", result.missing_keys)
+
+                head_sd = universal_torch_load(f"{base}/head_state_dict.pt", cache_mode="use", weights_only=True)
+                self.prototype_vectors = nn.Parameter(head_sd["prototype_vectors"].to(device))
+                self.last_layer.weight.data.copy_(head_sd["last_layer.weight"])
+                self.last_layer.bias.data.copy_(head_sd["last_layer.bias"])
+            else:
+                remapped = _remap_birdcode_state_dict(raw_sd)
+                load_result = self.load_state_dict(remapped, strict=False)
+                if load_result.unexpected_keys:
+                    logger.warning("Unexpected keys in birdcode checkpoint: %s", load_result.unexpected_keys)
+                if load_result.missing_keys:
+                    logger.warning("Missing keys in birdcode checkpoint: %s", load_result.missing_keys)
 
             self.num_classes: int = n_classes
-            self.ebird_codes: dict[int, str] = {i: c for i, c in enumerate(ebird_labels)}
-            self.label_mapping: Optional[dict[int, str]] = self._build_label_mapping(self.ebird_codes)
+            self.ebird_codes: dict[int, str] = {i: label for i, label in enumerate(class_labels)}
+            self.label_mapping: Optional[dict[int, str]] = self._build_label_mapping(
+                self.ebird_codes, ebird_taxonomy_version
+            )
 
             logger.info(
                 "Loaded: %d classes, %d prototypes (%d/class)",
@@ -341,8 +485,18 @@ class Model(ModelBase):
         self.last_layer = self.last_layer.to(device)
 
     @staticmethod
-    def _build_label_mapping(ebird_codes: dict[int, str]) -> Optional[dict[int, str]]:
+    def _build_label_mapping(
+        ebird_codes: dict[int, str],
+        taxonomy_version: EbirdTaxonomyVersion = _EBIRD_TAXONOMY_VERSION,
+    ) -> Optional[dict[int, str]]:
         """Return ``{class_id: common_name}`` using the bundled eBird taxonomy.
+
+        Parameters
+        ----------
+        ebird_codes
+            Class index to eBird species code.
+        taxonomy_version
+            eBird/Clements release used when the model was trained.
 
         Returns
         -------
@@ -352,9 +506,13 @@ class Model(ModelBase):
         from avex.data.ebird_taxonomy import load as load_taxonomy
 
         try:
-            taxonomy = load_taxonomy()
+            taxonomy = load_taxonomy(taxonomy_version)
         except Exception as exc:
-            logger.warning("Could not load eBird taxonomy, using raw codes: %s", exc)
+            logger.warning(
+                "Could not load eBird taxonomy %s, using raw codes: %s",
+                taxonomy_version,
+                exc,
+            )
             return dict(ebird_codes)
         return {idx: taxonomy[code]["common_name"] if code in taxonomy else code for idx, code in ebird_codes.items()}
 
@@ -375,6 +533,34 @@ class Model(ModelBase):
             len(self._layer_names),
             self._layer_names,
         )
+
+    def _get_last_non_classification_layer(self) -> str:
+        """Resolve ``last_layer`` to the prototype vector before the classifier.
+
+        Returns
+        -------
+        str
+            Virtual layer name used by AudioProtoPNet SED probing.
+        """
+        return "last_layer"
+
+    def register_hooks_for_layers(self, layer_names: List[str]) -> List[str]:
+        """Register probe targets.
+
+        ``last_layer`` is virtual for AudioProtoPNet SED because the
+        pre-classifier vector is produced by functional prototype pooling, not
+        by a hookable module.
+
+        Returns
+        -------
+        List[str]
+            Resolved layer names.
+        """
+        if layer_names == ["last_layer"]:
+            self.deregister_all_hooks()
+            self._hook_layers = ["last_layer"]
+            return ["last_layer"]
+        return super().register_hooks_for_layers(layer_names)
 
     def process_audio(self, x: torch.Tensor) -> torch.Tensor:
         """Convert raw waveform to normalised mel spectrogram.
@@ -404,6 +590,19 @@ class Model(ModelBase):
         """
         return self.add_on_layers(self.backbone(mel).last_hidden_state)
 
+    def _extract_pre_classifier_embeddings(self, x: torch.Tensor | dict) -> torch.Tensor:
+        """Return pooled prototype activations passed directly to ``last_layer``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``[batch, num_prototypes]``.
+        """
+        wav = x["raw_wav"] if isinstance(x, dict) else x
+        features = self._backbone_features(self.process_audio(wav))
+        activations = _cosine_activation(features, self.prototype_vectors)
+        return activations.view(activations.shape[0], activations.shape[1], -1).max(dim=-1).values
+
     def extract_embeddings(
         self,
         x: torch.Tensor | dict,
@@ -429,6 +628,12 @@ class Model(ModelBase):
         ValueError
             If no hooks are registered.
         """
+        if self._hook_layers == ["last_layer"]:
+            if freeze_backbone:
+                with torch.no_grad():
+                    return self._extract_pre_classifier_embeddings(x)
+            return self._extract_pre_classifier_embeddings(x)
+
         if not self._hooks:
             raise ValueError("No hooks registered. Call register_hooks_for_layers() first.")
 
