@@ -596,6 +596,11 @@ def _create_and_fill_h5_datasets_hybrid(
                     exc,
                 )
                 skipped_batches.append(batch_idx + 1)
+                # Over-advances when the failing batch is the short final batch,
+                # but that only matters for the abort-and-discard path: any run
+                # with skipped batches is marked extraction_complete=False and
+                # the cache is discarded, so start_idx need only stay consistent
+                # there, not exact.
                 start_idx = min(start_idx + batch_size, total_samples)
                 if consecutive_errors >= max_consecutive_errors:
                     raise RuntimeError(f"Aborting extraction: {consecutive_errors} consecutive worker errors") from exc
@@ -991,6 +996,13 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
 
         Capacity is divided by the number of DataLoader workers so that total
         RAM across all worker processes stays within cache_size_limit_gb.
+
+        Note: the sliding window assumes roughly sequential access. A shuffled
+        DataLoader over an HDF5-backed set whose window is smaller than the
+        dataset will miss [_window_start, _window_end) on nearly every
+        __getitem__ and reload a full window each time — a perf cliff. The
+        common path (probe_num_workers=0, in-memory) avoids this; prefer
+        in-memory or sequential access for large HDF5-backed shuffled sets.
         """
         if self._window_capacity_samples <= 0:
             self._window_cache = None

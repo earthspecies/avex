@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 
 import h5py
+import numpy as np
 import torch
 
 from avex.evaluation.embedding_utils import (
@@ -147,14 +148,11 @@ class EmbeddingDataSource:
             # smaller than RAM), so we compute the true uncompressed footprint from
             # HDF5 shape × dtype to avoid silently loading 20+ GB into memory.
             try:
-                import h5py as _h5py
-                import numpy as _np
-
                 uncompressed_bytes = 0
-                with _h5py.File(save_path, "r") as _f:
+                with h5py.File(save_path, "r") as _f:
                     for _key in _f.keys():
                         _dset = _f[_key]
-                        uncompressed_bytes += int(_np.prod(_dset.shape)) * _dset.dtype.itemsize
+                        uncompressed_bytes += int(np.prod(_dset.shape)) * _dset.dtype.itemsize
                 file_size = uncompressed_bytes
                 logger.info(f"Uncompressed embedding footprint: {file_size / 1e9:.2f} GB")
             except Exception:
@@ -193,12 +191,10 @@ class EmbeddingDataSource:
                         if nl is not None and int(nl) > 0:
                             self.num_labels = int(nl)
                         else:
-                            import numpy as _np
-
-                            lbls = _np.asarray(h5f["labels"])  # type: ignore[index]
+                            lbls = np.asarray(h5f["labels"])  # type: ignore[index]
                             if lbls.ndim > 1 and lbls.shape[-1] > 1:
                                 lbls = lbls.argmax(axis=-1)
-                            self.num_labels = int(_np.unique(lbls).size)
+                            self.num_labels = int(np.unique(lbls).size)
 
                         # Read embedding_dims from H5 attributes if not already set
                         if self.embedding_dims is None:

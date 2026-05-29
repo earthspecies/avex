@@ -62,6 +62,11 @@ from avex.utils.utils import _embedding_cache_matches, _process_state_dict, univ
 
 logger = logging.getLogger("run_finetune")
 
+# Per-batch DataLoader worker timeout (seconds) for raw-audio eval loaders.
+# Decoding/resampling long clips from remote storage can stall well past the
+# PyTorch default; 120s tolerates slow GCS reads without hanging forever.
+_EVAL_WORKER_TIMEOUT_SECONDS = 120
+
 
 # -------------------------------------------------------------------- #
 #  Dataclass to collect final results
@@ -237,6 +242,12 @@ def run_experiment(
     else:
         aggregation_method = experiment_cfg.get_aggregation_method()
 
+    # Aggregations that yield pooled (2D) embeddings directly reusable for
+    # retrieval/clustering. Anything else (e.g. "none") is unpooled (3D) and
+    # falls back to "mean" pooling for the clustering/retrieval caches.
+    _POOLED_AGGREGATIONS = ("mean", "max", "cls_token")
+    _clustering_aggregation = aggregation_method if aggregation_method in _POOLED_AGGREGATIONS else "mean"
+
     # Log probe configuration details
     if need_probe:
         probe_type = experiment_cfg.get_probe_type()
@@ -329,9 +340,6 @@ def run_experiment(
         test_cache_ok = _embedding_cache_matches(test_path, expected_aggregation=aggregation_method)
         need_recompute_embeddings_train = need_probe and not (train_cache_ok and val_cache_ok) and not online_training
         need_recompute_embeddings_test = need_probe and not online_training and not test_cache_ok
-        # Clustering/retrieval always needs pooled (2D) embeddings; use mean
-        # as the expected aggregation even when probe cache uses "none".
-        _clustering_aggregation = aggregation_method if aggregation_method in ("mean", "max") else "mean"
         need_recompute_embeddings_train_clustering = (
             need_clustering or (need_retrieval and retrieval_mode == "train_vs_test")
         ) and not _embedding_cache_matches(train_path_clustering, expected_aggregation=_clustering_aggregation)
@@ -407,7 +415,7 @@ def run_experiment(
             dataset_audio_max_length_seconds=dataset_audio_max_length,
             enable_eval_augmentations=is_birdset,
             is_evaluation_context=True,
-            worker_timeout=120,
+            worker_timeout=_EVAL_WORKER_TIMEOUT_SECONDS,
         )
 
         # Log dataloader info
@@ -762,7 +770,7 @@ def run_experiment(
     def _reuse_probe_embeddings_for_eval(split_path: Path) -> bool:
         # Only reuse when the probe cache is pooled (2D); "none" caches are
         # unpooled (3D) and cannot be fed directly into retrieval/clustering.
-        if aggregation_method not in ("mean", "max", "cls_token"):
+        if aggregation_method not in _POOLED_AGGREGATIONS:
             return False
         return (not overwrite) and _embedding_cache_matches(split_path, expected_aggregation=aggregation_method)
 
@@ -786,16 +794,14 @@ def run_experiment(
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
 
-            # We need to force aggregation method to "mean" for retrieval if it's
-            # different from "mean" or "max"
-            if aggregation_method not in ["mean", "max"]:
-                aggregation_method_retrieval = "mean"
+            # Clustering/retrieval needs pooled (2D) embeddings; fall back to
+            # "mean" when the probe aggregation is unpooled (e.g. "none").
+            aggregation_method_retrieval = _clustering_aggregation
+            if aggregation_method_retrieval != aggregation_method:
                 logger.info(
-                    f"Forcing aggregation method to 'mean' for retrieval "
-                    f"(aggregation_method: {aggregation_method_retrieval})"
+                    f"Forcing aggregation method to '{aggregation_method_retrieval}' for retrieval "
+                    f"(probe aggregation: {aggregation_method})"
                 )
-            else:
-                aggregation_method_retrieval = aggregation_method
 
             logger.info(f"Using EmbeddingDataSource for train embeddings (retrieval) (layers: {len(layer_names)})")
             # Use in-memory configuration for clustering/retrieval
@@ -846,15 +852,21 @@ def run_experiment(
     if need_retrieval or need_clustering:
         if _reuse_probe_embeddings_for_eval(test_path):
             test_embeds_path = test_path
+            # Reusing the probe cache: it was written with the probe aggregation.
+            expected_test_aggregation = aggregation_method
             logger.info("Reusing probe test embeddings for retrieval/clustering: %s", test_path)
         else:
             test_embeds_path = test_path_clustering
+            # The clustering cache is written with the pooled clustering
+            # aggregation (mean fallback for unpooled probe storage like "none"),
+            # so validate against that, not the probe aggregation.
+            expected_test_aggregation = _clustering_aggregation
         logger.info(f"Test embeddings path: {test_embeds_path}")
 
         if (
             (not overwrite)
             and test_embeds_path.exists()
-            and _embedding_cache_matches(test_embeds_path, expected_aggregation=aggregation_method)
+            and _embedding_cache_matches(test_embeds_path, expected_aggregation=expected_test_aggregation)
         ):
             test_embeds_dict, test_labels, _ = load_embeddings_arrays(test_embeds_path)
 
@@ -869,16 +881,14 @@ def run_experiment(
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
 
-            # We need to force aggregation method to "mean" for retrieval if it's
-            # different from "mean" or "max"
-            if aggregation_method not in ["mean", "max"]:
-                aggregation_method_retrieval = "mean"
+            # Clustering/retrieval needs pooled (2D) embeddings; fall back to
+            # "mean" when the probe aggregation is unpooled (e.g. "none").
+            aggregation_method_retrieval = _clustering_aggregation
+            if aggregation_method_retrieval != aggregation_method:
                 logger.info(
-                    f"Forcing aggregation method to 'mean' for retrieval "
-                    f"(aggregation_method: {aggregation_method_retrieval})"
+                    f"Forcing aggregation method to '{aggregation_method_retrieval}' for retrieval "
+                    f"(probe aggregation: {aggregation_method})"
                 )
-            else:
-                aggregation_method_retrieval = aggregation_method
 
             logger.info(f"Using EmbeddingDataSource for test embeddings (retrieval) (layers: {len(layer_names)})")
             # Use in-memory configuration for clustering/retrieval
