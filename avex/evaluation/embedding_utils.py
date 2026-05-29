@@ -804,8 +804,14 @@ def _create_and_fill_h5_datasets_hybrid(
     # Don't overwrite layer_names - it was already set correctly above
 
     if skipped_batches:
-        logger.warning("Skipped %d batches due to worker errors: %s", len(skipped_batches), skipped_batches)
-    h5f.attrs["extraction_complete"] = True
+        logger.warning(
+            "Skipped %d batches due to worker errors: %s — cache marked incomplete",
+            len(skipped_batches),
+            skipped_batches,
+        )
+    # Mark complete only when no batches were skipped: skipped rows leave
+    # unwritten gaps in the pre-allocated HDF5 datasets so the cache is unusable.
+    h5f.attrs["extraction_complete"] = len(skipped_batches) == 0
     h5f.attrs["skipped_batches"] = len(skipped_batches)
     final_embedding_shapes = {name: dset.shape for name, dset in embeddings_datasets.items()}
     logger.info(f"Final dataset shapes - embeddings: {final_embedding_shapes}, labels: {labels_dset.shape}")

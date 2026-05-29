@@ -329,12 +329,15 @@ def run_experiment(
         test_cache_ok = _embedding_cache_matches(test_path, expected_aggregation=aggregation_method)
         need_recompute_embeddings_train = need_probe and not (train_cache_ok and val_cache_ok) and not online_training
         need_recompute_embeddings_test = need_probe and not online_training and not test_cache_ok
+        # Clustering/retrieval always needs pooled (2D) embeddings; use mean
+        # as the expected aggregation even when probe cache uses "none".
+        _clustering_aggregation = aggregation_method if aggregation_method in ("mean", "max") else "mean"
         need_recompute_embeddings_train_clustering = (
             need_clustering or (need_retrieval and retrieval_mode == "train_vs_test")
-        ) and not train_path_clustering.exists()
+        ) and not _embedding_cache_matches(train_path_clustering, expected_aggregation=_clustering_aggregation)
         need_recompute_embeddings_test_clustering = (
             need_clustering or need_retrieval
-        ) and not test_path_clustering.exists()
+        ) and not _embedding_cache_matches(test_path_clustering, expected_aggregation=_clustering_aggregation)
     logger.info(
         "Need to recompute embeddings for probing, train: %s and test: %s",
         need_recompute_embeddings_train,
@@ -757,6 +760,10 @@ def run_experiment(
     # ------------------------------------------------------------------ #
 
     def _reuse_probe_embeddings_for_eval(split_path: Path) -> bool:
+        # Only reuse when the probe cache is pooled (2D); "none" caches are
+        # unpooled (3D) and cannot be fed directly into retrieval/clustering.
+        if aggregation_method not in ("mean", "max", "cls_token"):
+            return False
         return (not overwrite) and _embedding_cache_matches(split_path, expected_aggregation=aggregation_method)
 
     # ------------------- embeddings for train-vs-test retrieval -------- #
