@@ -26,6 +26,7 @@ from esp_data import (
 from avex.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
+from avex.data import birdset_train_splits  # noqa: F401 - registers birdset_train
 
 # apply_cloudpathlib_patch()
 apply_animalspeak_column_patch()
@@ -427,6 +428,7 @@ def build_dataloaders(
     dataset_audio_max_length_seconds: Optional[int] = None,
     enable_eval_augmentations: bool = False,
     is_evaluation_context: bool = False,
+    worker_timeout: int = 0,
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     """Create train/val/(optional) test :pyclass:`torch.utils.data.DataLoader`s.
 
@@ -590,6 +592,7 @@ def build_dataloaders(
         multiprocessing_context=ctx,
         persistent_workers=(cfg.num_workers > 0),
         drop_last=True,
+        timeout=worker_timeout,
     )
     val_dl = DataLoader(
         ds_val,
@@ -604,6 +607,7 @@ def build_dataloaders(
         multiprocessing_context=ctx,
         drop_last=True,
         persistent_workers=(cfg.num_workers > 0),
+        timeout=worker_timeout,
     )
     if ds_test is not None:
         test_dl = DataLoader(
@@ -616,6 +620,7 @@ def build_dataloaders(
             worker_init_fn=worker_init_fn,
             generator=g,
             multiprocessing_context=ctx,
+            timeout=worker_timeout,
         )
     else:
         test_dl = None

@@ -4,7 +4,7 @@ evaluation_sets:
   # BirdSet Detection Tasks
   - name: "birdset_pow_detection"
     train: &pow_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: POW-train
       type: detection
       label_column: labels_as_list
@@ -57,7 +57,7 @@ evaluation_sets:
 
   - name: "birdset_per_detection"
     train: &per_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: PER-train
       type: detection
       label_column: labels_as_list
@@ -110,7 +110,7 @@ evaluation_sets:
 
   - name: "birdset_nes_detection"
     train: &nes_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: NES-train
       type: detection
       label_column: labels_as_list
@@ -163,7 +163,7 @@ evaluation_sets:
 
   - name: "birdset_nbp_detection"
     train: &nbp_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: NBP-train
       type: detection
       label_column: labels_as_list
@@ -216,7 +216,7 @@ evaluation_sets:
 
   - name: "birdset_hsn_detection"
     train: &hsn_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: HSN-train
       type: detection
       label_column: labels_as_list
@@ -269,7 +269,7 @@ evaluation_sets:
 
   - name: "birdset_uhh_detection"
     train: &uhh_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: UHH-train
       type: detection
       label_column: labels_as_list
@@ -322,7 +322,7 @@ evaluation_sets:
 
   - name: "birdset_sne_detection"
     train: &sne_base
-      dataset_name: birdset
+      dataset_name: birdset_train
       split: SNE-train
       type: detection
       label_column: labels_as_list
