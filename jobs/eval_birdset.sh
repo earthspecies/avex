@@ -11,6 +11,7 @@
 
 cd ~/code/avex
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 echo $UV_PROJECT_ENVIRONMENT
 # export PYTHONBUFFERED=1
 # export LOG_LEVEL=DEBUG

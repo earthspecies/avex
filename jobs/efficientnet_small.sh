@@ -10,4 +10,5 @@
 
 cd ~/avex
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex train --config configs/run_configs/efficientnet_base_test.yml

@@ -8,4 +8,5 @@
 #SBATCH --cpus-per-gpu=12
 cd ~/avex
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex train --config configs/run_configs/eat_pretrain_all.yml

@@ -11,6 +11,7 @@
 cd ~/avex
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 
 # Comprehensive NCCL configuration for better reliability
 export NCCL_DEBUG=INFO
