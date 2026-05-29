@@ -1,9 +1,9 @@
 """Custom transforms for representation learning data processing."""
 
-import random
 from typing import Literal, Optional, Tuple
 
 import pandas as pd
+from esp_data import DataBackend
 from esp_data.transforms import register_transform
 from pydantic import BaseModel, Field
 from sklearn.model_selection import train_test_split
@@ -170,9 +170,9 @@ class RLSubsampleConfig(BaseModel):
         ge=1,
         description="Maximum total number of samples to keep",
     )
-    random_state: Optional[int] = Field(
+    random_state: int = Field(
         default=42,
-        description=("Random seed for reproducible sampling. If None, sampling is non-deterministic."),
+        description="Random seed for reproducible sampling.",
     )
 
 
@@ -188,15 +188,15 @@ class RLSubsampleTransform:
         Ratio of samples to keep from the dataset
     max_samples : Optional[int], default=None
         Maximum total number of samples to keep
-    random_state : Optional[int], default=42
-        Random state for reproducible sampling
+    random_state : int, default=42
+        Random seed for reproducible sampling
     """
 
     def __init__(
         self,
         ratio: float = 1.0,
         max_samples: Optional[int] = None,
-        random_state: Optional[int] = 42,
+        random_state: int = 42,
     ) -> None:
         """Initialize the RLSubsampleTransform.
 
@@ -225,12 +225,12 @@ class RLSubsampleTransform:
         """
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: object) -> Tuple[object, dict]:
+    def __call__(self, data: pd.DataFrame | DataBackend) -> Tuple[object, dict]:
         """Apply the subsampling transform.
 
         Parameters
         ----------
-        data : object
+        data : pd.DataFrame | DataBackend
             Input dataset to sample from.
 
         Returns
@@ -239,18 +239,7 @@ class RLSubsampleTransform:
             Tuple containing:
             - Sampled data (backend object or DataFrame, not tuple)
             - Metadata dictionary with sampling information
-
-        Raises
-        ------
-        TypeError
-            If ``data`` is neither a pandas DataFrame nor a backend object that
-            provides ``sample_rows(n=..., seed=...)``.
         """
-        sample_rows = getattr(data, "sample_rows", None)
-        if not isinstance(data, pd.DataFrame) and not callable(sample_rows):
-            raise TypeError(
-                f"rl_subsample expects a pandas DataFrame or a backend object with `sample_rows()`, got {type(data)!r}"
-            )
 
         if len(data) == 0:
             return data, {
@@ -273,18 +262,16 @@ class RLSubsampleTransform:
             n_samples = min(n_samples, self.max_samples)
 
         # Perform random sampling
-        if callable(sample_rows):
-            # esp_data backends require an `int` seed. Preserve non-determinism
-            # when random_state is None by picking a fresh seed each call.
-            seed = random.randint(0, 2**32 - 1) if self.random_state is None else int(self.random_state)
-            sampled_data = data.sample_rows(n=n_samples, seed=seed)
-        elif n_samples > 0:
-            sampled_data = data.sample(
-                n=n_samples,
-                random_state=self.random_state,
-            ).reset_index(drop=True)
+        if isinstance(data, DataBackend):
+            sampled_data = data.sample_rows(n=n_samples, seed=self.random_state)
         else:
-            sampled_data = pd.DataFrame(columns=data.columns)
+            if n_samples > 0:
+                sampled_data = data.sample(
+                    n=n_samples,
+                    random_state=self.random_state,
+                ).reset_index(drop=True)
+            else:
+                sampled_data = pd.DataFrame(columns=data.columns)
 
         # Prepare metadata
         metadata = {
