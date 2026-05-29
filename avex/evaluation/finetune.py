@@ -332,6 +332,21 @@ class FineTuneTrainer:
                 logits = self.model(z)
                 y = batch["label"].to(self.device)
 
+            if self.multi_label:
+                # `BCEWithLogitsLoss` expects floating targets in [0, 1] with the
+                # same shape as logits.
+                if y.ndim == 1:
+                    y = torch.nn.functional.one_hot(
+                        y.to(dtype=torch.int64),
+                        num_classes=self.num_labels,
+                    )
+                elif y.ndim == 2 and y.shape[-1] == 1:
+                    y = torch.nn.functional.one_hot(
+                        y.squeeze(-1).to(dtype=torch.int64),
+                        num_classes=self.num_labels,
+                    )
+                y = y.to(dtype=logits.dtype)
+
             # Calculate loss - handle different label formats for different loss
             # functions
             if self.multi_label:
@@ -526,8 +541,11 @@ def train_and_eval_offline(
     # Store probe model in exp_logger for later access (e.g., printing learned weights)
     exp_logger.probe_model = probe
 
-    # Use spawn context for DataLoaders to avoid fork-related issues (e.g., HDF5)
-    ctx = multiprocessing.get_context("spawn") if eval_cfg.num_workers > 0 else None
+    # Use probe_num_workers (default 0) for embedding DataLoaders.
+    # num_workers > 0 with HDF5 datasets multiplies RAM by worker count via
+    # per-worker window caches; 0 keeps everything in the main process.
+    probe_workers = getattr(eval_cfg, "probe_num_workers", 0)
+    ctx = multiprocessing.get_context("spawn") if probe_workers > 0 else None
 
     trainer = FineTuneTrainer(
         model=probe,
@@ -536,16 +554,16 @@ def train_and_eval_offline(
             train_ds,
             batch_size=eval_cfg.training_params.batch_size,
             shuffle=True,
-            pin_memory=True,
-            num_workers=eval_cfg.num_workers,
+            pin_memory=probe_workers > 0,
+            num_workers=probe_workers,
             multiprocessing_context=ctx,
         ),
         val_loader=torch.utils.data.DataLoader(
             val_ds,
             batch_size=eval_cfg.training_params.batch_size,
             shuffle=False,
-            pin_memory=True,
-            num_workers=eval_cfg.num_workers,
+            pin_memory=probe_workers > 0,
+            num_workers=probe_workers,
             multiprocessing_context=ctx,
         ),
         device=device,
@@ -566,8 +584,8 @@ def train_and_eval_offline(
         test_ds,
         batch_size=eval_cfg.training_params.batch_size,
         shuffle=False,
-        pin_memory=True,
-        num_workers=eval_cfg.num_workers,
+        pin_memory=probe_workers > 0,
+        num_workers=probe_workers,
         multiprocessing_context=ctx,
     )
 
