@@ -1,13 +1,22 @@
-"""Tests for embedding cache metadata."""
+"""Tests for embedding cache metadata.
+
+These tests require esp_data which is an internal dependency.
+They are skipped when esp_data is not installed.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import h5py
+import pytest
 import torch
 
-from avex.evaluation.embedding_utils import save_embeddings_arrays
+# Skip entire module if esp_data is not installed (internal dependency)
+# Must be before imports that trigger esp_data loading
+pytest.importorskip("esp_data")
+
+from avex.evaluation.embedding_utils import save_embeddings_arrays  # noqa: E402
 
 
 def test_save_embeddings_arrays_records_aggregation_metadata(tmp_path: Path) -> None:
