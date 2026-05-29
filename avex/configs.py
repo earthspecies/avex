@@ -1291,6 +1291,15 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     device: str = Field(..., description="Device to run the evaluation on")
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
+    probe_num_workers: int = Field(
+        0,
+        ge=0,
+        description=(
+            "DataLoader workers for offline probe training. Defaults to 0 "
+            "(main-process HDF5 reads) to prevent per-worker cache duplication. "
+            "Only increase if embeddings fit fully within cache_size_limit_gb."
+        ),
+    )
 
     # Which evaluation phases to run
     eval_modes: List[Literal["probe", "retrieval", "clustering"]] = Field(
@@ -1373,6 +1382,15 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             10,
             ge=1,
             description=("Number of batches to process before writing during streaming."),
+        )
+        probe_storage_aggregation: Literal["none", "mean", "max", "cls_token"] = Field(
+            "none",
+            description=(
+                "Aggregation used when caching offline probe embeddings. 'none' "
+                "preserves full sequence/stage embeddings for maximum probe reuse; "
+                "'mean' or 'max' stores smaller pooled embeddings for datasets "
+                "where unpooled caches are too large."
+            ),
         )
 
         model_config = ConfigDict(extra="forbid")
