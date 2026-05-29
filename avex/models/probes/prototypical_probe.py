@@ -129,6 +129,7 @@ class PrototypicalProbe(BaseProbe2D):
         feature_mode: bool = False,
         input_dim: Optional[int] = None,
         aggregation: str = "mean",
+        input_processing: str = "pooled",
         target_length: Optional[int] = None,
         freeze_backbone: bool = True,
         num_prototypes_per_class: int = 10,
@@ -144,6 +145,7 @@ class PrototypicalProbe(BaseProbe2D):
             feature_mode=feature_mode,
             input_dim=input_dim,
             aggregation=aggregation,
+            input_processing=input_processing,
             target_length=target_length,
             freeze_backbone=freeze_backbone,
         )

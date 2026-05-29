@@ -26,6 +26,7 @@ class LSTMProbe(BaseProbe3D):
         feature_mode: bool = False,
         input_dim: Optional[int] = None,
         aggregation: str = "mean",
+        input_processing: str = "sequence",
         lstm_hidden_size: int = 256,
         num_layers: int = 2,
         bidirectional: bool = False,
@@ -50,6 +51,7 @@ class LSTMProbe(BaseProbe3D):
             feature_mode=feature_mode,
             input_dim=input_dim,
             aggregation=aggregation,
+            input_processing=input_processing,
             target_length=target_length,
             freeze_backbone=freeze_backbone,
         )

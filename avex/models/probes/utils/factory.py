@@ -162,6 +162,7 @@ def build_probe_from_config(
         "feature_mode": feature_mode,
         "input_dim": input_dim,
         "aggregation": aggregation,
+        "input_processing": input_processing,
         "target_length": final_target_length,
         "freeze_backbone": frozen,
         **kwargs,
