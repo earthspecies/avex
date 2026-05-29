@@ -10,8 +10,8 @@ from avex.data import ebird_taxonomy as et
 
 
 @pytest.mark.parametrize("version", ["v2021", "v2025"])
-def test_load_returns_mapping(version: str) -> None:
-    tax = et.load(version)  # type: ignore[arg-type]
+def test_load_returns_mapping(version: et.EbirdTaxonomyVersion) -> None:
+    tax = et.load(version)
     assert isinstance(tax, dict)
     assert tax["ostric2"]["common_name"] == "Common Ostrich"
     assert tax["ostric2"]["sci_name"] == "Struthio camelus"

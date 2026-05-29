@@ -12,7 +12,7 @@ repos:
         types: [python]
         args: [--fix=no]
       - id: check-added-large-files
-        exclude: ^avex/data/
+        exclude: ^avex/data/ebird_taxonomy_v
         args: [--maxkb=1024]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -21,11 +21,9 @@ repos:
     hooks:
       # Run the linter.
       - id: ruff
-        exclude: ^avex/data/
         args: [--fix]
       # Run the formatter.
       - id: ruff-format
-        exclude: ^avex/data/
 
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.35.1
@@ -36,7 +34,7 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
-        exclude: ^avex/data/
+        exclude: ^avex/data/ebird_taxonomy_v
         args:
           - "--ignore-words=.dict-allowed.txt"
           # skip jupyter notebook as there isn't a good way to only match inputs

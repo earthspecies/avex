@@ -15,12 +15,9 @@ Usage::
 from __future__ import annotations
 
 import json
-import logging
 from functools import lru_cache
 from importlib import resources
 from typing import Literal
-
-logger = logging.getLogger(__name__)
 
 EbirdTaxonomyVersion = Literal["v2021", "v2025"]
 
@@ -49,7 +46,7 @@ def load(version: EbirdTaxonomyVersion) -> dict[str, dict[str, str]]:
     ------
     ValueError
         If ``version`` is not a supported taxonomy release.
-  FileNotFoundError
+    FileNotFoundError
         If the bundled JSON for ``version`` is missing from the package.
     """
     json_name = _VERSION_FILES.get(version)
