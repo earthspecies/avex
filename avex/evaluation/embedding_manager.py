@@ -63,12 +63,12 @@ class EmbeddingDataSource:
         self,
         *,
         save_path: Path,
-        layer_names: List[str],
+        target_layers: List[str | int],
         aggregation: str = "mean",
         config: Optional[EmbeddingDataSourceConfig] = None,
     ) -> None:
         self.save_path = save_path
-        self.layer_names = layer_names
+        self.target_layers = target_layers
         self.aggregation = aggregation
         self.config = config or EmbeddingDataSourceConfig(save_path=save_path)
         self.embedding_dims: Optional[List[Tuple[int, ...]]] = None
@@ -128,6 +128,7 @@ class EmbeddingDataSource:
 
         Raises:
             ValueError: If required parameters are missing or file loading fails.
+            TypeError: If `target_layers` contains a boolean value (bool is not allowed).
         """
         save_path = self.config.save_path
 
@@ -148,29 +149,57 @@ class EmbeddingDataSource:
             except Exception:
                 file_size = self.config.memory_limit_bytes + 1  # fallback to HDF5
 
+            # Resolve integer layer indices against HDF5 metadata before any path branches
+            if any(isinstance(x, int) for x in self.target_layers) and "all" not in self.target_layers:
+                try:
+                    with h5py.File(str(save_path), "r") as _h5f:
+                        file_layer_names = list(_h5f.attrs.get("layer_names", []))
+                except Exception as _e:
+                    raise ValueError("Failed to read layer names from HDF5 file to resolve integer indices") from _e
+                if not file_layer_names:
+                    raise ValueError(
+                        "Cannot resolve integer layer indices in load-only mode: no layer names found in "
+                        "HDF5 metadata. Provide a model to resolve indices, or use string layer names."
+                    )
+                resolved: list[str] = []
+                for name in self.target_layers:
+                    if isinstance(name, int):
+                        try:
+                            resolved.append(file_layer_names[name])
+                        except IndexError as _err:
+                            n = len(file_layer_names)
+                            raise ValueError(
+                                f"Layer index {name} is out of range for {n} layers in the embeddings file "
+                                f"(valid indices: 0..{n - 1} and negative indices like -1)."
+                            ) from _err
+                    else:
+                        resolved.append(name)
+                self.target_layers = resolved
+                logger.info(f"Resolved integer layer indices to: {self.target_layers}")
+
             if self.config.use_streaming_embeddings is True or file_size > self.config.memory_limit_bytes:
                 logger.info("Loading embeddings into HDF5-backed dataset")
                 # HDF5-backed lazy loading; allow file to define layers when 'all'
                 ds = HDF5EmbeddingDataset(
                     save_path,
-                    layer_names=(None if ("all" in self.layer_names) else self.layer_names),
+                    target_layers=(None if ("all" in self.target_layers) else self.target_layers),
                     cache_in_memory=True,
                     cache_size_limit_gb=max(1.0, float(self.config.cache_size_limit_gb)),
                     allow_partial_cache=True,
                 )
                 self.embedding_dims = getattr(ds, "embedding_dims", None)
                 # If 'all' was requested, adopt detected layer names from file
-                if "all" in self.layer_names and hasattr(ds, "layer_names"):
-                    self.layer_names = list(ds.layer_names)
+                if "all" in self.target_layers and hasattr(ds, "target_layers"):
+                    self.target_layers = list(ds.target_layers)
                 # If 'last_layer' was requested, resolve it to the actual
                 # last layer name
-                elif "last_layer" in self.layer_names and hasattr(ds, "layer_names"):
-                    if ds.layer_names:
+                elif "last_layer" in self.target_layers and hasattr(ds, "target_layers"):
+                    if ds.target_layers:
                         # Replace 'last_layer' with the actual last layer name
-                        self.layer_names = [
-                            name if name != "last_layer" else ds.layer_names[-1] for name in self.layer_names
+                        self.target_layers = [
+                            name if name != "last_layer" else ds.target_layers[-1] for name in self.target_layers
                         ]
-                        logger.info(f"Resolved 'last_layer' to '{ds.layer_names[-1]}'")
+                        logger.info(f"Resolved 'last_layer' to '{ds.target_layers[-1]}'")
                     else:
                         logger.warning("No layer names found in dataset to resolve 'last_layer'")
                 # Read num_labels and embedding_dims from HDF5 if present
@@ -222,24 +251,24 @@ class EmbeddingDataSource:
                 if isinstance(embeds, dict):
                     # If 'last_layer' was requested, resolve it to the actual
                     # last layer name
-                    if "last_layer" in self.layer_names:
+                    if "last_layer" in self.target_layers:
                         if embeds:
                             # Replace 'last_layer' with the actual last layer name
                             last_layer_name = list(embeds.keys())[-1]
-                            self.layer_names = [
-                                name if name != "last_layer" else last_layer_name for name in self.layer_names
+                            self.target_layers = [
+                                name if name != "last_layer" else last_layer_name for name in self.target_layers
                             ]
                             logger.info(f"Resolved 'last_layer' to '{last_layer_name}'")
                         else:
                             logger.warning("No embeddings found to resolve 'last_layer'")
 
                     # If 'all' requested, use all layers; else filter to requested
-                    if "all" in self.layer_names:
-                        self.layer_names = list(embeds.keys())
+                    if "all" in self.target_layers:
+                        self.target_layers = list(embeds.keys())
                         self.embedding_dims = [tuple(t.shape[1:]) for t in embeds.values()]
                         return EmbeddingDataset(embeds, labels)
                     else:
-                        filtered_embeds = {k: v for k, v in embeds.items() if k in self.layer_names}
+                        filtered_embeds = {k: v for k, v in embeds.items() if k in self.target_layers}
                         self.embedding_dims = [tuple(t.shape[1:]) for t in filtered_embeds.values()]
                         return EmbeddingDataset(filtered_embeds, labels)
                 else:
@@ -250,6 +279,29 @@ class EmbeddingDataSource:
         first_batch = next(iter(dataloader))
         base_model.eval()
 
+        # If target_layers include integer indices, resolve them against this loaded
+        # model once so downstream logic (filtering by keys, filenames, etc.) sees
+        # concrete string names.
+        if any(isinstance(x, int) for x in self.target_layers):
+            if hasattr(base_model, "get_model_layers"):
+                discovered = base_model.get_model_layers()  # type: ignore[attr-defined]
+                resolved: list[str] = []
+                for name in self.target_layers:
+                    if isinstance(name, bool):
+                        raise TypeError("target_layers entries must be str or int (bool is not allowed).")
+                    if isinstance(name, int):
+                        try:
+                            resolved.append(discovered[name])
+                        except IndexError as err:
+                            n = len(discovered)
+                            raise ValueError(
+                                f"Layer index {name} is out of range for {n} layers "
+                                f"(valid indices: 0..{n - 1} and negative indices like -1)."
+                            ) from err
+                    else:
+                        resolved.append(name)
+                self.target_layers = resolved
+
         # Ensure hooks are registered consistently for the preview extraction
         original_disable_layerdrop = None
         if self.config.disable_layerdrop is not None and hasattr(base_model, "disable_layerdrop"):
@@ -259,7 +311,7 @@ class EmbeddingDataSource:
         # Register hooks for requested layers
         if hasattr(base_model, "register_hooks_for_layers"):
             try:
-                _ = base_model.register_hooks_for_layers(self.layer_names)
+                _ = base_model.register_hooks_for_layers(self.target_layers)
             except Exception:
                 # Fall through; extract_embeddings may self-heal, but we try our best
                 pass
@@ -288,21 +340,21 @@ class EmbeddingDataSource:
                 base_model.disable_layerdrop = original_disable_layerdrop
 
         # Resolve 'all' layer names from preview if requested
-        if "all" in self.layer_names:
+        if "all" in self.target_layers:
             if isinstance(sample_emb, dict):
-                self.layer_names = sorted(list(sample_emb.keys()))
+                self.target_layers = sorted(list(sample_emb.keys()))
             elif isinstance(sample_emb, list):
                 # Don't create synthetic names - let the model handle 'all'
                 # resolution. Keep 'all' in the list so
                 # model.register_hooks_for_layers can resolve it
                 pass
             else:
-                self.layer_names = ["embed"]
+                self.target_layers = ["embed"]
 
         if isinstance(sample_emb, list):
             first_shapes = [tuple(t.shape[1:]) for t in sample_emb]
         elif isinstance(sample_emb, dict):
-            first_shapes = [tuple(v.shape[1:]) for k, v in sample_emb.items() if k in self.layer_names]
+            first_shapes = [tuple(v.shape[1:]) for k, v in sample_emb.items() if k in self.target_layers]
         else:
             first_shapes = [tuple(sample_emb.shape[1:])]
         # Stash preliminary dims (may be refined later)
@@ -316,7 +368,7 @@ class EmbeddingDataSource:
             dims = _extract_embeddings_streaming(
                 base_model,
                 dataloader,
-                self.layer_names,
+                self.target_layers,
                 device,
                 save_path=save_path,
                 chunk_size=self.config.chunk_size,
@@ -349,10 +401,10 @@ class EmbeddingDataSource:
                     base_model.deregister_all_hooks()
                 except Exception:
                     pass
-            # Respect requested layer_names; allow auto-detect when 'all'
+            # Respect requested target_layers; allow auto-detect when 'all'
             return HDF5EmbeddingDataset(
                 save_path,
-                layer_names=None if ("all" in self.layer_names) else self.layer_names,
+                target_layers=None if ("all" in self.target_layers) else self.target_layers,
                 cache_in_memory=True,
                 cache_size_limit_gb=max(1.0, float(self.config.cache_size_limit_gb)),
                 allow_partial_cache=True,
@@ -362,7 +414,7 @@ class EmbeddingDataSource:
         embeds_dict, labels, dims_mem = _extract_embeddings_in_memory(
             base_model,
             dataloader,
-            self.layer_names,
+            self.target_layers,
             device,
             aggregation=self.aggregation,
             disable_tqdm=self.config.disable_tqdm,

@@ -19,6 +19,40 @@ features = model(audio, padding_mask=None)
 
 Different models return features in different formats when `return_features_only=True`:
 
+## Layer-wise embedding extraction (multiple layers)
+
+Separately from `return_features_only=True`, AVEX can extract embeddings from **internal
+layers** using hooks. This is useful for layer-wise analysis and multi-layer probes.
+
+### Limitations (models without intermediate layers)
+
+Some backbones do not expose intermediate layers through PyTorch modules (notably the
+TensorFlow / TFLite based models: **Perch**, **SurfPerch**, and **BirdNET**). For these
+models, `extract_embeddings` returns the **single available embedding output** and does
+not support internal layer selection via hooks.
+
+Some other backbones currently only expose the final embedding output in their
+`extract_embeddings` implementations (e.g. **BirdMAE**). In these cases, requesting
+intermediate layers is not supported yet.
+
+### List layers and select them by index
+
+Layer indices are **0-based**, and **negative indices are allowed** (Python-style, e.g.
+`-1` is the last discovered layer). Indices refer to the order returned by
+`model.get_model_layers()` (same order as `list_model_layers(model)["layers"]`).
+
+```python
+import torch
+from avex import load_model
+
+model = load_model("esp_aves2_naturelm_audio_v1_beats", device="cpu")
+print(model.get_model_layer_map())
+
+audio = torch.randn(1, 16000 * 5)
+_ = model.register_hooks_for_layers([0, -1])
+emb = model.extract_embeddings(audio, aggregation="mean")
+```
+
 ### BEATs (Bidirectional Encoder representation from Audio Transformers)
 
 **Output Shape**: `(batch, time_steps, 768)`

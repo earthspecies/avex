@@ -56,7 +56,7 @@ def compute_embeddings(
     model: nn.Module,
     dataloader: DataLoader,
     device: str,
-    target_layers: list[str] = None,
+    target_layers: list[str | int] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Pre-compute embeddings from a backbone model.
 
@@ -259,7 +259,8 @@ def main(device: str = "cpu") -> None:
     try:
         last_layer_config = ProbeConfig(
             probe_type="linear",
-            target_layers=["last_layer"],
+            # You can use indices (0-based, negative indices allowed). -1 == last layer.
+            target_layers=[-1],
             aggregation="mean",
             freeze_backbone=True,
             online_training=True,
@@ -274,7 +275,7 @@ def main(device: str = "cpu") -> None:
         last_layer_probe.eval()
         with torch.no_grad():
             output = last_layer_probe(dummy_audio, padding_mask=None)
-        print(f"{'last_layer':<20} {param_count:>14,} {str(output.shape):<20}")
+        print(f"{'last_layer (-1)':<20} {param_count:>14,} {str(output.shape):<20}")
     except Exception as e:
         print(f"{'last_layer':<20} {'ERROR':<15} {str(e)[:40]:<20}")
 
@@ -328,10 +329,8 @@ Offline training is useful when:
     val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False)
 
     start_time = time.time()
-    train_embeddings, train_labels_emb = compute_embeddings(
-        backbone, train_loader, device, target_layers=["last_layer"]
-    )
-    val_embeddings, val_labels_emb = compute_embeddings(backbone, val_loader, device, target_layers=["last_layer"])
+    train_embeddings, train_labels_emb = compute_embeddings(backbone, train_loader, device, target_layers=[-1])
+    val_embeddings, val_labels_emb = compute_embeddings(backbone, val_loader, device, target_layers=[-1])
     embedding_time = time.time() - start_time
 
     embedding_dim = train_embeddings.shape[1]

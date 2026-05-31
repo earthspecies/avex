@@ -77,46 +77,13 @@ class Model(ModelBase):
         # -------------------------------------------------------------- #
         #  Pre-discover convolutional layers for efficient hook management #
         # -------------------------------------------------------------- #
-        # Convolutional layers will be discovered in _discover_linear_layers override
-
-    def _discover_linear_layers(self) -> None:
-        """Discover and cache only the EfficientNet layers that are useful
-        for embeddings.
-
-        This method is called when target_layers=["all"] is used.
-        Specifically filters for:
-        - Initial conv layer (model.features.0.0)
-        - Final projection layers from each block (model.features.X.Y.block.3.0)
-        - Final conv layer (model.features.8.0)
-        - Excludes expansion layers, depthwise convs, SE layers, and avgpool
-        """
-        if len(self._layer_names) == 0:  # Only discover once
-            self._layer_names = []
-
-            for name, _module in self.named_modules():
-                # Keep the initial conv layer
-                if name == "model.features.0.0":
-                    self._layer_names.append(name)
-
-                # Keep final projection layers (last conv in each MBConv block)
-                # Pattern: model.features.X.Y.block.3.0
-                elif name.endswith(".block.3.0") and "model.features." in name:
-                    self._layer_names.append(name)
-
-                # Keep the final conv layer
-                elif name == "model.features.8.0":
-                    self._layer_names.append(name)
-
-            logger.info(
-                f"Discovered {len(self._layer_names)} embedding-relevant layers "
-                f"in EfficientNet model: "
-                f"{self._layer_names}"
-            )
+        # Convolutional layers will be discovered in _discover_embedding_layers override
 
     def _discover_embedding_layers(self) -> None:
         """Discover and cache only the EfficientNet layers that are useful
         for embeddings.
 
+        This method is called when target_layers=["all"] is used.
         Specifically filters for:
         - Initial conv layer (model.features.0.0)
         - Final projection layers from each block (model.features.X.Y.block.3.0)
@@ -304,13 +271,11 @@ class Model(ModelBase):
                 self.forward(wav, padding_mask)
 
             # Collect embeddings from hook outputs
-            embeddings = []
-            for layer_name in self._hook_outputs:
-                if layer_name in self._hook_outputs:
-                    embeddings.append(self._hook_outputs[layer_name])
-                    logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
-                else:
-                    logger.warning(f"No output captured for layer: {layer_name}")
+            embeddings: list[torch.Tensor] = []
+            ordered_names = self._hook_layers if self._hook_layers else list(self._hook_outputs.keys())
+            for layer_name in ordered_names:
+                embeddings.append(self._hook_outputs[layer_name])
+                logger.debug(f"Found embedding for {layer_name}: {self._hook_outputs[layer_name].shape}")
 
             logger.debug(f"Collected {len(embeddings)} embeddings")
 
