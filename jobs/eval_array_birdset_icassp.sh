@@ -48,5 +48,6 @@ cd ~/code/avex
 
 echo $UV_PROJECT_ENVIRONMENT
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 
 srun uv run avex evaluate --config configs/evaluation_configs/icassp/$config_file --patch dataset_config=configs/data_configs/benchmark_birdset.yml

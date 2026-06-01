@@ -25,6 +25,7 @@ class TransformerProbe(BaseProbe3D):
         feature_mode: bool = False,
         input_dim: Optional[int] = None,
         aggregation: str = "mean",
+        input_processing: str = "sequence",
         num_heads: int = 12,
         attention_dim: int = 768,
         num_layers: int = 4,
@@ -49,6 +50,7 @@ class TransformerProbe(BaseProbe3D):
             feature_mode=feature_mode,
             input_dim=input_dim,
             aggregation=aggregation,
+            input_processing=input_processing,
             target_length=target_length,
             freeze_backbone=freeze_backbone,
         )

@@ -15,7 +15,7 @@ from typing import Any, Dict, Tuple, Union
 import torch
 import torch.nn as nn
 
-from avex.training.losses import ClipLoss
+from avex.training.losses import AsymmetricLoss, ClipLoss
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,8 @@ class SupervisedStrategy(TrainingStrategy):
             logger.warning(f"Number of Inf values in outputs: {inf_count}")
 
         # Match target format to criterion expectations
-        if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
-            # BCE expects float multi-hot targets (shape [B, C])
+        if isinstance(self.criterion, (torch.nn.BCEWithLogitsLoss, AsymmetricLoss)):
+            # BCE / ASL expect float multi-hot targets (shape [B, C])
             if target.dim() == 1:
                 target = torch.nn.functional.one_hot(target.long(), num_classes=outputs.size(1)).float()
         elif isinstance(self.criterion, torch.nn.CrossEntropyLoss):
@@ -107,7 +107,7 @@ class SupervisedStrategy(TrainingStrategy):
 
         # Return predictions and targets for metric computation
         with torch.no_grad():
-            if isinstance(self.criterion, torch.nn.BCEWithLogitsLoss):
+            if isinstance(self.criterion, (torch.nn.BCEWithLogitsLoss, AsymmetricLoss)):
                 # Multi-label: return logits and targets as they are
                 predictions = outputs.detach()
                 targets = target.detach()

@@ -142,9 +142,21 @@ class EmbeddingDataSource:
 
         if file_exists and (base_model is None or dataloader is None or device is None):
             logger.info("Loading embeddings from existing file")
-            # Decide in-memory vs HDF5-backed based on file size
+            # Decide in-memory vs HDF5-backed based on uncompressed dataset size.
+            # stat().st_size is the compressed on-disk size (gzip typically 4-6×
+            # smaller than RAM), so we compute the true uncompressed footprint from
+            # HDF5 shape × dtype to avoid silently loading 20+ GB into memory.
             try:
-                file_size = Path(save_path).stat().st_size
+                import h5py as _h5py
+                import numpy as _np
+
+                uncompressed_bytes = 0
+                with _h5py.File(save_path, "r") as _f:
+                    for _key in _f.keys():
+                        _dset = _f[_key]
+                        uncompressed_bytes += int(_np.prod(_dset.shape)) * _dset.dtype.itemsize
+                file_size = uncompressed_bytes
+                logger.info(f"Uncompressed embedding footprint: {file_size / 1e9:.2f} GB")
             except Exception:
                 file_size = self.config.memory_limit_bytes + 1  # fallback to HDF5
 
@@ -296,6 +308,10 @@ class EmbeddingDataSource:
                 # resolution. Keep 'all' in the list so
                 # model.register_hooks_for_layers can resolve it
                 pass
+            elif hasattr(base_model, "register_hooks_for_layers"):
+                # Mean/max aggregation may return one concatenated tensor for
+                # multi-layer models (e.g. AudioProtoPNet); resolve real hooks.
+                self.layer_names = base_model.register_hooks_for_layers(["all"])
             else:
                 self.layer_names = ["embed"]
 
@@ -391,6 +407,7 @@ class EmbeddingDataSource:
                 num_labels if num_labels is not None else 0,
                 compression=self.config.compression,
                 compression_level=self.config.compression_level,
+                aggregation=self.aggregation,
             )
             logger.info(f"Saved embeddings to {self.config.save_path}")
             self.num_labels = num_labels

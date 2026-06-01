@@ -10,4 +10,5 @@
 cd ~/avex
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex/run_train.py --config configs/run_configs/beats_base_beans.yml

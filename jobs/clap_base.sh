@@ -28,4 +28,5 @@ export DATASET_DEBUG_SAVE=true
 #keyring
 
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex/run_train.py --config configs/run_configs/aaai_train/clap_efficientnet_captions.yml

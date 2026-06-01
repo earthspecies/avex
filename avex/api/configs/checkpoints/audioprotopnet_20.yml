@@ -1,0 +1,10 @@
+---
+# AudioProtoPNet with 20 prototypes per class, trained on BirdSet XCL (9,736 species).
+# Loaded directly from HuggingFace hub via from_pretrained (trust_remote_code=True).
+# Reference: https://huggingface.co/DBD-research-group/AudioProtoPNet-20-BirdSet-XCL
+
+model_spec:
+  name: audioprotopnet
+  pretrained: true
+  device: cuda
+  model_id: "DBD-research-group/AudioProtoPNet-20-BirdSet-XCL"

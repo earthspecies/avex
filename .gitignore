@@ -8,6 +8,7 @@ runs/
 static/
 labels/
 wandb/
+.torch-fingerprint-probes/
 
 ### ex
 
@@ -15,6 +16,7 @@ wandb/
 .vscode/
 *.code-workspace
 .cursorrules
+.codex
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

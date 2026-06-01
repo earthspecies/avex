@@ -13,4 +13,5 @@ cd ~/avex
 # export UV_CACHE_DIR=/scratch/$USER/uv_cache/
 
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex train --config  configs/run_configs/aaai_train/sl_efficientnet_animalspeak_audioset.yml

@@ -151,6 +151,8 @@ The framework supports the following audio representation learning models:
 - **ATST** - Audio Spectrogram Transformer
 - **ResNet** - ResNet models (ResNet18, ResNet50, ResNet152)
 - **CLIP** - Contrastive Language-Audio Pretraining models
+- **AudioProtoPNet** - ConvNeXt-Base + prototype head for interpretable clip-level species classification (BirdSet XCL, 9 736 classes)
+- **AudioProtoPNet SED** - Frame-level sound event detection variant; returns per-second species probabilities via `forward_frames()`
 - **BirdNet** - BirdNet models for bioacoustic classification - external tensorflow model, some features might not be available
 - **Perch** - Perch models for bioacoustics - external tensorflow model, some features might not be available
 - **SurfPerch** - SurfPerch models - external tensorflow model, some features might not be available

@@ -10,6 +10,7 @@
 cd ~/avex
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 
 # NCCL debugging and configuration for better GPU detection
 export NCCL_DEBUG=INFO

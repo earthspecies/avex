@@ -8,4 +8,5 @@
 
 cd ~/code/avex
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex evaluate --config configs/evaluation_configs/aves_bio.yml

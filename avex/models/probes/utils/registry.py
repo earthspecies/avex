@@ -19,6 +19,7 @@ from avex.models.probes.attention_probe import AttentionProbe
 from avex.models.probes.linear_probe import LinearProbe
 from avex.models.probes.lstm_probe import LSTMProbe
 from avex.models.probes.mlp_probe import MLPProbe
+from avex.models.probes.prototypical_probe import PrototypicalProbe
 from avex.models.probes.transformer_probe import TransformerProbe
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ _PROBE_REGISTRY: Dict[str, Tuple[Type, Optional[ProbeConfig]]] = {
     "lstm": (LSTMProbe, None),
     "attention": (AttentionProbe, None),
     "transformer": (TransformerProbe, None),
+    "prototypical": (PrototypicalProbe, None),
 }
 
 # Backward compatibility: map to just classes for get_probe_class()

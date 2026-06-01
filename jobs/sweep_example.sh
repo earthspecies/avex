@@ -6,4 +6,5 @@
 
 cd ~/avex
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run esp-sweep agent dazzling-wildebeest

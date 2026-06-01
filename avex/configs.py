@@ -97,6 +97,11 @@ class TrainingParams(BaseModel):
         ge=0,
         description=("Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided."),
     )
+    orthogonal_loss_weight: float = Field(
+        1e-4,
+        ge=0,
+        description="Weight for the orthogonal regularisation loss on prototype vectors.",
+    )
 
     # Skip validation during training
     skip_validation: bool = Field(
@@ -228,6 +233,23 @@ class AudioConfig(BaseModel):
         return v
 
 
+class ConvNextCfg(BaseModel):
+    """Mel-spectrogram preprocessing configuration for ConvNeXt-based models.
+
+    Defaults match the BirdSet XCL training setup used by AudioProtoPNet.
+    Used by ``convnext`` and ``audioprotopnet_sed`` models.
+    """
+
+    sample_rate: int = Field(32000, gt=0)
+    n_fft: int = Field(2048, gt=0)
+    hop_length: int = Field(256, gt=0)
+    n_mels: int = Field(256, gt=0)
+    norm_mean: float = -13.369
+    norm_std: float = 13.162
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ModelSpec(BaseModel):
     """All parameters required to *instantiate* the network."""
 
@@ -291,15 +313,40 @@ class ModelSpec(BaseModel):
         ),
     )  # noqa: ANN401
 
+    # ConvNeXt mel preprocessing configuration (convnext and audioprotopnet_sed).
+    # When provided, overrides the convnext_cfg block in the packaged YAML.
+    convnext_cfg: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Mel preprocessing configuration for ConvNeXt-based models "
+            "(convnext, audioprotopnet_sed). Overrides the convnext_cfg block "
+            "in the packaged checkpoint YAML. Keys: sample_rate, n_fft, "
+            "hop_length, n_mels, norm_mean, norm_std."
+        ),
+    )  # noqa: ANN401
+
     # BirdNet-specific configuration
     language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")
 
-    # EAT HF model ID for HuggingFace model loading
-    model_id: Optional[str] = Field(
-        "worstchan/EAT-base_epoch30_pretrain",
+    # AudioProtoPNet SED checkpoint directory (three .pt files).
+    checkpoint_dir: Optional[str] = Field(
+        None,
         description=(
-            "HuggingFace model repository ID or local path for EAT HF model "
-            "(e.g., 'worstchan/EAT-base_epoch30_pretrain')"
+            "Path to a directory containing config.pt, backbone_state_dict.pt, "
+            "head_state_dict.pt (AudioProtoPNet SED).  Overrides checkpoint_dir "
+            "in the packaged YAML."
+        ),
+    )
+
+    # HuggingFace model repository ID or local path.  Models that load from HF
+    # (e.g. EAT, AudioProtoPNet, ConvNeXt variants) should set this explicitly
+    # in their YAML config; the default is None (no HF hub loading).
+    model_id: Optional[str] = Field(
+        None,
+        description=(
+            "HuggingFace model repository ID or local path "
+            "(e.g. 'DBD-research-group/AudioProtoPNet-20-BirdSet-XCL'). "
+            "Models that need a specific hub repo must set this in their YAML config."
         ),
     )
 
@@ -471,6 +518,7 @@ class ProbeConfig(BaseModel):
         "attention",
         "lstm",
         "transformer",
+        "prototypical",
     ] = Field("linear", description="Type of probe to use")
 
     aggregation: Literal["mean", "max", "cls_token", "none"] = Field(
@@ -510,6 +558,13 @@ class ProbeConfig(BaseModel):
     lstm_hidden_size: Optional[int] = Field(None, ge=1, description="Hidden size for LSTM probe")
 
     bidirectional: bool = Field(False, description="Whether to use bidirectional LSTM")
+
+    # Prototypical probe parameters
+    num_prototypes_per_class: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Number of prototype vectors per class (required for prototypical probe)",
+    )
 
     # Sequence processing parameters
     max_sequence_length: Optional[int] = Field(
@@ -601,6 +656,11 @@ class ProbeConfig(BaseModel):
                 raise ValueError("LSTM probe requires lstm_hidden_size to be specified")
             if self.num_layers is None:
                 raise ValueError("LSTM probe requires num_layers to be specified")
+
+        # Validate prototypical-specific parameters
+        if self.probe_type == "prototypical":
+            if self.num_prototypes_per_class is None:
+                raise ValueError("prototypical probe requires num_prototypes_per_class to be specified")
 
         # Enforce: offline training requires a frozen backbone
         # If online_training is explicitly set to False (offline), the backbone
@@ -813,6 +873,8 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
         "contrastive",
         "clip",
         "focal",
+        "asymmetric",
+        "asl",
     ]
 
     # Enable multi-label classification
@@ -917,8 +979,11 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
             v = "bce"
 
         # Check if multilabel is True but loss function isn't BCE/Focal
-        if data.get("multilabel", False) and v not in {"bce", "focal"}:
-            raise ValueError(f"When multilabel=True, loss_function must be 'bce' or 'focal' (got '{v}' instead)")
+        if data.get("multilabel", False) and v not in {"bce", "focal", "asymmetric", "asl"}:
+            raise ValueError(
+                f"When multilabel=True, loss_function must be 'bce', 'focal', 'asymmetric', or 'asl' "
+                f"(got '{v}' instead)"
+            )
 
         # For self-supervised runs we don't impose any loss-type restrictions
         if data.get("label_type") == "self_supervised":
@@ -1212,6 +1277,15 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     device: str = Field(..., description="Device to run the evaluation on")
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
+    probe_num_workers: int = Field(
+        0,
+        ge=0,
+        description=(
+            "DataLoader workers for offline probe training. Defaults to 0 "
+            "(main-process HDF5 reads) to prevent per-worker cache duplication. "
+            "Only increase if embeddings fit fully within cache_size_limit_gb."
+        ),
+    )
 
     # Which evaluation phases to run
     eval_modes: List[Literal["probe", "retrieval", "clustering"]] = Field(
@@ -1294,6 +1368,15 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             10,
             ge=1,
             description=("Number of batches to process before writing during streaming."),
+        )
+        probe_storage_aggregation: Literal["none", "mean", "max", "cls_token"] = Field(
+            "none",
+            description=(
+                "Aggregation used when caching offline probe embeddings. 'none' "
+                "preserves full sequence/stage embeddings for maximum probe reuse; "
+                "'mean' or 'max' stores smaller pooled embeddings for datasets "
+                "where unpooled caches are too large."
+            ),
         )
 
         model_config = ConfigDict(extra="forbid")

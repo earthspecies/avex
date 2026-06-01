@@ -191,6 +191,12 @@ def create_probe_eval_config(
                 "activation": "relu",
             }
         )
+    elif probe_type == "prototypical":
+        probe_cfg.update({"num_prototypes_per_class": 4})
+        # Orthogonal regularisation on the prototype vectors (consumed by
+        # FineTuneTrainer only for the prototypical probe).
+        assert isinstance(base_config["training_params"], dict)
+        base_config["training_params"]["orthogonal_loss_weight"] = 1e-3
 
     experiment: dict[str, object] = {
         "run_name": f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}",
@@ -207,20 +213,21 @@ def create_probe_eval_config(
     return config_path
 
 
-def run_linear_offline_probe_evaluate(temp_output_dir: Path) -> dict[str, float]:
-    """Run the minimal linear / offline / last_layer evaluate job and read metrics.
+def run_offline_probe_evaluate(temp_output_dir: Path, probe_type: str = "linear") -> dict[str, float]:
+    """Run a minimal ``<probe_type>`` / offline / last_layer evaluate job and read metrics.
 
     Mirrors ``test_weighted_probes_comprehensive`` (same patches and paths).
 
     Args:
         temp_output_dir: Temporary directory for configs and run outputs.
+        probe_type: Probe to evaluate (e.g. ``linear`` or ``prototypical``).
 
     Returns:
         Mapping of summary CSV column names to scalar metric values.
     """
     from avex.run_evaluate import main
 
-    probe_type, freeze_backbone, layers, training_mode = ("linear", True, "last_layer", "offline")
+    freeze_backbone, layers, training_mode = (True, "last_layer", "offline")
     config_path = create_probe_eval_config(temp_output_dir, probe_type, freeze_backbone, layers, training_mode)
     test_output_dir = temp_output_dir / f"{probe_type}_{freeze_backbone}_{layers}_{training_mode}"
     test_output_dir.mkdir(exist_ok=True)
@@ -259,3 +266,18 @@ def run_linear_offline_probe_evaluate(temp_output_dir: Path) -> dict[str, float]
             continue
         out[metric] = float(val)
     return out
+
+
+def run_linear_offline_probe_evaluate(temp_output_dir: Path) -> dict[str, float]:
+    """Backwards-compatible wrapper: linear / offline / last_layer evaluate job.
+
+    Kept stable because the recorded cross-version metric baselines depend on
+    the exact linear-probe configuration.
+
+    Args:
+        temp_output_dir: Temporary directory for configs and run outputs.
+
+    Returns:
+        Mapping of summary CSV column names to scalar metric values.
+    """
+    return run_offline_probe_evaluate(temp_output_dir, probe_type="linear")

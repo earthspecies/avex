@@ -154,6 +154,64 @@ def test_get_embeddings_feature_mode_multi_key_list() -> None:
     assert len(out) == 2
 
 
+def test_2d_probe_4d_offline_embeddings_no_oom() -> None:
+    """Regression: linear probe with offline 4D stage features must not OOM.
+
+    ConvNeXt stages are cached as (C, H, W) when aggregation='none'.  The 2D
+    probe must pool W (time) before flattening, not flatten C*H*W wholesale.
+    """
+    # Shapes mirroring ConvNeXt-Base stage outputs: C*H is constant (8192)
+    stage_shapes = [(128, 64, 312), (256, 32, 156), (512, 16, 78), (1024, 8, 39)]
+    probe = _Dummy2DProbe(
+        base_model=None,
+        layers=[],
+        num_classes=4,
+        device="cpu",
+        feature_mode=True,
+        input_dim=stage_shapes,
+        aggregation="mean",
+    )
+    # All projectors should be None (all stages have same C*H = 8192)
+    assert all(p is None for p in probe.embedding_projectors)
+
+    # forward must produce (B, 8192) without OOM or error
+    batch = [torch.randn(2, *s) for s in stage_shapes]
+    out = probe(batch)
+    assert out.shape == (2, 8192)
+
+
+def test_2d_probe_pools_unaveraged_3d_embeddings_for_pooled_input() -> None:
+    probe = _Dummy2DProbe(
+        base_model=None,
+        layers=[],
+        num_classes=4,
+        device="cpu",
+        feature_mode=True,
+        input_dim=[(5, 3)],
+        aggregation="mean",
+        input_processing="pooled",
+    )
+    x = torch.arange(2 * 5 * 3, dtype=torch.float32).reshape(2, 5, 3)
+    out = probe(x)
+    assert out.shape == (2, 3)
+    assert torch.allclose(out, x.mean(dim=1))
+
+
+def test_3d_probe_treats_averaged_2d_embeddings_as_single_step_sequence() -> None:
+    probe = _Dummy3DProbe(
+        base_model=None,
+        layers=[],
+        num_classes=4,
+        device="cpu",
+        feature_mode=True,
+        input_dim=3,
+        aggregation="mean",
+    )
+    x = torch.randn(2, 3)
+    out = probe(x)
+    assert out.shape == (2, 1, 3)
+
+
 def test_get_embeddings_non_feature_mode_calls_base_model_and_detaches() -> None:
     base = _MockBaseModel(out_shape=torch.Size([6]))
     probe = _Dummy2DProbe(

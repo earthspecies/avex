@@ -30,6 +30,7 @@ class _BaseProbe(ABC, nn.Module):
         feature_mode: bool = False,
         input_dim: Optional[Union[int, Tuple[int, ...], List[Tuple[int, ...]]]] = None,
         aggregation: str = "mean",
+        input_processing: str = "pooled",
         target_length: Optional[int] = None,
         freeze_backbone: bool = True,
     ) -> None:
@@ -40,6 +41,7 @@ class _BaseProbe(ABC, nn.Module):
         self.num_classes = num_classes
         self.feature_mode = feature_mode
         self.aggregation = aggregation
+        self.input_processing = input_processing
         self.target_length = target_length
         self.freeze_backbone = freeze_backbone
 
@@ -251,6 +253,21 @@ class BaseProbe2D(_BaseProbe):
     def _expected_dimensionality(self) -> int:
         return 2
 
+    def _to_2d(self, emb: torch.Tensor) -> torch.Tensor:
+        if emb.dim() == 2:
+            return emb
+        if emb.dim() == 3:
+            if self.input_processing == "flatten" or self.aggregation == "none":
+                return emb.reshape(emb.shape[0], -1)
+            if self.aggregation == "max":
+                return emb.max(dim=1).values
+            if self.aggregation == "cls_token":
+                return emb[:, 0, :]
+            return emb.mean(dim=1)
+        if emb.dim() == 4:
+            return self._pool4d(emb)
+        raise ValueError(f"Unsupported embedding dim {emb.dim()} for 2D probe")
+
     def _analyze_and_create_projectors(self, embeddings: List[torch.Tensor]) -> int:
         if not embeddings:
             raise ValueError(
@@ -262,14 +279,7 @@ class BaseProbe2D(_BaseProbe):
 
         flattened_dims: List[int] = []
         for emb in embeddings:
-            if emb.dim() == 4:
-                flattened_dims.append(emb.shape[1] * emb.shape[2] * emb.shape[3])
-            elif emb.dim() == 3:
-                flattened_dims.append(emb.shape[1] * emb.shape[2])
-            elif emb.dim() == 2:
-                flattened_dims.append(emb.shape[1])
-            else:
-                raise ValueError(f"Unsupported embedding dim {emb.dim()} for 2D probe")
+            flattened_dims.append(self._to_2d(emb).shape[1])
 
         from collections import Counter
 
@@ -289,38 +299,31 @@ class BaseProbe2D(_BaseProbe):
         return target_dim
 
     def _infer_single_tensor_dim(self, emb: torch.Tensor) -> int:
-        if emb.dim() == 2:
-            return emb.shape[-1]
-        if emb.dim() == 3:
-            return emb.shape[1] * emb.shape[2]
-        if emb.dim() == 4:
-            return emb.shape[1] * emb.shape[2] * emb.shape[3]
-        raise ValueError(f"Linear probe expects 2D, 3D or 4D embeddings, got {emb.shape}")
+        return self._to_2d(emb).shape[1]
+
+    def _pool4d(self, emb: torch.Tensor) -> torch.Tensor:
+        """Pool last dim (W/time) of a 4-D tensor to 2-D (B, C*H).
+
+        Returns
+        -------
+        torch.Tensor
+            Pooled and flattened tensor.
+        """
+        if self.aggregation == "max":
+            return emb.max(dim=-1).values.reshape(emb.shape[0], -1)
+        return emb.mean(dim=-1).reshape(emb.shape[0], -1)
 
     def _combine_or_reshape_embeddings(self, embeddings: TensorOrList) -> torch.Tensor:
         if isinstance(embeddings, list):
             projected: List[torch.Tensor] = []
             assert self.embedding_projectors is not None
             for emb, projector in zip(embeddings, self.embedding_projectors, strict=False):
-                if emb.dim() == 4:
-                    emb2 = emb.reshape(emb.shape[0], -1)
-                elif emb.dim() == 3:
-                    emb2 = emb.reshape(emb.shape[0], -1)
-                elif emb.dim() == 2:
-                    emb2 = emb
-                else:
-                    raise ValueError(f"Unsupported embedding dim {emb.dim()} for 2D probe")
+                emb2 = self._to_2d(emb)
                 emb2 = projector(emb2) if projector is not None else emb2
                 projected.append(emb2)
             return self._sum(projected)
 
-        if embeddings.dim() == 3:
-            return embeddings.reshape(embeddings.shape[0], -1)
-        if embeddings.dim() == 4:
-            return embeddings.reshape(embeddings.shape[0], -1)
-        if embeddings.dim() == 2:
-            return embeddings
-        raise ValueError(f"Linear probe expects 2D, 3D or 4D embeddings, got {embeddings.shape}")
+        return self._to_2d(embeddings)
 
 
 class BaseProbe3D(_BaseProbe):
@@ -345,7 +348,7 @@ class BaseProbe3D(_BaseProbe):
             elif emb.dim() == 4:
                 info.append((4, emb.shape[3], emb.shape[1] * emb.shape[2]))
             elif emb.dim() == 2:
-                info.append((2, emb.shape[1], 1))
+                info.append((2, 1, emb.shape[1]))
             else:
                 raise ValueError(f"Unsupported embedding dim {emb.dim()} for 3D probe")
 
@@ -374,12 +377,12 @@ class BaseProbe3D(_BaseProbe):
             b, c, h, w = emb.shape
             return emb.transpose(1, 3).reshape(b, w, c * h)
         if emb.dim() == 2:
-            return emb.unsqueeze(2)
+            return emb.unsqueeze(1)
         raise ValueError(f"Unsupported embedding dim {emb.dim()} for 3D probe")
 
     def _infer_single_tensor_dim(self, emb: torch.Tensor) -> int:
         if emb.dim() == 2:
-            return 1
+            return emb.shape[-1]
         if emb.dim() == 3:
             return emb.shape[-1]
         if emb.dim() == 4:

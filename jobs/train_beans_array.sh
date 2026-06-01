@@ -21,6 +21,7 @@ cd ~/avex
 
 # Ensure dependencies are in sync on the worker
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 
 # --------------------------- config selector ------------------------------- #
 CONFIG=""

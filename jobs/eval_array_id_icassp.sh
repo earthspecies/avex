@@ -47,6 +47,7 @@ echo "Running evaluation for model: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)
 cd ~/code/avex
 
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 
 srun uv run avex evaluate --config configs/evaluation_configs/icassp/$config_file --patch dataset_config=configs/data_configs/individual_id_icassp.yml
 

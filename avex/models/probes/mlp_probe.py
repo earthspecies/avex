@@ -25,6 +25,7 @@ class MLPProbe(BaseProbe2D):
         feature_mode: bool = False,
         input_dim: Optional[int] = None,
         aggregation: str = "mean",
+        input_processing: str = "pooled",
         hidden_dims: Optional[List[int]] = None,
         dropout_rate: float = 0.1,
         activation: str = "relu",
@@ -44,6 +45,7 @@ class MLPProbe(BaseProbe2D):
             feature_mode=feature_mode,
             input_dim=input_dim,
             aggregation=aggregation,
+            input_processing=input_processing,
             target_length=target_length,
             freeze_backbone=freeze_backbone,
         )

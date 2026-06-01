@@ -47,6 +47,7 @@ uv tool install keyring --with keyrings.google-artifactregistry-auth
 export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 export GOOGLE_APPLICATION_CREDENTIALS=/home/marius_miron_earthspecies_org/.config/gcloud/application_default_credentials.json
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 
 echo $UV_PROJECT_ENVIRONMENT
 uv sync

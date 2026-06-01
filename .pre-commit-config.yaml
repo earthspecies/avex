@@ -12,6 +12,7 @@ repos:
         types: [python]
         args: [--fix=no]
       - id: check-added-large-files
+        exclude: ^avex/data/ebird_taxonomy_v
         args: [--maxkb=1024]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -33,6 +34,7 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
+        exclude: ^avex/data/ebird_taxonomy_v
         args:
           - "--ignore-words=.dict-allowed.txt"
           # skip jupyter notebook as there isn't a good way to only match inputs

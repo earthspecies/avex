@@ -8,4 +8,5 @@
 
 cd ~/avex
 uv sync
+export ESP_DATA_HOME="gs://esp-ml-datasets"
 srun uv run avex/run_evaluate.py --config configs/evaluation_configs/perch_cpu.yml

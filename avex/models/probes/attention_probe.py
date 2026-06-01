@@ -25,6 +25,7 @@ class AttentionProbe(BaseProbe3D):
         feature_mode: bool = False,
         input_dim: Optional[int] = None,
         aggregation: str = "mean",
+        input_processing: str = "sequence",
         num_heads: int = 8,
         attention_dim: int = 512,
         num_layers: int = 2,
@@ -49,6 +50,7 @@ class AttentionProbe(BaseProbe3D):
             feature_mode=feature_mode,
             input_dim=input_dim,
             aggregation=aggregation,
+            input_processing=input_processing,
             target_length=target_length,
             freeze_backbone=freeze_backbone,
         )

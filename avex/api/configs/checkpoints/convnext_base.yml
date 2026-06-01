@@ -1,0 +1,26 @@
+---
+# ConvNeXt-Base for audio classification.
+#
+# pretrained: true  — loads facebook/convnext-base-224-22k ImageNet-22k backbone.
+#                     Use as a starting point for fine-tuning.
+# pretrained: false — builds from the init_config below with no network access.
+#                     Use for training from scratch; supply a checkpoint_path to
+#                     resume or checkpoint_path is omitted for a fresh run.
+#
+# convnext_cfg matches the BirdSet XCL training setup used by AudioProtoPNet.
+# Adjust norm_mean / norm_std if training on a dataset with different statistics.
+
+convnext_cfg:
+  sample_rate: 32000
+  n_fft: 2048
+  hop_length: 256
+  n_mels: 256
+  norm_mean: -13.369
+  norm_std: 13.162
+
+model_spec:
+  name: convnext
+  pretrained: true
+  init_config:
+    depths: [3, 3, 27, 3]
+    hidden_sizes: [128, 256, 512, 1024]

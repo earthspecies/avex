@@ -4,6 +4,7 @@ This module provides various loss functions used in representation learning
 tasks, including contrastive losses, focal loss, and distributed training utilities.
 """
 
+import contextlib
 import os
 from typing import Dict, Optional, Tuple, Union
 
@@ -341,6 +342,132 @@ class FocalLoss(nn.Module):
             return loss
 
 
+class AsymmetricLoss(nn.Module):
+    """Asymmetric loss for multi-label classification.
+
+    Down-weights easy negatives more aggressively than positives via separate
+    focusing parameters ``gamma_neg`` and ``gamma_pos``.
+
+    Reference: Ridnik et al., "Asymmetric Loss for Multi-Label Classification",
+    ICCV 2021. https://arxiv.org/abs/2009.14119
+
+    Parameters
+    ----------
+    gamma_neg : float, default=4
+        Focusing parameter for negatives (down-weights easy negatives).
+    gamma_pos : float, default=1
+        Focusing parameter for positives.
+    clip : float, default=0.05
+        Shift the negative probability by this margin to avoid vanishing
+        gradients on hard negatives.
+    eps : float, default=1e-8
+        Numerical stability epsilon for log.
+    disable_torch_grad_focal_loss : bool, default=False
+        Disable autograd inside focal-weight computation for memory savings.
+    reduction : str, {"mean", "sum", "none"}, default="mean"
+        Reduction applied to the per-element loss.
+    """
+
+    def __init__(
+        self,
+        gamma_neg: float = 4,
+        gamma_pos: float = 1,
+        clip: float = 0.05,
+        eps: float = 1e-8,
+        disable_torch_grad_focal_loss: bool = False,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        self.gamma_neg = gamma_neg
+        self.gamma_pos = gamma_pos
+        self.clip = clip
+        self.eps = eps
+        self.disable_torch_grad_focal_loss = disable_torch_grad_focal_loss
+        if reduction not in {"mean", "sum", "none"}:
+            raise ValueError("reduction must be 'mean', 'sum', or 'none'")
+        self.reduction = reduction
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        if targets.dtype != torch.float32:
+            targets = targets.float()
+
+        xs_pos = torch.sigmoid(logits)
+        xs_neg = 1 - xs_pos
+
+        if self.clip > 0:
+            xs_neg = (xs_neg + self.clip).clamp(max=1)
+
+        loss = targets * torch.log(xs_pos.clamp(min=self.eps)) + (1 - targets) * torch.log(xs_neg.clamp(min=self.eps))
+
+        if self.gamma_neg > 0 or self.gamma_pos > 0:
+            ctx = torch.no_grad() if self.disable_torch_grad_focal_loss else contextlib.nullcontext()
+            with ctx:
+                pt = xs_pos * targets + xs_neg * (1 - targets)
+                one_sided_gamma = self.gamma_pos * targets + self.gamma_neg * (1 - targets)
+                loss *= torch.pow(1 - pt, one_sided_gamma)
+
+        if self.reduction == "mean":
+            return -loss.mean()
+        if self.reduction == "sum":
+            return -loss.sum()
+        return -loss
+
+
+class OrthogonalLoss(nn.Module):
+    """Orthogonality loss for prototype vectors.
+
+    Encourages prototypes within the same class to be orthogonal to each
+    other.  For each class c the loss is::
+
+        ||P_c @ P_c.T - I||_F / n_elements
+
+    where P_c is the ``(num_prototypes_per_class, D)`` matrix of L2-normalised
+    prototype vectors for class c.
+
+    Reference: Wang et al., "Interpretable Image Recognition by Constructing
+    Transparent Embedding Space", ICCV 2021.
+
+    Parameters
+    ----------
+    num_classes : int
+        Number of target classes.
+    num_prototypes_per_class : int
+        Number of prototype vectors per class.
+    """
+
+    def __init__(self, num_classes: int, num_prototypes_per_class: int) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_prototypes_per_class = num_prototypes_per_class
+
+    def forward(self, prototype_vectors: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        """Compute normalised orthogonality loss.
+
+        Parameters
+        ----------
+        prototype_vectors : torch.Tensor
+            Shape ``(num_classes * num_prototypes_per_class, D)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar loss.
+        """
+        p = prototype_vectors.view(self.num_classes, self.num_prototypes_per_class, -1)
+        # Normalise each prototype to unit length
+        p = F.normalize(p, dim=-1)  # (C, K, D)
+        # Gram matrix per class: (C, K, K)
+        gram = torch.bmm(p, p.transpose(1, 2))
+        identity = (
+            torch.eye(self.num_prototypes_per_class, device=gram.device).unsqueeze(0).expand(self.num_classes, -1, -1)
+        )
+        off_diag = gram - identity
+        # Mean per-class Frobenius norm, normalised by K*K so loss is
+        # invariant to both num_classes and num_prototypes_per_class.
+        per_class = torch.linalg.norm(off_diag.view(self.num_classes, -1), dim=-1)
+        return per_class.mean() / (self.num_prototypes_per_class**2)
+
+
 def build_criterion(loss_name: str) -> nn.Module:
     if loss_name == "cross_entropy":
         return nn.CrossEntropyLoss()
@@ -354,5 +481,7 @@ def build_criterion(loss_name: str) -> nn.Module:
         return ClipLoss()
     elif loss_name in {"focal", "focal_loss"}:
         return FocalLoss()
+    elif loss_name in {"asymmetric", "asl", "asymmetric_loss"}:
+        return AsymmetricLoss()
     else:
         raise ValueError(f"Unknown loss_function: {loss_name}")

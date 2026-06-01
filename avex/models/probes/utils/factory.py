@@ -43,6 +43,7 @@ def _add_probe_config_params(init_kwargs: dict, probe_config: ProbeConfig) -> No
         "use_positional_encoding",
         "num_heads",
         "attention_dim",
+        "num_prototypes_per_class",
     ]
 
     for param_name in param_names:
@@ -161,6 +162,7 @@ def build_probe_from_config(
         "feature_mode": feature_mode,
         "input_dim": input_dim,
         "aggregation": aggregation,
+        "input_processing": input_processing,
         "target_length": final_target_length,
         "freeze_backbone": frozen,
         **kwargs,
