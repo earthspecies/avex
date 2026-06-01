@@ -22,6 +22,7 @@ from tests.integration.eval_end_to_end_harness import (
     create_probe_eval_config,
     create_test_data_config,
     run_linear_offline_probe_evaluate,
+    run_offline_probe_evaluate,
 )
 
 # Skip entire module if esp_data is not installed (internal dependency)
@@ -148,6 +149,33 @@ class TestRunEvaluateEndToEnd:
         ):
             pytest.skip("Harness only implements the linear/offline/last_layer path.")
         metrics = run_linear_offline_probe_evaluate(temp_output_dir)
+        for metric in ("test_accuracy", "test_balanced_accuracy"):
+            assert metric in metrics, f"Missing metric column: {metric}"
+            val = metrics[metric]
+            assert 0.0 <= val <= 1.0, f"{metric} out of range: {val}"
+
+    def test_prototypical_probe_config_validation(self, temp_output_dir: Path) -> None:
+        """The prototypical probe config flows through with its prototype/orthogonal params."""
+        config_path = self._create_test_config(temp_output_dir, "prototypical", True, "last_layer", "offline")
+
+        eval_cfg = self._load_eval_config(config_path)
+
+        assert len(eval_cfg.experiments) == 1
+        experiment = eval_cfg.experiments[0]
+        assert experiment.probe_config is not None
+        assert experiment.probe_config.probe_type == "prototypical"
+        assert experiment.probe_config.num_prototypes_per_class == 4
+        # Orthogonal regularisation weight reaches TrainingParams.
+        assert eval_cfg.training_params.orthogonal_loss_weight == 1e-3
+
+    @pytest.mark.slow
+    def test_prototypical_probe_comprehensive(self, temp_output_dir: Path) -> None:
+        """End-to-end prototypical probe on BEANS dogs: runs and yields valid metrics.
+
+        Exercises the ProtoPNet head plus the orthogonal loss and non-negativity
+        clamp wired into ``FineTuneTrainer`` for the prototypical probe.
+        """
+        metrics = run_offline_probe_evaluate(temp_output_dir, probe_type="prototypical")
         for metric in ("test_accuracy", "test_balanced_accuracy"):
             assert metric in metrics, f"Missing metric column: {metric}"
             val = metrics[metric]

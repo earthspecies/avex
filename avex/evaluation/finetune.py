@@ -75,6 +75,30 @@ class FineTuneTrainer:
         else:
             self.criterion = torch.nn.CrossEntropyLoss()
 
+        # Prototypical probe: add orthogonal regularisation on the prototype
+        # vectors and clamp the correct-class connections non-negative after each
+        # optimiser step (ProtoPNet interpretability constraints).
+        self._proto_orth_criterion: Optional[torch.nn.Module] = None
+        self._proto_orth_weight: float = 0.0
+        classifier = getattr(self.model, "classifier", None)
+        if (
+            hasattr(self.model, "clamp_last_layer")
+            and classifier is not None
+            and hasattr(classifier, "prototype_vectors")
+        ):
+            from avex.training.losses import OrthogonalLoss
+
+            self._proto_orth_weight = float(getattr(cfg.training_params, "orthogonal_loss_weight", 1e-4))
+            self._proto_orth_criterion = OrthogonalLoss(
+                num_classes=self.num_labels,
+                num_prototypes_per_class=classifier.num_prototypes_per_class,
+            ).to(self.device)
+            logger.info(
+                "Prototypical probe detected: orthogonal loss weight=%s, num_prototypes_per_class=%d",
+                self._proto_orth_weight,
+                classifier.num_prototypes_per_class,
+            )
+
         # Set up learning rate scheduler
         self.scheduler = self._create_scheduler()
 
@@ -357,6 +381,11 @@ class FineTuneTrainer:
                 y_indices = y.argmax(dim=1)
                 loss = self.criterion(logits, y_indices)
 
+            # Prototypical probe: orthogonal regularisation on prototype vectors
+            if self._proto_orth_criterion is not None and self._proto_orth_weight > 0:
+                orth_loss = self._proto_orth_criterion(self.model.classifier.prototype_vectors)
+                loss = loss + self._proto_orth_weight * orth_loss
+
             # Backward pass if training
             if train:
                 self.optimizer.zero_grad()
@@ -373,6 +402,10 @@ class FineTuneTrainer:
                     )
 
                 self.optimizer.step()
+
+                # Prototypical probe: enforce non-negative correct-class connections
+                if hasattr(self.model, "clamp_last_layer"):
+                    self.model.clamp_last_layer()
 
                 # Step scheduler after optimizer step (for proper LR scheduling)
                 # Only step scheduler if it exists and we're past the warmup period
