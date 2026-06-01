@@ -584,6 +584,9 @@ def build_dataloaders(
     # Force "spawn" start method even if the global context is already locked
     ctx = multiprocessing.get_context("spawn")
 
+    # PyTorch raises ValueError if timeout > 0 while num_workers == 0.
+    effective_timeout = worker_timeout if cfg.num_workers > 0 else 0
+
     train_dl = DataLoader(
         ds_train,
         batch_size=cfg.training_params.batch_size,
@@ -597,7 +600,7 @@ def build_dataloaders(
         multiprocessing_context=ctx,
         persistent_workers=(cfg.num_workers > 0),
         drop_last=True,
-        timeout=worker_timeout,
+        timeout=effective_timeout,
     )
     val_dl = DataLoader(
         ds_val,
@@ -612,7 +615,7 @@ def build_dataloaders(
         multiprocessing_context=ctx,
         drop_last=True,
         persistent_workers=(cfg.num_workers > 0),
-        timeout=worker_timeout,
+        timeout=effective_timeout,
     )
     if ds_test is not None:
         test_dl = DataLoader(
@@ -625,7 +628,7 @@ def build_dataloaders(
             worker_init_fn=worker_init_fn,
             generator=g,
             multiprocessing_context=ctx,
-            timeout=worker_timeout,
+            timeout=effective_timeout,
         )
     else:
         test_dl = None

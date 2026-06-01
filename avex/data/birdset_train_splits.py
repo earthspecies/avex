@@ -60,7 +60,7 @@ class BirdSetTrainSplits(Dataset):
             "(see esp-data PR #243). Uses JSONL manifests and local/GCS audio "
             "via the ``path`` column."
         ),
-        sources=["HSN", "NBP", "NES", "PER", "POW", "SSW", "SNE", "UHH"],
+        sources=["HSN", "NBP", "NES", "PER", "POW", "SSW", "SNE", "UHH", "XCM"],
         license="CC-BY-4.0, CC0",
     )
 

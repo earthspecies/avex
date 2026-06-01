@@ -17,7 +17,7 @@ def test_load_returns_mapping(version: et.EbirdTaxonomyVersion) -> None:
     assert tax["ostric2"]["sci_name"] == "Struthio camelus"
 
 
-def test_versions_are_disjoint_from_merged_union() -> None:
+def test_versions_overlap_with_taxonomic_drift() -> None:
     v2021 = et.load("v2021")
     v2025 = et.load("v2025")
     conflicts = [code for code in v2021 if code in v2025 and v2021[code] != v2025[code]]
