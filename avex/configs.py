@@ -97,25 +97,10 @@ class TrainingParams(BaseModel):
         ge=0,
         description=("Warm-up steps for the second stage. Defaults to scheduler.warmup_steps if not provided."),
     )
-
-    # Prototypical two-stage training (phase 2)
-    prototypical_phase2: bool = Field(
-        False,
-        description=(
-            "If True and freeze_backbone_epochs > 0, phase 2 replaces the model head "
-            "with a prototype-based head (PrototypicalWrapper) instead of unfreezing "
-            "the backbone. Requires a ConvNeXt, EfficientNet, or AudioProtoPNet backbone."
-        ),
-    )
-    num_prototypes_per_class: int = Field(
-        10,
-        ge=1,
-        description="Number of prototype vectors per class used in prototypical phase 2.",
-    )
     orthogonal_loss_weight: float = Field(
         1e-4,
         ge=0,
-        description="Weight for the orthogonal regularisation loss during prototypical phase 2.",
+        description="Weight for the orthogonal regularisation loss on prototype vectors.",
     )
 
     # Skip validation during training

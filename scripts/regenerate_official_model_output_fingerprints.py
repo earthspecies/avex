@@ -188,6 +188,13 @@ def parse_args() -> argparse.Namespace:
         help="Rounding decimals before hashing (default: 4).",
     )
     parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        metavar="MODEL",
+        help=("Optional official model names to regenerate. When omitted, all HF-backed ESP models are evaluated."),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Print JSON output instead of Python dict literal.",
@@ -208,6 +215,12 @@ def main() -> int:
     args = parse_args()
     profile = args.profile if args.profile is not None else _profile_from_runtime()
     model_names = _official_hf_model_names()
+    if args.models is not None:
+        requested = set(args.models)
+        unknown = sorted(requested.difference(model_names))
+        if unknown:
+            raise ValueError(f"Unknown or non-HF official models: {unknown}")
+        model_names = [name for name in model_names if name in requested]
     audio, labels = _build_labeled_audio_batch(seed=7)
     if labels.shape[0] != audio.shape[0]:
         raise ValueError("Labeled batch mismatch between audio and labels.")
