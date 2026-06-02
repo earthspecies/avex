@@ -71,10 +71,11 @@ class TrainValSplitTransform:
             return data, {"subset": self.subset, "original_size": 0, "split_size": 0}
 
         rng = np.random.default_rng(self.random_state)
-        is_dataframe = isinstance(data, pd.DataFrame)
 
+        # Datasets are always loaded through an esp_data backend (pandas or
+        # polars); both expose the unified column/indexing API used below.
         if self.stratify_column is not None:
-            if self.stratify_column not in data.columns:
+            if not data.column_exists(self.stratify_column):
                 raise ValueError(
                     f"Stratify column '{self.stratify_column}' not found in data. "
                     f"Available columns: {list(data.columns)}"
@@ -82,23 +83,15 @@ class TrainValSplitTransform:
             train_idxs: list[int] = []
             val_idxs: list[int] = []
 
-            if is_dataframe:
-                for class_val in data[self.stratify_column].unique():
-                    group_pos = list(np.where(data[self.stratify_column] == class_val)[0])
-                    perm = rng.permutation(len(group_pos)).tolist()
-                    n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
-                    train_idxs.extend([group_pos[perm[i]] for i in range(n_train)])
-                    val_idxs.extend([group_pos[perm[i]] for i in range(n_train, len(perm))])
-            else:
-                # Per-class proportional split via esp_data backend API
-                indexed = data.add_column("__row_idx__", list(range(n)))
-                for class_val in indexed.get_unique(self.stratify_column):
-                    group = indexed.filter_isin(self.stratify_column, [class_val])
-                    group_row_idxs = [row["__row_idx__"] for row in group]
-                    perm = rng.permutation(len(group_row_idxs)).tolist()
-                    n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
-                    train_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train)])
-                    val_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train, len(perm))])
+            # Per-class proportional split via esp_data backend API
+            indexed = data.add_column("__row_idx__", list(range(n)))
+            for class_val in indexed.get_unique(self.stratify_column):
+                group = indexed.filter_isin(self.stratify_column, [class_val])
+                group_row_idxs = [row["__row_idx__"] for row in group]
+                perm = rng.permutation(len(group_row_idxs)).tolist()
+                n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
+                train_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train)])
+                val_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train, len(perm))])
 
             selected = sorted(train_idxs) if self.subset == "train" else sorted(val_idxs)
         else:
@@ -106,7 +99,7 @@ class TrainValSplitTransform:
             n_train = int(n * self.train_size)
             selected = sorted(perm[:n_train]) if self.subset == "train" else sorted(perm[n_train:])
 
-        result = data.iloc[selected].reset_index(drop=True) if is_dataframe else data[selected]
+        result = data[selected]
 
         return result, {
             "subset": self.subset,
