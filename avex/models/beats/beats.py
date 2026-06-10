@@ -307,13 +307,19 @@ class BEATs(nn.Module):
         Uses the GPU-native batched fbank that reproduces kaldi's output,
         operating on the full batch in one shot instead of looping per sample.
 
+        The frontend always runs in fp32, even inside an AMP autocast region: in
+        bf16/fp16 the mel features drift ~0.06 (vs ~0.005 in fp32), which hurts
+        fine-tuning. Frontends are conventionally kept in fp32, so we disable
+        autocast around it (negligible cost — ~0.2% of a training step).
+
         Args:
             source: ``[B, T]`` raw waveform tensor
 
         Returns:
             ``[B, num_frames, num_mel_bins]`` normalized filterbank features
         """
-        fbank = self.fbank(source * 2**15)
+        with torch.autocast(device_type=source.device.type, enabled=False):
+            fbank = self.fbank(source.float() * 2**15)
         return (fbank - self.fbank_mean) / (2 * self.fbank_std)
 
     def extract_features(
