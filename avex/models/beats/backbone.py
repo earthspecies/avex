@@ -190,6 +190,10 @@ class TransformerEncoder(nn.Module):
         for i, layer in enumerate(self.layers):
             if self.layer_wise_gradient_decay_ratio != 1.0:
                 x = GradMultiply.apply(x, self.layer_wise_gradient_decay_ratio)
+            # LayerDrop (stochastic depth): during training, randomly skip whole
+            # encoder layers with probability ``self.layerdrop`` for regularization.
+            # Layers are always run at inference, or when explicitly disabled (e.g.
+            # for deterministic equivalence tests / fingerprinting).
             if disable_layerdrop:
                 should_execute = True
             else:
@@ -237,6 +241,32 @@ class _TransformerSentenceEncoderLayer(nn.Module):
         gru_rel_pos: bool = False,
         encoder_layers: int = 0,
     ) -> None:
+        """One BEATs transformer block (self-attention + FFN).
+
+        Args:
+            embedding_dim: Model/residual width (``encoder_embed_dim``).
+            ffn_embedding_dim: Hidden width of the feed-forward sublayer.
+            num_attention_heads: Number of self-attention heads.
+            dropout: Dropout on the attention output and FFN output (residual paths).
+            attention_dropout: Dropout applied inside attention (on the weights).
+            activation_dropout: Dropout after the FFN activation.
+            activation_fn: FFN activation name (``relu``/``gelu``/``glu``...).
+            layer_norm_first: Pre-LN (``True``) vs post-LN (``False``) block ordering.
+            deep_norm: Enable DeepNorm residual scaling for stable deep-stack training.
+                Residuals are scaled by ``deep_norm_alpha = (2 * encoder_layers) ** 0.25``
+                (paired with the matching DeepNorm weight init applied elsewhere).
+            has_relative_attention_bias: If ``True``, this layer *owns* the T5-style
+                relative-position-bias table. BEATs computes it once (in layer 0) and
+                threads the result through later layers via ``pos_bias``.
+            num_buckets: Number of buckets the relative position (i - j) is mapped into
+                for that bias table.
+            max_distance: Relative distance at which bucketing saturates (positions
+                farther apart than this share the last bucket).
+            gru_rel_pos: Use BEATs' gated relative position bias (a GRU-style gate that
+                modulates the bias per query) instead of a plain additive bias.
+            encoder_layers: Total number of encoder layers; only used to compute the
+                DeepNorm ``deep_norm_alpha`` scale above.
+        """
         super().__init__()
         self.embedding_dim = embedding_dim
         self.dropout = dropout
