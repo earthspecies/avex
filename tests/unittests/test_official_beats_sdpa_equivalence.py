@@ -255,7 +255,7 @@ def _swap_to_legacy_attention(model: BEATs) -> BEATs:
         legacy_attn = _LegacyMultiheadAttention(
             embed_dim=old_attn.embed_dim,
             num_heads=old_attn.num_heads,
-            dropout=getattr(old_attn, "dropout_p", old_attn.dropout_module.p),
+            dropout=old_attn.dropout_p,
             self_attention=True,
             has_relative_attention_bias=old_attn.has_relative_attention_bias,
             num_buckets=old_attn.num_buckets,
