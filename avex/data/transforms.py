@@ -3,6 +3,7 @@
 from typing import Literal, Optional, Tuple
 
 import pandas as pd
+from esp_data import DataBackend
 from esp_data.transforms import register_transform
 from pydantic import BaseModel, Field
 from sklearn.model_selection import train_test_split
@@ -169,7 +170,10 @@ class RLSubsampleConfig(BaseModel):
         ge=1,
         description="Maximum total number of samples to keep",
     )
-    random_state: Optional[int] = Field(default=42, description="Random state for reproducible sampling")
+    random_state: int = Field(
+        default=42,
+        description="Random seed for reproducible sampling.",
+    )
 
 
 class RLSubsampleTransform:
@@ -184,15 +188,15 @@ class RLSubsampleTransform:
         Ratio of samples to keep from the dataset
     max_samples : Optional[int], default=None
         Maximum total number of samples to keep
-    random_state : Optional[int], default=42
-        Random state for reproducible sampling
+    random_state : int, default=42
+        Random seed for reproducible sampling
     """
 
     def __init__(
         self,
         ratio: float = 1.0,
         max_samples: Optional[int] = None,
-        random_state: Optional[int] = 42,
+        random_state: int = 42,
     ) -> None:
         """Initialize the RLSubsampleTransform.
 
@@ -221,21 +225,22 @@ class RLSubsampleTransform:
         """
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    def __call__(self, data: pd.DataFrame | DataBackend) -> Tuple[object, dict]:
         """Apply the subsampling transform.
 
         Parameters
         ----------
-        data : pd.DataFrame
-            Input dataset to sample from
+        data : pd.DataFrame | DataBackend
+            Input dataset to sample from.
 
         Returns
         -------
-        Tuple[pd.DataFrame, dict]
+        Tuple[object, dict]
             Tuple containing:
-            - Sampled data (DataFrame, not tuple)
+            - Sampled data (backend object or DataFrame, not tuple)
             - Metadata dictionary with sampling information
         """
+
         if len(data) == 0:
             return data, {
                 "rl_subsample": {
@@ -257,13 +262,16 @@ class RLSubsampleTransform:
             n_samples = min(n_samples, self.max_samples)
 
         # Perform random sampling
-        if n_samples > 0:
-            sampled_data = data.sample(
-                n=n_samples,
-                random_state=self.random_state,
-            ).reset_index(drop=True)
+        if isinstance(data, DataBackend):
+            sampled_data = data.sample_rows(n=n_samples, seed=self.random_state)
         else:
-            sampled_data = pd.DataFrame(columns=data.columns)
+            if n_samples > 0:
+                sampled_data = data.sample(
+                    n=n_samples,
+                    random_state=self.random_state,
+                ).reset_index(drop=True)
+            else:
+                sampled_data = pd.DataFrame(columns=data.columns)
 
         # Prepare metadata
         metadata = {
@@ -275,7 +283,7 @@ class RLSubsampleTransform:
             }
         }
 
-        # Return DataFrame (not tuple) to ensure compatibility with dataset structure
+        # Return data object (not tuple) to ensure compatibility with dataset structure
         return sampled_data, metadata
 
 
