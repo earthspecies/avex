@@ -49,7 +49,10 @@ SED_CHECKPOINT = "gs://sound-event-detection/checkpoints/final_ssl_beats_clip_ps
 BEATS_HIDDEN_DIM = 768
 NUM_FREQ_PATCHES = 8
 
-# BEATs fbank parameters (it assumes a 16 kHz frontend internally).
+# BEATs fbank constants. BEATs' fbank is configured with sample_frequency=16000
+# (its default) regardless of the real input rate. The SED model feeds 32 kHz audio
+# un-resampled, so these 16 kHz-derived window/hop sizes (400/160 samples) are applied
+# directly to the 32 kHz stream — matching how the checkpoint was trained.
 _FBANK_WINDOW_SAMPLES = 400
 _FBANK_HOP_SAMPLES = 160
 _PATCH_SIZE = 16
