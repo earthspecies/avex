@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
+from safetensors.torch import save_file
 
 from avex.io.paths import PureGSPath
-from avex.utils.utils import _get_local_path_for_cloud_file
+from avex.utils.utils import _get_local_path_for_cloud_file, universal_torch_load
 
 pytestmark = pytest.mark.skipif(
     os.getuid() == 0,
@@ -134,3 +136,14 @@ def test_cache_unwritable_falls_back_to_direct_read(tmp_path: Path, monkeypatch:
 
     out = _get_local_path_for_cloud_file(path, fs, "use")
     assert out is None
+
+
+def test_universal_torch_load_accepts_torch_device(tmp_path: Path) -> None:
+    """Safetensors loading should accept torch.device for the device argument."""
+    weights = {"weight": torch.tensor([1.0, 2.0, 3.0])}
+    artifact_path = tmp_path / "weights.safetensors"
+    save_file(weights, artifact_path)
+
+    result = universal_torch_load(artifact_path, device=torch.device("cpu"))
+
+    assert result["model_state_dict"]["weight"].tolist() == [1.0, 2.0, 3.0]

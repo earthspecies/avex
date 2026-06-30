@@ -387,6 +387,7 @@ def _load_safetensor(
         device = map_location
     elif device is None:
         device = "cpu"
+    device = str(device)
 
     local_path = _get_local_path_for_cloud_file(path, fs, cache_mode)
 
