@@ -464,7 +464,7 @@ def train_and_eval_offline(
     test_ds: torch.utils.data.Dataset,
     input_dim: List[Tuple[int, ...]],
     num_labels: int,
-    layer_names: List[str],
+    target_layers: List[str],
     eval_cfg: EvaluateConfig,
     device: torch.device,
     exp_logger: ExperimentLogger,
@@ -640,7 +640,7 @@ def train_and_eval_online(
     test_dl_raw: torch.utils.data.DataLoader,
     base_model: torch.nn.Module,
     num_labels: int,
-    layer_names: List[str],
+    target_layers: List[str],
     eval_cfg: EvaluateConfig,
     device: torch.device,
     exp_logger: ExperimentLogger,
@@ -663,8 +663,8 @@ def train_and_eval_online(
         Base model to fine-tune
     num_labels : int
         Number of output classes
-    layer_names : List[str]
-        Names of layers to extract features from
+    target_layers : List[str]
+        Target layers to extract features from
     eval_cfg : EvaluateConfig
         Evaluation configuration
     device : torch.device

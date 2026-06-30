@@ -95,31 +95,12 @@ class Model(ModelBase):
         # Pre-discover feed-forward (intermediate_dense, output_dense) layers
         # for efficient hook management
         # ------------------------------------------------------------------
-        # Feed-forward layers will be discovered in _discover_linear_layers override
+        # Feed-forward layers will be discovered in _discover_embedding_layers override
 
-    def _discover_linear_layers(self) -> None:
+    def _discover_embedding_layers(self) -> None:
         """Discover and cache only the AVES layers that are useful for embeddings.
 
         This method is called when target_layers=["all"] is used.
-        Specifically:
-        - model.encoder.transformer.layers.{i}.feed_forward.output_dense
-          (only output_dense layers from transformer blocks)
-        """
-        if len(self._layer_names) == 0:  # Only discover once
-            self._layer_names = []
-
-            for name, _module in self.named_modules():
-                # Keep only the output_dense layers from transformer blocks
-                # Pattern: model.encoder.transformer.layers.{i}
-                # .feed_forward.output_dense
-                if name.endswith(".feed_forward.output_dense") and "model.encoder.transformer.layers." in name:
-                    self._layer_names.append(name)
-
-            logger.info(f"Discovered {len(self._layer_names)} embedding layers in AVES model: {self._layer_names}")
-
-    def _discover_embedding_layers(self) -> None:
-        """
-        Discover and cache only the AVES layers that are useful for embeddings.
         Specifically:
         - model.encoder.transformer.layers.{i}.feed_forward.output_dense
           (only output_dense layers from transformer blocks)

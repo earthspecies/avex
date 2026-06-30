@@ -66,6 +66,16 @@ def main(device: str = "cpu") -> None:
     print(f"   - Number of frames: {output.shape[1]}")
     print(f"   - Feature dimension: {output.shape[2]}")
 
+    # Layer-wise embeddings via hooks (index-based layer selection)
+    # Indices are 0-based and negative indices are allowed (Python-style).
+    # This uses the hook-based extraction API (register hooks -> extract_embeddings).
+    print("\n   Layer-wise embedding extraction (hooks)")
+    print(f"   Available layers (index -> name): {model.get_model_layer_map()}")
+    _ = model.register_hooks_for_layers([0, -1])  # first + last discovered layer
+    with torch.no_grad():
+        layerwise = model.extract_embeddings(dummy_input, aggregation="mean")
+    print(f"   Layer-wise pooled+concat shape: {tuple(layerwise.shape)}")
+
     # =========================================================================
     # Part 2: EfficientNet (CNN - 4D output)
     # =========================================================================

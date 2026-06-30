@@ -126,7 +126,10 @@ class RLSubsampleConfig(BaseModel):
         ge=1,
         description="Maximum total number of samples to keep",
     )
-    random_state: Optional[int] = Field(default=42, description="Random state for reproducible sampling")
+    random_state: int = Field(
+        default=42,
+        description="Random seed for reproducible sampling.",
+    )
 
 
 class RLSubsampleTransform:
@@ -138,15 +141,15 @@ class RLSubsampleTransform:
         Ratio of samples to keep from the dataset
     max_samples : Optional[int], default=None
         Maximum total number of samples to keep
-    random_state : Optional[int], default=42
-        Random state for reproducible sampling
+    random_state : int, default=42
+        Random seed for reproducible sampling
     """
 
     def __init__(
         self,
         ratio: float = 1.0,
         max_samples: Optional[int] = None,
-        random_state: Optional[int] = 42,
+        random_state: int = 42,
     ) -> None:
         if not 0.0 <= ratio <= 1.0:
             raise ValueError(f"ratio must be between 0 and 1, got {ratio}")
@@ -180,8 +183,7 @@ class RLSubsampleTransform:
 
         # Datasets are always loaded through an esp_data backend (pandas or
         # polars); both expose the unified `sample_rows(n, seed=...)` API.
-        seed = self.random_state if self.random_state is not None else 42
-        result = data[0:0] if n == 0 else data.sample_rows(n, seed=seed)
+        result = data[0:0] if n == 0 else data.sample_rows(n, seed=self.random_state)
 
         return result, {
             "rl_subsample": {

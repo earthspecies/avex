@@ -35,7 +35,7 @@ class ClusteringEvaluator:
         """
         self.config = config
         self.device = device
-        self.layer_names = self._parse_layer_names(config.layers)
+        self.target_layers = self._parse_target_layers(config.layers)
 
     def _get_aggregation_method(self, model: torch.nn.Module) -> str:
         """Determine the appropriate aggregation method based on model type.
@@ -59,8 +59,8 @@ class ClusteringEvaluator:
         #     return "mean"
         return "mean"
 
-    def _parse_layer_names(self, layers_str: str) -> List[str]:
-        """Parse layer names from configuration string.
+    def _parse_target_layers(self, layers_str: str) -> List[str]:
+        """Parse target layers from configuration string.
 
         Parameters
         ----------
@@ -149,13 +149,13 @@ class ClusteringEvaluator:
         sample_count = 0
 
         # Handle layer name resolution for models that need it
-        layer_names = self.layer_names.copy()
-        if "last_layer" in layer_names:
+        resolved_layers = self.target_layers.copy()
+        if "last_layer" in resolved_layers:
             # Find the actual last linear layer name
             linear_layers = [n for n, m in model.named_modules() if isinstance(m, torch.nn.Linear)]
             if linear_layers:
                 # Replace 'last_layer' with actual layer name
-                layer_names = [linear_layers[-1] if name == "last_layer" else name for name in layer_names]
+                resolved_layers = [linear_layers[-1] if name == "last_layer" else name for name in resolved_layers]
                 logger.info(f"Resolved 'last_layer' to actual layer name: '{linear_layers[-1]}'")
             else:
                 logger.warning("No linear layers found, using 'last_layer' as-is")
@@ -163,7 +163,7 @@ class ClusteringEvaluator:
         with torch.no_grad():
             # Register hooks for the specified layers outside the loop
             if hasattr(model, "register_hooks_for_layers"):
-                layer_names = model.register_hooks_for_layers(layer_names)
+                resolved_layers = model.register_hooks_for_layers(resolved_layers)
             else:
                 logger.warning("Model does not support register_hooks_for_layers")
 
