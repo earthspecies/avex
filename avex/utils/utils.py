@@ -347,6 +347,35 @@ def _load_torch(
             return torch.load(io.BytesIO(opened_file.read()), **kwargs)
 
 
+def _safetensors_device(device: object) -> str | int:
+    """Normalize a device value for safetensors.torch.load_file().
+
+    Parameters
+    ----------
+    device : object
+        Device specifier from ``device`` or ``map_location`` kwargs.
+
+    Returns
+    -------
+    str | int
+        A value accepted by ``safetensors.torch.load_file(device=...)``.
+
+    Raises
+    ------
+    TypeError
+        If ``device`` is not a supported type.
+    """
+    if isinstance(device, torch.device):
+        return str(device)
+    if isinstance(device, (str, int)):
+        return device
+    msg = (
+        f"Unsupported device/map_location {device!r} for safetensors. "
+        "Use str ('cpu', 'cuda:0'), int GPU index, or torch.device."
+    )
+    raise TypeError(msg)
+
+
 def _load_safetensor(
     path: AnyPathT,
     fs: Any,  # noqa: ANN401
@@ -387,7 +416,7 @@ def _load_safetensor(
         device = map_location
     elif device is None:
         device = "cpu"
-    device = str(device)
+    device = _safetensors_device(device)
 
     local_path = _get_local_path_for_cloud_file(path, fs, cache_mode)
 

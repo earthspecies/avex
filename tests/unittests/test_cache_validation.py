@@ -138,12 +138,16 @@ def test_cache_unwritable_falls_back_to_direct_read(tmp_path: Path, monkeypatch:
     assert out is None
 
 
-def test_universal_torch_load_accepts_torch_device(tmp_path: Path) -> None:
-    """Safetensors loading should accept torch.device for the device argument."""
+def test_universal_torch_load_accepts_safetensors_device(tmp_path: Path) -> None:
+    """Safetensors loading should accept common device/map_location forms."""
     weights = {"weight": torch.tensor([1.0, 2.0, 3.0])}
     artifact_path = tmp_path / "weights.safetensors"
     save_file(weights, artifact_path)
+    expected = [1.0, 2.0, 3.0]
 
-    result = universal_torch_load(artifact_path, device=torch.device("cpu"))
+    for device in (torch.device("cpu"), "cpu", 0):
+        result = universal_torch_load(artifact_path, device=device)
+        assert result["model_state_dict"]["weight"].tolist() == expected
 
-    assert result["model_state_dict"]["weight"].tolist() == [1.0, 2.0, 3.0]
+    result = universal_torch_load(artifact_path, map_location=torch.device("cpu"))
+    assert result["model_state_dict"]["weight"].tolist() == expected
