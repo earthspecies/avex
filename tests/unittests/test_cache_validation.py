@@ -9,7 +9,11 @@ import torch
 from safetensors.torch import save_file
 
 from avex.io.paths import PureGSPath
-from avex.utils.utils import _get_local_path_for_cloud_file, universal_torch_load
+from avex.utils.utils import (
+    _get_local_path_for_cloud_file,
+    _safetensors_device,
+    universal_torch_load,
+)
 
 pytestmark = pytest.mark.skipif(
     os.getuid() == 0,
@@ -138,6 +142,12 @@ def test_cache_unwritable_falls_back_to_direct_read(tmp_path: Path, monkeypatch:
     assert out is None
 
 
+def test_safetensors_device_preserves_int_gpu_index() -> None:
+    """Int GPU indices must not be coerced to strings for safetensors."""
+    assert _safetensors_device(0) == 0
+    assert _safetensors_device(torch.device("cpu")) == "cpu"
+
+
 def test_universal_torch_load_accepts_safetensors_device(tmp_path: Path) -> None:
     """Safetensors loading should accept common device/map_location forms."""
     weights = {"weight": torch.tensor([1.0, 2.0, 3.0])}
@@ -145,7 +155,7 @@ def test_universal_torch_load_accepts_safetensors_device(tmp_path: Path) -> None
     save_file(weights, artifact_path)
     expected = [1.0, 2.0, 3.0]
 
-    for device in (torch.device("cpu"), "cpu", 0):
+    for device in (torch.device("cpu"), "cpu"):
         result = universal_torch_load(artifact_path, device=device)
         assert result["model_state_dict"]["weight"].tolist() == expected
 
