@@ -58,9 +58,14 @@ from avex.utils.experiment_tracking import (
     get_or_create_experiment_metadata,
     save_evaluation_metadata,
 )
-from avex.utils.utils import _process_state_dict, universal_torch_load
+from avex.utils.utils import _embedding_cache_matches, _process_state_dict, universal_torch_load
 
 logger = logging.getLogger("run_finetune")
+
+# Per-batch DataLoader worker timeout (seconds) for raw-audio eval loaders.
+# Decoding/resampling long clips from remote storage can stall well past the
+# PyTorch default; 120s tolerates slow GCS reads without hanging forever.
+_EVAL_WORKER_TIMEOUT_SECONDS = 120
 
 
 # -------------------------------------------------------------------- #
@@ -228,14 +233,20 @@ def run_experiment(
         logger.info(f"  Train clustering path: {train_path_clustering}")
         logger.info(f"  Test clustering path: {test_path_clustering}")
 
-    # For offline training, always save embeddings with aggregation="none" so they
-    # can be reused by different probe types (2D probes can aggregate as needed,
-    # 3D probes use full sequence)
     if not online_training:
-        aggregation_method = "none"
-        logger.info("Using aggregation='none' for offline training to enable probe reuse")
+        aggregation_method = eval_cfg.offline_embeddings.probe_storage_aggregation
+        logger.info(
+            "Using aggregation='%s' for offline probe embedding storage",
+            aggregation_method,
+        )
     else:
         aggregation_method = experiment_cfg.get_aggregation_method()
+
+    # Aggregations that yield pooled (2D) embeddings directly reusable for
+    # retrieval/clustering. Anything else (e.g. "none") is unpooled (3D) and
+    # falls back to "mean" pooling for the clustering/retrieval caches.
+    _POOLED_AGGREGATIONS = ("mean", "max", "cls_token")
+    _clustering_aggregation = aggregation_method if aggregation_method in _POOLED_AGGREGATIONS else "mean"
 
     # Log probe configuration details
     if need_probe:
@@ -324,19 +335,17 @@ def run_experiment(
                         logger.warning(f"Could not remove {path}: {e}")
     else:
         # Normal logic: check file existence for the appropriate aggregation method
-        need_recompute_embeddings_train = (
-            need_probe and not (train_path.exists() and val_path.exists()) and not online_training
-        )
-        need_recompute_embeddings_test = need_probe and not online_training and not test_path.exists()
+        train_cache_ok = _embedding_cache_matches(train_path, expected_aggregation=aggregation_method)
+        val_cache_ok = _embedding_cache_matches(val_path, expected_aggregation=aggregation_method)
+        test_cache_ok = _embedding_cache_matches(test_path, expected_aggregation=aggregation_method)
+        need_recompute_embeddings_train = need_probe and not (train_cache_ok and val_cache_ok) and not online_training
+        need_recompute_embeddings_test = need_probe and not online_training and not test_cache_ok
         need_recompute_embeddings_train_clustering = (
-            need_clustering
-            or need_retrieval
-            and retrieval_mode == "train_vs_test"
-            and not train_path_clustering.exists()
-        )
+            need_clustering or (need_retrieval and retrieval_mode == "train_vs_test")
+        ) and not _embedding_cache_matches(train_path_clustering, expected_aggregation=_clustering_aggregation)
         need_recompute_embeddings_test_clustering = (
-            need_clustering or need_retrieval and not test_path_clustering.exists()
-        )
+            need_clustering or need_retrieval
+        ) and not _embedding_cache_matches(test_path_clustering, expected_aggregation=_clustering_aggregation)
     logger.info(
         "Need to recompute embeddings for probing, train: %s and test: %s",
         need_recompute_embeddings_train,
@@ -406,6 +415,7 @@ def run_experiment(
             dataset_audio_max_length_seconds=dataset_audio_max_length,
             enable_eval_augmentations=is_birdset,
             is_evaluation_context=True,
+            worker_timeout=_EVAL_WORKER_TIMEOUT_SECONDS,
         )
 
         # Log dataloader info
@@ -518,6 +528,11 @@ def run_experiment(
         disable_layerdrop_for_embeddings = True
         logger.info("Setting disable_layerdrop=True for BEATs model to prevent layerdrop issues")
 
+    # Embedding memory limit (used offline for probe HDF5 path and always for
+    # retrieval/clustering EmbeddingDataSource configs when recomputing embeddings).
+    memory_limit_gb = getattr(eval_cfg.offline_embeddings, "memory_limit_gb", 32)
+    memory_limit_bytes = int(memory_limit_gb * 1024**3)
+
     test_embeds: torch.Tensor | None = None
     test_labels: torch.Tensor | None = None
     train_embeds: torch.Tensor | None = None
@@ -530,9 +545,6 @@ def run_experiment(
     # ------------------- embeddings for probing ------------------- #
     if not online_training:
         # Configure unified data sources (streaming vs in-memory decided internally)
-        memory_limit_gb = getattr(eval_cfg.offline_embeddings, "memory_limit_gb", 32)
-        memory_limit_bytes = int(memory_limit_gb * 1024**3)
-
         base_cfg_common = dict(
             memory_limit_bytes=memory_limit_bytes,
             use_streaming_embeddings=eval_cfg.offline_embeddings.use_streaming_embeddings,
@@ -570,14 +582,54 @@ def run_experiment(
         # Only run probing section if we actually need probing
         if need_probe:
             if need_recompute_embeddings_train:
-                train_ds = train_src.get_dataset(base_model=base_model, dataloader=train_dl_raw, device=device)
-                val_ds = val_src.get_dataset(base_model=base_model, dataloader=val_dl_raw, device=device)
-                test_ds = test_src.get_dataset(base_model=base_model, dataloader=test_dl_raw, device=device)
+                _train_ok = _embedding_cache_matches(train_path, expected_aggregation=aggregation_method)
+                _val_ok = _embedding_cache_matches(val_path, expected_aggregation=aggregation_method)
+                _test_ok = _embedding_cache_matches(test_path, expected_aggregation=aggregation_method)
+                train_ds = train_src.get_dataset(
+                    base_model=None if _train_ok else base_model,
+                    dataloader=None if _train_ok else train_dl_raw,
+                    device=None if _train_ok else device,
+                )
+                val_ds = val_src.get_dataset(
+                    base_model=None if _val_ok else base_model,
+                    dataloader=None if _val_ok else val_dl_raw,
+                    device=None if _val_ok else device,
+                )
+                test_ds = test_src.get_dataset(
+                    base_model=None if _test_ok else base_model,
+                    dataloader=None if _test_ok else test_dl_raw,
+                    device=None if _test_ok else device,
+                )
             else:
                 # Fallback: try to load from existing files
-                train_ds = train_src.get_dataset()
-                val_ds = val_src.get_dataset()
-                test_ds = test_src.get_dataset()
+                # If any embedding file is missing, allow recomputation rather than
+                # failing with "base_model/dataloader/device is None".
+                if train_path.exists():
+                    train_ds = train_src.get_dataset()
+                else:
+                    train_ds = train_src.get_dataset(
+                        base_model=base_model,
+                        dataloader=train_dl_raw,
+                        device=device,
+                    )
+
+                if val_path.exists():
+                    val_ds = val_src.get_dataset()
+                else:
+                    val_ds = val_src.get_dataset(
+                        base_model=base_model,
+                        dataloader=val_dl_raw,
+                        device=device,
+                    )
+
+                if test_path.exists():
+                    test_ds = test_src.get_dataset()
+                else:
+                    test_ds = test_src.get_dataset(
+                        base_model=base_model,
+                        dataloader=test_dl_raw,
+                        device=device,
+                    )
         else:
             # When not doing probing, set datasets to None
             train_ds = None
@@ -705,14 +757,31 @@ def run_experiment(
         split="train_final",
     )
 
+    # Release probe HDF5 RAM caches before clustering/retrieval (can duplicate ~46 GB).
+    if not online_training and need_probe:
+        for _ds in (train_ds, val_ds, test_ds):
+            if _ds is not None and hasattr(_ds, "close"):
+                _ds.close()
+
     # ------------------------------------------------------------------ #
     #  (2) Retrieval and Clustering
     # ------------------------------------------------------------------ #
 
+    def _reuse_probe_embeddings_for_eval(split_path: Path) -> bool:
+        # Only reuse when the probe cache is pooled (2D); "none" caches are
+        # unpooled (3D) and cannot be fed directly into retrieval/clustering.
+        if aggregation_method not in _POOLED_AGGREGATIONS:
+            return False
+        return (not overwrite) and _embedding_cache_matches(split_path, expected_aggregation=aggregation_method)
+
     # ------------------- embeddings for train-vs-test retrieval -------- #
     if need_retrieval and retrieval_mode == "train_vs_test":
-        if not need_recompute_embeddings_train_clustering:
-            train_embeds_dict, train_labels, _ = load_embeddings_arrays(train_path_clustering)
+        train_embeds_eval_path = train_path if _reuse_probe_embeddings_for_eval(train_path) else train_path_clustering
+        if train_embeds_eval_path == train_path:
+            logger.info("Reusing probe train embeddings for retrieval: %s", train_path)
+
+        if not need_recompute_embeddings_train_clustering or _reuse_probe_embeddings_for_eval(train_path):
+            train_embeds_dict, train_labels, _ = load_embeddings_arrays(train_embeds_eval_path)
 
             # Extract the last layer for evaluation (most processed features)
             if isinstance(train_embeds_dict, dict):
@@ -725,16 +794,14 @@ def run_experiment(
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
 
-            # We need to force aggregation method to "mean" for retrieval if it's
-            # different from "mean" or "max"
-            if aggregation_method not in ["mean", "max"]:
-                aggregation_method_retrieval = "mean"
+            # Clustering/retrieval needs pooled (2D) embeddings; fall back to
+            # "mean" when the probe aggregation is unpooled (e.g. "none").
+            aggregation_method_retrieval = _clustering_aggregation
+            if aggregation_method_retrieval != aggregation_method:
                 logger.info(
-                    f"Forcing aggregation method to 'mean' for retrieval "
-                    f"(aggregation_method: {aggregation_method_retrieval})"
+                    f"Forcing aggregation method to '{aggregation_method_retrieval}' for retrieval "
+                    f"(probe aggregation: {aggregation_method})"
                 )
-            else:
-                aggregation_method_retrieval = aggregation_method
 
             logger.info(f"Using EmbeddingDataSource for train embeddings (retrieval) (layers: {len(layer_names)})")
             # Use in-memory configuration for clustering/retrieval
@@ -783,12 +850,24 @@ def run_experiment(
     # ------------------- embeddings for retrieval and clustering -------- #
     test_labels: Optional[torch.Tensor] = None
     if need_retrieval or need_clustering:
-        # Use the regular test path - filename encoding handles different
-        # aggregation methods
-        test_embeds_path = test_path_clustering
+        if _reuse_probe_embeddings_for_eval(test_path):
+            test_embeds_path = test_path
+            # Reusing the probe cache: it was written with the probe aggregation.
+            expected_test_aggregation = aggregation_method
+            logger.info("Reusing probe test embeddings for retrieval/clustering: %s", test_path)
+        else:
+            test_embeds_path = test_path_clustering
+            # The clustering cache is written with the pooled clustering
+            # aggregation (mean fallback for unpooled probe storage like "none"),
+            # so validate against that, not the probe aggregation.
+            expected_test_aggregation = _clustering_aggregation
         logger.info(f"Test embeddings path: {test_embeds_path}")
 
-        if (not overwrite) and test_embeds_path.exists():
+        if (
+            (not overwrite)
+            and test_embeds_path.exists()
+            and _embedding_cache_matches(test_embeds_path, expected_aggregation=expected_test_aggregation)
+        ):
             test_embeds_dict, test_labels, _ = load_embeddings_arrays(test_embeds_path)
 
             # Extract the last layer for evaluation (most processed features)
@@ -802,16 +881,14 @@ def run_experiment(
             if base_model is None:
                 raise ValueError("base_model is required to compute embeddings")
 
-            # We need to force aggregation method to "mean" for retrieval if it's
-            # different from "mean" or "max"
-            if aggregation_method not in ["mean", "max"]:
-                aggregation_method_retrieval = "mean"
+            # Clustering/retrieval needs pooled (2D) embeddings; fall back to
+            # "mean" when the probe aggregation is unpooled (e.g. "none").
+            aggregation_method_retrieval = _clustering_aggregation
+            if aggregation_method_retrieval != aggregation_method:
                 logger.info(
-                    f"Forcing aggregation method to 'mean' for retrieval "
-                    f"(aggregation_method: {aggregation_method_retrieval})"
+                    f"Forcing aggregation method to '{aggregation_method_retrieval}' for retrieval "
+                    f"(probe aggregation: {aggregation_method})"
                 )
-            else:
-                aggregation_method_retrieval = aggregation_method
 
             logger.info(f"Using EmbeddingDataSource for test embeddings (retrieval) (layers: {len(layer_names)})")
             # Use in-memory configuration for clustering/retrieval
