@@ -2,7 +2,7 @@
 
 This guide explains how to install the `avex` package.
 
-**Supported Python versions:** 3.10, 3.11, 3.12, and 3.13 (`requires-python` in `pyproject.toml`).
+**Supported Python versions:** 3.11, 3.12, and 3.13 (`requires-python` in `pyproject.toml`).
 
 The installation process depends on how you plan to use this package:
 
@@ -15,7 +15,7 @@ For users who want to install the package and use it as a library (for example t
 
 ### 1.1 Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 - ESP GCP authentication:
 
 ```bash
@@ -118,7 +118,7 @@ This pulls in additional dependencies, including for example:
 - `gradio` – interactive demos
 - `gradio-leaderboard` – leaderboard visualization
 
-`alp-data` is available for Python 3.11 and newer. On Python 3.10, API-only usage remains supported, but training/evaluation workflows that require `alp-data` are unavailable.
+`alp-data` is available for Python 3.11 and newer.
 
 ## 2. Development Usage
 
@@ -126,7 +126,7 @@ For contributors or power users who clone the repository and want the full devel
 
 ### 2.1 Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 - Git
 - GCP authentication:
 

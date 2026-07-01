@@ -16,7 +16,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ### Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13 (supported range is `>=3.10,<3.14` in `pyproject.toml`)
+- Python 3.11, 3.12, or 3.13 (supported range is `>=3.11,<3.14` in `pyproject.toml`)
 - Git
 
 Continuous integration runs tests on **Python 3.13**. Slow official-model output regression tests use profiled expected fingerprints for **torch 2.5.x**, **2.6.x–2.9.x**, and **2.10.x+** (`tests/integration/test_official_models_output_regression.py`); regenerate with `scripts/regenerate_official_model_output_fingerprints.py` if you change the numerical stack.
@@ -123,7 +123,7 @@ uv run pytest tests/integration/test_run_evaluate_cross_version_metrics.py -m sl
 
 # Record metrics on current Python for baseline JSON / cross-version diff:
 uv run python scripts/record_evaluate_end_to_end_metrics.py record
-uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_310.json snap_313.json
+uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_311.json snap_313.json
 
 # Consistency tests
 uv run pytest tests/consistency --base_folder avex

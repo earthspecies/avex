@@ -16,7 +16,7 @@ The Representation Learning Framework is an API for model loading and inference,
 
 ### Requirements
 
-- **Python** 3.10, 3.11, 3.12, or 3.13 (`requires-python` in the repository `pyproject.toml` is `>=3.10,<3.14`)
+- **Python** 3.11, 3.12, or 3.13 (`requires-python` in the repository `pyproject.toml` is `>=3.11,<3.14`)
 
 ### Quick Start
 
@@ -151,7 +151,7 @@ For users who want to install the package and use it as a library (for example t
 
 #### Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 
 #### Install with pip
 
@@ -175,7 +175,7 @@ Training the original supervised learning models requires `alp-data` for dataset
 
 #### Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 - Git
 - GCP authentication:
 
