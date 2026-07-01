@@ -247,11 +247,9 @@ class Model(ModelBase):
             return self.audio_processor.sr
         return self.SAMPLE_RATE
 
-    def _discover_linear_layers(self) -> None:
+    def _discover_embedding_layers(self) -> None:
         if not self._layer_names:
             self._layer_names = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
-
-    _discover_embedding_layers = _discover_linear_layers  # type: ignore[assignment]
 
     def enable_gradient_checkpointing(self) -> None:
         logger.warning("Gradient checkpointing not supported for BirdNet ONNX.")
