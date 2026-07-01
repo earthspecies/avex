@@ -8,6 +8,8 @@
 #SBATCH --cpus-per-gpu=12
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 uv sync
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 srun uv run avex/run_train.py --config configs/run_configs/beats_base_beans.yml

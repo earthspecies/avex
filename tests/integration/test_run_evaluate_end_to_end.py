@@ -8,8 +8,8 @@ This test:
 4. Tests with training offline and online modes
 5. Validates that expected metrics are present and within valid ranges
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 import tempfile
@@ -24,9 +24,9 @@ from tests.integration.eval_end_to_end_harness import (
     run_linear_offline_probe_evaluate,
 )
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# These tests use build_dataloaders which loads real datasets via esp_data
-pytest.importorskip("esp_data")
+# Skip entire module if alp_data is not installed (optional dependency)
+# These tests use build_dataloaders which loads real datasets via alp_data
+pytest.importorskip("alp_data")
 
 
 class TestRunEvaluateEndToEnd:

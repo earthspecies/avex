@@ -1,8 +1,8 @@
 """
 Tests for experiment tracking utilities.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.data.*)
-esp_data = pytest.importorskip("esp_data")
-DatasetConfig = esp_data.DatasetConfig
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.data.*)
+alp_data = pytest.importorskip("alp_data")
+DatasetConfig = alp_data.DatasetConfig
 
 from avex.configs import (  # noqa: E402
     AudioConfig,

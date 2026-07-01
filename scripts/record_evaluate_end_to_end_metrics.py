@@ -2,7 +2,7 @@
 
 Examples
 --------
-Record a snapshot for the current interpreter (requires ``esp_data``)::
+Record a snapshot for the current interpreter (requires ``alp_data``)::
 
     uv run python scripts/record_evaluate_end_to_end_metrics.py record
 

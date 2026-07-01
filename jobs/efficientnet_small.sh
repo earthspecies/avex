@@ -9,5 +9,7 @@
 #SBATCH --mem=32G  # Reserve 32GB of RAM
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 uv sync
 srun uv run avex train --config configs/run_configs/efficientnet_base_test.yml

@@ -1,7 +1,7 @@
 """Temporary BirdSet dataset with pre-refresh train/validation splits.
 
-esp-data v0.1.0 (PR #243) dropped train splits from ``birdset``. This module
-registers ``birdset_train`` with the split paths from pre-refresh esp-data
+alp-data v0.1.0 (PR #243) dropped train splits from ``birdset``. This module
+registers ``birdset_train`` with the split paths from pre-refresh alp-data
 (``f2d0f0df``) so existing benchmark configs can keep using ``POW-train``,
 ``PER-train``, etc. Remove once train splits are restored upstream.
 """
@@ -13,9 +13,9 @@ from typing import Any
 
 import librosa
 import numpy as np
-from esp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
-from esp_data.backends import BackendType
-from esp_data.io import AnyPathT, anypath, audio_stereo_to_mono, read_audio
+from alp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
+from alp_data.backends import BackendType
+from alp_data.io import AnyPathT, anypath, audio_stereo_to_mono, read_audio
 
 _LEGACY_SPLIT_PATHS: dict[str, str] = {
     "HSN-train": "gs://foundation-model-data/data/birdset-train/HSN/HSN_taxonomic.jsonl",
@@ -57,7 +57,7 @@ class BirdSetTrainSplits(Dataset):
         version="0.0.1",
         description=(
             "Temporary BirdSet wrapper restoring pre-refresh train splits "
-            "(see esp-data PR #243). Uses JSONL manifests and local/GCS audio "
+            "(see alp-data PR #243). Uses JSONL manifests and local/GCS audio "
             "via the ``path`` column."
         ),
         sources=["HSN", "NBP", "NES", "PER", "POW", "SSW", "SNE", "UHH", "XCM"],

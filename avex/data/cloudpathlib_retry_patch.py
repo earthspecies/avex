@@ -1,7 +1,7 @@
 # New file: avex/data/cloudpathlib_retry_patch.py
 """Robustify *cloudpathlib* downloads during dataset initialisation.
 
-esp-data (and therefore our loaders) rely on ``anypath().read_text`` which, for
+alp-data (and therefore our loaders) rely on ``anypath().read_text`` which, for
 GCS/Cloud URLs, maps to ``cloudpathlib.CloudPath.read_text``.  Under heavy
 multi-process load this occasionally fails inside Google-cloud-storage’s
 ``Blob.download_to_filename`` with a *FileNotFoundError* on the final

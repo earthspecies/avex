@@ -9,6 +9,8 @@
 
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 # export UV_PROJECT_ENVIRONMENT=/scratch/$USER/venvs/
 # export UV_CACHE_DIR=/scratch/$USER/uv_cache/
 # --checkpoint_dir runs/aaai/sl_efficientnet_animalspeak_audioset/2025-07-11_11-42-34/ \

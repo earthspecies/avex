@@ -491,7 +491,7 @@ class Trainer:
             label_map = self.train_dataloader.dataset.metadata.get("label_map", {})
             if label_map:
                 # Use the same output directory structure as checkpoints
-                from esp_data.io import anypath, filesystem_from_path
+                from alp_data.io import anypath, filesystem_from_path
 
                 output_dir = anypath(self.config.output_dir)
                 label_map_path = output_dir / "label_map.json"

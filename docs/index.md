@@ -171,7 +171,7 @@ uv sync
 
 ### 2. Training Setup (ESP Internal)
 
-Training the original supervised learning models requires `esp-data` for dataset management. This package is currently only available to Earth Species Project team members.
+Training the original supervised learning models requires `alp-data` for dataset management. This package is public on PyPI.
 
 #### Prerequisites
 
@@ -202,7 +202,6 @@ explicit = true
 
 [tool.uv.sources]
 avex = { index = "esp-pypi" }
-esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
@@ -223,7 +222,7 @@ pip install "avex[dev]" \
 ```
 
 This installs additional dependencies for training:
-- `esp-data` – dataset management
+- `alp-data` – dataset management
 - `esp-sweep` – hyperparameter sweeping
 - `pytorch-lightning`, `mlflow`, `wandb` – training infrastructure
 

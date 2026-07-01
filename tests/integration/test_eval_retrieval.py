@@ -1,7 +1,7 @@
 """Integration tests for evaluation retrieval.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.run_evaluate)
-esp_data_module = pytest.importorskip("esp_data")
-DatasetConfig = esp_data_module.DatasetConfig
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.run_evaluate)
+alp_data_module = pytest.importorskip("alp_data")
+DatasetConfig = alp_data_module.DatasetConfig
 
 from avex.configs import EvaluateConfig, ExperimentConfig, TrainingParams  # noqa: E402
 from avex.run_evaluate import run_experiment  # noqa: E402

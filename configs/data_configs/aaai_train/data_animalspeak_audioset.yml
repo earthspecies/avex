@@ -38,7 +38,7 @@ train_datasets:
     sample_rate: 16000
     # data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
     # data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
-    # data_root: ../esp-data/audioset/v0.1.0/raw/
+    # data_root: ../alp-data/audioset/v0.1.0/raw/
     data_root: /scratch-representation-learning/audioset/v0.1.0/raw/
     # NO transformations here - keep original labels field
 

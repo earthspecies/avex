@@ -5,7 +5,7 @@ The patch works exactly like the other dataset patches in
 ``avex.data``:
 
 1. We monkey-patch
-   :pyfunc:`esp_data.datasets.animalspeak.AnimalSpeak._load`.
+   :pyfunc:`alp_data.datasets.animalspeak.AnimalSpeak._load`.
 2. After the original ``_load`` finishes, we drop all columns except a
    hard-coded keep-list.
 3. The keep-list is applied defensively – if a listed column is absent we
@@ -22,7 +22,7 @@ import logging
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from esp_data.datasets.animalspeak import AnimalSpeak
+    from alp_data.datasets.animalspeak import AnimalSpeak
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ def apply_animalspeak_column_patch() -> bool:  # noqa: D401 – simple status he
     """
     global _original_load
     try:
-        from esp_data.datasets.animalspeak import AnimalSpeak  # type: ignore
+        from alp_data.datasets.animalspeak import AnimalSpeak  # type: ignore
 
         if getattr(AnimalSpeak._load, "__name__", "") == _patched_load.__name__:
             # Already patched

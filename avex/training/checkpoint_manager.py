@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
-from esp_data.io import AnyPathT, anypath, exists
-from esp_data.io.paths import PureCloudPath
+from alp_data.io import AnyPathT, anypath, exists
+from alp_data.io.paths import PureCloudPath
 
 from avex.configs import RunConfig
 from avex.training.distributed import is_main_process
