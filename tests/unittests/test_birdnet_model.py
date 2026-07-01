@@ -116,6 +116,28 @@ def test_forward_method(
     assert not torch.isnan(result_no_clf).any()
 
 
+def test_stereo_input_is_downmixed_to_mono(birdnet_model_no_classifier: BirdNetModel) -> None:
+    """Multi-channel (B, C, N) input is downmixed to mono, matching an averaged (B, N) input."""
+    torch.manual_seed(0)
+    n = 48000 * 5
+    left = torch.randn(1, n)
+    right = torch.roll(left, shifts=1000, dims=-1)
+    stereo = torch.stack([left, right], dim=1)  # (1, 2, N)
+    mono_downmix = (left + right) / 2  # (1, N)
+
+    emb_stereo = birdnet_model_no_classifier.extract_embeddings(stereo, aggregation="mean")
+    emb_mono = birdnet_model_no_classifier.extract_embeddings(mono_downmix, aggregation="mean")
+
+    assert emb_stereo.shape == (1, 1024)
+    assert torch.allclose(emb_stereo, emb_mono, atol=1e-5)
+
+    # Duplicated-channel stereo must equal the single mono channel
+    dup = left.unsqueeze(1).repeat(1, 2, 1)  # (1, 2, N)
+    emb_dup = birdnet_model_no_classifier.extract_embeddings(dup, aggregation="mean")
+    emb_single = birdnet_model_no_classifier.extract_embeddings(left, aggregation="mean")
+    assert torch.allclose(emb_dup, emb_single, atol=1e-5)
+
+
 def test_species_mapping(birdnet_model: BirdNetModel) -> None:
     """Test species index mapping methods."""
     species_name = birdnet_model.idx_to_species(0)

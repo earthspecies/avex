@@ -283,6 +283,10 @@ class Model(ModelBase):
         torch.Tensor
             Float32 tensor with shape [N, CHUNK_SAMPLES].
         """
+        if wav.dim() > 1:
+            # Downmix any channel dims to mono: (..., C, N) → (N,)
+            wav = wav.mean(dim=tuple(range(wav.dim() - 1)))
+
         if src_sr != self.SAMPLE_RATE:
             wav = torchaudio.functional.resample(wav, src_sr, self.SAMPLE_RATE)
 

@@ -98,10 +98,11 @@ class Perch2Model(ModelBase):
     #  Private helpers
     # ------------------------------------------------------------------ #
     def _prepare_waveform(self, wav: torch.Tensor) -> torch.Tensor:
-        if wav.dim() == 3 and wav.size(1) == 1:
-            wav = wav.squeeze(1)
+        if wav.dim() == 3:
+            # (B, C, N) → (B, N): downmix any channel count to mono
+            wav = wav.mean(dim=1)
         if wav.dim() != 2:
-            raise ValueError("Audio must be (batch, samples) waveform.")
+            raise ValueError("Audio must be (batch, channels, samples) or (batch, samples) waveform.")
         n = wav.size(-1)
         if n > self.window_samples:
             start = (n - self.window_samples) // 2

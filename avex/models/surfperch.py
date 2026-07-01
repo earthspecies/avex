@@ -175,11 +175,11 @@ class PerchModel(ModelBase):
         Raises:
             ValueError: If audio shape is not compatible
         """
-        if wav.dim() == 3 and wav.size(1) == 1:  # (B,1,N) → (B,N)
-            wav = wav.squeeze(1)
+        if wav.dim() == 3:  # (B,C,N) → (B,N): downmix any channel count to mono
+            wav = wav.mean(dim=1)
 
         if wav.dim() != 2:
-            raise ValueError("Audio must be (batch, samples) waveform.")
+            raise ValueError("Audio must be (batch, channels, samples) or (batch, samples) waveform.")
 
         if wav.size(-1) != self.window_samples:
             if wav.size(-1) > self.window_samples:  # centre-crop
