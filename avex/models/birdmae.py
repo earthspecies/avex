@@ -4,7 +4,7 @@ This module provides the BirdMAE (Bird Masked Autoencoder) model implementation
 for bioacoustic representation learning tasks.
 """
 
-from typing import List, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -217,32 +217,40 @@ class Model(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
+        aggregation: str = "none",
         freeze_backbone: bool = True,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | list[torch.Tensor]:
         """Extract embeddings from BirdMAE.
 
         Parameters
         ----------
         x : torch.Tensor | dict[str, torch.Tensor]
             Input audio tensor or dictionary containing 'raw_wav'
-        layers : List[str]
-            List of layer names (ignored for BirdMAE, uses final embeddings)
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input (not used by BirdMAE)
-        average_over_time : bool
-            Whether to average over time dimension (handled automatically)
+        aggregation : str
+            Aggregation method for compatibility with other backbones. Since BirdMAE
+            exposes a single embedding output, the behavior is:
+            - "none": return the raw embeddings tensor
+            - "mean" | "max" | "cls_token": return the embeddings tensor (no-op)
         freeze_backbone : bool
             Whether to freeze the backbone and use torch.no_grad()
 
         Returns
         -------
-        torch.Tensor
-            Model embeddings
+        torch.Tensor | list[torch.Tensor]
+            Model embeddings.
+
+        Raises
+        ------
+        ValueError
+            If an unsupported aggregation method is provided.
         """
+        if aggregation not in {"none", "mean", "max", "cls_token"}:
+            raise ValueError(f"Unsupported aggregation method: {aggregation}")
+
         # Extract raw audio if provided as dict
         if isinstance(x, dict):
             x = x["raw_wav"]

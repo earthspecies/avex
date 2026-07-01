@@ -7,11 +7,11 @@ repos:
         types: [file, text]
       - id: end-of-file-fixer
         types: [python]
-      - id: requirements-txt-fixer
       - id: mixed-line-ending
         types: [python]
         args: [--fix=no]
       - id: check-added-large-files
+        exclude: ^avex/data/ebird_taxonomy_v
         args: [--maxkb=1024]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -33,6 +33,7 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
+        exclude: ^avex/data/ebird_taxonomy_v
         args:
           - "--ignore-words=.dict-allowed.txt"
           # skip jupyter notebook as there isn't a good way to only match inputs
@@ -49,7 +50,7 @@ repos:
   #      args: ["-c", "Company, Inc", "*.py"]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.5.5
+    rev: 0.9.22
     hooks:
       - id: uv-lock
         files: ^(uv\.lock|pyproject\.toml|uv\.toml)$

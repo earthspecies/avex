@@ -80,6 +80,23 @@ with torch.no_grad():
 embedding = embeddings.mean(dim=1)  # Shape: (batch, 768)
 ```
 
+### Layer-wise Embedding Extraction (Multiple Layers)
+
+For some analyses and probes it can help to extract embeddings from **multiple internal layers**.
+You can select layers by **index** (0-based, negative indices allowed) instead of long module names.
+
+```python
+import torch
+from avex import load_model
+
+model = load_model("esp_aves2_naturelm_audio_v1_beats", device="cpu")
+print(model.get_model_layer_map())  # {0: "...", 1: "...", ...}
+
+audio = torch.randn(1, 16000 * 5)
+_ = model.register_hooks_for_layers([0, -1])
+emb = model.extract_embeddings(audio, aggregation="mean")
+```
+
 ### Transfer Learning with Probes
 
 ```python

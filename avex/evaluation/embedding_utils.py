@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def _extract_embeddings_in_memory(
     model: ModelBase,
     dataloader: DataLoader,
-    layer_names: List[str],
+    target_layers: List[str | int],
     device: torch.device,
     aggregation: str = "mean",
     disable_tqdm: bool = False,
@@ -70,7 +70,7 @@ def _extract_embeddings_in_memory(
     try:
         with torch.no_grad():
             # Register hooks for the specified layers outside the loop
-            layer_names = model.register_hooks_for_layers(layer_names)
+            resolved_layers = model.register_hooks_for_layers(target_layers)
 
             for _idx, batch in progress:
                 wav = batch["raw_wav"].to(device)
@@ -101,7 +101,7 @@ def _extract_embeddings_in_memory(
                 if isinstance(emb, list):
                     # Multiple layers: emb is a list of tensors
                     for i, layer_emb in enumerate(emb):
-                        layer_name = layer_names[i] if i < len(layer_names) else f"layer_{i}"
+                        layer_name = resolved_layers[i] if i < len(resolved_layers) else f"layer_{i}"
                         if layer_name not in layer_embeds:
                             layer_embeds[layer_name] = []
                         layer_embeds[layer_name].append(layer_emb.cpu())
@@ -114,7 +114,7 @@ def _extract_embeddings_in_memory(
                 else:
                     # Single layer: emb is a single tensor
                     # Use the first layer name or a default name
-                    layer_name = layer_names[0] if layer_names else "embeddings"
+                    layer_name = resolved_layers[0] if resolved_layers else "embeddings"
                     if layer_name not in layer_embeds:
                         layer_embeds[layer_name] = []
                     layer_embeds[layer_name].append(emb.cpu())
@@ -144,10 +144,27 @@ def _extract_embeddings_in_memory(
         model.deregister_all_hooks()
 
 
+def _write_embedding_metadata(
+    h5f: h5py.File,
+    *,
+    aggregation: str,
+    layer_names: List[str],
+    embedding_dims: List[tuple],
+    multi_layer: bool,
+) -> None:
+    """Persist cache metadata needed to interpret stored embedding shape."""
+    h5f.attrs["embedding_aggregation"] = aggregation
+    h5f.attrs["aggregation"] = aggregation
+    h5f.attrs["stored_embedding_rank"] = [len(tuple(dim)) for dim in embedding_dims]
+    h5f.attrs["layer_names"] = layer_names
+    h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
+    h5f.attrs["multi_layer"] = multi_layer
+
+
 def _extract_embeddings_streaming(
     model: ModelBase,
     dataloader: DataLoader,
-    layer_names: List[str],
+    target_layers: List[str | int],
     device: torch.device,
     save_path: Path,
     chunk_size: int,
@@ -182,10 +199,10 @@ def _extract_embeddings_streaming(
         model.disable_layerdrop = disable_layerdrop
 
     # Register hooks for the specified layers outside the loop
-    layer_names = model.register_hooks_for_layers(layer_names)
+    resolved_layers = model.register_hooks_for_layers(target_layers)
 
     logger.info(f"Extracting embeddings using optimized streaming approach to {save_path}")
-    logger.info(f"Chunk size: {chunk_size}, layers: {len(layer_names)}")
+    logger.info(f"Chunk size: {chunk_size}, layers: {len(resolved_layers)}")
 
     # Ensure directory exists
     save_path_obj = anypath(save_path)
@@ -293,7 +310,7 @@ def _extract_embeddings_streaming(
                     compression_level,
                     model,
                     dataloader,
-                    layer_names,
+                    resolved_layers,
                     device,
                     first_batch,
                     batch_chunk_size,
@@ -311,7 +328,7 @@ def _extract_embeddings_streaming(
                     compression_level,
                     model,
                     dataloader,
-                    layer_names,
+                    resolved_layers,
                     device,
                     first_batch,
                     batch_chunk_size,
@@ -338,7 +355,7 @@ def _create_and_fill_h5_datasets_hybrid(
     compression_level: int,
     model: ModelBase,
     dataloader: DataLoader,
-    layer_names: List[str],
+    resolved_layers: List[str],
     device: torch.device,
     first_batch: dict,
     batch_chunk_size: int,
@@ -355,6 +372,8 @@ def _create_and_fill_h5_datasets_hybrid(
     ------
     ValueError
         If invalid parameters or data structures are encountered.
+    RuntimeError
+        If HDF5 dataset creation fails.
     """
     # Get label shape and type from the first batch
     sample_labels = first_batch["label"]
@@ -395,11 +414,18 @@ def _create_and_fill_h5_datasets_hybrid(
 
     logger.info(f"Label shape: {sample_labels.shape}, dtype: {label_dtype} -> numpy: {numpy_label_dtype}")
 
+    compression_kwargs: dict[str, object] = {}
+    if compression and str(compression).lower() not in {"none", "null", "false"}:
+        compression_kwargs["compression"] = compression
+        # h5py rejects compression_opts for some filters (e.g. lzf).
+        if str(compression).lower() != "lzf":
+            compression_kwargs["compression_opts"] = int(compression_level)
+
     # Create separate datasets for each layer to handle different dimensions
     embeddings_datasets = {}
     if aggregation == "mean" and len(embedding_dims) == 1:
         # For mean aggregation with single concatenated tensor, create one dataset
-        layer_name = layer_names[0] if layer_names else "embeddings"
+        layer_name = resolved_layers[0] if resolved_layers else "embeddings"
         embedding_dim = embedding_dims[0]
         h5_shape = (total_samples,) + embedding_dim
         h5_chunks = (chunk_size,) + embedding_dim
@@ -410,12 +436,11 @@ def _create_and_fill_h5_datasets_hybrid(
             maxshape=(None,) + embedding_dim,
             dtype=np.float32,
             chunks=h5_chunks,
-            compression=compression,
-            compression_opts=compression_level,
+            **compression_kwargs,
         )
     else:
         # For multi-layer or none aggregation, create datasets for each layer
-        for layer_name, embedding_dim in zip(layer_names, embedding_dims, strict=False):
+        for layer_name, embedding_dim in zip(resolved_layers, embedding_dims, strict=False):
             # Create HDF5 dataset with original multi-dimensional shape
             h5_shape = (total_samples,) + embedding_dim
             h5_chunks = (chunk_size,) + embedding_dim
@@ -426,8 +451,7 @@ def _create_and_fill_h5_datasets_hybrid(
                 maxshape=(None,) + embedding_dim,
                 dtype=np.float32,
                 chunks=h5_chunks,
-                compression=compression,
-                compression_opts=compression_level,
+                **compression_kwargs,
             )
 
     # Create labels dataset with correct shape
@@ -439,8 +463,7 @@ def _create_and_fill_h5_datasets_hybrid(
             maxshape=(None,) + label_shape,
             dtype=numpy_label_dtype,
             chunks=(chunk_size,) + label_shape,
-            compression=compression,
-            compression_opts=compression_level,
+            **compression_kwargs,
         )
     else:
         # Single-dimensional labels
@@ -450,8 +473,7 @@ def _create_and_fill_h5_datasets_hybrid(
             maxshape=(None,),
             dtype=numpy_label_dtype,
             chunks=(chunk_size,),
-            compression=compression,
-            compression_opts=compression_level,
+            **compression_kwargs,
         )
 
     # Log dataset shapes
@@ -504,7 +526,7 @@ def _create_and_fill_h5_datasets_hybrid(
             # Handle single tensor, list of tensors, or dictionary
             if isinstance(embeddings, list):
                 # Multi-layer case: write each layer to its own dataset
-                for _i, (layer_name, layer_emb) in enumerate(zip(layer_names, embeddings, strict=False)):
+                for _i, (layer_name, layer_emb) in enumerate(zip(resolved_layers, embeddings, strict=False)):
                     layer_emb_np = layer_emb.cpu().numpy().astype(np.float32)
                     embeddings_datasets[layer_name][start_idx : start_idx + batch_size] = layer_emb_np
             elif isinstance(embeddings, dict):
@@ -554,7 +576,35 @@ def _create_and_fill_h5_datasets_hybrid(
         batch_labels_buffer = []
         buffer_sample_count = 0
 
-        for batch_idx, batch in progress:
+        skipped_batches: list[int] = []
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        batch_idx = -1
+        _progress_iter = iter(progress)
+        while True:
+            try:
+                batch_idx, batch = next(_progress_iter)
+                consecutive_errors = 0
+            except StopIteration:
+                break
+            except Exception as exc:
+                consecutive_errors += 1
+                logger.warning(
+                    "Skipping batch ~%d due to worker error (%d consecutive): %s",
+                    batch_idx + 1,
+                    consecutive_errors,
+                    exc,
+                )
+                skipped_batches.append(batch_idx + 1)
+                # Over-advances when the failing batch is the short final batch,
+                # but that only matters for the abort-and-discard path: any run
+                # with skipped batches is marked extraction_complete=False and
+                # the cache is discarded, so start_idx need only stay consistent
+                # there, not exact.
+                start_idx = min(start_idx + batch_size, total_samples)
+                if consecutive_errors >= max_consecutive_errors:
+                    raise RuntimeError(f"Aborting extraction: {consecutive_errors} consecutive worker errors") from exc
+                continue
             logger.debug(f"Processing batch {batch_idx}")
             wav = batch["raw_wav"].to(device)
             mask = batch.get("padding_mask")
@@ -640,7 +690,7 @@ def _create_and_fill_h5_datasets_hybrid(
                         # Multi-layer case: concatenate each layer separately across
                         # batches
                         num_layers = len(batch_embeddings_buffer[0])
-                        logger.debug((f"Writing {num_layers} layers from buffer, layer_names: {layer_names}"))
+                        logger.debug((f"Writing {num_layers} layers from buffer, resolved_layers: {resolved_layers}"))
                         for layer_idx in range(num_layers):
                             layer_embeddings = [batch_emb[layer_idx] for batch_emb in batch_embeddings_buffer]
                             if len(layer_embeddings) == 1:
@@ -654,7 +704,7 @@ def _create_and_fill_h5_datasets_hybrid(
                             if remaining_samples > 0:
                                 layer_emb_np = layer_emb_np[:remaining_samples]
 
-                            layer_name = layer_names[layer_idx]
+                            layer_name = resolved_layers[layer_idx]
                             logger.debug(
                                 (
                                     f"Writing layer {layer_idx} ({layer_name}) with "
@@ -738,12 +788,15 @@ def _create_and_fill_h5_datasets_hybrid(
 
     # Add multi-layer metadata. We always save embeddings in per-layer datasets
     # (embeddings_{layer}) even if there is only one layer, so mark as multi-layer.
-    h5f.attrs["multi_layer"] = True
     # Set layer_names to only the layers that were actually created
     actual_layer_names = list(embeddings_datasets.keys())
-    h5f.attrs["layer_names"] = actual_layer_names
-    # Convert embedding_dims to a format HDF5 can store
-    h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
+    _write_embedding_metadata(
+        h5f,
+        aggregation=aggregation,
+        layer_names=actual_layer_names,
+        embedding_dims=embedding_dims,
+        multi_layer=True,
+    )
 
     # Final validation
     if start_idx != total_samples:
@@ -755,6 +808,16 @@ def _create_and_fill_h5_datasets_hybrid(
     # Store metadata as HDF5 attributes (reinforce values, do not change multi_layer)
     # Don't overwrite layer_names - it was already set correctly above
 
+    if skipped_batches:
+        logger.warning(
+            "Skipped %d batches due to worker errors: %s — cache marked incomplete",
+            len(skipped_batches),
+            skipped_batches,
+        )
+    # Mark complete only when no batches were skipped: skipped rows leave
+    # unwritten gaps in the pre-allocated HDF5 datasets so the cache is unusable.
+    h5f.attrs["extraction_complete"] = len(skipped_batches) == 0
+    h5f.attrs["skipped_batches"] = len(skipped_batches)
     final_embedding_shapes = {name: dset.shape for name, dset in embeddings_datasets.items()}
     logger.info(f"Final dataset shapes - embeddings: {final_embedding_shapes}, labels: {labels_dset.shape}")
 
@@ -810,7 +873,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         hdf5_path: Union[str, Path],
-        layer_names: Optional[List[str]] = None,
+        target_layers: Optional[List[str]] = None,
         cache_in_memory: bool = True,
         cache_size_limit_gb: float = 8.0,
         allow_partial_cache: bool = True,
@@ -819,7 +882,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
 
         Args:
             hdf5_path: Path to the HDF5 file containing embeddings and labels
-            layer_names: Optional list of layer names to use. If None, will be
+            target_layers: Optional list of target layers to use. If None, will be
                 auto-detected from the HDF5 file
             cache_in_memory: If True and dataset is small enough, cache everything
                 in RAM
@@ -837,22 +900,24 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         # Load metadata from a temporary file handle
         self._load_metadata()
 
-        # Handle layer names
-        if layer_names is None:
-            self.layer_names = self._detect_layer_names()
+        # Handle target layers
+        if target_layers is None:
+            self.target_layers = self._detect_layer_names()
         else:
             # Check if 'last_layer' needs to be resolved
-            if "last_layer" in layer_names:
+            if "last_layer" in target_layers:
                 detected_layers = self._detect_layer_names()
                 if detected_layers:
                     # Replace 'last_layer' with the actual last layer name
-                    self.layer_names = [name if name != "last_layer" else detected_layers[-1] for name in layer_names]
+                    self.target_layers = [
+                        name if name != "last_layer" else detected_layers[-1] for name in target_layers
+                    ]
                     logger.info(f"Resolved 'last_layer' to '{detected_layers[-1]}'")
                 else:
-                    self.layer_names = layer_names
+                    self.target_layers = target_layers
                     logger.warning("No layer names found to resolve 'last_layer'")
             else:
-                self.layer_names = layer_names
+                self.target_layers = target_layers
 
         # Compute embedding dimensions
         self.embedding_dims = self._compute_embedding_dims()
@@ -876,12 +941,12 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         # Initialize sliding window capacity if embeddings not fully cached
         if (
             self._memory_cache is None
-            or (self.multi_layer and not all(ln in self._memory_cache for ln in self.layer_names))
+            or (self.multi_layer and not all(ln in self._memory_cache for ln in self.target_layers))
             or (not self.multi_layer and "embed" not in (self._memory_cache or {}))
         ):
             self._initialize_window_cache()
 
-        logger.info(f"Initialized HDF5EmbeddingDataset: {len(self)} samples, layers: {self.layer_names}")
+        logger.info(f"Initialized HDF5EmbeddingDataset: {len(self)} samples, layers: {self.target_layers}")
         logger.info(f"Embedding dimensions: {self.embedding_dims}")
         logger.info(f"Number of labels: {self.num_labels}")
         logger.info(f"In-memory cache: {self._memory_cache is not None}")
@@ -912,31 +977,44 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
             return 0
 
     def _initialize_window_cache(self) -> None:
-        """Initialize sliding window cache capacity and prefill the first window."""
+        """Initialize sliding window cache capacity (no prefill — lazy on first access)."""
         try:
             bytes_per_sample = self._bytes_per_sample_embeddings()
             if bytes_per_sample <= 0:
                 self._window_capacity_samples = 0
                 return
             budget_bytes = int(self._cache_size_limit_gb * (1024**3))
-            # Reserve a small margin for overhead
             budget_bytes = max(0, budget_bytes - 8 * 1024 * 1024)
             capacity = max(1, budget_bytes // bytes_per_sample)
             self._window_capacity_samples = int(min(capacity, self.total_samples))
-            # Prefill initial window from start
-            if self._window_capacity_samples > 0:
-                self._load_window(0)
+            # No prefill here: avoids loading data before workers are spawned,
+            # which would ship a full window (~cache_size_limit_gb) to every worker.
         except Exception as e:
             logger.warning(f"Failed to initialize window cache: {e}")
             self._window_capacity_samples = 0
 
     def _load_window(self, start_idx: int) -> None:
-        """Load a new cache window [start_idx, start_idx + capacity)."""
+        """Load a new cache window [start_idx, start_idx + capacity).
+
+        Capacity is divided by the number of DataLoader workers so that total
+        RAM across all worker processes stays within cache_size_limit_gb.
+
+        Note: the sliding window assumes roughly sequential access. A shuffled
+        DataLoader over an HDF5-backed set whose window is smaller than the
+        dataset will miss [_window_start, _window_end) on nearly every
+        __getitem__ and reload a full window each time — a perf cliff. The
+        common path (probe_num_workers=0, in-memory) avoids this; prefer
+        in-memory or sequential access for large HDF5-backed shuffled sets.
+        """
         if self._window_capacity_samples <= 0:
             self._window_cache = None
             self._window_start = 0
             self._window_end = 0
             return
+        # Scale capacity so all workers combined stay within budget
+        worker_info = torch.utils.data.get_worker_info()
+        num_workers = worker_info.num_workers if worker_info is not None else 1
+        capacity = max(1, self._window_capacity_samples // num_workers)
         # Ensure file handle available
         datasets = self._datasets
         if datasets is None:
@@ -945,13 +1023,13 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         if datasets is None:
             return
         start = max(0, int(start_idx))
-        end = min(self.total_samples, start + self._window_capacity_samples)
+        end = min(self.total_samples, start + capacity)
         if end <= start:
             return
         window: Dict[str, torch.Tensor] = {}
         # Load embeddings per layer/dataset
         if self.multi_layer:
-            for layer_name in self.layer_names:
+            for layer_name in self.target_layers:
                 if self._memory_cache is not None and layer_name in self._memory_cache:
                     # This layer already fully cached; no need to duplicate
                     continue
@@ -1018,6 +1096,9 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
 
             # Store HDF5 attributes
             self._h5_attrs = dict(f.attrs)
+            self.embedding_aggregation = str(
+                f.attrs.get("embedding_aggregation", f.attrs.get("aggregation", "unknown"))
+            )
 
     def _detect_layer_names(self) -> List[str]:
         """Auto-detect layer names from dataset structure.
@@ -1050,7 +1131,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         datasets = {}
 
         if self.multi_layer:
-            for layer_name in self.layer_names:
+            for layer_name in self.target_layers:
                 dataset_name = f"embeddings_{layer_name}"
                 if dataset_name in self._h5file:
                     datasets[layer_name] = self._h5file[dataset_name]
@@ -1080,7 +1161,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
             embedding_dims = []
 
             if self.multi_layer:
-                for layer_name in self.layer_names:
+                for layer_name in self.target_layers:
                     dataset_name = f"embeddings_{layer_name}"
                     if dataset_name in f:
                         shape = f[dataset_name].shape[1:]
@@ -1142,7 +1223,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                 # Calculate embedding sizes
                 if self.multi_layer:
                     layer_sizes: Dict[str, int] = {}
-                    for layer_name in self.layer_names:
+                    for layer_name in self.target_layers:
                         dataset_name = f"embeddings_{layer_name}"
                         if dataset_name in f:
                             dset = f[dataset_name]
@@ -1230,7 +1311,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         if self._memory_cache is not None:
             if self.multi_layer:
                 result = {"label": self._memory_cache["labels"][idx]}
-                for layer_name in self.layer_names:
+                for layer_name in self.target_layers:
                     if layer_name in self._memory_cache:
                         result[layer_name] = self._memory_cache[layer_name][idx]
                     else:
@@ -1285,7 +1366,7 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
 
         if self.multi_layer:
             result = {"label": label_tensor}
-            for layer_name in self.layer_names:
+            for layer_name in self.target_layers:
                 if layer_name in datasets:
                     embedding_data = datasets[layer_name][idx]
                     result[layer_name] = torch.from_numpy(np.array(embedding_data, dtype=np.float32))
@@ -1304,9 +1385,9 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
             Tuple[int, ...]: Embedding dimensions for the specified layer.
         """
         if layer_name is None:
-            layer_name = self.layer_names[0]
+            layer_name = self.target_layers[0]
 
-        idx = self.layer_names.index(layer_name)
+        idx = self.target_layers.index(layer_name)
         return self.embedding_dims[idx]
 
     def close(self) -> None:
@@ -1334,6 +1415,11 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
         state["_h5file"] = None
         state["_datasets"] = None
         state["_worker_id"] = None
+        # Drop window cache: each worker builds its own scaled window on first access.
+        # Keeping it would ship up to cache_size_limit_gb × num_workers into RAM.
+        state["_window_cache"] = None
+        state["_window_start"] = 0
+        state["_window_end"] = 0
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
@@ -1351,6 +1437,7 @@ def save_embeddings_arrays(
     num_labels: int,
     compression: str = "gzip",
     compression_level: int = 4,
+    aggregation: str = "unknown",
 ) -> None:
     """Save already-computed embeddings/labels to an HDF5 file.
 
@@ -1390,6 +1477,12 @@ def save_embeddings_arrays(
     # Labels: numpy.int64 for standard integer labels
     labels_np = labels.detach().cpu().numpy().astype(np.int64)
 
+    compression_kwargs: dict[str, object] = {}
+    if compression and str(compression).lower() not in {"none", "null", "false"}:
+        compression_kwargs["compression"] = compression
+        if str(compression).lower() != "lzf":
+            compression_kwargs["compression_opts"] = int(compression_level)
+
     # Write file – use file-like stream for cloud storage
     if isinstance(save_path_obj, PureCloudPath):
         with save_path_obj.open("wb") as fh, h5py.File(fh, "w") as h5f:
@@ -1403,37 +1496,41 @@ def save_embeddings_arrays(
                     h5f.create_dataset(
                         f"embeddings_{layer_name}",
                         data=layer_np,
-                        compression=compression,
-                        compression_opts=compression_level,
+                        **compression_kwargs,
                     )
-                h5f.attrs["layer_names"] = layer_names
-                # Convert embedding_dims to a format HDF5 can store
-                # Store as a list of strings representing the dimensions
-                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
-                h5f.attrs["multi_layer"] = True
+                _write_embedding_metadata(
+                    h5f,
+                    aggregation=aggregation,
+                    layer_names=layer_names,
+                    embedding_dims=embedding_dims,
+                    multi_layer=True,
+                )
             else:
                 # Single tensor: save as before for backward compatibility
                 embeds_np = embeddings.detach().cpu().numpy().astype(np.float32)
                 h5f.create_dataset(
                     "embeddings",
                     data=embeds_np,
-                    compression=compression,
-                    compression_opts=compression_level,
+                    **compression_kwargs,
                 )
-                h5f.attrs["multi_layer"] = False
                 # Store embedding dimensions for proper reshaping on load
                 layer_names = ["embeddings"]  # Default layer name for single tensor
                 embedding_dims = [embeds_np.shape[1:]]  # Exclude batch dimension
-                h5f.attrs["layer_names"] = layer_names
-                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
+                _write_embedding_metadata(
+                    h5f,
+                    aggregation=aggregation,
+                    layer_names=layer_names,
+                    embedding_dims=embedding_dims,
+                    multi_layer=False,
+                )
 
             h5f.create_dataset(
                 "labels",
                 data=labels_np,
-                compression=compression,
-                compression_opts=compression_level,
+                **compression_kwargs,
             )
             h5f.attrs["num_labels"] = num_labels
+            h5f.attrs["extraction_complete"] = True
     else:
         with h5py.File(str(save_path_obj), "w") as h5f:
             if isinstance(embeddings, dict):
@@ -1446,37 +1543,41 @@ def save_embeddings_arrays(
                     h5f.create_dataset(
                         f"embeddings_{layer_name}",
                         data=layer_np,
-                        compression=compression,
-                        compression_opts=compression_level,
+                        **compression_kwargs,
                     )
-                h5f.attrs["layer_names"] = layer_names
-                # Convert embedding_dims to a format HDF5 can store
-                # Store as a list of strings representing the dimensions
-                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
-                h5f.attrs["multi_layer"] = True
+                _write_embedding_metadata(
+                    h5f,
+                    aggregation=aggregation,
+                    layer_names=layer_names,
+                    embedding_dims=embedding_dims,
+                    multi_layer=True,
+                )
             else:
                 # Single tensor: save as before for backward compatibility
                 embeds_np = embeddings.detach().cpu().numpy().astype(np.float32)
                 h5f.create_dataset(
                     "embeddings",
                     data=embeds_np,
-                    compression=compression,
-                    compression_opts=compression_level,
+                    **compression_kwargs,
                 )
-                h5f.attrs["multi_layer"] = False
                 # Store embedding dimensions for proper reshaping on load
                 layer_names = ["embeddings"]  # Default layer name for single tensor
                 embedding_dims = [embeds_np.shape[1:]]  # Exclude batch dimension
-                h5f.attrs["layer_names"] = layer_names
-                h5f.attrs["embedding_dims"] = [str(tuple(dim)) for dim in embedding_dims]
+                _write_embedding_metadata(
+                    h5f,
+                    aggregation=aggregation,
+                    layer_names=layer_names,
+                    embedding_dims=embedding_dims,
+                    multi_layer=False,
+                )
 
             h5f.create_dataset(
                 "labels",
                 data=labels_np,
-                compression=compression,
-                compression_opts=compression_level,
+                **compression_kwargs,
             )
             h5f.attrs["num_labels"] = num_labels
+            h5f.attrs["extraction_complete"] = True
 
 
 def load_embeddings_arrays(

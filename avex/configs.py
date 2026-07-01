@@ -385,7 +385,7 @@ class ProbeConfig(BaseModel):
 
     **Core Parameters:**
         probe_type: Type of probe to use ("linear", "mlp", "attention", "lstm", "transformer")
-        target_layers: List of layer names to extract embeddings from (required)
+        target_layers: List of layer identifiers to extract embeddings from (required)
             - Use "last_layer" for the final layer
             - Use "all" for all discoverable layers
             - Use specific layer names from list_model_layers()
@@ -482,7 +482,28 @@ class ProbeConfig(BaseModel):
         description="How to process input embeddings before feeding to probe",
     )
 
-    target_layers: List[str] = Field(..., description="List of layer names to extract embeddings from")
+    target_layers: List[str | int] = Field(
+        ...,
+        description=(
+            "List of layer identifiers to extract embeddings from. Supports:\n"
+            "- special strings: 'all', 'last_layer'\n"
+            "- explicit layer names (strings)\n"
+            "- integer indices (0-based, negative indices allowed) into the model's "
+            "discovered layer list (see list_model_layers(model_instance) or "
+            "model.get_model_layers())."
+        ),
+    )
+
+    @field_validator("target_layers", mode="before")
+    @classmethod
+    def _validate_target_layers_no_bool(cls, v: Any) -> Any:  # noqa: ANN401
+        # Pydantic may coerce bool -> int because bool is a subclass of int.
+        # Validate on raw input to forbid booleans explicitly.
+        if isinstance(v, list):
+            for item in v:
+                if isinstance(item, bool):
+                    raise ValueError("target_layers entries must be str or int (bool is not allowed).")
+        return v
 
     freeze_backbone: bool = Field(True, description="Whether to freeze the backbone model during probing")
 
@@ -1061,7 +1082,7 @@ class ExperimentConfig(BaseModel):
         Returns
         -------
         List[str]
-            List of target layer names
+            List of target layer identifiers
 
         Raises
         ------
@@ -1212,6 +1233,15 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
     device: str = Field(..., description="Device to run the evaluation on")
     seed: int = Field(..., description="Random seed for reproducibility")
     num_workers: int = Field(..., description="Number of workers for evaluation")
+    probe_num_workers: int = Field(
+        0,
+        ge=0,
+        description=(
+            "DataLoader workers for offline probe training. Defaults to 0 "
+            "(main-process HDF5 reads) to prevent per-worker cache duplication. "
+            "Only increase if embeddings fit fully within cache_size_limit_gb."
+        ),
+    )
 
     # Which evaluation phases to run
     eval_modes: List[Literal["probe", "retrieval", "clustering"]] = Field(
@@ -1294,6 +1324,15 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
             10,
             ge=1,
             description=("Number of batches to process before writing during streaming."),
+        )
+        probe_storage_aggregation: Literal["none", "mean", "max", "cls_token"] = Field(
+            "none",
+            description=(
+                "Aggregation used when caching offline probe embeddings. 'none' "
+                "preserves full sequence/stage embeddings for maximum probe reuse; "
+                "'mean' or 'max' stores smaller pooled embeddings for datasets "
+                "where unpooled caches are too large."
+            ),
         )
 
         model_config = ConfigDict(extra="forbid")

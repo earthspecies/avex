@@ -12,6 +12,7 @@ The `examples/` directory contains comprehensive examples demonstrating various 
 | `05_embedding_extraction.py` | Feature extraction with `return_features_only=True` (unpooled features) |
 | `06_classifier_head_loading.py` | Understanding classifier head behavior with different `num_classes` settings |
 | `colab_sl_beats_demo.ipynb` | Google Colab demo for the sl-beats model |
+| `08_probe_comparison.py` | Index-based multi-layer embedding extraction and probe comparison (`target_layers=[-1]`) |
 
 ## Package Structure
 

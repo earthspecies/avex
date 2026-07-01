@@ -2,119 +2,373 @@
 #    uv export --frozen --output-file=requirements.txt --no-dev --no-hashes
 -e .
 aiobotocore==3.4.0
+    # via s3fs
 aiohappyeyeballs==2.6.1
+    # via aiohttp
 aiohttp==3.13.5
+    # via
+    #   aiobotocore
+    #   gcsfs
+    #   s3fs
 aioitertools==0.13.0
+    # via aiobotocore
 aiosignal==1.4.0
+    # via aiohttp
 annotated-types==0.7.0
+    # via pydantic
 antlr4-python3-runtime==4.9.3
+    # via omegaconf
 async-timeout==5.0.1 ; python_full_version < '3.11'
+    # via aiohttp
 attrs==26.1.0
+    # via aiohttp
 bitsandbytes==0.49.2 ; sys_platform != 'darwin'
 botocore==1.42.84
+    # via aiobotocore
 certifi==2026.2.25
+    # via requests
 cffi==2.0.0
+    # via
+    #   cryptography
+    #   soundfile
 charset-normalizer==3.4.7
+    # via requests
 colorama==0.4.6 ; sys_platform == 'win32'
+    # via tqdm
 cryptography==46.0.7
+    # via google-auth
 cuda-bindings==13.2.0 ; sys_platform == 'linux'
+    # via torch
 cuda-pathfinder==1.5.2 ; sys_platform == 'linux'
+    # via cuda-bindings
 cuda-toolkit==13.0.2 ; sys_platform == 'linux'
+    # via torch
 decorator==5.2.1
+    # via gcsfs
 einops==0.8.2
+    # via avex
 filelock==3.25.2
+    # via
+    #   huggingface-hub
+    #   torch
+    #   transformers
 flatbuffers==25.12.19
+    # via onnxruntime
 frozenlist==1.8.0
+    # via
+    #   aiohttp
+    #   aiosignal
 fsspec==2026.3.0
+    # via
+    #   avex
+    #   gcsfs
+    #   huggingface-hub
+    #   s3fs
+    #   torch
 gcsfs==2026.3.0
+    # via avex
 google-api-core==2.30.3
+    # via
+    #   google-cloud-core
+    #   google-cloud-storage
+    #   google-cloud-storage-control
 google-auth==2.49.2
+    # via
+    #   gcsfs
+    #   google-api-core
+    #   google-auth-oauthlib
+    #   google-cloud-core
+    #   google-cloud-storage
+    #   google-cloud-storage-control
 google-auth-oauthlib==1.3.1
+    # via gcsfs
 google-cloud-core==2.5.1
+    # via google-cloud-storage
 google-cloud-storage==3.10.1
+    # via gcsfs
 google-cloud-storage-control==1.11.0
+    # via gcsfs
 google-crc32c==1.8.0
+    # via
+    #   google-cloud-storage
+    #   google-resumable-media
 google-resumable-media==2.8.2
+    # via google-cloud-storage
 googleapis-common-protos==1.74.0
+    # via
+    #   google-api-core
+    #   grpc-google-iam-v1
+    #   grpcio-status
 grpc-google-iam-v1==0.14.4
+    # via google-cloud-storage-control
 grpcio==1.80.0
+    # via
+    #   google-api-core
+    #   google-cloud-storage-control
+    #   googleapis-common-protos
+    #   grpc-google-iam-v1
+    #   grpcio-status
 grpcio-status==1.80.0
+    # via google-api-core
 h5py==3.14.0
+    # via avex
 hf-xet==1.4.3 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
+    # via huggingface-hub
 huggingface-hub==0.36.2
+    # via
+    #   avex
+    #   timm
+    #   tokenizers
+    #   transformers
 idna==3.11
+    # via
+    #   requests
+    #   yarl
 jinja2==3.1.6
+    # via torch
 jmespath==1.1.0
+    # via
+    #   aiobotocore
+    #   botocore
 joblib==1.5.3
+    # via scikit-learn
 markupsafe==3.0.3
+    # via jinja2
 ml-dtypes==0.5.4
+    # via onnx
 mpmath==1.3.0
+    # via sympy
 multidict==6.7.1
+    # via
+    #   aiobotocore
+    #   aiohttp
+    #   yarl
 networkx==3.4.2 ; python_full_version < '3.11'
+    # via torch
 networkx==3.6.1 ; python_full_version >= '3.11'
+    # via torch
 numpy==2.2.6 ; python_full_version < '3.11'
+    # via
+    #   avex
+    #   bitsandbytes
+    #   h5py
+    #   ml-dtypes
+    #   onnx
+    #   onnxruntime
+    #   pandas
+    #   scikit-learn
+    #   scipy
+    #   soundfile
+    #   torchvision
+    #   transformers
 numpy==2.4.4 ; python_full_version >= '3.11'
+    # via
+    #   avex
+    #   bitsandbytes
+    #   h5py
+    #   ml-dtypes
+    #   onnx
+    #   onnxruntime
+    #   pandas
+    #   scikit-learn
+    #   scipy
+    #   soundfile
+    #   torchvision
+    #   transformers
 nvidia-cublas==13.1.0.3 ; sys_platform == 'linux'
+    # via
+    #   cuda-toolkit
+    #   nvidia-cudnn-cu13
+    #   nvidia-cusolver
 nvidia-cuda-cupti==13.0.85 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-cuda-nvrtc==13.0.88 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-cuda-runtime==13.0.96 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-cudnn-cu13==9.19.0.56 ; sys_platform == 'linux'
+    # via torch
 nvidia-cufft==12.0.0.61 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-cufile==1.15.1.6 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-curand==10.4.0.35 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-cusolver==12.0.4.66 ; sys_platform == 'linux'
+    # via cuda-toolkit
 nvidia-cusparse==12.6.3.3 ; sys_platform == 'linux'
+    # via
+    #   cuda-toolkit
+    #   nvidia-cusolver
 nvidia-cusparselt-cu13==0.8.0 ; sys_platform == 'linux'
+    # via torch
 nvidia-nccl-cu13==2.28.9 ; sys_platform == 'linux'
+    # via torch
 nvidia-nvjitlink==13.0.88 ; sys_platform == 'linux'
+    # via
+    #   cuda-toolkit
+    #   nvidia-cufft
+    #   nvidia-cusolver
+    #   nvidia-cusparse
 nvidia-nvshmem-cu13==3.4.5 ; sys_platform == 'linux'
+    # via torch
 nvidia-nvtx==13.0.85 ; sys_platform == 'linux'
+    # via cuda-toolkit
 oauthlib==3.3.1
+    # via requests-oauthlib
 omegaconf==2.3.0
+    # via avex
 onnx==1.21.0
+    # via avex
 onnxruntime==1.24.3 ; python_full_version < '3.11'
+    # via avex
 onnxruntime==1.26.0 ; python_full_version >= '3.11'
+    # via avex
 packaging==26.0
+    # via
+    #   bitsandbytes
+    #   huggingface-hub
+    #   onnxruntime
+    #   transformers
 pandas==2.3.3
+    # via avex
 pillow==11.3.0
+    # via torchvision
 propcache==0.4.1
+    # via
+    #   aiohttp
+    #   yarl
 proto-plus==1.27.2
+    # via
+    #   google-api-core
+    #   google-cloud-storage-control
 protobuf==6.33.6
+    # via
+    #   google-api-core
+    #   google-cloud-storage-control
+    #   googleapis-common-protos
+    #   grpc-google-iam-v1
+    #   grpcio-status
+    #   onnx
+    #   onnxruntime
+    #   proto-plus
 pyasn1==0.6.3
+    # via pyasn1-modules
 pyasn1-modules==0.4.2
+    # via google-auth
 pycparser==3.0 ; implementation_name != 'PyPy'
+    # via cffi
 pydantic==2.12.3
+    # via
+    #   avex
+    #   pydantic-settings
 pydantic-core==2.41.4
+    # via pydantic
 pydantic-settings==2.13.1
+    # via avex
 python-dateutil==2.9.0.post0
+    # via
+    #   aiobotocore
+    #   botocore
+    #   pandas
 python-dotenv==1.2.2
+    # via pydantic-settings
 pytz==2026.1.post1
+    # via pandas
 pyyaml==6.0.3
+    # via
+    #   avex
+    #   huggingface-hub
+    #   omegaconf
+    #   timm
+    #   transformers
 regex==2026.4.4
+    # via transformers
 requests==2.33.1
+    # via
+    #   gcsfs
+    #   google-api-core
+    #   google-cloud-storage
+    #   huggingface-hub
+    #   requests-oauthlib
+    #   transformers
 requests-oauthlib==2.0.0
+    # via google-auth-oauthlib
 s3fs==2026.3.0
+    # via avex
 safetensors==0.7.0
+    # via
+    #   timm
+    #   transformers
 scikit-learn==1.7.2 ; python_full_version < '3.11'
+    # via avex
 scikit-learn==1.8.0 ; python_full_version >= '3.11'
+    # via avex
 scipy==1.15.3 ; python_full_version < '3.11'
+    # via scikit-learn
 scipy==1.17.1 ; python_full_version >= '3.11'
+    # via scikit-learn
 setuptools==81.0.0
+    # via torch
 six==1.17.0
+    # via python-dateutil
 soundfile==0.13.1
+    # via avex
 sympy==1.14.0
+    # via
+    #   onnxruntime
+    #   torch
 threadpoolctl==3.6.0
+    # via scikit-learn
 timm==1.0.26
+    # via avex
 tokenizers==0.22.2
+    # via transformers
 torch==2.11.0
+    # via
+    #   avex
+    #   bitsandbytes
+    #   timm
+    #   torchvision
 torchaudio==2.11.0
+    # via avex
 torchvision==0.26.0
+    # via
+    #   avex
+    #   timm
 tqdm==4.67.3
+    # via
+    #   avex
+    #   huggingface-hub
+    #   transformers
 transformers==4.57.6
+    # via avex
 triton==3.6.0 ; sys_platform == 'linux'
+    # via torch
 typing-extensions==4.15.0
+    # via
+    #   aiobotocore
+    #   aiosignal
+    #   cryptography
+    #   grpcio
+    #   huggingface-hub
+    #   multidict
+    #   onnx
+    #   pydantic
+    #   pydantic-core
+    #   torch
+    #   typing-inspection
 typing-inspection==0.4.2
+    # via
+    #   pydantic
+    #   pydantic-settings
 tzdata==2026.1
+    # via pandas
 urllib3==2.6.3
+    # via
+    #   botocore
+    #   requests
 wrapt==2.1.2
+    # via aiobotocore
 yarl==1.23.0
+    # via aiohttp

@@ -652,7 +652,7 @@ def list_model_layers(
     """List available layers for a model that can be used with probes.
 
     This function discovers all layers in a model that can be used as probe targets.
-    It uses the same discovery method (`_discover_linear_layers`) that is used when
+    It uses the same discovery method (`_discover_embedding_layers`) that is used when
     probes are attached, ensuring the returned layers are exactly what probes can access.
     It returns both the concrete layer names and information about special layer
     options like "last_layer" and "all".
@@ -664,7 +664,7 @@ def list_model_layers(
 
     Returns:
         Dictionary with the following keys:
-        - "layers": List of all discoverable layer names (from _discover_linear_layers)
+        - "layers": List of all discoverable layer names (from _discover_embedding_layers)
         - "last_layer": The layer name that "last_layer" resolves to
         - "all": List of all layers (same as "layers" but included for clarity)
         - "special_options": List of special layer options: ["last_layer", "all"]
@@ -697,8 +697,7 @@ def list_model_layers(
 
     # Discover layers using the same method that register_hooks_for_layers uses
     # This ensures we get the exact same layers that probes can access
-    if len(model_instance._layer_names) == 0:
-        model_instance._discover_linear_layers()
+    model_instance._discover_embedding_layers()
 
     # Get all layers (these are the layers available for probing)
     all_layers = model_instance._layer_names.copy()

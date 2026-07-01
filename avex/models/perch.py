@@ -125,31 +125,6 @@ class PerchModel(ModelBase):
 
         self.to(device)
 
-    def _discover_linear_layers(self) -> None:
-        """Discover and cache layers for Perch model.
-
-        Note: Perch is a TensorFlow Hub model with no accessible intermediate layers.
-        The TensorFlow Hub model only exposes the final embedding output.
-        This method is implemented for API consistency but will only find the optional
-        PyTorch classifier layer.
-        """
-        if len(self._layer_names) == 0:  # Only discover once
-            self._layer_names = []
-
-            # Perch is a TensorFlow Hub model with no accessible intermediate layers
-            # Only the optional PyTorch classifier layer can be discovered
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Linear):
-                    self._layer_names.append(name)
-
-            logger.info(f"Discovered {len(self._layer_names)} layers in Perch model: {self._layer_names}")
-            if len(self._layer_names) == 0:
-                logger.info(
-                    "Perch is a TensorFlow Hub model with no accessible "
-                    "intermediate layers. "
-                    "Only the optional PyTorch classifier layer can be discovered."
-                )
-
     def _discover_embedding_layers(self) -> None:
         """Discover and cache layers for Perch model.
 
@@ -174,6 +149,14 @@ class PerchModel(ModelBase):
                     "intermediate layers. "
                     "Only the optional PyTorch classifier layer can be discovered."
                 )
+
+    def register_hooks_for_layers(self, target_layers: list[str | int]) -> list[str]:
+        """Perch does not support PyTorch forward hooks for TF-Hub internals."""
+        raise NotImplementedError(
+            "PerchModel does not support intermediate layer hooks. "
+            "This backbone is TensorFlow Hub based; use extract_embeddings() "
+            "without hook registration."
+        )
 
     # --------------------------------------------------------------------- #
     #  Private helpers
@@ -309,7 +292,6 @@ class PerchModel(ModelBase):
         Raises:
             ValueError: If unsupported aggregation method is provided.
         """
-
         if isinstance(x, dict):
             audio = x["raw_wav"]
         else:

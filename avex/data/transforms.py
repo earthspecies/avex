@@ -1,11 +1,12 @@
 """Custom transforms for representation learning data processing."""
 
-from typing import Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple
 
+import numpy as np
 import pandas as pd
+from esp_data.backends import PandasBackend
 from esp_data.transforms import register_transform
 from pydantic import BaseModel, Field
-from sklearn.model_selection import train_test_split
 
 
 class TrainValSplitConfig(BaseModel):
@@ -33,9 +34,6 @@ class TrainValSplitConfig(BaseModel):
 class TrainValSplitTransform:
     """Transform that splits a dataset into train and validation subsplits.
 
-    This transform uses sklearn's train_test_split to divide the input dataset
-    into training and validation portions, then returns the requested subset.
-
     Parameters
     ----------
     subset : Literal["train", "validation"], default="train"
@@ -45,9 +43,7 @@ class TrainValSplitTransform:
     random_state : Optional[int], default=42
         Random state for reproducible splits
     stratify_column : Optional[str], default=None
-        Column name to use for stratified splitting. If provided,
-        the split will preserve the proportion of samples for each
-        unique value in this column.
+        Column name to use for stratified splitting.
     """
 
     def __init__(
@@ -57,105 +53,66 @@ class TrainValSplitTransform:
         random_state: Optional[int] = 42,
         stratify_column: Optional[str] = None,
     ) -> None:
-        """Initialize the TrainValSplitTransform.
-
-        Raises
-        ------
-        ValueError
-            If train_size is not between 0 and 1
-        """
+        if not 0.0 < train_size < 1.0:
+            raise ValueError(f"train_size must be between 0 and 1, got {train_size}")
         self.subset = subset
         self.train_size = train_size
         self.random_state = random_state
         self.stratify_column = stratify_column
 
-        # Validate train_size
-        if not 0.0 < train_size < 1.0:
-            raise ValueError(f"train_size must be between 0 and 1, got {train_size}")
-
     @classmethod
     def from_config(cls, cfg: TrainValSplitConfig) -> "TrainValSplitTransform":
-        """Create TrainValSplitTransform from configuration.
-
-        Returns
-        -------
-        TrainValSplitTransform
-            Configured transform instance
-        """
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-        """Apply the train/validation split transform.
+    def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
+        n = len(data)
 
-        Parameters
-        ----------
-        data : pd.DataFrame
-            Input dataset to split
+        if n == 0:
+            return data, {"subset": self.subset, "original_size": 0, "split_size": 0}
 
-        Returns
-        -------
-        Tuple[pd.DataFrame, dict]
-            Tuple containing:
-            - Transformed data (either train or validation subset)
-            - Metadata dictionary with split information
+        rng = np.random.default_rng(self.random_state)
 
-        Raises
-        ------
-        ValueError
-            If stratify_column is specified but not found in data
-        """
-        if len(data) == 0:
-            return data, {
-                "subset": self.subset,
-                "original_size": 0,
-                "split_size": 0,
-            }
-
-        # Prepare stratification
-        stratify = None
+        # Datasets are always loaded through an esp_data backend (pandas or
+        # polars); both expose the unified column/indexing API used below.
         if self.stratify_column is not None:
-            if self.stratify_column not in data.columns:
+            if not data.column_exists(self.stratify_column):
                 raise ValueError(
                     f"Stratify column '{self.stratify_column}' not found in data. "
                     f"Available columns: {list(data.columns)}"
                 )
-            stratify = data[self.stratify_column]
+            train_idxs: list[int] = []
+            val_idxs: list[int] = []
 
-        # Perform the split
-        train_data, val_data = train_test_split(
-            data,
-            train_size=self.train_size,
-            random_state=self.random_state,
-            stratify=stratify,
-        )
+            # Per-class proportional split via esp_data backend API
+            indexed = data.add_column("__row_idx__", list(range(n)))
+            for class_val in indexed.get_unique(self.stratify_column):
+                group = indexed.filter_isin(self.stratify_column, [class_val])
+                group_row_idxs = [row["__row_idx__"] for row in group]
+                perm = rng.permutation(len(group_row_idxs)).tolist()
+                n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
+                train_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train)])
+                val_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train, len(perm))])
 
-        # Select the requested subset
-        if self.subset == "train":
-            result_data = train_data
-        else:  # validation
-            result_data = val_data
+            selected = sorted(train_idxs) if self.subset == "train" else sorted(val_idxs)
+        else:
+            perm = rng.permutation(n).tolist()
+            n_train = int(n * self.train_size)
+            selected = sorted(perm[:n_train]) if self.subset == "train" else sorted(perm[n_train:])
 
-        # Reset index to ensure continuous indexing
-        result_data = result_data.reset_index(drop=True)
+        result = data[selected]
 
-        # Prepare metadata
-        metadata = {
+        return result, {
             "subset": self.subset,
-            "original_size": len(data),
-            "split_size": len(result_data),
+            "original_size": n,
+            "split_size": len(result),
             "train_size": self.train_size,
             "random_state": self.random_state,
             "stratify_column": self.stratify_column,
         }
 
-        return result_data, metadata
-
 
 class RLSubsampleConfig(BaseModel):
-    """Configuration for RLSubsampleTransform.
-
-    This transform performs simple random subsampling of the dataset.
-    """
+    """Configuration for RLSubsampleTransform."""
 
     type: Literal["rl_subsample"]
     ratio: float = Field(
@@ -169,14 +126,14 @@ class RLSubsampleConfig(BaseModel):
         ge=1,
         description="Maximum total number of samples to keep",
     )
-    random_state: Optional[int] = Field(default=42, description="Random state for reproducible sampling")
+    random_state: int = Field(
+        default=42,
+        description="Random seed for reproducible sampling.",
+    )
 
 
 class RLSubsampleTransform:
     """Transform that performs simple random subsampling.
-
-    This transform randomly samples a specified ratio of the dataset,
-    optionally limiting the total number of samples.
 
     Parameters
     ----------
@@ -184,59 +141,32 @@ class RLSubsampleTransform:
         Ratio of samples to keep from the dataset
     max_samples : Optional[int], default=None
         Maximum total number of samples to keep
-    random_state : Optional[int], default=42
-        Random state for reproducible sampling
+    random_state : int, default=42
+        Random seed for reproducible sampling
     """
 
     def __init__(
         self,
         ratio: float = 1.0,
         max_samples: Optional[int] = None,
-        random_state: Optional[int] = 42,
+        random_state: int = 42,
     ) -> None:
-        """Initialize the RLSubsampleTransform.
-
-        Raises
-        ------
-        ValueError
-            If ratio is not between 0 and 1, or max_samples is not positive
-        """
         if not 0.0 <= ratio <= 1.0:
             raise ValueError(f"ratio must be between 0 and 1, got {ratio}")
         if max_samples is not None and max_samples < 1:
             raise ValueError(f"max_samples must be >= 1, got {max_samples}")
-
         self.ratio = ratio
         self.max_samples = max_samples
         self.random_state = random_state
 
     @classmethod
     def from_config(cls, cfg: RLSubsampleConfig) -> "RLSubsampleTransform":
-        """Create RLSubsampleTransform from configuration.
-
-        Returns
-        -------
-        RLSubsampleTransform
-            Configured transform instance
-        """
         return cls(**cfg.model_dump(exclude=("type",)))
 
-    def __call__(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-        """Apply the subsampling transform.
+    def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
+        n_total = len(data)
 
-        Parameters
-        ----------
-        data : pd.DataFrame
-            Input dataset to sample from
-
-        Returns
-        -------
-        Tuple[pd.DataFrame, dict]
-            Tuple containing:
-            - Sampled data (DataFrame, not tuple)
-            - Metadata dictionary with sampling information
-        """
-        if len(data) == 0:
+        if n_total == 0:
             return data, {
                 "rl_subsample": {
                     "original_size": 0,
@@ -246,39 +176,121 @@ class RLSubsampleTransform:
                 }
             }
 
-        original_size = len(data)
-
-        # Calculate number of samples to keep
-        n_samples = int(len(data) * self.ratio)
-        n_samples = min(n_samples, len(data))
-
-        # Apply max_samples limit if specified
+        n = int(n_total * self.ratio)
+        n = min(n, n_total)
         if self.max_samples is not None:
-            n_samples = min(n_samples, self.max_samples)
+            n = min(n, self.max_samples)
 
-        # Perform random sampling
-        if n_samples > 0:
-            sampled_data = data.sample(
-                n=n_samples,
-                random_state=self.random_state,
-            ).reset_index(drop=True)
-        else:
-            sampled_data = pd.DataFrame(columns=data.columns)
+        # Datasets are always loaded through an esp_data backend (pandas or
+        # polars); both expose the unified `sample_rows(n, seed=...)` API.
+        result = data[0:0] if n == 0 else data.sample_rows(n, seed=self.random_state)
 
-        # Prepare metadata
-        metadata = {
+        return result, {
             "rl_subsample": {
-                "original_size": original_size,
-                "sampled_size": len(sampled_data),
+                "original_size": n_total,
+                "sampled_size": len(result),
                 "ratio": self.ratio,
                 "max_samples": self.max_samples,
             }
         }
 
-        # Return DataFrame (not tuple) to ensure compatibility with dataset structure
-        return sampled_data, metadata
+
+def _is_empty_labels(val: Any) -> bool:  # noqa: ANN401
+    """Return True when a labels_as_list cell carries no usable string labels.
+
+    Returns
+    -------
+    bool
+        True when the cell is None, NaN, an empty list, or a list of only None values.
+    """
+    if val is None:
+        return True
+    if isinstance(val, (list, np.ndarray)):
+        return len(val) == 0 or all(x is None for x in val)
+    # Scalar: treat only NaN as empty (a legitimate float label must survive).
+    try:
+        return bool(pd.isna(val))
+    except (TypeError, ValueError):
+        return False
+
+
+class FillLabelsFromAnswerConfig(BaseModel):
+    """Configuration for FillLabelsFromAnswer transform."""
+
+    type: Literal["fill_labels_from_answer"]
+    source: str = "answer"
+    target: str = "labels_as_list"
+    ignore_answers: list[str] = Field(default_factory=lambda: ["None"])
+
+
+class FillLabelsFromAnswer:
+    """Fill a null/empty list-label column from a plain-string fallback column.
+
+    Handles BEANS train splits where labels_as_list is [] or [null] but the
+    label string is stored in the `answer` column instead.  Rows with a
+    properly-populated target are left untouched (no-op for val/test).
+
+    answer values listed in `ignore_answers` (default: ["None"]) are treated as
+    "no label" and will not be used to fill.
+    """
+
+    def __init__(
+        self,
+        *,
+        source: str = "answer",
+        target: str = "labels_as_list",
+        ignore_answers: list[str] | None = None,
+    ) -> None:
+        self.source = source
+        self.target = target
+        self.ignore_answers: set[str] = set(ignore_answers) if ignore_answers is not None else {"None"}
+
+    @classmethod
+    def from_config(cls, cfg: FillLabelsFromAnswerConfig) -> "FillLabelsFromAnswer":
+        return cls(**cfg.model_dump(exclude=("type",)))
+
+    def __call__(self, data: Any) -> Tuple[Any, dict]:  # noqa: ANN401
+        # Unwrap to pandas for row-wise label fix.
+        # Note: collect() materializes a lazy/polars frame fully into memory
+        # before converting to pandas; large splits can blow up here. Kept as a
+        # deliberate workaround for the Polars replace_strict/List(Null) bug.
+        if hasattr(data, "unwrap"):
+            frame = data.unwrap
+            if hasattr(frame, "collect"):
+                frame = frame.collect()
+            df = frame.to_pandas() if hasattr(frame, "to_pandas") else frame
+        else:
+            df = data
+
+        if self.target not in df.columns:
+            raise ValueError(f"Target column '{self.target}' not found in data.")
+        if self.source not in df.columns:
+            raise ValueError(f"Source column '{self.source}' not found in data.")
+
+        # Single explicit pass: row-wise apply can double-invoke during dtype
+        # inference (inflating `filled`) and is slow on large frames.
+        filled = 0
+        new_labels: list[list] = []
+        for tgt, answer in zip(df[self.target].tolist(), df[self.source].tolist(), strict=False):
+            if _is_empty_labels(tgt):
+                if isinstance(answer, str) and answer and answer not in self.ignore_answers:
+                    filled += 1
+                    # BEANS train often uses comma-separated names in answer (e.g. enabirds).
+                    new_labels.append([part.strip() for part in answer.split(",") if part.strip()])
+                else:
+                    new_labels.append([])
+            else:
+                new_labels.append(list(tgt) if not isinstance(tgt, list) else tgt)
+
+        df = df.copy()
+        df[self.target] = new_labels
+
+        # Always return PandasBackend so downstream multilabel_from_features
+        # uses the pandas path, avoiding the Polars replace_strict/List(Null) bug.
+        return PandasBackend(df), {"fill_labels_from_answer": {"filled": filled}}
 
 
 # Register the transforms
 register_transform(TrainValSplitConfig, TrainValSplitTransform)
 register_transform(RLSubsampleConfig, RLSubsampleTransform)
+register_transform(FillLabelsFromAnswerConfig, FillLabelsFromAnswer)
