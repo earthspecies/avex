@@ -473,7 +473,6 @@ dependencies = [
     { name = "gcsfs" },
     { name = "h5py" },
     { name = "huggingface-hub" },
-    { name = "librosa" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "omegaconf" },
@@ -485,6 +484,8 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "s3fs" },
+    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "soundfile" },
     { name = "timm" },
     { name = "torch" },
@@ -503,6 +504,9 @@ dev = [
     { name = "mlflow" },
     { name = "pytorch-lightning" },
     { name = "wandb" },
+]
+examples = [
+    { name = "librosa" },
 ]
 tensorflow = [
     { name = "tensorflow" },
@@ -543,7 +547,7 @@ requires-dist = [
     { name = "gradio-leaderboard", marker = "extra == 'dev'", specifier = ">=0.0.13" },
     { name = "h5py", specifier = ">=3.13.0" },
     { name = "huggingface-hub", specifier = ">=0.36.0" },
-    { name = "librosa", specifier = ">=0.11.0" },
+    { name = "librosa", marker = "extra == 'examples'", specifier = ">=0.11.0" },
     { name = "mlflow", marker = "extra == 'dev'", specifier = ">=2.22.0" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "omegaconf", specifier = ">=2.3.0" },
@@ -555,6 +559,7 @@ requires-dist = [
     { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.5.1.post0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "s3fs", specifier = ">=2024.2.0" },
+    { name = "scikit-learn", specifier = ">=1.6.0" },
     { name = "soundfile", specifier = ">=0.13.1" },
     { name = "tensorflow", marker = "python_full_version < '3.14' and extra == 'tensorflow'", specifier = ">=2.21.0" },
     { name = "tensorflow-hub", marker = "python_full_version < '3.14' and extra == 'tensorflow'", specifier = ">=0.16.1" },
@@ -566,7 +571,7 @@ requires-dist = [
     { name = "transformers", specifier = ">=4.0.0" },
     { name = "wandb", marker = "extra == 'dev'", specifier = ">=0.21.0" },
 ]
-provides-extras = ["tensorflow", "dev"]
+provides-extras = ["examples", "tensorflow", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
