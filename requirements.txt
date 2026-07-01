@@ -18,8 +18,6 @@ annotated-types==0.7.0
     # via pydantic
 antlr4-python3-runtime==4.9.3
     # via omegaconf
-async-timeout==5.0.1 ; python_full_version < '3.11'
-    # via aiohttp
 attrs==26.1.0
     # via aiohttp
 bitsandbytes==0.49.2 ; sys_platform != 'darwin'
@@ -143,25 +141,9 @@ multidict==6.7.1
     #   aiobotocore
     #   aiohttp
     #   yarl
-networkx==3.4.2 ; python_full_version < '3.11'
+networkx==3.6.1
     # via torch
-networkx==3.6.1 ; python_full_version >= '3.11'
-    # via torch
-numpy==2.2.6 ; python_full_version < '3.11'
-    # via
-    #   avex
-    #   bitsandbytes
-    #   h5py
-    #   ml-dtypes
-    #   onnx
-    #   onnxruntime
-    #   pandas
-    #   scikit-learn
-    #   scipy
-    #   soundfile
-    #   torchvision
-    #   transformers
-numpy==2.4.4 ; python_full_version >= '3.11'
+numpy==2.4.4
     # via
     #   avex
     #   bitsandbytes
@@ -220,9 +202,7 @@ omegaconf==2.3.0
     # via avex
 onnx==1.21.0
     # via avex
-onnxruntime==1.24.3 ; python_full_version < '3.11'
-    # via avex
-onnxruntime==1.26.0 ; python_full_version >= '3.11'
+onnxruntime==1.26.0
     # via avex
 packaging==26.0
     # via
@@ -300,13 +280,9 @@ safetensors==0.7.0
     # via
     #   timm
     #   transformers
-scikit-learn==1.7.2 ; python_full_version < '3.11'
+scikit-learn==1.8.0
     # via avex
-scikit-learn==1.8.0 ; python_full_version >= '3.11'
-    # via avex
-scipy==1.15.3 ; python_full_version < '3.11'
-    # via scikit-learn
-scipy==1.17.1 ; python_full_version >= '3.11'
+scipy==1.17.1
     # via scikit-learn
 setuptools==81.0.0
     # via torch
@@ -315,9 +291,7 @@ six==1.17.0
 soundfile==0.13.1
     # via avex
 sympy==1.14.0
-    # via
-    #   onnxruntime
-    #   torch
+    # via torch
 threadpoolctl==3.6.0
     # via scikit-learn
 timm==1.0.26
@@ -347,12 +321,9 @@ triton==3.6.0 ; sys_platform == 'linux'
     # via torch
 typing-extensions==4.15.0
     # via
-    #   aiobotocore
     #   aiosignal
-    #   cryptography
     #   grpcio
     #   huggingface-hub
-    #   multidict
     #   onnx
     #   pydantic
     #   pydantic-core
