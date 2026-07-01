@@ -1,16 +1,16 @@
 """Unit tests for audio processing utilities.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 import numpy as np
 import pytest
 import torch
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.data.dataset)
-pytest.importorskip("esp_data")
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.data.dataset)
+pytest.importorskip("alp_data")
 
 from avex.configs import AudioConfig  # noqa: E402
 from avex.data.audio_utils import (  # noqa: E402

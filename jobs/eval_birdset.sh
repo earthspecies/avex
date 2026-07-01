@@ -10,6 +10,8 @@
 # export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 
 cd ~/code/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 uv sync
 echo $UV_PROJECT_ENVIRONMENT
 # export PYTHONBUFFERED=1

@@ -346,7 +346,7 @@ evaluation_sets:
       dataset_name: "vfpa_killer_whales"
       split: "srkw_standard"
       sample_rate: 16000
-      data_root: "../esp-data/dclde_2026_killer_whales/vfpa/"
+      data_root: "../alp-data/dclde_2026_killer_whales/vfpa/"
       transformations:
         - type: "label_from_feature"
           feature: "call_type"
@@ -362,7 +362,7 @@ evaluation_sets:
       dataset_name: "vfpa_killer_whales"
       split: "srkw_standard"  # Use same as train - will be split internally if needed
       sample_rate: 16000
-      data_root: "../esp-data/dclde_2026_killer_whales/vfpa/"
+      data_root: "../alp-data/dclde_2026_killer_whales/vfpa/"
       transformations:
         - type: "label_from_feature"
           feature: "call_type"
@@ -377,7 +377,7 @@ evaluation_sets:
       dataset_name: "vfpa_killer_whales"
       split: "srkw_standard"
       sample_rate: 16000
-      data_root: "../esp-data/dclde_2026_killer_whales/vfpa/"
+      data_root: "../alp-data/dclde_2026_killer_whales/vfpa/"
       transformations:
         - type: "label_from_feature"
           feature: "call_type"

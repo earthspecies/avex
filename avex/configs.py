@@ -1378,9 +1378,9 @@ class EvaluateConfig(BaseCLIConfig, extra="forbid"):
         return raw
 
 
-# Import dataset configs from data module (dev-only, requires esp-data).
-# For API-only installs (no esp-data), these imports are skipped so that the
-# public API can be used without the private esp-data dependency. Development
+# Import dataset configs from data module (dev-only, requires alp-data).
+# For API-only installs (no alp-data), these imports are skipped so that the
+# public API can be used without the optional alp-data dependency. Development
 # workflows that rely on these configs must install the dev extras.
 try:
     from avex.data.configs import (
@@ -1389,7 +1389,7 @@ try:
     )
 except ImportError:  # pragma: no cover - exercised only in API-only envs
     logger.info(
-        "esp_data is not installed; dataset-related configs "
+        "alp_data is not installed; dataset-related configs "
         "(DatasetCollectionConfig, BenchmarkEvaluationConfig) are unavailable. "
         "This is expected for API-only installations. Install the dev extras "
         "to enable training/evaluation configs."

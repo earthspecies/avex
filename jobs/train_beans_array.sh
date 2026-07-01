@@ -18,6 +18,8 @@
 
 # Navigate to repository root on compute node
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 
 # Ensure dependencies are in sync on the worker
 uv sync

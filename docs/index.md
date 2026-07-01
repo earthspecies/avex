@@ -16,7 +16,7 @@ The Representation Learning Framework is an API for model loading and inference,
 
 ### Requirements
 
-- **Python** 3.10, 3.11, 3.12, or 3.13 (`requires-python` in the repository `pyproject.toml` is `>=3.10,<3.14`)
+- **Python** 3.11, 3.12, or 3.13 (`requires-python` in the repository `pyproject.toml` is `>=3.11,<3.14`)
 
 ### Quick Start
 
@@ -151,7 +151,7 @@ For users who want to install the package and use it as a library (for example t
 
 #### Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 
 #### Install with pip
 
@@ -171,11 +171,11 @@ uv sync
 
 ### 2. Training Setup (ESP Internal)
 
-Training the original supervised learning models requires `esp-data` for dataset management. This package is currently only available to Earth Species Project team members.
+Training the original supervised learning models requires `alp-data` for dataset management. This package is public on PyPI.
 
 #### Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 - Git
 - GCP authentication:
 
@@ -202,7 +202,6 @@ explicit = true
 
 [tool.uv.sources]
 avex = { index = "esp-pypi" }
-esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
@@ -223,7 +222,7 @@ pip install "avex[dev]" \
 ```
 
 This installs additional dependencies for training:
-- `esp-data` – dataset management
+- `alp-data` – dataset management
 - `esp-sweep` – hyperparameter sweeping
 - `pytorch-lightning`, `mlflow`, `wandb` – training infrastructure
 

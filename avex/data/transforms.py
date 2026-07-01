@@ -4,8 +4,8 @@ from typing import Any, Literal, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from esp_data.backends import PandasBackend
-from esp_data.transforms import register_transform
+from alp_data.backends import PandasBackend
+from alp_data.transforms import register_transform
 from pydantic import BaseModel, Field
 
 
@@ -72,7 +72,7 @@ class TrainValSplitTransform:
 
         rng = np.random.default_rng(self.random_state)
 
-        # Datasets are always loaded through an esp_data backend (pandas or
+        # Datasets are always loaded through an alp_data backend (pandas or
         # polars); both expose the unified column/indexing API used below.
         if self.stratify_column is not None:
             if not data.column_exists(self.stratify_column):
@@ -83,7 +83,7 @@ class TrainValSplitTransform:
             train_idxs: list[int] = []
             val_idxs: list[int] = []
 
-            # Per-class proportional split via esp_data backend API
+            # Per-class proportional split via alp_data backend API
             indexed = data.add_column("__row_idx__", list(range(n)))
             for class_val in indexed.get_unique(self.stratify_column):
                 group = indexed.filter_isin(self.stratify_column, [class_val])
@@ -181,7 +181,7 @@ class RLSubsampleTransform:
         if self.max_samples is not None:
             n = min(n, self.max_samples)
 
-        # Datasets are always loaded through an esp_data backend (pandas or
+        # Datasets are always loaded through an alp_data backend (pandas or
         # polars); both expose the unified `sample_rows(n, seed=...)` API.
         result = data[0:0] if n == 0 else data.sample_rows(n, seed=self.random_state)
 

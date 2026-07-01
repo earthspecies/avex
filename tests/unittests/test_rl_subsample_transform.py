@@ -1,20 +1,20 @@
 """Unit tests for RLSubsampleTransform.
 
-Datasets are always loaded through an esp_data backend (pandas or polars), so
+Datasets are always loaded through an alp_data backend (pandas or polars), so
 these tests exercise the transform against real backend objects.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 import pandas as pd
 import pytest
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.data.transforms)
-pytest.importorskip("esp_data")
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.data.transforms)
+pytest.importorskip("alp_data")
 
-from esp_data.backends import PandasBackend, PolarsBackend  # noqa: E402
+from alp_data.backends import PandasBackend, PolarsBackend  # noqa: E402
 
 from avex.data.transforms import (  # noqa: E402
     RLSubsampleConfig,
@@ -46,7 +46,7 @@ def _polars_backend(n: int) -> PolarsBackend:
 
 
 class TestRLSubsampleTransform:
-    """Test cases for RLSubsampleTransform on esp_data backends."""
+    """Test cases for RLSubsampleTransform on alp_data backends."""
 
     @pytest.mark.parametrize("backend_cls", [PandasBackend, PolarsBackend])
     def test_ratio_subsample(self, backend_cls: type) -> None:

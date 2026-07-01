@@ -85,7 +85,8 @@ For supervised learning experiments, the framework provides dedicated scripts th
 > pip install -e ".[dev]" --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
 > ```
 >
-> The `[dev]` extra includes dependencies like `pytorch-lightning`, `mlflow`, `wandb`, `esp-data`, `esp-sweep`, and other training/evaluation tools.
+> The `[dev]` extra includes dependencies like `pytorch-lightning`, `mlflow`, `wandb`, `alp-data`, `esp-sweep`, and other training/evaluation tools.
+> `alp-data` is available for Python 3.11 and newer, so data-loading training/evaluation workflows require Python 3.11+.
 
 ### Training with `run_train.py`
 
@@ -95,7 +96,7 @@ The [`run_train.py`](../avex/run_train.py) script provides a complete training p
 - Experiment tracking (MLflow, WandB)
 - Checkpoint management
 - Configurable optimizers and schedulers
-- Data loading with `esp-data`
+- Data loading with `alp-data`
 
 **Prerequisites:**
 

@@ -2,13 +2,13 @@
 
 Examples
 --------
-Record a snapshot for the current interpreter (requires ``esp_data``)::
+Record a snapshot for the current interpreter (requires ``alp_data``)::
 
     uv run python scripts/record_evaluate_end_to_end_metrics.py record
 
 Compare two snapshots produced by ``record``::
 
-    uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_310.json snap_313.json
+    uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_311.json snap_313.json
 
 Merge ``record`` output into ``tests/fixtures/evaluate_end_to_end_metric_baselines.json``
 under ``profiles.<torch_2_5_0|torch_2_6_0|torch_2_11_0>`` to enable strict checks in

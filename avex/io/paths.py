@@ -1,6 +1,6 @@
 """Path utilities for cloud and local URIs.
 
-This module provides a minimal subset of the ``esp_data.io.paths`` interface that is
+This module provides a minimal subset of the ``alp_data.io.paths`` interface that is
 required by the public API. It defines lightweight "pure" path classes for cloud URIs
 and an ``anypath`` helper that converts strings to the appropriate path type.
 """
@@ -15,7 +15,7 @@ from typing import TypeAlias
 class PureCloudPath:
     """Base class for cloud path manipulation.
 
-    This is a simplified version of the ``esp_data`` implementation. It focuses on the
+    This is a simplified version of the ``alp_data`` implementation. It focuses on the
     behaviours required by the public API:
 
     - Representing URIs like ``gs://bucket/path/to/file`` or ``s3://bucket/key``
@@ -147,7 +147,7 @@ AnyPathT: TypeAlias = Path | PureGSPath | PureR2Path | PureS3Path | PureHFPath
 def anypath(path: str | AnyPathT) -> AnyPathT:
     """Create the appropriate path object based on the input.
 
-    This mirrors the subset of ``esp_data.io.anypath`` that is relied upon by the
+    This mirrors the subset of ``alp_data.io.anypath`` that is relied upon by the
     public API. It supports:
 
     - Local paths -> ``pathlib.Path``

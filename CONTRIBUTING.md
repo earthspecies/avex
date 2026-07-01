@@ -16,7 +16,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ### Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13 (supported range is `>=3.10,<3.14` in `pyproject.toml`)
+- Python 3.11, 3.12, or 3.13 (supported range is `>=3.11,<3.14` in `pyproject.toml`)
 - Git
 
 Continuous integration runs tests on **Python 3.13**. Slow official-model output regression tests use profiled expected fingerprints for **torch 2.5.x**, **2.6.x–2.9.x**, and **2.10.x+** (`tests/integration/test_official_models_output_regression.py`); regenerate with `scripts/regenerate_official_model_output_fingerprints.py` if you change the numerical stack.
@@ -60,11 +60,11 @@ pip install pytest ruff pre-commit
 
 **Note**: Editable install (`-e`) means changes in the repo are picked up immediately without reinstalling.
 
-Some tests that depend on internal packages (`esp-data`) will be automatically skipped.
+Some tests that depend on optional packages (`alp-data`) will be automatically skipped when those packages are not installed.
 
 ## Internal Development Setup (ESP Team)
 
-For ESP team members who need access to internal packages (`esp-data`, `esp-sweep`) and the full training/evaluation stack:
+For ESP team members who need access to private ESP tooling (`esp-sweep`) and the full training/evaluation stack:
 
 ### Prerequisites
 
@@ -81,13 +81,13 @@ For ESP team members who need access to internal packages (`esp-data`, `esp-swee
    uv tool install keyring --with keyrings.google-artifactregistry-auth
    ```
 
-2. Install with the internal dependency group:
+2. Install with the full development/runtime dependency group:
    ```bash
    uv sync --group project-dev
    ```
 
-This installs additional internal dependencies:
-- `esp-data` – dataset management
+This installs additional dependencies:
+- `alp-data` – dataset management
 - `esp-sweep` – hyperparameter sweeping
 - `pytorch-lightning`, `mlflow`, `wandb` – training infrastructure
 
@@ -117,13 +117,13 @@ uv run pytest tests/unittests
 # Integration tests (excluding slow tests)
 uv run pytest tests/integration -m "not slow"
 
-# Evaluate pipeline metrics vs recorded baselines (requires esp_data; slow).
+# Evaluate pipeline metrics vs recorded baselines (requires alp_data; slow).
 # Without baselines in tests/fixtures/evaluate_end_to_end_metric_baselines.json the test skips strict checks but still prints AVEX_EVAL_METRICS_SNAPSHOT.
 uv run pytest tests/integration/test_run_evaluate_cross_version_metrics.py -m slow -s
 
 # Record metrics on current Python for baseline JSON / cross-version diff:
 uv run python scripts/record_evaluate_end_to_end_metrics.py record
-uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_310.json snap_313.json
+uv run python scripts/record_evaluate_end_to_end_metrics.py diff snap_311.json snap_313.json
 
 # Consistency tests
 uv run pytest tests/consistency --base_folder avex

@@ -2,7 +2,7 @@
 
 This guide explains how to install the `avex` package.
 
-**Supported Python versions:** 3.10, 3.11, 3.12, and 3.13 (`requires-python` in `pyproject.toml`).
+**Supported Python versions:** 3.11, 3.12, and 3.13 (`requires-python` in `pyproject.toml`).
 
 The installation process depends on how you plan to use this package:
 
@@ -15,7 +15,7 @@ For users who want to install the package and use it as a library (for example t
 
 ### 1.1 Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 - ESP GCP authentication:
 
 ```bash
@@ -54,14 +54,13 @@ explicit = true
 [tool.uv.sources]
 avex = { index = "esp-pypi" }
 # Optional: only needed if you plan to install the dev extras (avex[dev])
-esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]
 keyring-provider = "subprocess"
 ```
 
-**Note:** If you plan to install `avex[dev]` (see section 1.4), you need to include `esp-data` and `esp-sweep` in `[tool.uv.sources]` as shown above, since they are dependencies of the `dev` extras and also come from the esp-pypi index.
+**Note:** If you plan to install `avex[dev]` (see section 1.4), you only need to include `esp-sweep` in `[tool.uv.sources]`, since `alp-data` is public on PyPI.
 
 4. Install the package (API dependencies only):
 
@@ -115,9 +114,11 @@ This pulls in additional dependencies, including for example:
 - `mlflow` – experiment tracking
 - `wandb` – Weights & Biases integration
 - `esp-sweep` – hyperparameter sweeping
-- `esp-data` – dataset management
+- `alp-data` – dataset management
 - `gradio` – interactive demos
 - `gradio-leaderboard` – leaderboard visualization
+
+`alp-data` is available for Python 3.11 and newer.
 
 ## 2. Development Usage
 
@@ -125,7 +126,7 @@ For contributors or power users who clone the repository and want the full devel
 
 ### 2.1 Prerequisites
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, or 3.13
 - Git
 - GCP authentication:
 
@@ -154,7 +155,7 @@ uv sync --group project-dev
 This will install:
 
 - Base API dependencies
-- Training/evaluation runtime dependencies (for example `pytorch-lightning`, `mlflow`, `wandb`, `esp-data`, etc.)
+- Training/evaluation runtime dependencies (for example `pytorch-lightning`, `mlflow`, `wandb`, `alp-data`, etc.)
 - Development tools (`pytest`, `ruff`, `pre-commit`, etc.)
 - Optional GPU-related packages (for example `bitsandbytes`, when supported)
 
@@ -205,18 +206,17 @@ list-models
 
 ## Troubleshooting
 
-### esp-data Not Found
+### alp-data Not Found
 
-If you get an error about `esp-data` not being found:
+If you get an error about `alp-data` not being found:
 
-1. Make sure you've configured the private index in your `pyproject.toml` (see section 1.2)
-2. Check that you have access to the Earth Species private PyPI repository
-3. Verify your authentication token is valid
-4. Make sure you've installed keyring (see section 1.2, step 1)
+1. Make sure your package installer is using the public PyPI index
+2. Make sure you've installed the dev extras or `project-dev` group if you need training/evaluation data loading
+3. Verify the package name is `alp-data`, not the old `esp-data` name
 
 ### Permission Errors
 
-If you get permission errors during installation, ensure you have the correct permissions to access the private repository.
+If you get permission errors during installation, ensure you have the correct permissions to access the private repository for `esp-sweep`.
 
 ### CUDA Issues
 
@@ -234,6 +234,7 @@ The package requires several dependencies including:
 - **Audio**: Librosa, SoundFile, Resampy
 - **Data**: Pandas, NumPy, H5Py
 - **Cloud**: Google Cloud Storage, CloudPathLib
-- **Private**: esp-data, esp-sweep (from Earth Species private PyPI)
+- **Public data tooling**: alp-data
+- **Private ESP tooling**: esp-sweep (from Earth Species private PyPI)
 
 See `pyproject.toml` for the complete list of dependencies.

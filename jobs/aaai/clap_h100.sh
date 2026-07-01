@@ -8,6 +8,8 @@
 #SBATCH --cpus-per-gpu=26
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 # uv tool install keyring --with keyrings.google-artifactregistry-auth
 uv sync
 

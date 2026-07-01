@@ -1,16 +1,16 @@
 """Unit tests for FillLabelsFromAnswer transform and _is_empty_labels helper.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 import numpy as np
 import pandas as pd
 import pytest
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.data.transforms)
-pytest.importorskip("esp_data")
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.data.transforms)
+pytest.importorskip("alp_data")
 
 from avex.data.transforms import (  # noqa: E402
     FillLabelsFromAnswer,

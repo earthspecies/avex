@@ -14,7 +14,7 @@ from typing import Any, Callable, Optional, Tuple
 import numpy as np
 import torch
 import torch.distributed as dist
-from esp_data import (
+from alp_data import (
     ConcatenatedDataset,
     Dataset,
     DatasetConfig,
@@ -24,7 +24,7 @@ from esp_data import (
 from avex.data import birdset_train_splits  # noqa: F401 - registers birdset_train
 
 # Temporary patch for AnimalSpeak for compatibility
-# with dataset concatenation while relevant issue is raised in esp-data.
+# with dataset concatenation while relevant issue is raised in alp-data.
 from avex.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
@@ -289,7 +289,7 @@ class Collater:
         audios, masks, labels, text_labels = [], [], [], []
 
         for item in batch:
-            # Use "audio" key which is the standard in esp_data,
+            # Use "audio" key which is the standard in alp_data,
             # fallback to "raw_wav" for compatibility
             audio_key = "audio" if "audio" in item else "raw_wav"
             wav = torch.as_tensor(item[audio_key])  # (T,) or (C, T)
