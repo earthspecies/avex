@@ -111,7 +111,7 @@ def _build_session(repo_id: str, model_filename: str) -> tuple[Any, str, str, st
         import onnx.shape_inference
         import onnxruntime as ort
     except ImportError as e:
-        raise ImportError("onnxruntime and onnx are required.\npip install onnxruntime onnx") from e
+        raise ImportError("onnxruntime and onnx are required.\nuv pip install onnxruntime onnx") from e
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 

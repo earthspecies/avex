@@ -5,8 +5,8 @@ from typing import Dict
 import pytest
 import torch
 
-pytest.importorskip("tensorflow", reason="TensorFlow not installed — pip install 'avex[tensorflow]'")
-pytest.importorskip("tensorflow_hub", reason="TensorFlow Hub not installed — pip install 'avex[tensorflow]'")
+pytest.importorskip("tensorflow", reason="TensorFlow not installed — uv pip install 'avex[tensorflow]'")
+pytest.importorskip("tensorflow_hub", reason="TensorFlow Hub not installed — uv pip install 'avex[tensorflow]'")
 
 from avex.models.perch import PerchModel
 

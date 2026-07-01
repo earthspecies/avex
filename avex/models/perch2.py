@@ -33,8 +33,8 @@ def _load_ort_session(repo_id: str = _HF_REPO_ID, filename: str = _HF_FILENAME) 
         except ModuleNotFoundError as e:
             raise ImportError(
                 "onnxruntime is required for the Perch2 model.\n"
-                "pip install onnxruntime   # CPU\n"
-                "pip install onnxruntime-gpu  # CUDA"
+                "uv pip install onnxruntime   # CPU\n"
+                "uv pip install onnxruntime-gpu  # CUDA"
             ) from e
 
         logger.info("Downloading Perch2 ONNX model from %s …", repo_id)

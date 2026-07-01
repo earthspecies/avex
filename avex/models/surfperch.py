@@ -40,7 +40,7 @@ def _load_tf_model() -> Any:  # noqa: ANN401
         except ModuleNotFoundError as e:  # pragma: no cover
             raise ImportError(
                 "TensorFlow is required for SurfPerch but is not installed.\n"
-                "Install the optional extra:  pip install 'avex[tensorflow]'"
+                "Install the optional extra:  uv pip install 'avex[tensorflow]'"
             ) from e
 
         logger.info("Downloading Perch model from TF-Hub …")
@@ -95,7 +95,7 @@ class PerchModel(ModelBase):
         warnings.warn(
             "PerchModel (SurfPerch) requires TensorFlow and is deprecated. "
             "No ONNX export for SurfPerch is publicly available yet. "
-            "Install the optional extra to continue using it: pip install 'avex[tensorflow]'. "
+            "Install the optional extra to continue using it: uv pip install 'avex[tensorflow]'. "
             "TensorFlow support will be removed in a future release.",
             DeprecationWarning,
             stacklevel=2,

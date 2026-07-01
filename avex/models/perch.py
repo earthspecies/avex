@@ -40,7 +40,7 @@ def _load_tf_model() -> Any:  # noqa: ANN401
         except ModuleNotFoundError as e:  # pragma: no cover
             raise ImportError(
                 "TensorFlow is required for Perch v1 but is not installed.\n"
-                "Install the optional extra:  pip install 'avex[tensorflow]'\n"
+                "Install the optional extra:  uv pip install 'avex[tensorflow]'\n"
                 "Or migrate to Perch v2 (ONNX, no TensorFlow):  use model name 'perch2'."
             ) from e
 
@@ -97,7 +97,7 @@ class PerchModel(ModelBase):
             "PerchModel (Perch v1) requires TensorFlow and is deprecated. "
             "Migrate to Perch2Model (Perch v2) which runs via ONNX with no TensorFlow dependency: "
             "use model name 'perch2' or import avex.models.perch2. "
-            "If you still need Perch v1, install the optional extra: pip install 'avex[tensorflow]'. "
+            "If you still need Perch v1, install the optional extra: uv pip install 'avex[tensorflow]'. "
             "TensorFlow support will be removed in a future release.",
             DeprecationWarning,
             stacklevel=2,
