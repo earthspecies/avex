@@ -28,12 +28,6 @@ async-timeout==5.0.1 ; python_full_version < '3.11'
     # via aiohttp
 attrs==26.1.0
     # via aiohttp
-audioop-lts==0.2.2 ; python_full_version >= '3.13'
-    # via
-    #   standard-aifc
-    #   standard-sunau
-audioread==3.1.0
-    # via librosa
 birdnetlib==0.18.0
     # via avex
 bitsandbytes==0.49.2 ; sys_platform != 'darwin'
@@ -64,9 +58,7 @@ cuda-toolkit==13.0.2 ; sys_platform == 'linux'
 cycler==0.12.1
     # via matplotlib
 decorator==5.2.1
-    # via
-    #   gcsfs
-    #   librosa
+    # via gcsfs
 einops==0.8.2
     # via avex
 filelock==3.25.2
@@ -163,23 +155,15 @@ jmespath==1.1.0
     #   aiobotocore
     #   botocore
 joblib==1.5.3
-    # via
-    #   librosa
-    #   scikit-learn
+    # via scikit-learn
 keras==3.12.1 ; python_full_version < '3.11'
     # via tensorflow
 keras==3.14.0 ; python_full_version >= '3.11'
     # via tensorflow
 kiwisolver==1.5.0
     # via matplotlib
-lazy-loader==0.5
-    # via librosa
 libclang==18.1.1
     # via tensorflow
-librosa==0.11.0
-    # via avex
-llvmlite==0.47.0
-    # via numba
 markdown-it-py==4.0.0
     # via rich
 markupsafe==3.0.3
@@ -194,8 +178,6 @@ ml-dtypes==0.5.4
     #   tensorflow
 mpmath==1.3.0
     # via sympy
-msgpack==1.1.2
-    # via librosa
 multidict==6.7.1
     # via
     #   aiobotocore
@@ -207,8 +189,6 @@ networkx==3.4.2 ; python_full_version < '3.11'
     # via torch
 networkx==3.6.1 ; python_full_version >= '3.11'
     # via torch
-numba==0.65.0
-    # via librosa
 numpy==2.2.6 ; python_full_version < '3.11'
     # via
     #   avex
@@ -216,15 +196,12 @@ numpy==2.2.6 ; python_full_version < '3.11'
     #   contourpy
     #   h5py
     #   keras
-    #   librosa
     #   matplotlib
     #   ml-dtypes
-    #   numba
     #   pandas
     #   scikit-learn
     #   scipy
     #   soundfile
-    #   soxr
     #   tensorflow
     #   tensorflow-hub
     #   torchvision
@@ -236,15 +213,12 @@ numpy==2.4.4 ; python_full_version >= '3.11'
     #   contourpy
     #   h5py
     #   keras
-    #   librosa
     #   matplotlib
     #   ml-dtypes
-    #   numba
     #   pandas
     #   scikit-learn
     #   scipy
     #   soundfile
-    #   soxr
     #   tensorflow
     #   tensorflow-hub
     #   torchvision
@@ -301,9 +275,7 @@ packaging==26.0
     #   bitsandbytes
     #   huggingface-hub
     #   keras
-    #   lazy-loader
     #   matplotlib
-    #   pooch
     #   tensorflow
     #   transformers
     #   wheel
@@ -313,10 +285,6 @@ pillow==11.3.0
     # via
     #   matplotlib
     #   torchvision
-platformdirs==4.9.6
-    # via pooch
-pooch==1.9.0
-    # via librosa
 propcache==0.4.1
     # via
     #   aiohttp
@@ -381,7 +349,6 @@ requests==2.33.1
     #   google-api-core
     #   google-cloud-storage
     #   huggingface-hub
-    #   pooch
     #   requests-oauthlib
     #   tensorflow
     #   transformers
@@ -396,17 +363,13 @@ safetensors==0.7.0
     #   timm
     #   transformers
 scikit-learn==1.7.2 ; python_full_version < '3.11'
-    # via librosa
+    # via avex
 scikit-learn==1.8.0 ; python_full_version >= '3.11'
-    # via librosa
+    # via avex
 scipy==1.15.3 ; python_full_version < '3.11'
-    # via
-    #   librosa
-    #   scikit-learn
+    # via scikit-learn
 scipy==1.17.1 ; python_full_version >= '3.11'
-    # via
-    #   librosa
-    #   scikit-learn
+    # via scikit-learn
 setuptools==81.0.0
     # via
     #   tensorflow
@@ -418,21 +381,7 @@ six==1.17.0
     #   python-dateutil
     #   tensorflow
 soundfile==0.13.1
-    # via
-    #   avex
-    #   librosa
-soxr==1.0.0
-    # via librosa
-standard-aifc==3.13.0 ; python_full_version >= '3.13'
-    # via
-    #   audioread
-    #   librosa
-standard-chunk==3.13.0 ; python_full_version >= '3.13'
-    # via standard-aifc
-standard-sunau==3.13.0 ; python_full_version >= '3.13'
-    # via
-    #   audioread
-    #   librosa
+    # via avex
 sympy==1.14.0
     # via torch
 tensorflow==2.21.0
@@ -479,7 +428,6 @@ typing-extensions==4.15.0
     #   cryptography
     #   grpcio
     #   huggingface-hub
-    #   librosa
     #   multidict
     #   optree
     #   pydantic
