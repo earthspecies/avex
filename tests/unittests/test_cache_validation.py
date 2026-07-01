@@ -155,9 +155,11 @@ def test_universal_torch_load_accepts_safetensors_device(tmp_path: Path) -> None
     save_file(weights, artifact_path)
     expected = [1.0, 2.0, 3.0]
 
-    for device in (torch.device("cpu"), "cpu"):
-        result = universal_torch_load(artifact_path, device=device)
+    load_kwargs = (
+        {"device": torch.device("cpu")},
+        {"device": "cpu"},
+        {"map_location": torch.device("cpu")},
+    )
+    for kwargs in load_kwargs:
+        result = universal_torch_load(artifact_path, **kwargs)
         assert result["model_state_dict"]["weight"].tolist() == expected
-
-    result = universal_torch_load(artifact_path, map_location=torch.device("cpu"))
-    assert result["model_state_dict"]["weight"].tolist() == expected
