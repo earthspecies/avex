@@ -12,7 +12,6 @@ from typing import Any, Dict, Optional
 import numpy as np
 import torch
 import torch.nn as nn
-import torchaudio
 
 from avex.models.base_model import ModelBase
 
@@ -177,8 +176,8 @@ def _load_session(
 class Model(ModelBase):
     """BirdNet v2.4 bird-sound classifier via ONNX Runtime.
 
-    Input: raw waveform at any sample rate.  Audio is resampled to 48 kHz and
-    split into 3-second (144 000-sample) chunks before inference.
+    Input: raw waveform at 48 kHz.  Split into 3-second (144 000-sample)
+    chunks before inference.
 
     Outputs:
       • forward()           → [B, num_species] logits (or [B, num_classes] with head)
@@ -241,12 +240,6 @@ class Model(ModelBase):
     #  ModelBase overrides
     # ------------------------------------------------------------------ #
 
-    @property
-    def input_sr(self) -> int:
-        if self.audio_processor is not None:
-            return self.audio_processor.sr
-        return self.SAMPLE_RATE
-
     def _discover_embedding_layers(self) -> None:
         if not self._layer_names:
             self._layer_names = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
@@ -273,8 +266,8 @@ class Model(ModelBase):
     #  Audio helpers
     # ------------------------------------------------------------------ #
 
-    def _to_chunks(self, wav: torch.Tensor, src_sr: int) -> torch.Tensor:
-        """Resample to 48 kHz and split into fixed-length chunks.
+    def _to_chunks(self, wav: torch.Tensor) -> torch.Tensor:
+        """Split a 48 kHz waveform into fixed-length chunks.
 
         Returns
         -------
@@ -284,9 +277,6 @@ class Model(ModelBase):
         if wav.dim() > 1:
             # Downmix any channel dims to mono: (..., C, N) → (N,)
             wav = wav.mean(dim=tuple(range(wav.dim() - 1)))
-
-        if src_sr != self.SAMPLE_RATE:
-            wav = torchaudio.functional.resample(wav, src_sr, self.SAMPLE_RATE)
 
         wav = wav.float()
 
@@ -345,10 +335,9 @@ class Model(ModelBase):
         torch.Tensor
             Logits with shape [B, num_species] or [B, num_classes].
         """
-        src_sr = self.input_sr
         clip_logits = []
         for clip in wav:
-            chunks = self._to_chunks(clip, src_sr)
+            chunks = self._to_chunks(clip)
             logits, _ = self._run_onnx(chunks)
             clip_logits.append(logits.mean(0))  # [num_species]
 
@@ -365,11 +354,10 @@ class Model(ModelBase):
         aggregation: str = "mean",
     ) -> torch.Tensor | list[torch.Tensor]:
         wav = x["raw_wav"] if isinstance(x, dict) else x
-        src_sr = self.input_sr
 
         batch: list[torch.Tensor] = []
         for clip in wav:
-            chunks = self._to_chunks(clip, src_sr)
+            chunks = self._to_chunks(clip)
             _, embs = self._run_onnx(chunks)
             if embs is None:
                 raise RuntimeError(
