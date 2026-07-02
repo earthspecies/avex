@@ -1,71 +1,191 @@
-"""BirdNet model implementation for bioacoustic classification.
+"""BirdNet v2.4 model via ONNX runtime.
 
-This module provides a BirdNet model wrapper for bioacoustic classification
-tasks, including species identification and audio analysis.
+Source model: BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite
+ONNX export: https://huggingface.co/justinchuby/BirdNET-onnx
 """
 
-# avex/models/birdnet.py
-import contextlib
+from __future__ import annotations
+
 import logging
-import os
-import sys
-import tempfile
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
-import soundfile as sf  # lightweight; writes the tmp .wav we feed in
 import torch
 import torch.nn as nn
 
-# NOTE: birdnetlib imports are LAZY to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
-# which would break PyTorch CUDA availability. Imports happen in __init__ and forward methods.
-from avex.models.base_model import (
-    ModelBase,
-)  # Add missing import
+from avex.models.base_model import ModelBase
 
 logger = logging.getLogger(__name__)
 
-# Suppress verbose logging from birdnetlib
-logging.getLogger("birdnetlib").setLevel(logging.WARNING)
-# Also suppress any TensorFlow logging if present
-logging.getLogger("tensorflow").setLevel(logging.WARNING)
-# Suppress any other potential verbose loggers
-for logger_name in ["absl", "h5py", "soundfile"]:
-    logging.getLogger(logger_name).setLevel(logging.WARNING)
+_HF_REPO_ID = "justinchuby/BirdNET-onnx"
+_MODEL_FILENAME = "birdnet.onnx"
+_LABELS_FILENAME = "BirdNET_GLOBAL_6K_V2.4_Labels.txt"
+_SAMPLE_RATE = 48_000
+_CHUNK_SAMPLES = 144_000  # 3 s @ 48 kHz
+_EMBEDDING_DIM = 1024
+
+# Module-level session cache
+_session: Any = None
+_session_key: tuple[str, str] | None = None
+_input_name: str | None = None
+_output_name: str | None = None
+_embedding_output_name: str | None = None  # None if not found in graph
 
 
-@contextlib.contextmanager
-def suppress_stdout_stderr() -> Generator[None, None, None]:
-    """Context manager to suppress stdout and stderr."""
-    with open(os.devnull, "w") as devnull:
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
+# --------------------------------------------------------------------------- #
+#  ONNX graph helpers
+# --------------------------------------------------------------------------- #
+
+
+def _find_embedding_tensor_name(model_proto: object) -> str | None:
+    """Traverse ONNX graph backwards from output to find the 1024-d embedding.
+
+    Returns
+    -------
+    str | None
+        Tensor name of the nearest ancestor with shape [*, 1024], or None.
+    """
+    # Build producer map: tensor_name → node
+    output_to_node: dict[str, Any] = {}
+    for node in model_proto.graph.node:
+        for out in node.output:
+            if out:
+                output_to_node[out] = node
+
+    # Build shape lookup from value_info (populated after shape inference)
+    name_to_shape: dict[str, list[int]] = {}
+    for vi in model_proto.graph.value_info:
         try:
-            sys.stdout = devnull
-            sys.stderr = devnull
-            yield
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
+            if vi.type.HasField("tensor_type") and vi.type.tensor_type.HasField("shape"):
+                shape = [d.dim_value for d in vi.type.tensor_type.shape.dim]
+                name_to_shape[vi.name] = shape
+        except Exception:
+            pass
+
+    # BFS backwards from classification output
+    visited: set[str] = set()
+    queue: list[str] = [model_proto.graph.output[0].name]
+
+    while queue:
+        name = queue.pop(0)
+        if name in visited:
+            continue
+        visited.add(name)
+
+        shape = name_to_shape.get(name, [])
+        # Match [batch, 1024] or [1024] — 2-D or 1-D with correct last dim
+        if _EMBEDDING_DIM in shape and len(shape) <= 2:
+            return name
+
+        node = output_to_node.get(name)
+        if node:
+            for inp in node.input:
+                if inp and inp not in visited:
+                    queue.append(inp)
+
+    return None
+
+
+def _build_session(repo_id: str, model_filename: str) -> tuple[Any, str, str, str | None]:
+    """Download + load ONNX model, returning (session, input_name, output_name, embedding_name).
+
+    Modifies the graph in-memory to expose the 1024-d embedding tensor as an
+    extra output.  Falls back to model.onnx if not found in birdnet.onnx.
+
+    Returns
+    -------
+    tuple[Any, str, str, str | None]
+        ONNX Runtime session, input name, classifier output name, and optional
+        embedding output name.
+
+    Raises
+    ------
+    ImportError
+        If onnxruntime or onnx is not installed.
+    """
+    from huggingface_hub import hf_hub_download
+
+    try:
+        import onnx as onnx_lib
+        import onnx.shape_inference
+        import onnxruntime as ort
+    except ImportError as e:
+        raise ImportError("onnxruntime and onnx are required.\nuv pip install onnxruntime onnx") from e
+
+    providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+    def _try_load(filename: str) -> tuple[Any, str, str, str | None]:
+        model_path = hf_hub_download(repo_id=repo_id, filename=filename)
+        logger.info("Loading BirdNet ONNX: %s", model_path)
+
+        model_proto = onnx_lib.load(model_path)
+        model_proto = onnx.shape_inference.infer_shapes(model_proto)
+
+        inp_name = model_proto.graph.input[0].name
+        clf_out_name = model_proto.graph.output[0].name
+        emb_name = _find_embedding_tensor_name(model_proto)
+
+        if emb_name:
+            logger.info("BirdNet embedding tensor found: %s", emb_name)
+            model_proto.graph.output.append(
+                onnx_lib.helper.make_tensor_value_info(emb_name, onnx_lib.TensorProto.FLOAT, None)
+            )
+            session = ort.InferenceSession(model_proto.SerializeToString(), providers=providers)
+        else:
+            logger.warning("No 1024-d tensor found in %s", filename)
+            session = ort.InferenceSession(model_path, providers=providers)
+
+        return session, inp_name, clf_out_name, emb_name
+
+    session, inp_name, clf_out_name, emb_name = _try_load(model_filename)
+
+    # If the optimised model lacks shape info, fall back to the raw tf2onnx export
+    if emb_name is None and model_filename == _MODEL_FILENAME:
+        logger.info("Falling back to model.onnx for embedding extraction")
+        session, inp_name, clf_out_name, emb_name = _try_load("model.onnx")
+
+    return session, inp_name, clf_out_name, emb_name
+
+
+def _load_session(
+    repo_id: str = _HF_REPO_ID,
+    model_filename: str = _MODEL_FILENAME,
+) -> tuple[Any, str, str, str | None]:
+    global _session, _session_key, _input_name, _output_name, _embedding_output_name
+
+    key = (repo_id, model_filename)
+    if _session is not None and _session_key == key:
+        return _session, _input_name, _output_name, _embedding_output_name
+
+    _session, _input_name, _output_name, _embedding_output_name = _build_session(repo_id, model_filename)
+    _session_key = key
+    logger.info(
+        "BirdNet ONNX ready — providers: %s — input: %s — embedding: %s",
+        _session.get_providers(),
+        _input_name,
+        _embedding_output_name,
+    )
+    return _session, _input_name, _output_name, _embedding_output_name
+
+
+# --------------------------------------------------------------------------- #
+#  Model class
+# --------------------------------------------------------------------------- #
 
 
 class Model(ModelBase):
-    """
-    Thin wrapper around *birdnetlib* that exposes:
-        • forward()  – returns clip-level class probabilities (rarely needed)
-        • extract_embeddings() – 1024-d BirdNET feature vectors
-    Everything else (batching, device placement, …) comes from ModelBase.
+    """BirdNet v2.4 bird-sound classifier via ONNX Runtime.
+
+    Input: raw waveform at 48 kHz.  Split into 3-second (144 000-sample)
+    chunks before inference.
+
+    Outputs:
+      • forward()           → [B, num_species] logits (or [B, num_classes] with head)
+      • extract_embeddings()→ [B, 1024] embeddings (penultimate layer)
     """
 
-    SAMPLE_RATE = 48_000
-    CHUNK_SEC = 3.0  # fixed window length inside the model
-
-    @property
-    def input_sr(self) -> int:
-        """Actual sample rate of audio arriving at this model."""
-        if self.audio_processor is not None:
-            return self.audio_processor.sr
-        return self.SAMPLE_RATE
+    SAMPLE_RATE = _SAMPLE_RATE
+    CHUNK_SAMPLES = _CHUNK_SAMPLES
 
     def __init__(
         self,
@@ -73,502 +193,204 @@ class Model(ModelBase):
         device: str = "cpu",
         audio_config: Optional[Dict[str, Any]] = None,
         *,
-        language: str = "en_us",
-        apply_sigmoid: bool = True,
         freeze_backbone: bool = True,
         return_features_only: bool = False,
-        **kwargs,  # Accept additional config parameters  # noqa: ANN003
+        hf_repo_id: str = _HF_REPO_ID,
+        hf_model_filename: str = _MODEL_FILENAME,
+        hf_labels_filename: str = _LABELS_FILENAME,
+        **kwargs: object,
     ) -> None:
         super().__init__(device=device, audio_config=audio_config)
 
-        # Preserve CUDA_VISIBLE_DEVICES before importing TensorFlow
-        # TensorFlow sets it to "" which breaks PyTorch CUDA
-        cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        self._hf_repo_id = hf_repo_id
+        self._hf_model_filename = hf_model_filename
+        self._hf_labels_filename = hf_labels_filename
+        self.freeze_backbone = freeze_backbone
+        self.return_features_only = return_features_only
 
-        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
-        from birdnetlib.analyzer import Analyzer
+        # Warm up session (downloads model on first use)
+        _load_session(hf_repo_id, hf_model_filename)  # noqa: F841
 
-        self._analyzer = Analyzer()  # classification helper
+        # Load species labels from HF repo
+        from huggingface_hub import hf_hub_download
 
-        # Restore CUDA_VISIBLE_DEVICES after TensorFlow import
-        if cuda_visible_devices is None:
-            # Remove the empty string that TensorFlow set
-            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
-        else:
-            # Restore the original value
-            os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
-
-        self._interpreter = self._get_interpreter(self._analyzer)
-        self.species = self._analyzer.labels  # 6 522 labels
+        labels_path = hf_hub_download(repo_id=hf_repo_id, filename=hf_labels_filename)
+        with open(labels_path) as f:
+            self.species: list[str] = [line.strip() for line in f if line.strip()]
         self.num_species = len(self.species)
 
-        self.return_features_only = return_features_only
-        self.language = language
-        self.apply_sigmoid = apply_sigmoid
-        self.freeze_backbone = freeze_backbone
-
-        # Handle return_features_only: if True, force num_classes to None
         if return_features_only:
             self.num_classes = None
+            self.classifier = None
+        elif num_classes is not None and num_classes > 0 and num_classes != self.num_species:
+            self.num_classes = num_classes
+            self.classifier = nn.Linear(self.num_species, num_classes).to(device)
         else:
             self.num_classes = num_classes
-
-        if (
-            not return_features_only
-            and self.num_classes is not None
-            and self.num_classes > 0
-            and self.num_classes != self.num_species
-        ):
-            self.classifier = nn.Linear(self.num_species, self.num_classes)
-            # Move classifier to the specified device
-            if device != "cpu" and torch.cuda.is_available():
-                self.classifier = self.classifier.to(device)
-        else:
             self.classifier = None
 
         logger.info(
-            "BirdNetTFLite ready – v2.4 • %d species • embeddings dim = 1024 • num_classes = %s • device = %s",
+            "BirdNet ONNX ready — %d species — embedding_dim=%d — device=%s",
             self.num_species,
-            self.num_classes if self.num_classes is not None else "None",
+            _EMBEDDING_DIM,
             device,
         )
 
+    # ------------------------------------------------------------------ #
+    #  ModelBase overrides
+    # ------------------------------------------------------------------ #
+
     def _discover_embedding_layers(self) -> None:
-        """Discover and cache layers for BirdNET model.
+        if not self._layer_names:
+            self._layer_names = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
 
-        Note: BirdNET is a TensorFlow Lite model with no accessible intermediate layers.
-        The TensorFlow Lite model only exposes the final output (species predictions).
-        This method is implemented for API consistency but will only find the optional
-        PyTorch classifier layer.
+    def enable_gradient_checkpointing(self) -> None:
+        logger.warning("Gradient checkpointing not supported for BirdNet ONNX.")
+
+    def to(self, device: torch.device | str) -> "Model":
+        self.device = device if isinstance(device, torch.device) else torch.device(device)
+        if self.classifier is not None:
+            if str(device).startswith("cuda") and torch.cuda.is_available():
+                self.classifier = self.classifier.to(device)
+            else:
+                self.classifier = self.classifier.cpu()
+        return self
+
+    def cpu(self) -> "Model":
+        return self.to("cpu")
+
+    def cuda(self, device: int | None = None) -> "Model":
+        return self.to(f"cuda:{device}" if device is not None else "cuda")
+
+    # ------------------------------------------------------------------ #
+    #  Audio helpers
+    # ------------------------------------------------------------------ #
+
+    def _to_chunks(self, wav: torch.Tensor) -> torch.Tensor:
+        """Split a 48 kHz waveform into fixed-length chunks.
+
+        Returns
+        -------
+        torch.Tensor
+            Float32 tensor with shape [N, CHUNK_SAMPLES].
         """
-        if len(self._layer_names) == 0:  # Only discover once
-            self._layer_names = []
+        if wav.dim() > 1:
+            # Downmix any channel dims to mono: (..., C, N) → (N,)
+            wav = wav.mean(dim=tuple(range(wav.dim() - 1)))
 
-            # BirdNET is a TensorFlow Lite model with no accessible intermediate layers
-            # Only the optional PyTorch classifier layer can be discovered
-            for name, module in self.named_modules():
-                if isinstance(module, torch.nn.Linear):
-                    self._layer_names.append(name)
+        wav = wav.float()
 
-            logger.info(f"Discovered {len(self._layer_names)} layers in BirdNET model: {self._layer_names}")
-            if len(self._layer_names) == 0:
-                logger.info(
-                    "BirdNET is a TensorFlow Lite model with no accessible "
-                    "intermediate layers. "
-                    "Only the optional PyTorch classifier layer can be discovered."
-                )
+        # Ensure at least one full chunk
+        if wav.shape[-1] < self.CHUNK_SAMPLES:
+            wav = torch.nn.functional.pad(wav, (0, self.CHUNK_SAMPLES - wav.shape[-1]))
 
-    def register_hooks_for_layers(self, target_layers: list[str | int]) -> list[str]:
-        """BirdNET does not support PyTorch forward hooks for TFLite internals."""
-        raise NotImplementedError(
-            "BirdNET does not support intermediate layer hooks. "
-            "This backbone is TensorFlow Lite based; use extract_embeddings() "
-            "without hook registration."
-        )
+        n_full = wav.shape[-1] // self.CHUNK_SAMPLES
+        remainder = wav.shape[-1] % self.CHUNK_SAMPLES
 
-    # --------------------------------------------------------------------- #
-    #                       NN.Module / ModelBase hooks                     #
-    # --------------------------------------------------------------------- #
+        chunks = [wav[i * self.CHUNK_SAMPLES : (i + 1) * self.CHUNK_SAMPLES] for i in range(n_full)]
+
+        # Keep partial tail if it contains > half a chunk of signal
+        if remainder > self.CHUNK_SAMPLES // 2:
+            tail = wav[n_full * self.CHUNK_SAMPLES :]
+            tail = torch.nn.functional.pad(tail, (0, self.CHUNK_SAMPLES - tail.shape[-1]))
+            chunks.append(tail)
+
+        return torch.stack(chunks)  # [N, CHUNK_SAMPLES]
+
+    # ------------------------------------------------------------------ #
+    #  ONNX inference
+    # ------------------------------------------------------------------ #
+
+    def _run_onnx(self, chunks: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """Run ONNX inference on fixed-length chunks.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor | None]
+            Logits with shape [N, S] and optional embeddings with shape [N, 1024].
+        """
+        session, inp_name, clf_out, emb_out = _load_session(self._hf_repo_id, self._hf_model_filename)
+        chunks_np = chunks.detach().cpu().numpy().astype(np.float32)
+
+        if emb_out:
+            logits_np, emb_np = session.run([clf_out, emb_out], {inp_name: chunks_np})
+            return torch.from_numpy(logits_np), torch.from_numpy(emb_np)
+        else:
+            (logits_np,) = session.run([clf_out], {inp_name: chunks_np})
+            return torch.from_numpy(logits_np), None
+
+    # ------------------------------------------------------------------ #
+    #  Public API
+    # ------------------------------------------------------------------ #
+
     def forward(
         self,
-        wav: torch.Tensor,  # (B, T) mono @48 kHz
+        wav: torch.Tensor,
         padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """
-        Convenience wrapper that averages per-chunk logits into one clip score.
-        (Mostly here so batch_inference() keeps working.)
+        """Return mean-pooled logits.
 
-        Returns:
-            torch.Tensor: Averaged logits for the audio clip.
+        Returns
+        -------
+        torch.Tensor
+            Logits with shape [B, num_species] or [B, num_classes].
         """
-        wav = wav.detach().cpu()
-        probs = []
+        clip_logits = []
         for clip in wav:
-            probs.append(self._infer_clip(clip.numpy()))
+            chunks = self._to_chunks(clip)
+            logits, _ = self._run_onnx(chunks)
+            clip_logits.append(logits.mean(0))  # [num_species]
 
-        result = torch.stack(probs)  # (B, Nclasses)
-
-        # Move to appropriate device - BirdNet core runs on CPU,
-        # but classifier might be on GPU
+        result = torch.stack(clip_logits).to(self.device)
         if self.classifier is not None:
-            # Move to classifier's device for processing
-            result = result.to(next(self.classifier.parameters()).device)
             result = self.classifier(result)
-        else:
-            # No classifier, move to model's device
-            result = result.to(self.device)
-
         return result
 
-    # ------------------------------------------------------------------ #
-    #                  ***  Embedding extraction API  ***                #
-    # ------------------------------------------------------------------ #
-    def extract_embeddings(  # ← the piece you asked for
+    def extract_embeddings(
         self,
         x: torch.Tensor | Dict[str, torch.Tensor],
         *,
         padding_mask: Optional[torch.Tensor] = None,
         aggregation: str = "mean",
     ) -> torch.Tensor | list[torch.Tensor]:
-        """
-        Returns embeddings based on aggregation method:
-            • (B, 1024) if aggregation="mean" or "max" – one vector / clip
-            • list[Tensor] with shape (n_chunks,1024) per clip if aggregation="none"
+        wav = x["raw_wav"] if isinstance(x, dict) else x
 
-        Returns:
-            torch.Tensor | list[torch.Tensor]: Aggregated embeddings based on method.
-
-        Raises:
-            ValueError: If unsupported aggregation method is provided.
-        """
-        if isinstance(x, dict):  # allow {'raw_wav': …}
-            wav = x["raw_wav"]
-        else:
-            wav = x
-        wav = wav.detach().cpu()
-
-        batch_out = []
+        batch: list[torch.Tensor] = []
         for clip in wav:
-            emb_np = self._embedding_for_clip(clip.numpy())  # (N,1024) or (1024,)
-            emb = torch.from_numpy(emb_np).float()
-            # Ensure embeddings are at least 2D: (N, 1024) or (1, 1024)
-            if emb.ndim == 1:
-                emb = emb.unsqueeze(0)  # (1024,) -> (1, 1024)
-            batch_out.append(emb)
+            chunks = self._to_chunks(clip)
+            _, embs = self._run_onnx(chunks)
+            if embs is None:
+                raise RuntimeError(
+                    "BirdNet ONNX model does not expose a 1024-d embedding output. "
+                    "Could not find the embedding tensor in the ONNX graph."
+                )
+            if embs.ndim == 1:
+                embs = embs.unsqueeze(0)
+            batch.append(embs)  # [N_chunks, 1024]
 
-        # Handle different aggregation methods
         if aggregation == "none":
-            # For sequence probes, return list of embeddings per batch item
-            # Each batch item gets a list of chunk embeddings
-            result = []
-            for clip_embeddings in batch_out:
-                # Reshape from (N, 1024) to (1, N, 1024) to make it 3D for
-                # sequence probes
-                # N is the number of chunks, 1024 is the embedding dimension
-                reshaped = clip_embeddings.unsqueeze(0)  # (1, N, 1024)
-                result.append(reshaped)
-            return result
+            # Return list of [1, N_chunks, 1024] per clip
+            return [emb.unsqueeze(0) for emb in batch]
         elif aggregation == "mean":
-            # Average over time dimension for each clip
-            result = torch.stack([emb.mean(0) for emb in batch_out])  # (B, 1024)
+            result = torch.stack([emb.mean(0) for emb in batch])
         elif aggregation == "max":
-            # Max pooling over time dimension for each clip
-            result = torch.stack([emb.max(0)[0] for emb in batch_out])  # (B, 1024)
+            result = torch.stack([emb.max(0).values for emb in batch])
         elif aggregation == "cls_token":
-            # For BirdNET, treat as mean since no CLS token
-            result = torch.stack([emb.mean(0) for emb in batch_out])  # (B, 1024)
+            result = torch.stack([emb.mean(0) for emb in batch])
         else:
             raise ValueError(f"Unsupported aggregation method: {aggregation}")
 
-        # Move to appropriate device (BirdNet embeddings are computed on CPU)
-        if self.classifier is not None and hasattr(self.classifier, "weight"):
-            # If we have a classifier, move to its device
-            result = result.to(next(self.classifier.parameters()).device)
-        else:
-            # Otherwise move to model device
-            result = result.to(self.device)
-
-        return result
-
-    def _get_interpreter(self, analyzer: Any) -> Any:  # noqa: ANN401
-        """Create a TFLite interpreter with experimental_preserve_all_tensors=True.
-
-        This is required for TensorFlow >= 2.17.0 to access intermediate tensors
-        for embedding extraction. See birdnetlib bug report:
-        https://github.com/joeweiss/birdnetlib/issues/125
-
-        Parameters
-        ----------
-        analyzer : birdnetlib.analyzer.Analyzer
-            The birdnetlib Analyzer instance.
-
-        Returns
-        -------
-        tf.lite.Interpreter
-            A TFLite interpreter configured with experimental_preserve_all_tensors=True,
-            or the original analyzer interpreter as fallback.
-        """
-        try:
-            import tensorflow as tf
-
-            # Try multiple attributes to find the model path (birdnetlib internals vary)
-            model_path: Optional[str] = None
-            if hasattr(analyzer, "model_path"):
-                model_path = analyzer.model_path
-            elif hasattr(analyzer, "_model_path"):
-                model_path = analyzer._model_path  # type: ignore[assignment]
-            elif hasattr(analyzer, "interpreter") and hasattr(
-                analyzer.interpreter,
-                "_model_path",
-            ):
-                model_path = analyzer.interpreter._model_path  # type: ignore[attr-defined]
-
-            if model_path:
-                logger.info(
-                    "Recreating BirdNet interpreter with experimental_preserve_all_tensors=True (TF >= 2.17 fix).",
-                )
-                return tf.lite.Interpreter(
-                    model_path=model_path,
-                    experimental_preserve_all_tensors=True,
-                )
-
-            logger.warning(
-                "Could not access model path to recreate BirdNet interpreter. Using birdnetlib's interpreter directly.",
-            )
-            return analyzer.interpreter
-
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Failed to recreate BirdNet interpreter with "
-                "experimental_preserve_all_tensors=True: %s. "
-                "Using original interpreter.",
-                exc,
-            )
-            return analyzer.interpreter
-
-    def _infer_clip(self, mono_wave: np.ndarray) -> torch.Tensor:
-        """
-        Uses birdnetlib's Analyzer to get a per-clip probability vector.
-        (Not required for embeddings, but handy for quick tests.)
-
-        Returns:
-            torch.Tensor: Probability vector for the audio clip.
-        """
-        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
-        from birdnetlib import Recording
-
-        sr = self.input_sr
-
-        # Pad short clips to at least CHUNK_SEC so birdnetlib produces chunks
-        min_samples = int(self.CHUNK_SEC * sr)
-        if len(mono_wave) < min_samples:
-            mono_wave = np.pad(mono_wave, (0, min_samples - len(mono_wave)))
-
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            sf.write(tmp.name, mono_wave, sr)
-            with suppress_stdout_stderr():
-                rec = Recording(self._analyzer, tmp.name, min_conf=0.0)
-                rec.analyze()
-            # build a species-probability vector from detections
-            scores = np.zeros(self.num_species, dtype=np.float32)
-            for det in rec.detections:
-                idx = self.species.index(det["label"])
-                scores[idx] = max(scores[idx], det["confidence"])
-            return torch.from_numpy(scores)
-
-    def _embedding_for_clip(self, mono_wave: np.ndarray) -> np.ndarray:
-        """
-        Directly grabs the **embedding output tensor** from BirdNET's
-        underlying TFLite *Interpreter* – the tensor right before logits.
-
-        Parameters
-        ----------
-        mono_wave : np.ndarray
-            Audio waveform data.
-
-        Returns
-        -------
-        np.ndarray
-            Embedding vector for the audio clip.
-
-        Raises
-        ------
-        ValueError
-            If embedding output tensor cannot be found in model.
-        """
-        sr = self.input_sr
-
-        # Bug 3 fix: pad short clips to at least CHUNK_SEC so birdnetlib
-        # produces at least one chunk (it requires >= 1.5 s of audio).
-        min_samples = int(self.CHUNK_SEC * sr)
-        if len(mono_wave) < min_samples:
-            mono_wave = np.pad(mono_wave, (0, min_samples - len(mono_wave)))
-
-        # Use the analyzer's built-in embedding extraction method if available
-        if hasattr(self._analyzer, "extract_embeddings_for_recording"):
-            # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
-            from birdnetlib import Recording
-
-            with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-                # Bug 1 fix: write with actual input sample rate, not hardcoded 48 kHz
-                sf.write(tmp.name, mono_wave, sr)
-                try:
-                    # Bug 2 fix: temporarily swap the analyzer's interpreter with
-                    # our fixed one (experimental_preserve_all_tensors=True) so
-                    # that extract_embeddings() reads valid tensor data.
-                    original_interpreter = self._analyzer.interpreter
-                    self._analyzer.interpreter = self._interpreter
-                    try:
-                        # Create Recording object, analyze, and extract embeddings
-                        with suppress_stdout_stderr():
-                            recording = Recording(self._analyzer, tmp.name)
-                            recording.analyze()
-                            recording.extract_embeddings()
-                    finally:
-                        self._analyzer.interpreter = original_interpreter
-
-                    # Get embeddings from the recording
-                    embeddings_data = recording.embeddings
-
-                    if embeddings_data and len(embeddings_data) > 0:
-                        # Extract embeddings from the first (and typically only) segment
-                        first_segment = embeddings_data[0]
-                        if isinstance(first_segment, dict) and "embeddings" in first_segment:
-                            embeddings_list = first_segment["embeddings"]
-                            if isinstance(embeddings_list, list) and len(embeddings_list) > 0:
-                                # Convert to numpy array and ensure 2D shape (1, 1024)
-                                embeddings = np.array(embeddings_list, dtype=np.float32)
-                                if embeddings.ndim == 1:
-                                    embeddings = embeddings.reshape(1, -1)  # (1024,) -> (1, 1024)
-                                return embeddings
-
-                    # If we get here, the built-in method didn't work as expected
-                    logger.debug("Built-in embedding extraction returned unexpected format")
-                except Exception as e:
-                    logger.debug(f"Built-in embedding extraction failed: {e}")
-                    # Fall back to manual extraction
-                    pass
-
-        # Manual extraction as fallback
-        interp = self._interpreter
-
-        # Lazy import to avoid TensorFlow setting CUDA_VISIBLE_DEVICES=""
-        from birdnetlib import RecordingBuffer
-
-        # Feed through RecordingBuffer which handles resampling + spectrograms
-        with suppress_stdout_stderr():
-            buf = RecordingBuffer(self._analyzer, mono_wave, sr)
-            buf.analyze()
-
-        # Ensure tensors are allocated
-        try:
-            interp.allocate_tensors()
-        except Exception as e:
-            logger.error(f"Failed to allocate tensors: {e}")
-            raise
-
-        # Try different approaches to find embeddings
-        embeddings = None
-
-        # First try: check if there are multiple outputs (old BirdNet format)
-        out_info = interp.get_output_details()
-        if len(out_info) > 1:
-            try:
-                emb_idx = out_info[1]["index"]
-                embeddings = interp.get_tensor(emb_idx)
-            except Exception:
-                pass
-
-        # Second try: search tensor details for embedding layer
-        if embeddings is None:
-            tensor_details = interp.get_tensor_details()
-
-            # Look for the global average pooling layer first (most reliable)
-            for detail in tensor_details:
-                name = detail.get("name", "")
-                shape = detail.get("shape", [])
-                if "GLOBAL_AVG_POOL" in name and len(shape) == 2 and 1024 in shape:
-                    try:
-                        embeddings = interp.get_tensor(detail.get("index"))
-                        break
-                    except Exception:
-                        continue
-
-            # Fallback: look for any 1024-dimensional tensor
-            if embeddings is None:
-                for detail in tensor_details:
-                    shape = detail.get("shape", [])
-                    name = detail.get("name", "")
-                    # Normalize shape to tuple for comparison (handles both list, tuple, and numpy array)
-                    # Check if shape exists and has elements before converting
-                    if shape is not None and len(shape) > 0:
-                        shape_tuple = tuple(shape)
-                    else:
-                        shape_tuple = ()
-                    if (
-                        len(shape) >= 1
-                        and 1024 in shape
-                        and (
-                            "embedding" in name.lower()
-                            or "feature" in name.lower()
-                            or shape_tuple == (1024,)
-                            or shape_tuple == (1, 1024)
-                        )
-                    ):
-                        try:
-                            embeddings = interp.get_tensor(detail.get("index"))
-                            break
-                        except Exception:
-                            continue
-
-        if embeddings is None:
-            raise ValueError(
-                f"Could not find embedding tensor in BirdNet model. "
-                f"Available outputs: {len(out_info)} with shapes: "
-                f"{[detail.get('shape') for detail in out_info]}. "
-                f"This may be a newer BirdNet model format that doesn't "
-                f"expose embeddings."
-            )
-
-        embeddings = embeddings.astype(np.float32)
-        # Ensure embeddings are at least 2D: (N, 1024) or (1, 1024)
-        if embeddings.ndim == 1:
-            embeddings = embeddings.reshape(1, -1)  # (1024,) -> (1, 1024)
-        return embeddings
+        return result.to(self.device)
 
     # ------------------------------------------------------------------ #
-    #                 OPTIONALS EXPECTED BY ModelBase                    #
+    #  Species mapping
     # ------------------------------------------------------------------ #
-    def enable_gradient_checkpointing(self) -> None:
-        logger.warning("Gradient checkpointing is not supported for BirdNET.")
 
-    def to(self, device: torch.device | str) -> "Model":
-        """Override to handle device movement properly for BirdNet.
-
-        Returns
-        -------
-        Model
-            Self for method chaining.
-        """
-        # Update internal device tracking
-        self.device = device if isinstance(device, torch.device) else torch.device(device)
-
-        # Move PyTorch components (classifier) to the device
-        if self.classifier is not None:
-            if str(device).startswith("cuda") and torch.cuda.is_available():
-                self.classifier = self.classifier.to(device)
-            else:
-                self.classifier = self.classifier.cpu()
-
-        # TensorFlow Lite interpreter stays on CPU - no need to move
-        return self
-
-    def cpu(self) -> "Model":
-        """Move to CPU.
-
-        Returns
-        -------
-        Model
-            Self for method chaining.
-        """
-        return self.to("cpu")
-
-    def cuda(self, device: int | None = None) -> "Model":
-        """Move to CUDA device.
-
-        Returns
-        -------
-        Model
-            Self for method chaining.
-        """
-        device_str = f"cuda:{device}" if device is not None else "cuda"
-        return self.to(device_str)
-
-    # ------------------------------------------------------------------ #
-    # Convenience to expose BirdNET's species mapping
-    # ------------------------------------------------------------------ #
     def idx_to_species(self, idx: int) -> str:
         return self.species[idx]
 
     def species_to_idx(self, name: str) -> int:
-        return self.species.index(name)
+        try:
+            return self.species.index(name)
+        except ValueError as err:
+            raise ValueError(f"Species '{name}' not found in BirdNet label list") from err
