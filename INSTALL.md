@@ -218,6 +218,18 @@ If you get an error about `esp-data` not being found:
 
 If you get permission errors during installation, ensure you have the correct permissions to access the private repository.
 
+### TensorFlow Models (Perch v1, SurfPerch)
+
+Perch v1 and SurfPerch require TensorFlow, which is an optional dependency not installed by default. To use them:
+
+```bash
+pip install 'avex[tensorflow]'
+# or with uv:
+uv add 'avex[tensorflow]'
+```
+
+> **Note:** Perch v1 and SurfPerch are deprecated. Perch v2 (`perch2`) runs via ONNX and requires no extra dependencies. BirdNet also runs via ONNX. Prefer those where possible.
+
 ### CUDA Issues
 
 If you encounter CUDA-related issues, you can install CPU-only PyTorch:

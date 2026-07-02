@@ -90,6 +90,16 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             device=model_config.device,
             audio_config=model_config.audio_config,
         )
+    elif model_name == "perch2":
+        from avex.models.perch2 import (
+            Model as Perch2Model,
+        )
+
+        return Perch2Model(
+            num_classes=num_classes,
+            device=model_config.device,
+            audio_config=model_config.audio_config,
+        )
     elif model_name == "atst":
         from avex.models.atst_frame.atst_encoder import (
             Model as ATSTModel,
