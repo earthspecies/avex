@@ -393,4 +393,4 @@ class Model(ModelBase):
         try:
             return self.species.index(name)
         except ValueError as err:
-            raise ValueError(f"Species '{name}' not found in BirdNet label list") from err
+            raise LookupError(f"Species '{name}' not found in BirdNet label list") from err

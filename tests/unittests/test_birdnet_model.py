@@ -147,7 +147,7 @@ def test_species_mapping(birdnet_model: BirdNetModel) -> None:
     idx = birdnet_model.species_to_idx(species_name)
     assert idx == 0
 
-    with pytest.raises(ValueError):
+    with pytest.raises(LookupError):
         birdnet_model.species_to_idx("invalid_species_that_does_not_exist_12345")
 
 
