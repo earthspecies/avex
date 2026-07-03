@@ -28,41 +28,14 @@ gcloud auth application-default login
 
 This assumes you are using `uv` to manage your project or environment.
 
-1. Install keyring with the Google Artifact Registry plugin (once per machine):
-
-```bash
-uv tool install keyring --with keyrings.google-artifactregistry-auth
-```
-
-**Note for Slurm users**: This step is NOT required for Slurm jobs. All nodes on the cluster already have this package installed.
-
-2. Create and activate a uv-managed virtual environment (if you do not already have one):
+1. Create and activate a uv-managed virtual environment (if you do not already have one):
 
 ```bash
 uv venv
 source .venv/bin/activate
 ```
 
-3. Configure `uv` to use the internal ESP PyPI index. Add the following to your `pyproject.toml` (either create one or edit the existing one):
-
-```toml
-[[tool.uv.index]]
-name = "esp-pypi"
-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-explicit = true
-
-[tool.uv.sources]
-avex = { index = "esp-pypi" }
-# Optional: only needed if you plan to install the dev extras (avex[dev])
-esp-sweep = { index = "esp-pypi" }
-
-[tool.uv]
-keyring-provider = "subprocess"
-```
-
-**Note:** If you plan to install `avex[dev]` (see section 1.4), you only need to include `esp-sweep` in `[tool.uv.sources]`, since `alp-data` is public on PyPI.
-
-4. Install the package (API dependencies only):
+2. Install the package (API dependencies only):
 
 ```bash
 # Option A: Add and install in one step
@@ -83,16 +56,42 @@ python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-2. Install the package from the ESP index:
+2. Install the package:
 
 ```bash
-pip install avex \
-  --extra-index-url https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/
+pip install avex
 ```
 
 ### 1.4 API + full dependencies (training / evaluation)
 
-If you want to use additional functionality such as `run_train.py`, `run_evaluate.py`, or other advanced workflows, install the `dev` extras:
+If you want to use additional functionality such as `run_train.py`, `run_evaluate.py`, or other advanced workflows, install the `dev` extras. This pulls in `esp-sweep`, which is hosted on Earth Species' private PyPI, so it needs a bit of extra setup on top of the plain API install above.
+
+1. Install keyring with the Google Artifact Registry plugin (once per machine):
+
+```bash
+uv tool install keyring --with keyrings.google-artifactregistry-auth
+```
+
+**Note for Slurm users**: This step is NOT required for Slurm jobs. All nodes on the cluster already have this package installed.
+
+2. Configure `uv` to use the internal ESP PyPI index for `esp-sweep`. Add the following to your `pyproject.toml` (either create one or edit the existing one):
+
+```toml
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+esp-sweep = { index = "esp-pypi" }
+
+[tool.uv]
+keyring-provider = "subprocess"
+```
+
+**Note:** `alp-data` is public on PyPI, so it does not need an entry in `[tool.uv.sources]`.
+
+3. Install:
 
 ```bash
 # With uv (in a project configured for esp-pypi as above)
@@ -233,7 +232,7 @@ The package requires several dependencies including:
 - **Core ML**: PyTorch, Transformers, Timm
 - **Audio**: Librosa, SoundFile, Resampy
 - **Data**: Pandas, NumPy, H5Py
-- **Cloud**: Google Cloud Storage, CloudPathLib
+- **Cloud**: Google Cloud Storage (gcsfs), S3 (s3fs)
 - **Public data tooling**: alp-data
 - **Private ESP tooling**: esp-sweep (from Earth Species private PyPI)
 

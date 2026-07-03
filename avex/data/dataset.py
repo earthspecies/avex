@@ -29,7 +29,6 @@ from avex.data.animalspeak_column_patch import (
     apply_animalspeak_column_patch,
 )
 
-# apply_cloudpathlib_patch()
 apply_animalspeak_column_patch()
 
 
