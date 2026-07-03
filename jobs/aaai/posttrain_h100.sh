@@ -15,6 +15,8 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export CUDA_LAUNCH_BLOCKING=1
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 
 export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 export WANDB_DIR=/scratch-representation-learning/wandb_tmp

@@ -11,6 +11,8 @@ export CLOUDPATHLIB_FORCE_OVERWRITE_FROM_CLOUD=1
 export BEANS_DEBUG=0
 
 cd ~/rep5
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 
 uv tool install keyring --with keyrings.google-artifactregistry-auth
 uv sync

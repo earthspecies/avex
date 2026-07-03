@@ -1,18 +1,18 @@
 """Unit tests for TrainValSplitTransform.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 import pytest
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.data.transforms)
-pytest.importorskip("esp_data")
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.data.transforms)
+pytest.importorskip("alp_data")
 
 import pandas as pd  # noqa: E402
 import polars as pl  # noqa: E402
-from esp_data.backends import DataBackend, PandasBackend, PolarsBackend  # noqa: E402
+from alp_data.backends import DataBackend, PandasBackend, PolarsBackend  # noqa: E402
 
 from avex.data.transforms import (  # noqa: E402
     TrainValSplitConfig,
@@ -22,9 +22,9 @@ from avex.data.transforms import (  # noqa: E402
 
 @pytest.fixture(params=[PandasBackend, PolarsBackend], ids=["pandas", "polars"])
 def backend_cls(request: pytest.FixtureRequest) -> type[DataBackend]:
-    """Run each test against both esp_data backends.
+    """Run each test against both alp_data backends.
 
-    Datasets are always loaded through an esp_data backend (pandas or polars)
+    Datasets are always loaded through an alp_data backend (pandas or polars)
     before transforms run, so the transform operates on a ``DataBackend`` rather
     than a raw DataFrame. Parametrizing here exercises both backend paths through
     the same protocol the transform relies on.

@@ -9,5 +9,7 @@
 
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 uv sync
 srun uv run avex evaluate --config configs/evaluation_configs/test_sft.yml

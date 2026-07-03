@@ -1,8 +1,8 @@
 """
 Unit tests for data loading and processing.
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 from pathlib import Path
@@ -10,12 +10,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# Must be before imports that trigger esp_data loading (e.g., avex.data.*)
-esp_data = pytest.importorskip("esp_data")
-Dataset = esp_data.Dataset
-DatasetConfig = esp_data.DatasetConfig
-dataset_from_config = esp_data.dataset_from_config
+# Skip entire module if alp_data is not installed (optional dependency)
+# Must be before imports that trigger alp_data loading (e.g., avex.data.*)
+alp_data = pytest.importorskip("alp_data")
+Dataset = alp_data.Dataset
+DatasetConfig = alp_data.DatasetConfig
+dataset_from_config = alp_data.dataset_from_config
 
 from avex.configs import (  # noqa: E402
     AudioConfig,
@@ -88,7 +88,7 @@ def create_test_config(tmp_path: Path, csv_path: Path) -> RunConfig:
         "label_column": "canonical_name",
         "label_type": "supervised",
         "audio_max_length_seconds": 10,
-        # Avoid esp_data transformation schema coupling in unit test
+        # Avoid alp_data transformation schema coupling in unit test
     }
 
     # Build DatasetCollectionConfig directly
@@ -137,7 +137,7 @@ def create_test_config(tmp_path: Path, csv_path: Path) -> RunConfig:
 
 
 def test_load_dataset_from_yaml(tmp_path: Path) -> None:
-    """Test loading a dataset directly from YAML using esp_data API.
+    """Test loading a dataset directly from YAML using alp_data API.
 
     Parameters
     ----------
@@ -150,7 +150,7 @@ def test_load_dataset_from_yaml(tmp_path: Path) -> None:
     # Create test config
     _run_config = create_test_config(tmp_path, csv_path)
 
-    # Load dataset using esp_data; skip if dataset not registered
+    # Load dataset using alp_data; skip if dataset not registered
     test_cfg = {
         "dataset_name": "test",
         "source_dataset_name": "test",
@@ -168,7 +168,7 @@ def test_load_dataset_from_yaml(tmp_path: Path) -> None:
     try:
         dataset, metadata = dataset_from_config(ds_cfg)
     except KeyError:
-        pytest.skip("esp_data registry has no 'test' dataset; skipping")
+        pytest.skip("alp_data registry has no 'test' dataset; skipping")
 
     # Check dataset properties
     assert isinstance(dataset, Dataset)
@@ -190,7 +190,7 @@ def test_build_dataloaders(tmp_path: Path) -> None:
     Raises
     ------
     ValueError
-        If the underlying dataset is not registered in esp_data.
+        If the underlying dataset is not registered in alp_data.
     """
     # Create test data
     csv_path = create_test_csv(tmp_path)
@@ -203,7 +203,7 @@ def test_build_dataloaders(tmp_path: Path) -> None:
         train_dl, val_dl = build_dataloaders(run_config, device="cpu")
     except ValueError as e:
         if "is not registered" in str(e):
-            pytest.skip("esp_data registry missing test dataset; skipping")
+            pytest.skip("alp_data registry missing test dataset; skipping")
         raise
 
     # Check dataloader properties
@@ -246,7 +246,7 @@ def test_dataset_basic_load(tmp_path: Path) -> None:
     try:
         dataset, metadata = dataset_from_config(ds_cfg)
     except KeyError:
-        pytest.skip("esp_data registry has no 'test' dataset; skipping")
+        pytest.skip("alp_data registry has no 'test' dataset; skipping")
     meta = getattr(dataset, "metadata", None) or metadata
     assert len(dataset) == 10
     assert set(meta["canonical_name"]) == {"bird", "mammal"}

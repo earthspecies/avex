@@ -8,8 +8,8 @@ This test verifies that:
 4. Batch creation works without overflow errors
 5. Labels are in the correct format (integers for single-label, lists for multi-label)
 
-These tests require esp_data which is an internal dependency.
-They are skipped when esp_data is not installed.
+These tests require alp_data which is an optional dependency.
+They are skipped when alp_data is not installed.
 """
 
 import math
@@ -19,9 +19,9 @@ from typing import Callable, Optional
 import pytest
 import torch
 
-# Skip entire module if esp_data is not installed (internal dependency)
-# These tests use build_dataloaders which loads real datasets via esp_data
-pytest.importorskip("esp_data")
+# Skip entire module if alp_data is not installed (optional dependency)
+# These tests use build_dataloaders which loads real datasets via alp_data
+pytest.importorskip("alp_data")
 
 from avex.configs import (  # noqa: E402
     AudioConfig,

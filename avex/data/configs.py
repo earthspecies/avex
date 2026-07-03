@@ -1,11 +1,11 @@
 """Temporary dataset configuration classes for training and evaluation.
 
-This module contains configuration classes that depend on esp_data.DatasetConfig.
+This module contains configuration classes that depend on alp_data.DatasetConfig.
 These are used for training and evaluation workflows, not for the public API.
 
 This is a temporary module that isolates the dataset configuration classes that
-require esp_data as a dependency. This allows the main configs.py to be used
-by the public API without requiring esp-data to be installed.
+require alp_data as a dependency. This allows the main configs.py to be used
+by the public API without requiring alp-data to be installed.
 
 Development workflows that rely on run_train.py or run_evaluate.py can
 continue to use these configs once the optional dev dependencies are installed.
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional, Tuple
 
-from esp_data import DatasetConfig
+from alp_data import DatasetConfig
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -128,7 +128,7 @@ class EvaluationSet(BaseModel):
         Returns
         -------
         DatasetCollectionConfig
-            A config that can be used with esp-data's dataset loading functionality
+            A config that can be used with alp-data's dataset loading functionality
         """
         return DatasetCollectionConfig(
             train_datasets=[self.train],
@@ -143,7 +143,7 @@ class EvaluationSet(BaseModel):
 
 class BenchmarkEvaluationConfig(BaseModel):
     """Configuration for benchmark evaluation wrapping
-    esp-data's DatasetCollectionConfig for actual data loading.
+    alp-data's DatasetCollectionConfig for actual data loading.
 
     Example
     -------
@@ -207,7 +207,7 @@ class BenchmarkEvaluationConfig(BaseModel):
         """Get all evaluation sets as (name, DatasetCollectionConfig) pairs.
 
         This is the main interface for evaluation loops - it provides each evaluation
-        set converted to the format needed by esp-data for actual data loading.
+        set converted to the format needed by alp-data for actual data loading.
 
         Returns
         -------

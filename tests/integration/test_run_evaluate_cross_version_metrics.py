@@ -1,4 +1,4 @@
-"""Cross-Python tracking for `run_evaluate` probe metrics (internal esp_data).
+"""Cross-Python tracking for `run_evaluate` probe metrics (optional alp_data).
 
 The minimal end-to-end job in `eval_end_to_end_harness` can yield slightly
 different ``test_accuracy`` / ``test_balanced_accuracy`` when PyTorch, NumPy,
@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 
-pytest.importorskip("esp_data")
+pytest.importorskip("alp_data")
 
 from tests.integration.eval_end_to_end_harness import (
     EVAL_SUMMARY_METRIC_KEYS,

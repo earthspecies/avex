@@ -1,6 +1,6 @@
 """Filesystem utilities for local and cloud paths.
 
-This module provides the subset of the ``esp_data.io.filesystem`` interface that is
+This module provides the subset of the ``alp_data.io.filesystem`` interface that is
 required by the public API:
 
 - ``filesystem_from_path``: map a path to an fsspec filesystem

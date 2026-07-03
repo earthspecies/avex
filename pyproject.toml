@@ -60,7 +60,7 @@ dev = [
   "mlflow>=2.22.0",
   "wandb>=0.21.0",
   "esp-sweep>=0.1.0",
-  "esp-data>=1.8.0",
+  "alp-data>=1.10.0",
   "gradio>=4.0.0",
   "gradio-leaderboard>=0.0.13",
 ]
@@ -81,7 +81,7 @@ project-dev = [
   "mlflow>=2.22.0",
   "wandb>=0.21.0",
   "esp-sweep>=0.1.0",
-  "esp-data>=1.8.0",
+  "alp-data>=1.10.0",
   "gradio>=4.0.0",
   "gradio-leaderboard>=0.0.13",
 ]
@@ -97,7 +97,6 @@ publish-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503
 explicit = true
 
 [tool.uv.sources]
-esp-data = { index = "esp-pypi" }
 esp-sweep = { index = "esp-pypi" }
 
 [tool.uv]

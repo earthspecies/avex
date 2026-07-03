@@ -200,9 +200,9 @@ oauthlib==3.3.1
     # via requests-oauthlib
 omegaconf==2.3.0
     # via avex
-onnx==1.21.0
+onnx==1.22.0
     # via avex
-onnxruntime==1.26.0
+onnxruntime==1.27.0
     # via avex
 packaging==26.0
     # via

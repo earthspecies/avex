@@ -28,6 +28,8 @@ fi
 echo "Running EfficientNet training for config: $config_file (Task ID: $SLURM_ARRAY_TASK_ID)"
 
 cd ~/avex
+# ESP-only: uncomment for faster dataset access when you have bucket permissions.
+# export ALP_DATA_HOME="gs://esp-ml-datasets/"
 
 # Environment setup
 export GOOGLE_APPLICATION_CREDENTIALS=/home/david_earthspecies_org/.config/gcloud/application_default_credentials.json

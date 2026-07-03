@@ -1,7 +1,7 @@
 """
 Transform to generate textual captions (text_label) from one or more feature columns.
 
-This mirrors esp-data's LabelFromFeature / MultiLabelFromFeatures but instead of
+This mirrors alp-data's LabelFromFeature / MultiLabelFromFeatures but instead of
 producing numeric class indices it keeps the raw text so that CLIP / CLAP style
 models can use them directly.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import List, Literal
 
 import pandas as pd
-from esp_data.transforms import register_transform
+from alp_data.transforms import register_transform
 from pydantic import BaseModel
 
 
@@ -78,10 +78,10 @@ class TextLabelFromFeatures:
 
         missing_cols = [c for c in self.features if c not in df.columns]
         if missing_cols:
-            # Not fatal: just log – esp_data codebase uses a logger named "esp_data".
+            # Not fatal: just log – alp_data codebase uses a logger named "alp_data".
             import logging
 
-            logger = logging.getLogger("esp_data")
+            logger = logging.getLogger("alp_data")
             logger.warning(
                 "TextLabelFromFeatures: columns %s not present in DataFrame – they will be ignored.",
                 missing_cols,
@@ -137,5 +137,5 @@ class TextLabelFromFeatures:
         return df_clean, metadata
 
 
-# Register the transform with esp-data so that it can be instantiated from YAML
+# Register the transform with alp-data so that it can be instantiated from YAML
 register_transform(TextLabelFromFeaturesConfig, TextLabelFromFeatures)

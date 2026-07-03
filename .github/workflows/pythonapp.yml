@@ -60,7 +60,7 @@ jobs:
             - name: Unittests with pytest
               run: |
                   uv run pytest tests/unittests
-            # TODO: Remove --ignore flags once esp_data is public
+            # TODO: Remove --ignore flags once alp_data-backed doctests are enabled
             - name: Doctests with pytest
               run: |
                   uv run pytest --doctest-modules avex \
@@ -96,7 +96,7 @@ jobs:
                       python-version: "3.11"
                     - numpy-version: "2.3.5"
                       python-version: "3.11"
-                    - numpy-version: "2.4.0"
+                    - numpy-version: "2.4.4"
                       python-version: "3.11"
 
         steps:
