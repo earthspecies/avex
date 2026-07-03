@@ -15,6 +15,8 @@ wandb/
 .vscode/
 *.code-workspace
 .cursorrules
+.codex/
+.torch-fingerprint-probes/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

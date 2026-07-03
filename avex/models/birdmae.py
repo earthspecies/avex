@@ -57,9 +57,7 @@ class Model(ModelBase):
         try:
             from transformers import AutoFeatureExtractor, AutoModel
         except ImportError as e:
-            raise ImportError(
-                "transformers library is required for BirdMAE. Install with: pip install transformers"
-            ) from e
+            raise ImportError("transformers library is required for BirdMAE.") from e
 
         # Load the model and feature extractor
         if pretrained:
