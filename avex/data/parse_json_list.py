@@ -43,6 +43,8 @@ def _pandas_backend_cls() -> type:
 
 
 class ParseJsonListConfig(BaseModel):
+    """Config for the ``parse_json_list`` transform (decode a JSON-string list column)."""
+
     type: Literal["parse_json_list"]
     feature: str
 
