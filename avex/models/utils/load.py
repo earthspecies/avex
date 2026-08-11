@@ -559,7 +559,7 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
     def _overlap(sd: dict) -> int:
         return len(set(sd) & _tk)
 
-    if state_dict and _overlap(state_dict) == 0:
+    if state_dict and _tk and _overlap(state_dict) == 0:
         ck0 = min(state_dict, key=len)  # shortest checkpoint key
         mk0 = min(_tk, key=len)  # shortest model key
         # (a) model has an extra leading prefix the checkpoint lacks -> prepend it
