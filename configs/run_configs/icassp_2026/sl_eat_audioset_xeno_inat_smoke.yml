@@ -46,4 +46,17 @@ scheduler:
   warmup_steps: 10
   min_lr: 1e-6
 
-augmentations: []
+# Noise + signal-masking + mixup enabled so the smoke run exercises them.
+# High probs + small noise dirs so they reliably fire and start fast.
+augmentations:
+  - noise:
+      noise_dirs:
+        - gs://foundation-model-data/audio_16k/noise_clean/demand_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/tut2016_10s
+      snr_db_range: [-5, 20]
+      augmentation_prob: 1.0
+      mask_signal_prob: 0.3
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 1.0
