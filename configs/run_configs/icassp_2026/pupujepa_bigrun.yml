@@ -1,0 +1,47 @@
+---
+# PupuJEPA-Base, pretrained from scratch (self-supervised only, no post-training)
+# on pooled Xeno-canto + iNaturalist + AudioSet for 200k steps.
+#
+# Unlike eat_ssl_all.yml this sets pretrained: true and passes the checkpoint via
+# extra_config rather than the experiment-level checkpoint_path. Deliberate: the
+# wrapper loads the weights itself and HARD-FAILS if any deployed-path tensor
+# (teacher.* / patch_embed.* / rope_encoder.*) is unmatched. Routing through
+# _load_checkpoint's prefix reconciliation risks the silent partial-load failure
+# mode PR #202 addresses -- for EAT that path still leaves 6 of 150 tensors
+# unmatched (patch embed, CLS token, pre-norm), which loads without error.
+model_spec:
+  name: pupujepa
+  pretrained: true
+  device: cuda
+  extra_config:
+    checkpoint_path: /home/eklavya_earthspecies_org/bio-jepa/checkpoints/pupujepa_bigrun/step-0200000_loss-0.161731/model.safetensors
+    # args_path defaults to the vendored avex/models/pupujepa/pupujepa_args.json
+  audio_config:
+    # 32 kHz in (a pre-resampled alp-data path); the model resamples the 10.24 s
+    # crop to its native 24 kHz. Nyquist 16 kHz > fmax 12 kHz, so nothing is lost.
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_base.yml
+run_name: pupujepa_bigrun
+output_dir: "./runs/icassp2026/pupujepa_bigrun"
+loss_function: cross_entropy
+label_type: supervised
+preprocessing: null
+sr: 32000
+debug_mode: false
+logging: mlflow
+resume_from_checkpoint: null
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+seed: 42
+num_workers: 8
+augmentations: []

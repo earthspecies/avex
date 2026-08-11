@@ -43,6 +43,11 @@ def _add_model_spec_params(init_kwargs: dict, model_spec: ModelSpec) -> None:
         "init_config",
         "language",
         "model_id",
+        # ModelSpec documents extra_config as the generic extension point for
+        # model-specific parameters, but it was never forwarded to __init__.
+        # Safe to add: init_kwargs are filtered against each model class's
+        # signature below, so models that don't accept it are unaffected.
+        "extra_config",
     ]
 
     for param_name in param_names:

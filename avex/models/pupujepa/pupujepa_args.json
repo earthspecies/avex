@@ -1,0 +1,87 @@
+{
+  "exp_name": "pupujepa_bigrun_v1",
+  "inference": {
+    "batch_size": 1
+  },
+  "log_dir": "/home/eklavya_earthspecies_org/bio-jepa/logs/pupujepa",
+  "model": {
+    "decoder_depth": 8,
+    "decoder_embed_dim": 512,
+    "decoder_num_heads": 16,
+    "depth": 12,
+    "drop_path_rate": 0.0,
+    "drop_path_uniform": false,
+    "embed_dim": 768,
+    "frequency_first": false,
+    "image_size": [
+      1024,
+      128
+    ],
+    "in_chans": 1,
+    "layer_scale_init_value": null,
+    "mask_probs": [
+      0.4,
+      0.3,
+      0.3
+    ],
+    "mask_ratio": 0.8,
+    "mask_warmup_end": 40000,
+    "mask_warmup_start": 10000,
+    "mlp_ratio": 4.0,
+    "norm_layer": "layer",
+    "num_heads": 12,
+    "patch_size": [
+      4,
+      16
+    ],
+    "qk_norm": true,
+    "use_swiglu": true
+  },
+  "model_type": "rope",
+  "preprocess": {
+    "cut_mel_frame": 1024,
+    "flip_ft": true,
+    "fmax": 12000,
+    "fmin": 0,
+    "hop_size": 240,
+    "n_fft": 1024,
+    "n_mels": 128,
+    "normalize": true,
+    "sample_rate": 24000,
+    "win_size": 1024
+  },
+  "train": {
+    "batch_size": 32,
+    "clip_grad": 1.0,
+    "dataloader": {
+      "drop_last": true,
+      "num_workers": 6,
+      "pin_memory": true,
+      "prefetch_factor": 2,
+      "shuffle_large": 5000,
+      "shuffle_small": 1000
+    },
+    "do_profiling": false,
+    "grad_checkpointing_step": null,
+    "gradient_accumulation_step": 4,
+    "norm_pix_loss": true,
+    "optimizer": {
+      "adam_b1": 0.9,
+      "adam_b2": 0.95,
+      "final_ema": 0.99999,
+      "final_lr": 1e-06,
+      "final_wd": 0.05,
+      "peak_lr": 0.001,
+      "start_ema": 0.99995,
+      "start_lr": 1e-06,
+      "start_wd": 0.05
+    },
+    "random_seed": 114514,
+    "save_checkpoint_stride": 5000,
+    "total_steps": 200000,
+    "tracker": [
+      "wandb"
+    ],
+    "warmup_steps": 10000
+  }
+}
