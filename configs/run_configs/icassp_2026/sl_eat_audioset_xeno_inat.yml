@@ -1,0 +1,53 @@
+---
+# ICASSP 2026: supervised post-training of SSL EAT on AudioSet + Xeno-canto + iNaturalist
+# (separate alp-data datasets). Mirrors aaai_train/sl_eat_animalspeak_ssl_all_h100.yml but
+# points at the split-dataset corpus. Run with: avex train --config <this>.
+model_spec:
+  name: eat_hf
+  pretrained: false
+  device: cuda
+  # SSL init = the released HF EAT pretrain checkpoint
+  # (worstchan/EAT-base_epoch30_pretrain), loaded by eat_hf's AutoModel.from_pretrained.
+  # `fairseq_weights_path` is only needed to override that with a local fairseq
+  # SSL checkpoint; the old path no longer exists, so we init from the HF weights.
+  eat_norm_mean: -5.553
+  eat_norm_std: 4.606
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/icassp_2026/data_audioset_xeno_inat.yml
+output_dir: "./runs/icassp2026/sl_eat_audioset_xeno_inat"
+run_name: sl_eat_audioset_xeno_inat
+label_type: supervised
+loss_function: bce           # multi-label (AudioSet ontology + species)
+preprocessing: null
+sr: 16000
+debug_mode: false
+logging: wandb
+resume_from_checkpoint: null
+
+training_params:
+  train_epochs: 10
+  lr: 0.0001
+  batch_size: 128
+  optimizer: adamw8bit
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  freeze_backbone_epochs: 2
+  second_stage_lr: 0.00008
+  second_stage_warmup_steps: 6000
+
+scheduler:
+  name: cosine
+  warmup_steps: 2000
+  min_lr: 1e-6
+
+# Original recipe used background-noise augmentation, but those noise dirs
+# (/home/milad_.../audio_16k/noise/*) are missing here -> disabled to avoid a
+# "Noise directory not found" crash. Re-add if the noise corpus is available.
+augmentations: []

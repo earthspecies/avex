@@ -1,0 +1,31 @@
+# Retrieval + clustering for SSL EAT-all (esp_aves2_eat_all), to reproduce paper Table 6.
+dataset_config: configs/data_configs/benchmark_id_repertoire_48khz.yml
+training_params:
+  train_epochs: 1
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+experiments:
+  - run_name: eat_ssl_all
+    run_config: configs/run_configs/icassp_2026/eat_ssl_all.yml
+    pretrained: false
+    checkpoint_path: hf://EarthSpeciesProject/esp-aves2-eat-all/esp-aves2-eat-all.safetensors
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone.model.blocks.11.mlp.fc2"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+save_dir: evaluation_results/icassp2026_eat_ssl_all
+results_csv_path: evaluation_results/icassp2026_eat_ssl_all/results.csv
+device: cuda
+seed: 42
+num_workers: 8
+eval_modes:
+  - retrieval
+  - clustering
+offline_embeddings:
+  overwrite_embeddings: true

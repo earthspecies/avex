@@ -550,16 +550,34 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         drop_model_prefix=not target_has_model_prefix,
     )
 
-    # Adapt backbone. prefix when checkpoint and model disagree
-    target_has_backbone = any(k.startswith("backbone.") for k in target_keys)
-    ckpt_has_backbone = any(k.startswith("backbone.") for k in state_dict)
+    # Reconcile a leading-prefix mismatch between checkpoint and model keys.
+    # Handles a single `backbone.` level (BEATs) AND deeper wrappers, e.g. eat_hf
+    # nests EAT under `backbone.model.` while the published checkpoint ships bare
+    # `blocks.*` keys -> would otherwise be 0 matches.
+    _tk = set(target_keys)
 
-    if target_has_backbone and not ckpt_has_backbone:
-        state_dict = {f"backbone.{k}": v for k, v in state_dict.items()}
-        logger.info("Added 'backbone.' prefix to checkpoint keys to match model")
-    elif not target_has_backbone and ckpt_has_backbone:
-        state_dict = {k.removeprefix("backbone."): v for k, v in state_dict.items()}
-        logger.info("Removed 'backbone.' prefix from checkpoint keys to match model")
+    def _overlap(sd: dict) -> int:
+        return len(set(sd) & _tk)
+
+    if state_dict and _overlap(state_dict) == 0:
+        ck0 = min(state_dict, key=len)  # shortest checkpoint key
+        mk0 = min(_tk, key=len)  # shortest model key
+        # (a) model has an extra leading prefix the checkpoint lacks -> prepend it
+        add_cands = [k[: -len(ck0)] for k in _tk if k.endswith("." + ck0)]
+        # (b) checkpoint has an extra leading prefix the model lacks -> strip it
+        strip_cands = [k[: -len(mk0)] for k in state_dict if k.endswith("." + mk0)]
+        if add_cands:
+            pfx = add_cands[0]
+            cand = {f"{pfx}{k}": v for k, v in state_dict.items()}
+            if _overlap(cand) > 0:
+                state_dict = cand
+                logger.info("Added '%s' prefix to checkpoint keys to match model", pfx)
+        elif strip_cands:
+            pfx = strip_cands[0]
+            cand = {k[len(pfx) :]: v for k, v in state_dict.items() if k.startswith(pfx)}
+            if _overlap(cand) > 0:
+                state_dict = cand
+                logger.info("Removed '%s' prefix from checkpoint keys to match model", pfx)
 
     # Load weights
     result = model.load_state_dict(state_dict, strict=False)

@@ -1,0 +1,49 @@
+---
+# SMOKE test of the icassp_2026 EAT supervised post-training pipeline on a single H100:
+# tiny data subsets, no wandb, backbone unfrozen from step 0 so the full trainable path
+# (backbone + head, bf16 amp, adamw8bit, BCE multi-label) is exercised. Confirms the
+# training + data configs build and step end-to-end. NOT a real training run.
+model_spec:
+  name: eat_hf
+  pretrained: false
+  device: cuda
+  # SSL init = HF EAT pretrain (worstchan/EAT-base_epoch30_pretrain) via AutoModel.from_pretrained.
+  eat_norm_mean: -5.553
+  eat_norm_std: 4.606
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/icassp_2026/data_audioset_xeno_inat_smoke.yml
+output_dir: "./runs/icassp2026/smoke_sl_eat_audioset_xeno_inat"
+run_name: smoke_sl_eat_audioset_xeno_inat
+label_type: supervised
+loss_function: bce
+preprocessing: null
+sr: 16000
+debug_mode: false
+logging: none
+resume_from_checkpoint: null
+
+training_params:
+  train_epochs: 1
+  lr: 0.0001
+  batch_size: 8
+  optimizer: adamw8bit
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  freeze_backbone_epochs: 0
+  second_stage_lr: 0.00008
+  second_stage_warmup_steps: 100
+  log_steps: 1
+
+scheduler:
+  name: cosine
+  warmup_steps: 10
+  min_lr: 1e-6
+
+augmentations: []
