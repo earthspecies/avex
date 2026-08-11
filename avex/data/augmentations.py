@@ -178,7 +178,7 @@ class AugmentationProcessor:
     # ------------------------------------------------------------------
     # Item-level noise augmentation
     # ------------------------------------------------------------------
-    def _apply_noise(self, wav: torch.Tensor) -> torch.Tensor:
+    def _apply_noise(self, wav: torch.Tensor) -> tuple[torch.Tensor, bool]:
         """Apply noise augmentation to a single audio sample.
 
         Parameters
@@ -188,15 +188,18 @@ class AugmentationProcessor:
 
         Returns
         -------
-        torch.Tensor
-            Audio tensor with noise augmentation applied.
+        tuple[torch.Tensor, bool]
+            The augmented audio tensor, and whether the original signal was
+            masked out (replaced by pure noise) — in which case the caller must
+            also clear the label, since no target class is present anymore.
 
         """
         # Skip noise augmentation if audio has zero length
         if wav.numel() == 0 or wav.shape[-1] == 0:
             logger.warning(f"Skipping noise augmentation for audio with zero length: shape={wav.shape}")
-            return wav
+            return wav, False
 
+        signal_masked = False
         for cfg in self.noise_aug_configs:
             if random.random() >= cfg.augmentation_prob:  # noqa: S311
                 continue
@@ -211,6 +214,7 @@ class AugmentationProcessor:
             mask_signal = random.random() < cfg.mask_signal_prob  # noqa: S311
             try:
                 wav = self._mix_noise(wav, noise_path, cfg.snr_db_range, mask_signal=mask_signal)
+                signal_masked = signal_masked or mask_signal
             except Exception as exc:  # noqa: BLE001
                 # Log full stack trace for later debugging
                 logger.exception(
@@ -219,7 +223,7 @@ class AugmentationProcessor:
                     exc,
                 )
 
-        return wav
+        return wav, signal_masked
 
     def _localize_noise_path(self, noise_path: AnyPathT) -> str:
         """Return a local path for ``noise_path``, downloading from cloud if needed.
@@ -429,7 +433,12 @@ class AugmentationProcessor:
         # Use "audio" key if available, fallback to "raw_wav" for compatibility
         audio_key = "audio" if "audio" in item_dict else "raw_wav"
         wav: torch.Tensor = item_dict[audio_key].to(self.device)
-        aug_item[audio_key] = self._apply_noise(wav)
+        aug_wav, signal_masked = self._apply_noise(wav)
+        aug_item[audio_key] = aug_wav
+        # If the signal was replaced by pure noise, no target class is present:
+        # clear the (multi-label) label so it collates to an all-zero target.
+        if signal_masked and isinstance(aug_item.get("label"), (list, np.ndarray, torch.Tensor)):
+            aug_item["label"] = []
         return aug_item
 
     # ------------------------------------------------------------------
