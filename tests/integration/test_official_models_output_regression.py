@@ -34,6 +34,10 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         "esp_aves2_effnetb0_audioset": "8ba36f99b5e8245d7b61fc472339f5760fabca19d63a51e835309c11a379eab6",
         "esp_aves2_effnetb0_bio": "c91dde6bee57788951a0fb9044703d301cb295e83fdc5e064874b63c99c70493",
         "esp_aves2_naturelm_audio_v1_beats": "c1689532213d32cc16b0f7eb1774239c4d4bbd91a0500b551d4468acf52cb9d1",
+        # TODO: regenerate on a torch 2.5.x env --
+        # scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_5_0
+        # Placeholder below is the torch 2.11 value and will NOT match.
+        "esp_aves2_sed_birdcode_beats_encoder": "e6cf6dc452aa175883e712c85470d35bc4c152f022b82157a1eb7853931a9c9c",
         "esp_aves2_sl_beats_all": "b6231fdcb855734ebfddf26e793a46d8e4b3bf61ee950273fdd85affcf85eefe",
         "esp_aves2_sl_beats_bio": "1ad22272d36f3e74d64c5fb98ec31810c9281c1c32e9a2178f10c08004c8bcd6",
         "esp_aves2_sl_eat_all_ssl_all": "0832f0c78523167e0a5439b9a4e96caf115131118549ff9161a01bd6d03a5b2e",
@@ -47,6 +51,10 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         "esp_aves2_effnetb0_audioset": "1fbe57dd3b795aea08c66ed5c45731cce5a08835b9c33676057d6e5d361c52ae",
         "esp_aves2_effnetb0_bio": "3123856a920e27271a26fe29437119a90e2ebd5436d4bb9a4629d08828fef8ef",
         "esp_aves2_naturelm_audio_v1_beats": "248a36d3772d847119b44969be19a4ba70a6302557f58a700dc9fd14ff0af9f3",
+        # TODO: regenerate on a torch 2.6.x env --
+        # scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_6_0
+        # Placeholder below is the torch 2.11 value and will NOT match.
+        "esp_aves2_sed_birdcode_beats_encoder": "e6cf6dc452aa175883e712c85470d35bc4c152f022b82157a1eb7853931a9c9c",
         "esp_aves2_sl_beats_all": "c01e92839305633644aa62346b3b3a4cf086e46083ae6db2b7f4b3fede3a8f5d",
         "esp_aves2_sl_beats_bio": "1c9e8459e2cf0038a0d062b3f414d18678d10997db95300aa7f1dc7288411fb2",
         "esp_aves2_sl_eat_all_ssl_all": "cc2ce5ffe5a91c79552cddd5401fe001bcaf28abeb79f39dddae69c14cd93b73",
@@ -60,6 +68,7 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         "esp_aves2_effnetb0_audioset": "1fbe57dd3b795aea08c66ed5c45731cce5a08835b9c33676057d6e5d361c52ae",
         "esp_aves2_effnetb0_bio": "3123856a920e27271a26fe29437119a90e2ebd5436d4bb9a4629d08828fef8ef",
         "esp_aves2_naturelm_audio_v1_beats": "a7c6ccf25fb251603c747c47ccdf632ddb703d0a7e5b7f4525e0f7e6788e34d0",
+        "esp_aves2_sed_birdcode_beats_encoder": "e6cf6dc452aa175883e712c85470d35bc4c152f022b82157a1eb7853931a9c9c",
         "esp_aves2_sl_beats_all": "7dedd023d6b167c3aa23cfa5461cca3fd80cc5411e32598cc29941fe1820dcbf",
         "esp_aves2_sl_beats_bio": "824b0aa66302d4fe4fee452913c81770eb7f1bd63653890a0d84ede5ac461851",
         "esp_aves2_sl_eat_all_ssl_all": "cc21667c9aca79fc2fb946685b28c7ef5dfee587181297d52fc5110832e05616",

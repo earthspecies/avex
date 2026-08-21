@@ -1,0 +1,68 @@
+---
+# ESP-AVES2: encoder-only BEATs backbone from the sed-birdcode SED ablation
+# (`sed-birdcode-ablation-ssl_beats_clip_pseudo`).
+#
+# Registry key is deliberately shorter than the Hub repo / GCS folder name
+# (esp-aves2-sed-birdcode-ablation-ssl-beats-clip-pseudo-encoder), which would
+# otherwise be a 61-character identifier for callers to type. checkpoint_path
+# below carries the full repo name.
+#
+# Encoder only: the source run's frame-level SED head (Linear(6144, 7475)) is
+# not published, so this model always loads in embedding-extraction mode. No
+# class_mapping_path is provided.
+#
+# Weights are hosted on the Hugging Face Hub as a safetensors file.
+# The loader supports `hf://` URIs via huggingface_hub's fsspec filesystem.
+checkpoint_path: hf://EarthSpeciesProject/esp-aves2-sed-birdcode-ablation-ssl-beats-clip-pseudo-encoder/esp-aves2-sed-birdcode-ablation-ssl-beats-clip-pseudo-encoder.safetensors
+
+model_spec:
+  name: beats
+  pretrained: false
+  fine_tuned: false
+  device: cuda
+  init_config:
+    activation_dropout: 0.0
+    activation_fn: gelu
+    attention_dropout: 0.0
+    conv_bias: false
+    conv_pos: 128
+    conv_pos_groups: 16
+    deep_norm: true
+    dropout: 0.0
+    dropout_input: 0.0
+    embed_dim: 512
+    encoder_attention_heads: 12
+    encoder_embed_dim: 768
+    encoder_ffn_embed_dim: 3072
+    encoder_layerdrop: 0.0
+    encoder_layers: 12
+    finetuned_model: false
+    gru_rel_pos: true
+    input_patch_size: 16
+    layer_norm_first: false
+    layer_wise_gradient_decay_ratio: 1.0
+    max_distance: 800
+    num_buckets: 320
+    predictor_class: 527
+    predictor_dropout: 0.0
+    relative_position_embedding: true
+    # Must stay 16000 even though audio is delivered at 32000 Hz. This is a
+    # parameter of the fbank extractor, not a declaration of the input rate: it
+    # fixes the window (25 ms * 16000 = 400 samples), hop (160 samples), and mel
+    # filterbank (257 x 128), all of which are frozen in the checkpoint as the
+    # buffers backbone.fbank.window and backbone.fbank.mel_fb. Setting 32000
+    # rebuilds them at (800,) and (513, 128) and the checkpoint fails to load.
+    sample_frequency: 16000.0
+    num_mel_bins: 128
+    frame_length: 25.0
+    frame_shift: 10.0
+    fbank_mean: 15.41663
+    fbank_std: 6.55582
+  # 32 kHz / 5.0 s -> 160000 samples -> 496 tokens (62 time x 8 freq).
+  # Do not resample to 16 kHz: it loads but degrades the representation.
+  audio_config:
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 5
+    window_selection: random

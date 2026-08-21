@@ -32,6 +32,7 @@ OFFICIAL_MODEL_CHECKSUMS: dict[str, str] = {
     "esp_aves2_effnetb0_audioset": "58455bac5346a8c8d705b20210edfd14a5f6151fed9dd61320bda2e31030119c",
     "esp_aves2_effnetb0_bio": "e34db5a8951f28f4d90cb06b396f4a4e716dd79e48a54e672017d832804868d7",
     "esp_aves2_naturelm_audio_v1_beats": "ce2c16141465e11852105eaee4a32bbb4663cfe8cf7a49ddc874ea5c267f78a2",
+    "esp_aves2_sed_birdcode_beats_encoder": "8e48088f3396e69dfca72cca89ed4eb67d0cd38910ce8cc9f611e572d3ea5c21",
     "esp_aves2_sl_beats_all": "25dc242853822de6e35228b22c285886162b5f787d162280e0277c010a510e91",
     "esp_aves2_sl_beats_bio": "1881788eb6d059d7b005e1c68235906fcb12bf3a6cde824cec7cbdc34dcb9fc3",
     "esp_aves2_sl_eat_all_ssl_all": "af10ff12eb15b0e1343348d787b4ccb97bd3e4fe11147140c68ba646d64130cc",
