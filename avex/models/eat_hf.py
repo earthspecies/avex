@@ -40,6 +40,33 @@ from avex.utils.utils import universal_torch_load
 logger = logging.getLogger(__name__)
 
 
+def _rename_eat_key(key: str) -> str:
+    """Rename fairseq/data2vec-multi EAT keys to the HuggingFace naming convention.
+
+    The published EAT checkpoints store the input stage under
+    ``modality_encoders.IMAGE.*`` (data2vec-multi layout), while the HF model
+    flattens it (``model.local_encoder.proj``, ``model.extra_tokens``,
+    ``model.fixed_positional_encoder.positions``, ``model.pre_norm``). Everything
+    else is placed under ``model.*``.
+
+    Args:
+        key: Original fairseq key name
+
+    Returns:
+        str: Renamed key for the HuggingFace model (``model.*``).
+    """
+    if key == "modality_encoders.IMAGE.context_encoder.norm.weight":
+        return "model.pre_norm.weight"
+    if key == "modality_encoders.IMAGE.context_encoder.norm.bias":
+        return "model.pre_norm.bias"
+    img_prefix = "modality_encoders.IMAGE."
+    if key.startswith(img_prefix):
+        key = "model." + key[len(img_prefix) :]
+    elif not key.startswith("model."):
+        key = "model." + key
+    return key
+
+
 def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
     """Load fairseq weights into HuggingFace model.
 
@@ -50,28 +77,7 @@ def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
         model: HuggingFace model to load weights into
         weights_path: Path to the fairseq checkpoint file
     """
-
-    def _rename_key(key: str) -> str:
-        """Rename fairseq keys to match HuggingFace naming convention.
-
-        Args:
-            key: Original fairseq key name
-
-        Returns:
-            str: Renamed key for HuggingFace model
-        """
-        if key == "modality_encoders.IMAGE.context_encoder.norm.weight":
-            # return "model.fc_norm.weight"
-            return "model.pre_norm.weight"
-        if key == "modality_encoders.IMAGE.context_encoder.norm.bias":
-            # return "model.fc_norm.bias"
-            return "model.pre_norm.bias"
-        img_prefix = "modality_encoders.IMAGE."
-        if key.startswith(img_prefix):
-            key = "model." + key[len(img_prefix) :]
-        elif not key.startswith("model."):
-            key = "model." + key
-        return key
+    _rename_key = _rename_eat_key
 
     alt_model = universal_torch_load(weights_path)["model"]
 
@@ -216,6 +222,35 @@ class EATHFModel(ModelBase):
         #  Pre-discover MLP layers for efficient hook management        #
         # -------------------------------------------------------------- #
         # MLP layers will be discovered in _discover_embedding_layers override
+
+    def remap_checkpoint_state_dict(self, state_dict: dict[str, Any]) -> dict[str, Any]:
+        """Map a fairseq/data2vec-multi EAT checkpoint onto this wrapper's keys.
+
+        The published EAT checkpoints (e.g. ``esp-aves2-eat-all``) ship bare
+        ``blocks.*`` transformer keys plus an input stage under
+        ``modality_encoders.IMAGE.*`` (patch conv, CLS/extra token, positional
+        encoding, input norm), and a pretraining-only ``...decoder.*`` head. The
+        generic prefix reconciliation only prepends ``backbone.model.``, which
+        matches the blocks but leaves the input stage under the wrong names (so 6
+        params silently stay at their HF-init values). This applies the same
+        renaming as :func:`load_fairseq_weights` and prepends ``backbone.``, then
+        keeps only keys that exist in the model (dropping the decoder).
+
+        Args:
+            state_dict: Raw checkpoint state dict (fairseq/data2vec key names).
+
+        Returns:
+            A state dict keyed to this model's ``backbone.model.*`` parameters.
+        """
+        target = set(self.state_dict().keys())
+        out: dict[str, Any] = {}
+        for k, v in state_dict.items():
+            if k.startswith("_ema"):
+                continue
+            new_k = "backbone." + _rename_eat_key(k)
+            if new_k in target:
+                out[new_k] = v
+        return out
 
     def _discover_embedding_layers(self) -> None:
         """Discover and cache only the EAT layers that are useful for embeddings.

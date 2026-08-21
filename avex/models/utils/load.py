@@ -560,6 +560,18 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         return len(set(sd) & _tk)
 
     if state_dict and _tk and _overlap(state_dict) == 0:
+        candidates: list[tuple[str, dict]] = []
+
+        # (0) model-specific remap hook — e.g. eat_hf maps a fairseq/data2vec
+        # checkpoint's `modality_encoders.IMAGE.*` input stage onto its flattened
+        # `backbone.model.*` keys, which a plain prefix add can never recover.
+        remap = getattr(model, "remap_checkpoint_state_dict", None)
+        if callable(remap):
+            try:
+                candidates.append(("model-specific remap", remap(state_dict)))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("model remap_checkpoint_state_dict failed: %s", exc)
+
         ck0 = min(state_dict, key=len)  # shortest checkpoint key
         mk0 = min(_tk, key=len)  # shortest model key
         # (a) model has an extra leading prefix the checkpoint lacks -> prepend it
@@ -568,16 +580,18 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         strip_cands = [k[: -len(mk0)] for k in state_dict if k.endswith("." + mk0)]
         if add_cands:
             pfx = add_cands[0]
-            cand = {f"{pfx}{k}": v for k, v in state_dict.items()}
-            if _overlap(cand) > 0:
-                state_dict = cand
-                logger.info("Added '%s' prefix to checkpoint keys to match model", pfx)
-        elif strip_cands:
+            candidates.append((f"add '{pfx}' prefix", {f"{pfx}{k}": v for k, v in state_dict.items()}))
+        if strip_cands:
             pfx = strip_cands[0]
-            cand = {k[len(pfx) :]: v for k, v in state_dict.items() if k.startswith(pfx)}
-            if _overlap(cand) > 0:
-                state_dict = cand
-                logger.info("Removed '%s' prefix from checkpoint keys to match model", pfx)
+            candidates.append(
+                (f"strip '{pfx}' prefix", {k[len(pfx) :]: v for k, v in state_dict.items() if k.startswith(pfx)})
+            )
+
+        # Pick the reconciliation that recovers the most parameters.
+        best = max(candidates, key=lambda c: _overlap(c[1]), default=None)
+        if best is not None and _overlap(best[1]) > 0:
+            state_dict = best[1]
+            logger.info("Reconciled checkpoint keys via %s (%d/%d overlap)", best[0], _overlap(best[1]), len(_tk))
 
     # Load weights
     result = model.load_state_dict(state_dict, strict=False)
