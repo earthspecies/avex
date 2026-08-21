@@ -1,0 +1,8 @@
+run,dataset,n_train,n_test,n_classes,C,accuracy,balanced_accuracy
+icassp2026_pupujepa_bigrun_probe,bat_classification,5984,2000,10,0.1,0.746,0.746
+icassp2026_pupujepa_bigrun_probe,bird_classification,14176,3620,264,0.1,0.3469613259668508,0.339971325467984
+icassp2026_pupujepa_bigrun_probe,dog_classification,384,139,10,10.0,0.8561151079136691,0.8089285714285713
+icassp2026_pupujepa_bigrun_probe,esc50_classification,1184,400,50,0.1,0.86,0.86
+icassp2026_pupujepa_bigrun_probe,hiceas_detection,4448,1485,2,1.0,0.7521885521885522,0.5478980373940309
+icassp2026_pupujepa_bigrun_probe,marine_mammal_classification,992,339,31,1.0,0.9292035398230089,0.925804437497986
+icassp2026_pupujepa_bigrun_probe,mosquito_classification,5568,1859,14,0.01,0.8251748251748252,0.5305435460403674

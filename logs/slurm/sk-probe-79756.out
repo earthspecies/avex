@@ -1,0 +1,101 @@
+Downloading cpython-3.13.9-linux-x86_64-gnu (download) (32.7MiB)
+ Downloaded cpython-3.13.9-linux-x86_64-gnu (download)
+Using CPython 3.13.9
+Creating virtual environment at: /scratch/eklavya_earthspecies_org/venvs/79756
+   Building avex @ file:///home/eklavya_earthspecies_org/avex
+      Built avex @ file:///home/eklavya_earthspecies_org/avex
+Downloading triton (179.6MiB)
+Downloading nvidia-cufile (1.2MiB)
+Downloading setuptools (1.0MiB)
+Downloading pygments (1.2MiB)
+Downloading pandas (11.7MiB)
+Downloading nvidia-cuda-runtime (2.1MiB)
+Downloading nvidia-nvshmem-cu13 (57.6MiB)
+Downloading nvidia-nvjitlink (38.8MiB)
+Downloading networkx (2.0MiB)
+Downloading nvidia-cusparse (139.2MiB)
+Downloading cryptography (4.3MiB)
+Downloading h5py (4.7MiB)
+Downloading cuda-bindings (5.9MiB)
+Downloading pillow (6.3MiB)
+Downloading nvidia-cuda-nvrtc (86.0MiB)
+Downloading nvidia-cusparselt-cu13 (162.0MiB)
+Downloading nvidia-curand (56.8MiB)
+Downloading nvidia-cufft (204.2MiB)
+Downloading ml-dtypes (4.8MiB)
+Downloading nvidia-cuda-cupti (10.2MiB)
+Downloading nvidia-cudnn-cu13 (349.1MiB)
+Downloading nvidia-cusolver (191.6MiB)
+Downloading hf-xet (4.0MiB)
+Downloading nvidia-nccl-cu13 (187.4MiB)
+Downloading onnxruntime (17.8MiB)
+Downloading numpy (15.9MiB)
+Downloading torchaudio (1.7MiB)
+Downloading torchvision (7.2MiB)
+Downloading grpcio (6.5MiB)
+Downloading aiohttp (1.7MiB)
+Downloading debugpy (4.1MiB)
+Downloading nvidia-cublas (403.5MiB)
+Downloading onnx (18.2MiB)
+Downloading scipy (33.6MiB)
+Downloading botocore (14.1MiB)
+Downloading torch (506.1MiB)
+Downloading bitsandbytes (57.8MiB)
+Downloading pydantic-core (2.0MiB)
+Downloading scikit-learn (8.5MiB)
+Downloading virtualenv (5.6MiB)
+ Downloaded nvidia-cufile
+ Downloaded aiohttp
+ Downloaded torchaudio
+ Downloaded pydantic-core
+ Downloaded nvidia-cuda-runtime
+ Downloaded pygments
+ Downloaded setuptools
+ Downloaded hf-xet
+ Downloaded networkx
+ Downloaded debugpy
+ Downloaded cryptography
+ Downloaded ml-dtypes
+ Downloaded h5py
+ Downloaded virtualenv
+ Downloaded cuda-bindings
+ Downloaded pillow
+ Downloaded grpcio
+ Downloaded torchvision
+ Downloaded scikit-learn
+ Downloaded nvidia-cuda-cupti
+ Downloaded botocore
+ Downloaded numpy
+ Downloaded pandas
+ Downloaded onnxruntime
+ Downloaded scipy
+ Downloaded nvidia-nvjitlink
+ Downloaded onnx
+ Downloaded nvidia-curand
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded bitsandbytes
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded triton
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cusolver
+ Downloaded nvidia-cufft
+ Downloaded nvidia-cudnn-cu13
+ Downloaded nvidia-cublas
+ Downloaded torch
+Installed 151 packages in 383ms
+
+=== icassp2026_pupujepa_bigrun_probe ===
+dataset                            n_tr   n_te   cls      C     acc  bal_acc
+bat_classification                 5984   2000    10    0.1   0.746    0.746
+/scratch/eklavya_earthspecies_org/venvs/79756/lib/python3.13/site-packages/sklearn/metrics/_classification.py:2924: UserWarning: y_pred contains classes not in y_true
+  warnings.warn("y_pred contains classes not in y_true")
+bird_classification               14176   3620   264    0.1   0.347    0.340
+dog_classification                  384    139    10     10   0.856    0.809
+esc50_classification               1184    400    50    0.1   0.860    0.860
+hiceas_detection                   4448   1485     2      1   0.752    0.548
+marine_mammal_classification        992    339    31      1   0.929    0.926
+mosquito_classification            5568   1859    14   0.01   0.825    0.531
+
+wrote sklearn_probe_results.csv

@@ -1,0 +1,21 @@
+Downloading cpython-3.13.9-linux-x86_64-gnu (download) (32.7MiB)
+ Downloaded cpython-3.13.9-linux-x86_64-gnu (download)
+Using CPython 3.13.9
+Creating virtual environment at: /scratch/eklavya_earthspecies_org/venvs/79757
+   Building avex @ file:///home/eklavya_earthspecies_org/avex
+      Built avex @ file:///home/eklavya_earthspecies_org/avex
+Installed 151 packages in 1.33s
+
+=== icassp2026_pupujepa_bigrun_probe ===
+dataset                            n_tr   n_te   cls      C     acc  bal_acc
+bat_classification                 5984   2000    10    0.1   0.746    0.746
+/scratch/eklavya_earthspecies_org/venvs/79757/lib/python3.13/site-packages/sklearn/metrics/_classification.py:2924: UserWarning: y_pred contains classes not in y_true
+  warnings.warn("y_pred contains classes not in y_true")
+bird_classification               14176   3620   264    0.1   0.347    0.340
+dog_classification                  384    139    10     10   0.856    0.809
+esc50_classification               1184    400    50    0.1   0.860    0.860
+hiceas_detection                   4448   1485     2      1   0.752    0.548
+marine_mammal_classification        992    339    31      1   0.929    0.926
+mosquito_classification            5568   1859    14   0.01   0.825    0.531
+
+wrote sklearn_probe_results.csv
