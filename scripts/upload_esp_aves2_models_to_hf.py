@@ -59,6 +59,7 @@ DEFAULT_MODELS: tuple[str, ...] = (
     "esp-aves2-effnetb0-audioset",
     "esp-aves2-effnetb0-bio",
     "esp-aves2-naturelm-audio-v1-beats",
+    "esp-aves2-sed-birdcode-ablation-ssl-beats-clip-pseudo-encoder",
     "esp-aves2-sl-beats-all",
     "esp-aves2-sl-beats-bio",
     "esp-aves2-sl-eat-all-ssl-all",
