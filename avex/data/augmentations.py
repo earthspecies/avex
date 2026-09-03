@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import random
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,9 +19,10 @@ import numpy as np
 import soundfile as sf
 import torch
 import torchaudio
-from alp_data.io import AnyPathT, anypath
+from alp_data.io import AnyPathT
 
 from avex.data.data_utils import combine_text_labels
+from avex.io.filesystem import filesystem_from_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -108,8 +110,12 @@ class AugmentationProcessor:
         self.noise_aug_configs = [spec for spec in augmentation_specs if isinstance(spec, NoiseAugment)]
         self.mixup_aug_configs = [spec for spec in augmentation_specs if isinstance(spec, MixupAugment)]
 
+        # Local cache for noise files fetched from cloud storage (gs://, s3://, …),
+        # since soundfile/torchaudio only read local paths.
+        self._noise_cache_dir = Path(tempfile.gettempdir()) / "avex_noise_cache"
+
         # Pre-collect noise file lists to avoid repeated directory scanning
-        self._noise_pools: dict[int, list[Path]] = {}
+        self._noise_pools: dict[int, list[str]] = {}
         for cfg in self.noise_aug_configs:
             try:
                 self._noise_pools[id(cfg)] = self._list_noise_files(cfg.noise_dirs)
@@ -125,8 +131,11 @@ class AugmentationProcessor:
     def _list_noise_files(
         noise_dirs: Sequence[str],
         max_noise_samples: int = 10000,
-    ) -> list[Path]:
+    ) -> list[str]:
         """Enumerate all candidate noise files across noise directories.
+
+        Uses an fsspec filesystem so both local paths and cloud URIs
+        (``gs://``, ``s3://`` …) are supported.
 
         Parameters
         ----------
@@ -137,8 +146,8 @@ class AugmentationProcessor:
 
         Returns
         -------
-        list[Path]
-            List of noise file paths found in the directories.
+        list[str]
+            List of noise file paths (full URIs, protocol preserved).
 
         Raises
         ------
@@ -146,23 +155,30 @@ class AugmentationProcessor:
             If any of the specified noise directories do not exist.
 
         """
-        noise_paths: list[Path] = []
+        noise_paths: list[str] = []
         for dir_str in noise_dirs:
-            dir_path: AnyPathT = anypath(dir_str)
-            if not dir_path.exists():
+            d = str(dir_str).rstrip("/")
+            proto = d.split("://", 1)[0] + "://" if "://" in d else ""
+            fs = filesystem_from_path(d)
+            if not fs.exists(d):
                 msg = f"Noise directory not found: {dir_str}"
                 raise FileNotFoundError(msg)
 
             for ext in (".wav", ".mp3", ".flac", ".ogg"):
-                noise_files = list(dir_path.glob(f"*{ext}"))[:max_noise_samples]
-                noise_paths.extend(noise_files)
+                matches = fs.glob(f"{d}/*{ext}")[:max_noise_samples]
+                for m in matches:
+                    m = str(m)
+                    # fsspec cloud filesystems return protocol-less keys -> re-add it
+                    if proto and not m.startswith(proto):
+                        m = proto + m.lstrip("/")
+                    noise_paths.append(m)
         logger.info("Found %d noise files", len(noise_paths))
         return noise_paths
 
     # ------------------------------------------------------------------
     # Item-level noise augmentation
     # ------------------------------------------------------------------
-    def _apply_noise(self, wav: torch.Tensor) -> torch.Tensor:
+    def _apply_noise(self, wav: torch.Tensor) -> tuple[torch.Tensor, bool]:
         """Apply noise augmentation to a single audio sample.
 
         Parameters
@@ -172,15 +188,18 @@ class AugmentationProcessor:
 
         Returns
         -------
-        torch.Tensor
-            Audio tensor with noise augmentation applied.
+        tuple[torch.Tensor, bool]
+            The augmented audio tensor, and whether the original signal was
+            masked out (replaced by pure noise) — in which case the caller must
+            also clear the label, since no target class is present anymore.
 
         """
         # Skip noise augmentation if audio has zero length
         if wav.numel() == 0 or wav.shape[-1] == 0:
             logger.warning(f"Skipping noise augmentation for audio with zero length: shape={wav.shape}")
-            return wav
+            return wav, False
 
+        signal_masked = False
         for cfg in self.noise_aug_configs:
             if random.random() >= cfg.augmentation_prob:  # noqa: S311
                 continue
@@ -190,8 +209,12 @@ class AugmentationProcessor:
                 continue
 
             noise_path = random.choice(noise_candidates)  # noqa: S311
+            # With mask_signal_prob, drop the original signal and keep only the
+            # (power-matched) noise — "mask the signal, use only noise".
+            mask_signal = random.random() < cfg.mask_signal_prob  # noqa: S311
             try:
-                wav = self._mix_noise(wav, noise_path, cfg.snr_db_range)
+                wav = self._mix_noise(wav, noise_path, cfg.snr_db_range, mask_signal=mask_signal)
+                signal_masked = signal_masked or mask_signal
             except Exception as exc:  # noqa: BLE001
                 # Log full stack trace for later debugging
                 logger.exception(
@@ -200,7 +223,27 @@ class AugmentationProcessor:
                     exc,
                 )
 
-        return wav
+        return wav, signal_masked
+
+    def _localize_noise_path(self, noise_path: AnyPathT) -> str:
+        """Return a local path for ``noise_path``, downloading from cloud if needed.
+
+        soundfile/torchaudio only read local files, so cloud URIs (``gs://`` …) are
+        fetched once into a local cache and reused thereafter.
+
+        Returns
+        -------
+        str
+            A local filesystem path to the (possibly cached) noise file.
+        """
+        p = str(noise_path)
+        if "://" not in p:
+            return p  # already local
+        cached = self._noise_cache_dir / p.split("://", 1)[1]
+        if not cached.exists():
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            filesystem_from_path(p).get(p, str(cached))
+        return str(cached)
 
     def _load_noise_segment(
         self,
@@ -213,7 +256,7 @@ class AugmentationProcessor:
         Parameters
         ----------
         noise_path : AnyPathT
-            Path to noise file.
+            Path to noise file (local or cloud URI).
         audio_len : int
             Target audio length in samples.
         max_window_sec : float
@@ -225,6 +268,7 @@ class AugmentationProcessor:
             Processed noise audio tensor.
 
         """
+        noise_path = self._localize_noise_path(noise_path)
         info = sf.info(str(noise_path))
         target_frames = min(int(self.sr * max_window_sec), audio_len)
 
@@ -255,11 +299,16 @@ class AugmentationProcessor:
             return torch.zeros((1, 1), dtype=torch.float32)
 
         try:
-            noise_wav, noise_sr = torchaudio.load(
-                noise_path,
-                frame_offset=frame_offset,
-                num_frames=num_frames,
+            # Read with soundfile (torchaudio.load needs the torchcodec backend,
+            # which is not installed with torch>=2.11). Returns (frames, channels).
+            noise_np, noise_sr = sf.read(
+                str(noise_path),
+                start=frame_offset,
+                frames=num_frames,
+                dtype="float32",
+                always_2d=True,
             )
+            noise_wav = torch.from_numpy(noise_np.T)  # -> (channels, frames)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to load noise file %s: %s", noise_path, exc)
             if audio_len <= 0:
@@ -318,6 +367,7 @@ class AugmentationProcessor:
         noise_path: AnyPathT,
         snr_db_range: tuple[float, float],
         max_window_sec: float = 10.0,
+        mask_signal: bool = False,
     ) -> torch.Tensor:
         """Mix noise into audio signal at random SNR.
 
@@ -331,11 +381,14 @@ class AugmentationProcessor:
             Range of SNR values in dB to randomly sample from.
         max_window_sec : float, default=10.0
             Maximum window size in seconds for noise loading.
+        mask_signal : bool, default=False
+            If True, discard the original signal and return only the noise,
+            power-matched to the signal ("mask the signal, use only noise").
 
         Returns
         -------
         torch.Tensor
-            Audio tensor with noise mixed in.
+            Audio tensor with noise mixed in (or noise only if ``mask_signal``).
 
         """
         audio_len = wav.shape[-1]
@@ -345,10 +398,16 @@ class AugmentationProcessor:
         noise_wav = self._load_noise_segment(noise_path, audio_len, max_window_sec)
         noise_wav = self._match_audio_length(noise_wav, audio_len, audio_t.device)
 
-        # Apply SNR scaling
         signal_power = (audio_t**2).mean(dim=-1, keepdim=True)
         noise_power = (noise_wav**2).mean(dim=-1, keepdim=True)
 
+        if mask_signal:
+            # Replace the signal entirely with power-matched noise.
+            scale = torch.sqrt(signal_power / (noise_power + 1e-8))
+            masked = scale * noise_wav
+            return masked.squeeze(0) if wav.ndim == 1 else masked
+
+        # Apply SNR scaling
         snr_db = random.uniform(*snr_db_range)  # noqa: S311
         snr_linear = 10 ** (snr_db / 10)
         scale = torch.sqrt(signal_power / (noise_power * snr_linear + 1e-8))
@@ -374,7 +433,12 @@ class AugmentationProcessor:
         # Use "audio" key if available, fallback to "raw_wav" for compatibility
         audio_key = "audio" if "audio" in item_dict else "raw_wav"
         wav: torch.Tensor = item_dict[audio_key].to(self.device)
-        aug_item[audio_key] = self._apply_noise(wav)
+        aug_wav, signal_masked = self._apply_noise(wav)
+        aug_item[audio_key] = aug_wav
+        # If the signal was replaced by pure noise, no target class is present:
+        # clear the (multi-label) label so it collates to an all-zero target.
+        if signal_masked and isinstance(aug_item.get("label"), (list, np.ndarray, torch.Tensor)):
+            aug_item["label"] = []
         return aug_item
 
     # ------------------------------------------------------------------

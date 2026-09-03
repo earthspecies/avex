@@ -259,6 +259,9 @@ class Model(ModelBase):
 
         # features: (B, T', D)
         # frame_padding: (B, T') or None
+        # Stash the frame-level padding mask so extract_embeddings() can do masked
+        # pooling over the same temporal grid (all encoder layers share T').
+        self._last_frame_padding = frame_padding
 
         if self._return_features_only:
             return features
@@ -405,10 +408,32 @@ class Model(ModelBase):
                         # Already in correct shape
                         pass
                     elif embeddings[i].dim() == 3:
+                        # Frame-level padding mask from the last forward pass (B, T').
+                        # Apply masked pooling so padded frames don't pollute the
+                        # aggregate — matches forward()'s masked mean-pooling.
+                        fp = getattr(self, "_last_frame_padding", None)
+                        use_mask = (
+                            fp is not None
+                            and fp.dim() == 2
+                            and fp.shape[0] == embeddings[i].shape[0]
+                            and fp.shape[1] == embeddings[i].shape[1]
+                            and bool(fp.any())
+                        )
                         if aggregation == "mean":
-                            embeddings[i] = torch.mean(embeddings[i], dim=1)
+                            if use_mask:
+                                masked = embeddings[i].clone()
+                                masked[fp] = 0.0
+                                valid = (~fp).sum(dim=1, keepdim=True).clamp(min=1)
+                                embeddings[i] = masked.sum(dim=1) / valid
+                            else:
+                                embeddings[i] = torch.mean(embeddings[i], dim=1)
                         elif aggregation == "max":
-                            embeddings[i] = torch.max(embeddings[i], dim=1)[0]  # max returns (values, indices)
+                            if use_mask:
+                                masked = embeddings[i].clone()
+                                masked[fp] = float("-inf")
+                                embeddings[i] = masked.max(dim=1)[0]
+                            else:
+                                embeddings[i] = torch.max(embeddings[i], dim=1)[0]  # max returns (values, indices)
                         elif aggregation == "cls_token":
                             embeddings[i] = embeddings[i][:, 0, :]
                         else:

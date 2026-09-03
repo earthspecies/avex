@@ -550,16 +550,48 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         drop_model_prefix=not target_has_model_prefix,
     )
 
-    # Adapt backbone. prefix when checkpoint and model disagree
-    target_has_backbone = any(k.startswith("backbone.") for k in target_keys)
-    ckpt_has_backbone = any(k.startswith("backbone.") for k in state_dict)
+    # Reconcile a leading-prefix mismatch between checkpoint and model keys.
+    # Handles a single `backbone.` level (BEATs) AND deeper wrappers, e.g. eat_hf
+    # nests EAT under `backbone.model.` while the published checkpoint ships bare
+    # `blocks.*` keys -> would otherwise be 0 matches.
+    _tk = set(target_keys)
 
-    if target_has_backbone and not ckpt_has_backbone:
-        state_dict = {f"backbone.{k}": v for k, v in state_dict.items()}
-        logger.info("Added 'backbone.' prefix to checkpoint keys to match model")
-    elif not target_has_backbone and ckpt_has_backbone:
-        state_dict = {k.removeprefix("backbone."): v for k, v in state_dict.items()}
-        logger.info("Removed 'backbone.' prefix from checkpoint keys to match model")
+    def _overlap(sd: dict) -> int:
+        return len(set(sd) & _tk)
+
+    if state_dict and _tk and _overlap(state_dict) == 0:
+        candidates: list[tuple[str, dict]] = []
+
+        # (0) model-specific remap hook — e.g. eat_hf maps a fairseq/data2vec
+        # checkpoint's `modality_encoders.IMAGE.*` input stage onto its flattened
+        # `backbone.model.*` keys, which a plain prefix add can never recover.
+        remap = getattr(model, "remap_checkpoint_state_dict", None)
+        if callable(remap):
+            try:
+                candidates.append(("model-specific remap", remap(state_dict)))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("model remap_checkpoint_state_dict failed: %s", exc)
+
+        ck0 = min(state_dict, key=len)  # shortest checkpoint key
+        mk0 = min(_tk, key=len)  # shortest model key
+        # (a) model has an extra leading prefix the checkpoint lacks -> prepend it
+        add_cands = [k[: -len(ck0)] for k in _tk if k.endswith("." + ck0)]
+        # (b) checkpoint has an extra leading prefix the model lacks -> strip it
+        strip_cands = [k[: -len(mk0)] for k in state_dict if k.endswith("." + mk0)]
+        if add_cands:
+            pfx = add_cands[0]
+            candidates.append((f"add '{pfx}' prefix", {f"{pfx}{k}": v for k, v in state_dict.items()}))
+        if strip_cands:
+            pfx = strip_cands[0]
+            candidates.append(
+                (f"strip '{pfx}' prefix", {k[len(pfx) :]: v for k, v in state_dict.items() if k.startswith(pfx)})
+            )
+
+        # Pick the reconciliation that recovers the most parameters.
+        best = max(candidates, key=lambda c: _overlap(c[1]), default=None)
+        if best is not None and _overlap(best[1]) > 0:
+            state_dict = best[1]
+            logger.info("Reconciled checkpoint keys via %s (%d/%d overlap)", best[0], _overlap(best[1]), len(_tk))
 
     # Load weights
     result = model.load_state_dict(state_dict, strict=False)

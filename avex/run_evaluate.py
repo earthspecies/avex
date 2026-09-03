@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 import torch
 from alp_data import DatasetConfig
-from alp_data.io import AnyPathT, anypath, exists
+from alp_data.io import AnyPathT, anypath
 from alp_data.io.paths import PureCloudPath
 
 # Import avex modules
@@ -52,13 +52,14 @@ from avex.evaluation.retrieval import (
     eval_retrieval_cross_set,
 )
 from avex.models.utils.factory import build_model_from_spec
+from avex.models.utils.load import _load_checkpoint
 from avex.utils import ExperimentLogger
 from avex.utils.experiment_tracking import (
     create_experiment_summary_csvs,
     get_or_create_experiment_metadata,
     save_evaluation_metadata,
 )
-from avex.utils.utils import _embedding_cache_matches, _process_state_dict, universal_torch_load
+from avex.utils.utils import _embedding_cache_matches
 
 logger = logging.getLogger("run_finetune")
 
@@ -461,27 +462,23 @@ def run_experiment(
             base_model = cached_model
         else:
             logger.info("Loading model (cache miss or first dataset)")
-            # Build backbone-only model; classifier heads are handled by probes
+            # Build backbone-only model; classifier heads are handled by probes.
+            # Force feature-only construction: BEATs auto-falls-back when num_classes
+            # is None, but eat_hf raises ("num_classes must be > 0 …") unless
+            # return_features_only is set explicitly.
             base_model = build_model_from_spec(
                 run_cfg.model_spec,
                 device=str(device),
+                return_features_only=True,
             ).to(device)
 
             if experiment_cfg.checkpoint_path:
-                ckpt_path = anypath(experiment_cfg.checkpoint_path)
-                if not exists(ckpt_path):
-                    raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-
-                # fs = filesystem_from_path(ckpt_path)
-                # with fs.open(ckpt_path, "rb") as f:
-                state = universal_torch_load(ckpt_path, map_location=device)
-                # state = torch.load(f, map_location=device)
-
-                if "model_state_dict" in state:
-                    state = _process_state_dict(state)
-
-                base_model.load_state_dict(state, strict=False)
-                logger.info("Loaded checkpoint from %s", ckpt_path)
+                # Use the prefix-aware loader (adapts a bare BEATs state_dict to the
+                # wrapper's "backbone." keys, strips "model."/classifier as needed).
+                # A naive base_model.load_state_dict(strict=False) silently matches 0
+                # keys for flat checkpoints (e.g. NatureLM's audio_encoder/beats.pt),
+                # leaving the backbone randomly initialised.
+                _load_checkpoint(base_model, str(experiment_cfg.checkpoint_path), str(device))
 
         # Note: Base model parameter freezing/counting handled by
         # build_probe_from_config() function
