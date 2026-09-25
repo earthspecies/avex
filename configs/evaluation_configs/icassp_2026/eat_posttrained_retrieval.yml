@@ -1,0 +1,37 @@
+# Retrieval + clustering for the POST-TRAINED EAT (supervised on AudioSet +
+# Xeno-canto + iNaturalist, run 2026-08-25_16-42-16). Mirrors
+# eat_ssl_all_retrieval.yml so the post-trained and SSL numbers are comparable;
+# only checkpoint_path and the output dirs differ.
+#
+# See eat_posttrained_probe.yml for why a training checkpoint loads correctly
+# here (model_state_dict unwrap + strict=False, classifier head ignored).
+dataset_config: configs/data_configs/benchmark_id_repertoire_48khz.yml
+training_params:
+  train_epochs: 1
+  lr: 0.001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: false
+experiments:
+  - run_name: eat_posttrained
+    run_config: configs/run_configs/icassp_2026/eat_ssl_all.yml
+    pretrained: false
+    checkpoint_path: runs/icassp2026/sl_eat_audioset_xeno_inat/2026-08-25_16-42-16/final_model.pt
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone.model.blocks.11.mlp.fc2"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+save_dir: evaluation_results/icassp2026_eat_posttrained
+results_csv_path: evaluation_results/icassp2026_eat_posttrained/results.csv
+device: cuda
+seed: 42
+num_workers: 8
+eval_modes:
+  - retrieval
+  - clustering
+offline_embeddings:
+  overwrite_embeddings: true

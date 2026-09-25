@@ -146,7 +146,7 @@ class PupuJEPAModel(ModelBase):
         device: str = "cuda",
         audio_config: Optional[Any] = None,
         num_classes: int = 0,
-        return_features_only: bool = True,
+        return_features_only: bool = False,   # matches eat_hf / beats_model; run_evaluate passes True explicitly
         extra_config: Optional[Dict[str, Any]] = None,
         pretrained: bool = True,
     ) -> None:
@@ -163,6 +163,22 @@ class PupuJEPAModel(ModelBase):
 
         self.pupu_cfg = load_pupu_config(args_path)
         self.return_features_only = return_features_only
+
+        # Opt-in switch for SUPERVISED POST-TRAINING of the backbone.
+        #
+        # This wrapper was written as an inference/embedding extractor: _embed_one
+        # was decorated @torch.no_grad(), so NO gradient could ever reach the
+        # backbone. Training with it would silently reduce to a linear probe --
+        # loss falls, checkpoints save, and the backbone comes out bit-identical
+        # to the SSL checkpoint. Verified: 0/399 backbone tensors received a
+        # gradient even with requires_grad forced True on every parameter.
+        #
+        # The guard cannot key off self.training, because run_evaluate.py never
+        # calls .eval() NOR wraps its embedding extraction in torch.no_grad() --
+        # it relies entirely on that decorator. Keying off self.training would
+        # therefore start building graphs during evaluation and blow up memory.
+        # Hence an explicit flag, default False: eval behaviour is unchanged.
+        self.trainable_backbone = bool(extra_config.get("trainable_backbone", False))
 
         backbone = PupuJEPA(self.pupu_cfg)
         if pretrained:
@@ -228,9 +244,18 @@ class PupuJEPAModel(ModelBase):
             chunks.append(F.pad(rem, (0, self.frame_len - rem.shape[-1])))
         return torch.stack(chunks)
 
-    @torch.no_grad()
     def _embed_one(self, audio: torch.Tensor) -> torch.Tensor:
-        """(T,) waveform at input_sr -> (D,) pooled embedding."""
+        """(T,) waveform at input_sr -> (D,) pooled embedding.
+
+        Grad is enabled ONLY when post-training the backbone (see
+        self.trainable_backbone). Otherwise this stays under no_grad exactly as
+        the original @torch.no_grad() decorator had it.
+        """
+        with torch.set_grad_enabled(self.trainable_backbone and torch.is_grad_enabled()):
+            return self._embed_one_impl(audio)
+
+    def _embed_one_impl(self, audio: torch.Tensor) -> torch.Tensor:
+        """Body of _embed_one; grad context is set by the caller."""
         if self.input_sr != self.target_sr:
             audio = AF.resample(audio, self.input_sr, self.target_sr)
         windows = self._windows(audio).to(self.device)               # (C, frame_len)

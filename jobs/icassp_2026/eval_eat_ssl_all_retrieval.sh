@@ -12,7 +12,6 @@
 #SBATCH --cpus-per-gpu=16
 #SBATCH --output="/home/%u/logs/%A_%a.log"
 #SBATCH --job-name="eat-retr"
-#SBATCH --qos=naturelm
 
 cd ~/avex
 uv sync --group project-dev --group gpu

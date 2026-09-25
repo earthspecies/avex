@@ -1,0 +1,121 @@
+# 32 kHz variant of data_audioset_xeno_inat.yml, for PuPuJEPA post-training.
+#
+# PuPuJEPA ingests 32 kHz and resamples the crop to its native 24 kHz internally.
+# alp-data ships pre-resampled 16k and 32k but NOT 24k, so loading at 32 kHz is
+# the fast path -- asking for 24 kHz triggers a whole-file kaiser_best resample
+# (seconds per sample). Same convention as benchmark_beans_gcs_32k.yml.
+#
+# VERIFY BEFORE A LONG RUN: the AudioSet data_root below is an explicit `raw/`
+# path, not an SR-resolved one like the other two datasets. If `raw/` is not
+# pre-resampled at 32 kHz, AudioSet samples will resample on the fly and the run
+# will crawl. Check the first epoch's it/s against the 16 kHz EAT run (~1 it/s at
+# batch 192); if it is far slower, this is why.
+#
+# Noise augmentation stays on the 16 kHz corpora -- no 32 kHz noise set exists,
+# and bio-jepa pretraining likewise mixed 16 kHz noise into 32 kHz audio.
+# using the now-SEPARATE alp-data datasets (previously bundled as `animalspeak`).
+#
+# Unified multi-label space (Option B: unify AFTER concatenation):
+#   - AudioSet: native `labels` is a JSON STRING (e.g. '["Music","Speech"]'); parse it into a
+#     real list per-dataset with `parse_json_list` so individual AudioSet classes become labels
+#     (otherwise each full combo string becomes one opaque label -> ~40k junk classes).
+#   - Xeno-canto / iNaturalist: native scalar `canonical_name` (species string).
+#   - Global `labels_from_features features: [labels, canonical_name]` builds ONE joint map over
+#     {AudioSet classes} U {species}. Each column stays single-typed after soft concat
+#     (`labels` = List, null on species rows; `canonical_name` = str, null on AudioSet rows),
+#     so no mixed-dtype column. A species shared by iNat and Xeno is the SAME string -> ONE id.
+# Registered dataset names: `audioset`, `xeno-canto` (hyphen!), `inaturalist`.
+
+train_datasets:
+  - dataset_name: audioset
+    split: train
+    sample_rate: 32000
+    audio_max_length_seconds: 10
+    # AudioSet v0.2.0 is REQUIRED at 32 kHz. alp_data's AudioSet declares
+    #   _sample_rate_paths = {32000: "32khz_path"}   # v0.2.0 only
+    # and DEFAULT_VERSION is "0.1.0", which has no such column. On v0.1.0 every
+    # sample therefore falls through to on-the-fly librosa.resample(kaiser_best),
+    # which (a) is brutally slow and (b) validates the buffer first -- so a single
+    # non-finite file raises ParameterError("Audio buffer is not finite
+    # everywhere"), which alp_data re-raises as RuntimeError and which kills the
+    # DataLoader worker and every DDP rank with it. That is exactly how job 83326
+    # died ~8 min into epoch 1 on item 508508.
+    #
+    # With v0.2.0 the pre-resampled 32 kHz file is read directly, no resample step
+    # runs, and a non-finite buffer instead reaches avex's own guard in
+    # avex/data/dataset.py, which zero-fills and logs a warning (this is why the
+    # 16 kHz EAT run survived the same corpus).
+    #
+    # data_root is intentionally OMITTED: AudioSet.from_config passes it straight
+    # through, so pinning the v0.1.0 root while asking for version 0.2.0 would
+    # join v0.2.0 relative paths onto the v0.1.0 root. Left unset it defaults to
+    # the version's own root (_V020_ROOT).
+    version: "0.2.0"
+    transformations:
+      - type: parse_json_list
+        feature: labels
+
+  - dataset_name: xeno-canto
+    split: train
+    sample_rate: 32000
+    audio_max_length_seconds: 10
+    # native label column: canonical_name (species)
+
+  - dataset_name: inaturalist
+    split: train
+    sample_rate: 32000
+    audio_max_length_seconds: 10
+    # native label column: canonical_name (species)
+
+val_datasets:
+  # AudioSet must be present in val too, otherwise the `labels` column doesn't exist and
+  # the joint labels_from_features (features: [labels, canonical_name]) errors on val.
+  - dataset_name: audioset
+    split: validation
+    sample_rate: 32000
+    audio_max_length_seconds: 10
+    # AudioSet v0.2.0 is REQUIRED at 32 kHz. alp_data's AudioSet declares
+    #   _sample_rate_paths = {32000: "32khz_path"}   # v0.2.0 only
+    # and DEFAULT_VERSION is "0.1.0", which has no such column. On v0.1.0 every
+    # sample therefore falls through to on-the-fly librosa.resample(kaiser_best),
+    # which (a) is brutally slow and (b) validates the buffer first -- so a single
+    # non-finite file raises ParameterError("Audio buffer is not finite
+    # everywhere"), which alp_data re-raises as RuntimeError and which kills the
+    # DataLoader worker and every DDP rank with it. That is exactly how job 83326
+    # died ~8 min into epoch 1 on item 508508.
+    #
+    # With v0.2.0 the pre-resampled 32 kHz file is read directly, no resample step
+    # runs, and a non-finite buffer instead reaches avex's own guard in
+    # avex/data/dataset.py, which zero-fills and logs a warning (this is why the
+    # 16 kHz EAT run survived the same corpus).
+    #
+    # data_root is intentionally OMITTED: AudioSet.from_config passes it straight
+    # through, so pinning the v0.1.0 root while asking for version 0.2.0 would
+    # join v0.2.0 relative paths onto the v0.1.0 root. Left unset it defaults to
+    # the version's own root (_V020_ROOT).
+    version: "0.2.0"
+    transformations:
+      - type: parse_json_list
+        feature: labels
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 32000
+    audio_max_length_seconds: 10
+  - dataset_name: inaturalist
+    split: val
+    sample_rate: 32000
+    audio_max_length_seconds: 10
+
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft
+
+# Global transforms after concatenation: unified joint label space + dedup.
+transformations:
+  - type: labels_from_features
+    features: [labels, canonical_name]
+    output_feature: label
+    override: true
+    allow_missing_labels: false     # drop rows that end up with no label
+  - type: deduplicate
+    subset: ['local_path']

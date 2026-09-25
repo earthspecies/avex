@@ -1,0 +1,127 @@
+---
+# ICASSP 2026: supervised post-training of OUR pre-trained PuPuJEPA-Base on
+# AudioSet + Xeno-canto + iNaturalist. This is step 2 of the plan: post-train the
+# PuPuJEPA model we pre-trained ourselves (200k steps, pupujepa_bigrun).
+#
+# Hyperparameters follow the AVEX paper's sl-EAT-all row (Table 5): 2 frozen
+# epochs @ 1e-4, then 10 epochs total @ 8e-5, AdamW, wd 0.01, cosine, 2000 warmup
+# steps, global batch 256. Global batch = batch_size * num_gpus, so batch_size 32
+# on 8 GPUs = 256.
+#
+# Two avex fixes are REQUIRED for this config to train at all (both currently
+# uncommitted in the working tree):
+#   1. get_model.py -- get_model() ran off the end of its if/elif chain and
+#      returned None for registry-resolved models like pupujepa. run_evaluate
+#      uses build_model_from_spec so eval worked, but run_train calls get_model,
+#      so PuPuJEPA could be evaluated and never trained.
+#   2. pupujepa_model.py -- return_features_only defaulted to True, so no
+#      classifier head was built. Now False (matching eat_hf/beats_model);
+#      run_evaluate passes True explicitly when it wants embeddings.
+model_spec:
+  name: pupujepa
+  pretrained: true
+  device: cuda
+  extra_config:
+    # Our own SSL pre-training checkpoint -- NOT a generic public one. The wrapper
+    # loads this itself and HARD-FAILS on any unmatched deployed-path tensor,
+    # rather than silently partial-loading the way _load_checkpoint can.
+    checkpoint_path: /home/eklavya_earthspecies_org/bio-jepa/checkpoints/pupujepa_bigrun/step-0200000_loss-0.161731/model.safetensors
+    # REQUIRED for post-training. The wrapper's _embed_one was written for
+    # inference and ran under @torch.no_grad(), so NO gradient could reach the
+    # backbone -- training would silently collapse to a linear probe with a
+    # bit-identical backbone coming out the other end. This flag enables grad on
+    # the embedding path; it defaults False so evaluation is unaffected
+    # (run_evaluate never calls .eval() nor wraps extraction in no_grad, so it
+    # depends on that no-grad behaviour).
+    # Verified: with this flag + the trainer's epoch-3 unfreeze, all 150
+    # deployed-path tensors (teacher/patch_embed/rope_encoder) receive gradients.
+    trainable_backbone: true
+  audio_config:
+    # 32 kHz in; the model resamples the 10 s crop to its native 24 kHz.
+    # Nyquist 16 kHz > fmax 12 kHz, so nothing is lost.
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/icassp_2026/data_audioset_xeno_inat_32k.yml
+output_dir: "./runs/icassp2026/sl_pupujepa_audioset_xeno_inat"
+run_name: sl_pupujepa_audioset_xeno_inat
+label_type: supervised
+loss_function: bce           # multi-label (AudioSet ontology + species), as in the paper
+preprocessing: null
+sr: 32000
+debug_mode: false
+logging: wandb
+# Set explicitly: the default in avex/configs.py is "audio-experiments" whose
+# hyphen is U+2011 (non-breaking), giving a project you cannot search for.
+wandb_project: avex-icassp2026
+resume_from_checkpoint: null
+
+training_params:
+  train_epochs: 10
+  lr: 0.0001                 # stage-1 (frozen backbone) LR, paper Table 5
+  # PER-GPU batch size: passed straight to the DataLoader alongside a
+  # DistributedSampler, so GLOBAL batch = batch_size * num_gpus.
+  # 32 x 8 GPUs = 256, the paper's batch size. avex has no gradient accumulation,
+  # so if you change the GPU count, change this too or the effective batch (and
+  # therefore the LR schedule) silently shifts.
+  batch_size: 32
+  optimizer: adamw8bit
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  freeze_backbone_epochs: 2
+  second_stage_lr: 0.00008
+  second_stage_warmup_steps: 6000
+
+scheduler:
+  name: cosine
+  warmup_steps: 2000
+  min_lr: 1e-6
+
+# Noise + mixup. Block copied verbatim from sl_eat_audioset_xeno_inat.yml so the
+# PuPuJEPA vs EAT comparison is clean -- same augmentation, different backbone.
+# Paper says SNR U(-10,20) dB; the committed EAT config uses [-5,20], and we
+# match the EAT config rather than the paper so the two runs stay comparable.
+# Mixup sets the target to the union of the mixed clips' labels (element-wise OR).
+# Noise corpora are 16 kHz -- no 32 kHz set exists, and bio-jepa pretraining also
+# mixed 16 kHz noise into 32 kHz audio.
+augmentations:
+  - noise:
+      noise_dirs:
+        - gs://foundation-model-data/audio_16k/noise_clean/demand_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/idmt
+        - gs://foundation-model-data/audio_16k/noise_clean/tut2016_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/urbansound
+        - gs://foundation-model-data/audio_16k/noise_clean/orcasound_shipnoise_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/deepship_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/shipsear_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/wham_noise
+        # audioset noise dir is empty at 16 kHz (0 wav) -> omitted; 8 dirs, ~65k files
+      snr_db_range: [-5, 20]
+      augmentation_prob: 0.5
+      mask_signal_prob: 0.1   # 10% of noised items: drop signal, keep only noise
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 0.5
+
+# NOTE on metrics: `metrics` is a TOP-LEVEL RunConfig field (not training_params),
+# and it is left at its default ["accuracy"] deliberately.
+#
+# That default is single-label top-1 (argmax logits vs argmax of the multi-hot
+# target) and is close to meaningless here -- it is what made the EAT run report
+# val_accuracy=0.0000 every epoch. mAP would be the right metric, BUT it is not
+# usable at this scale: beans_metrics.AveragePrecision accumulates every score and
+# target into growing NxK tensors, which at 14348 classes x ~1.35M samples/epoch is
+# ~77 GB of logits + ~155 GB of targets PER RANK, held on the GPU -> OOM partway
+# through epoch 1. It is built for BEANS-scale problems, not a 14k-class corpus.
+#
+# So train/val accuracy here is decoration only; it never touches a gradient. The
+# real read-out is the AVEX benchmark eval on the resulting checkpoint. A
+# streaming//chunked mAP would fix this properly and is worth doing separately.
+
+seed: 42
+num_workers: 8

@@ -1,0 +1,46 @@
+# Linear probing of the POST-TRAINED EAT (supervised on AudioSet + Xeno-canto +
+# iNaturalist, run 2026-08-25_16-42-16), to compare against the SSL EAT baseline
+# in eat_ssl_all_probe.yml. Same protocol, only the weights differ.
+#
+# checkpoint_path is a TRAINING checkpoint (dict with epoch / model_state_dict /
+# optimizer_state_dict), not a bare state_dict or safetensors like the hf:// SSL
+# baseline. avex/utils/utils.py:567 unwraps "model_state_dict", and eat_hf loads
+# with strict=False, so the checkpoint's 14348-class classifier head is reported
+# as unexpected and ignored -- which is what we want, probing reads the frozen
+# backbone at blocks.11.mlp.fc2 and never touches the head.
+#
+# Probing hyperparameters follow the AVEX paper spec (lr 1e-4, wd 0.1, bs 32,
+# 900 epochs), matching eat_ssl_all_probe.yml so the two are comparable.
+dataset_config: configs/data_configs/benchmark_beans_gcs_classification.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+
+experiments:
+  - run_name: eat_posttrained_linear_last
+    run_config: configs/run_configs/icassp_2026/eat_ssl_all.yml
+    pretrained: false
+    checkpoint_path: runs/icassp2026/sl_eat_audioset_xeno_inat/2026-08-25_16-42-16/final_model.pt
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone.model.blocks.11.mlp.fc2"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+save_dir: evaluation_results/icassp2026_eat_posttrained_probe
+results_csv_path: evaluation_results/icassp2026_eat_posttrained_probe/results.csv
+device: cuda
+seed: 42
+num_workers: 8
+eval_modes:
+  - probe
+offline_embeddings:
+  overwrite_embeddings: true
+disable_tqdm: true

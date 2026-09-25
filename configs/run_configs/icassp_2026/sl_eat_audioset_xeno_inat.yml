@@ -28,12 +28,21 @@ preprocessing: null
 sr: 16000
 debug_mode: false
 logging: wandb
+# Set explicitly: the default in avex/configs.py is "audio‑experiments" whose
+# hyphen is U+2011 (non-breaking), not ASCII -- it creates a project name you
+# cannot type or search for in the wandb UI.
+wandb_project: avex-icassp2026
 resume_from_checkpoint: null
 
 training_params:
   train_epochs: 10
   lr: 0.0001
-  batch_size: 128
+  # PER-GPU batch size: it is passed straight to the DataLoader alongside a
+  # DistributedSampler, so the GLOBAL batch is batch_size * num_gpus.
+  # 32 x 4 GPUs = 128, the effective batch that lr=1e-4 below was chosen for.
+  # If you change the GPU count, change this too or the effective batch (and so
+  # the LR/schedule) silently shifts. avex has no gradient accumulation.
+  batch_size: 32
   optimizer: adamw8bit
   weight_decay: 0.01
   amp: true

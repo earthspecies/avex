@@ -190,3 +190,19 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             audio_config=model_config.audio_config,
             model_id=model_id,
         )
+
+    # Anything not in the hardcoded chain above falls through to the registry,
+    # which this function's own docstring already names as the supported,
+    # extensible API. Without this, a registered model that evaluates fine via
+    # build_model_from_spec() still cannot be TRAINED, because run_train() calls
+    # get_model() -- which previously ran off the end of the if/elif chain and
+    # returned None. Purely additive: names handled above are unaffected.
+    from avex.models.utils.factory import build_model_from_spec
+
+    logger.info(
+        "Model '%s' is not in the legacy get_model chain; resolving via the "
+        "registry (build_model_from_spec).",
+        model_name,
+    )
+    return build_model_from_spec(model_config, device=model_config.device,
+                                 num_classes=num_classes)

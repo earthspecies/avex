@@ -415,21 +415,36 @@ class Trainer:
 
         # Log to experiment tracker
         if self.exp_logger:
+            # Log epoch summaries at the GLOBAL STEP, not the epoch number.
+            #
+            # Per-batch metrics are logged with step=self.global_updates (which
+            # reaches tens of thousands), so logging these with step=epoch (1..N)
+            # goes BACKWARDS. wandb requires monotonically increasing steps and
+            # silently DISCARDS out-of-order data:
+            #   "Tried to log to step 10 that is less than the current step 70280
+            #    ... this data will be ignored"
+            # That is why the EAT and PuPuJEPA runs had no validation curves in
+            # wandb at all, despite correct val numbers in the text log (11 such
+            # warnings in job 84455). The epoch number is kept as a logged value
+            # so it is still recoverable in the UI.
+            step = self.global_updates
+
             train_log_metrics = {
                 "loss": train_loss,
                 "learning_rate": current_lr,
+                "epoch": epoch,
                 **train_metrics,
             }
-            self.exp_logger.log_metrics(train_log_metrics, step=epoch, split="train")
+            self.exp_logger.log_metrics(train_log_metrics, step=step, split="train")
 
             # Only log validation metrics if validation was run
             if not self.config.training_params.skip_validation:
-                val_log_metrics = {"loss": val_loss, **val_metrics}
-                self.exp_logger.log_metrics(val_log_metrics, step=epoch, split="val")
+                val_log_metrics = {"loss": val_loss, "epoch": epoch, **val_metrics}
+                self.exp_logger.log_metrics(val_log_metrics, step=step, split="val")
 
             # Log clustering metrics separately if available
             if clustering_metrics:
-                self.exp_logger.log_metrics(clustering_metrics, step=epoch, split="clustering")
+                self.exp_logger.log_metrics(clustering_metrics, step=step, split="clustering")
 
     def _handle_checkpointing(self, epoch: int, val_acc: float) -> None:
         """Handle checkpoint saving logic."""
@@ -712,12 +727,57 @@ class Trainer:
             current_epoch,
         )
 
-        # Unfreeze backbone parameters
-        if hasattr(self.model, "backbone"):
-            for p in self.model.backbone.parameters():  # type: ignore[attr-defined]
+        # Unfreeze backbone parameters.
+        #
+        # MUST unwrap DDP first. Under DDP self.model is a
+        # DistributedDataParallel, which exposes the real model as `.module` and
+        # does NOT forward attribute access -- so `hasattr(self.model, "backbone")`
+        # is False on every multi-GPU run. The old code took the else-branch,
+        # logged a warning, and silently skipped the unfreeze, leaving the
+        # backbone frozen for the whole run. Two-stage fine-tuning then degraded
+        # to a 10-epoch linear probe with a bit-identical backbone, with no error
+        # and a perfectly healthy-looking falling loss. Confirmed on both the EAT
+        # (job 82848) and PuPuJEPA (job 84455) post-training runs: 0/150 backbone
+        # tensors changed between the epoch-2 and epoch-3 checkpoints.
+        #
+        # The initial freeze in run_train.py works because it happens BEFORE the
+        # DDP wrap; only this unfreeze runs after it.
+        target = self._get_unwrapped_model()
+        if hasattr(target, "backbone"):
+            n = 0
+            for p in target.backbone.parameters():  # type: ignore[attr-defined]
                 p.requires_grad = True
+                n += 1
+            logger.info("[Two-stage] Unfroze %d backbone parameter tensors", n)
+
+            # Rebuild DDP. Its Reducer is built from the parameters that require
+            # grad AT CONSTRUCTION TIME, and the backbone was frozen back then --
+            # so the newly-unfrozen tensors are absent from the reducer. Their
+            # gradients would be computed locally but never all-reduced, letting
+            # each rank drift onto its own trajectory (and giving the backbone an
+            # effective batch of one GPU's worth instead of the global batch).
+            # Re-wrapping registers the full parameter set. Safe to do here: this
+            # runs on every rank at the same epoch boundary, and the replicas are
+            # still in sync (the backbone was frozen and identical; the classifier
+            # was kept in sync by the previous reducer).
+            if self.is_distributed:
+                self.model = self._wrap_model_for_distributed(target)
+                logger.info("[Two-stage] Rebuilt DDP so the unfrozen backbone is all-reduced")
         else:
-            logger.warning("Model has no attribute 'backbone'; skipping unfreeze")
+            # FAIL LOUDLY. This used to be a warning, which is how two full
+            # multi-GPU post-training runs (EAT job 82848, PuPuJEPA job 84455)
+            # silently degraded into 10-epoch linear probes: the config asked for
+            # two-stage fine-tuning, the unfreeze quietly no-oped, and the only
+            # symptom was a backbone that came out bit-identical to the input.
+            # If freeze_backbone_epochs > 0 the caller explicitly asked to unfreeze
+            # something, so being unable to is a misconfiguration, not a nuance.
+            raise RuntimeError(
+                f"Two-stage fine-tuning requested (freeze_backbone_epochs="
+                f"{getattr(self.config.training_params, 'freeze_backbone_epochs', 0)}) but the "
+                f"unwrapped model ({type(target).__name__}) has no `.backbone` attribute, so the "
+                f"backbone cannot be unfrozen. Training would silently continue as a linear probe. "
+                f"Either expose `.backbone` on the model or set freeze_backbone_epochs=0."
+            )
 
         # ------------------------------------------------------------------
         # Re-initialise optimiser with full parameter set

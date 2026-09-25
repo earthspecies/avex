@@ -1,0 +1,55 @@
+---
+# PuPuJEPA-Base AFTER supervised post-training on AudioSet + Xeno-canto +
+# iNaturalist (run 2026-08-31_23-05-45, 10 epochs, 7 GPUs, global batch 224).
+#
+# Identical to pupujepa_bigrun.yml except checkpoint_path, so a comparison
+# against the raw SSL model isolates the effect of post-training alone.
+#
+# checkpoint_path points at backbone weights EXTRACTED from the training
+# checkpoint into safetensors. The training checkpoint is a .pt holding
+# {epoch, model_state_dict, optimizer_state_dict, ...} with `backbone.`-prefixed
+# keys, which this wrapper cannot read -- it calls safetensors.load_file directly.
+# Extracting (rather than routing through the experiment-level checkpoint_path)
+# keeps the wrapper's HARD-FAIL check on the deployed path (teacher/patch_embed/
+# rope_encoder), instead of the lenient loader that can silently partial-load.
+#
+# Verified on extraction: 399 tensors (150 deployed-path), loads clean through
+# the wrapper, and 150/150 deployed tensors differ from the SSL init -- i.e.
+# these really are the post-trained weights.
+#
+# Swap to backbone_best_ep7.safetensors for the best-val epoch (7, val_acc
+# 0.1900) rather than the final epoch (10, 0.1846). The paper's protocol is a
+# fixed 10-epoch schedule, so the final epoch is the faithful default.
+model_spec:
+  name: pupujepa
+  pretrained: true
+  device: cuda
+  extra_config:
+    checkpoint_path: /home/eklavya_earthspecies_org/avex/runs/icassp2026/sl_pupujepa_audioset_xeno_inat/2026-08-31_23-05-45/backbone_final.safetensors
+  audio_config:
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_base.yml
+run_name: pupujepa_posttrained
+output_dir: "./runs/icassp2026/pupujepa_posttrained"
+loss_function: cross_entropy
+label_type: supervised
+preprocessing: null
+sr: 32000
+debug_mode: false
+logging: mlflow
+resume_from_checkpoint: null
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+seed: 42
+num_workers: 8
+augmentations: []

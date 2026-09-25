@@ -96,8 +96,27 @@ url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pyp
 publish-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/"
 explicit = true
 
+# PyTorch must come from the CUDA 12.8 index, NOT default PyPI.
+#
+# From torch 2.11.0 the default PyPI wheels are built against CUDA 13, which
+# requires an NVIDIA driver >= 580. The h100-80 nodes run driver 570.211.01
+# (CUDA 12.8 max), so those wheels make torch.cuda.is_available() return False
+# on a node that does have GPUs -- surfacing as the very confusing
+#   ValueError: ProcessGroupNCCL is only supported with GPUs, no GPUs found!
+# and taking down every GPU job (train and eval alike).
+#
+# cu128 publishes the same torch/torchaudio/torchvision versions we already
+# pin, so this changes only the CUDA build, not the versions.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.uv.sources]
 esp-sweep = { index = "esp-pypi" }
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
 
 [tool.uv]
 default-groups = ["dev", "gpu"]
