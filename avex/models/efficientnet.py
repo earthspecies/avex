@@ -231,9 +231,11 @@ class Model(ModelBase):
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input (ignored for EfficientNet)
         aggregation : str
-            Aggregation method for multiple layers ('mean', 'max', 'cls_token', 'none').
+            Aggregation method for multiple layers ('mean', 'max', 'none').
             When 'none', 4D embeddings (B, C, H, W) are reshaped to 3D (B, H, C*W)
-            for sequence probe compatibility.
+            for sequence probe compatibility. 'cls_token' is rejected: EfficientNet
+            has no class token, and indexing the spatial map would return a single
+            channel whose width depends on clip length.
         freeze_backbone : bool
             Whether to freeze the backbone and use torch.no_grad()
 
@@ -246,11 +248,18 @@ class Model(ModelBase):
         Raises
         ------
         ValueError
-            If no hooks are registered or no outputs are captured
+            If no hooks are registered, no outputs are captured, or the
+            aggregation method is not supported (including "cls_token")
         """
         # Check if hooks are registered
         if not self._hooks:
             raise ValueError("No hooks are registered in the model.")
+
+        if aggregation not in ("none", "mean", "max"):
+            raise ValueError(
+                f"Unsupported aggregation method for efficientnet: {aggregation!r}. Use 'none', 'mean' or 'max' "
+                "(EfficientNet has no class token)."
+            )
 
         # Clear previous hook outputs
         self._clear_hook_outputs()
@@ -301,8 +310,6 @@ class Model(ModelBase):
                             embeddings[i] = embeddings[i].mean(dim=-1)
                         elif aggregation == "max":
                             embeddings[i] = embeddings[i].max(dim=-1)[0]  # max returns (values, indices)
-                        elif aggregation == "cls_token":
-                            embeddings[i] = embeddings[i][:, 0, :]
                         else:
                             raise ValueError(f"Unsupported aggregation method: {aggregation}")
                         if embeddings[i].dim() == 3:

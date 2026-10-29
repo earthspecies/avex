@@ -106,3 +106,20 @@ def test_efficientnet_amp_guard() -> None:
 if __name__ == "__main__":
     test_efficientnet()
     test_efficientnet_float64_audio_input()
+
+
+@pytest.mark.parametrize("aggregation", ["cls_token", "median"])
+def test_efficientnet_rejects_unsupported_aggregation(aggregation: str) -> None:
+    """EfficientNet has no class token; cls_token used to return one channel of the spatial map."""
+    audio_config = AudioConfig(sample_rate=16000, representation="mel_spectrogram", n_mels=128, target_length_seconds=1)
+    model = EfficientNet(num_classes=None, pretrained=False, device="cpu", audio_config=audio_config)
+    model.eval()
+    model.register_hooks_for_layers(["last_layer"])
+    try:
+        with pytest.raises(ValueError, match="Unsupported aggregation method for efficientnet"):
+            model.extract_embeddings(torch.randn(2, 16000), aggregation=aggregation)
+        # Supported aggregations keep working
+        for ok in ("mean", "max", "none"):
+            assert model.extract_embeddings(torch.randn(2, 16000), aggregation=ok).shape[0] == 2
+    finally:
+        model.deregister_all_hooks()
