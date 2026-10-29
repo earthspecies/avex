@@ -18,12 +18,17 @@ The ESP-AVES2 model collection is available on HuggingFace: [EarthSpeciesProject
 | `esp_aves2_effnetb0_all` | EfficientNet-B0 | All (AudioSet + Bio) | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-all) |
 | `esp_aves2_effnetb0_bio` | EfficientNet-B0 | Bioacoustics | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-bio) |
 | `esp_aves2_effnetb0_audioset` | EfficientNet-B0 | AudioSet | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-effnetb0-audioset) |
+| `esp_aves2_sed_birdcode_beats_encoder` | BEATs (encoder only) | BirdCODE SED ablation, clip pseudo-labels | [Link](https://huggingface.co/EarthSpeciesProject/esp-aves2-sed-birdcode-ablation-ssl-beats-clip-pseudo-encoder) |
+| `esp_aves2_sed_birdcode_convnext_encoder` | ConvNeXt-Base (encoder only) | BirdCODE bird sound event detector | [Link](https://huggingface.co/EarthSpeciesProject/sed-birdcode) |
+
+The two `sed_birdcode` entries are **encoder-only** models from the ESP sound event detection work ([sound-event-detection](https://github.com/earthspecies/sound-event-detection)): no classification head and no `label_map.json`, so they always load in embedding-extraction mode. They expect **32 kHz** audio (5 s clips in training). The ConvNeXt encoder loads the public [BirdCODE](https://huggingface.co/EarthSpeciesProject/sed-birdcode) checkpoint directly (about 1.1 GB) and discards its prototype head; use the `sound-event-detection` package for detections.
 
 ### Supported Architectures
 
 - **BEATs**: Bidirectional Encoder representation from Audio Transformers
 - **EAT**: Efficient Audio Transformer models
 - **EfficientNet**: EfficientNet-based models adapted for audio classification
+- **ConvNeXt**: ConvNeXt CNN on log-mel spectrograms (`model_spec.name: convnext`, AudioProtoPNet / BirdSet front-end)
 - **AVES**: AVES model for bioacoustics
 - **BirdMAE**: BirdMAE masked autoencoder for bioacoustic representation learning
 

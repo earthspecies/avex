@@ -226,6 +226,22 @@ def _load_from_modelspec(
     # All other model configuration comes from ModelSpec via build_model_from_spec()
     model_kwargs: dict[str, object] = {}
 
+    # Opt-in safe unpickling for checkpoints the spec marks as third-party pickles.
+    weights_only = bool(model_spec.extra_config and model_spec.extra_config.get("weights_only") is True)
+
+    # A spec can declare that its checkpoint is only usable as an encoder (e.g. an
+    # official model that reuses a detector checkpoint whose head the wrapper
+    # cannot represent). Treat that like an explicit return_features_only=True so
+    # we neither probe the checkpoint for num_classes nor build a throwaway head.
+    if (
+        not return_features_only
+        and supports_return_features_only
+        and model_spec.extra_config
+        and model_spec.extra_config.get("return_features_only") is True
+    ):
+        return_features_only = True
+        logger.info(f"Model spec for {model_type} declares an encoder-only checkpoint; using embedding mode")
+
     # If return_features_only is requested and supported, ensure the flag is set
     if return_features_only and supports_return_features_only:
         model_kwargs["return_features_only"] = True
@@ -234,7 +250,7 @@ def _load_from_modelspec(
     # Extract num_classes from checkpoint if not provided and checkpoint exists
     # This must happen BEFORE building the model so the model is created with the correct classifier
     if checkpoint_path and not return_features_only:
-        extracted_num_classes = _extract_num_classes_from_checkpoint(checkpoint_path, device)
+        extracted_num_classes = _extract_num_classes_from_checkpoint(checkpoint_path, device, weights_only=weights_only)
         if extracted_num_classes is not None:
             model_kwargs["num_classes"] = extracted_num_classes
             logger.info(f"Extracted num_classes={extracted_num_classes} from checkpoint")
@@ -306,9 +322,30 @@ def _load_from_modelspec(
             # For classification mode, always keep whatever classifier is in the checkpoint
             keep_classifier = True
             logger.info("Loading checkpoint and keeping classifier head from checkpoint when present")
-        _load_checkpoint(backbone, checkpoint_path, device, keep_classifier=keep_classifier)
+        _load_checkpoint(backbone, checkpoint_path, device, keep_classifier=keep_classifier, weights_only=weights_only)
 
     return backbone.to(device)
+
+
+def _checkpoint_load_kwargs(device: str, weights_only: bool = False) -> dict[str, object]:
+    """Return ``universal_torch_load`` kwargs for a checkpoint.
+
+    ``weights_only=True`` restricts unpickling to tensors and plain containers
+    (no arbitrary code execution). It is opt-in per model spec via
+    ``extra_config: {weights_only: true}``, used for official models that reuse
+    third-party pickle checkpoints. Everything else keeps the historical
+    ``weights_only=False`` behaviour, because some training checkpoints carry
+    config objects.
+
+    Returns
+    -------
+    dict[str, object]
+        Keyword arguments for ``universal_torch_load``.
+    """
+    kwargs: dict[str, object] = {"map_location": device}
+    if weights_only:
+        kwargs["weights_only"] = True
+    return kwargs
 
 
 def _get_classification_layer_dim_from_state_dict(state_dict: Dict[str, torch.Tensor]) -> Optional[int]:
@@ -376,12 +413,15 @@ def _get_classification_layer_dim_from_state_dict(state_dict: Dict[str, torch.Te
     return None
 
 
-def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> Optional[int]:
+def _extract_num_classes_from_checkpoint(
+    checkpoint_path: str, device: str, weights_only: bool = False
+) -> Optional[int]:
     """Extract num_classes from checkpoint file.
 
     Args:
         checkpoint_path: Path to checkpoint file
         device: Device to load checkpoint on
+        weights_only: Unpickle tensors and plain containers only
 
     Returns:
         Number of classes if found, None otherwise
@@ -393,7 +433,7 @@ def _extract_num_classes_from_checkpoint(checkpoint_path: str, device: str) -> O
         return None
 
     try:
-        checkpoint = universal_torch_load(ckpt_path, map_location=device)
+        checkpoint = universal_torch_load(ckpt_path, **_checkpoint_load_kwargs(device, weights_only))
 
         # Try to extract from model state dict
         if isinstance(checkpoint, dict):
@@ -518,7 +558,9 @@ def load_label_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
         return None
 
 
-def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_classifier: bool = False) -> None:
+def _load_checkpoint(
+    model: object, checkpoint_path: str, device: str, keep_classifier: bool = False, weights_only: bool = False
+) -> None:
     """Load checkpoint weights into model.
 
     Args:
@@ -527,6 +569,7 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         device: Device to load checkpoint on
         keep_classifier: If True, keep classifier/head layers from checkpoint.
             If False, remove classifier layers (default).
+        weights_only: Unpickle tensors and plain containers only
 
     Raises:
         FileNotFoundError: If checkpoint file doesn't exist
@@ -539,7 +582,7 @@ def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_clas
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
     # Load checkpoint
-    checkpoint = universal_torch_load(ckpt_path, map_location=device)
+    checkpoint = universal_torch_load(ckpt_path, **_checkpoint_load_kwargs(device, weights_only))
 
     # Process state dict if needed
     target_keys = model.state_dict().keys()

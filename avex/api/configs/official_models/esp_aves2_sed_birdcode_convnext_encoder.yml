@@ -1,0 +1,59 @@
+---
+# ESP-AVES2: encoder-only ConvNeXt-Base backbone from BirdCODE, the ESP sound
+# event detection model (https://github.com/earthspecies/sound-event-detection,
+# weights at https://huggingface.co/EarthSpeciesProject/sed-birdcode).
+#
+# BirdCODE is an AudioProtoPNet-style detector: ConvNeXt-Base backbone,
+# bilinear 2x add-on upsampling, 188,440 cosine prototypes (20 per class) and a
+# non-negative per-class linear layer over 9,422 bird taxa. AVEX wraps only the
+# backbone (plus the mel front-end buffers): `avex.models.convnext.Model`
+# remaps the FrameDetector keys (`encoder.backbone.*` -> `backbone.*`,
+# `encoder.mel_transform.*` -> `mel_transform.*`) and discards the prototype
+# head, so this model always loads in embedding-extraction mode and has no
+# class_mapping_path. Use the sound-event-detection package for detections.
+#
+# checkpoint_path is the public BirdCODE checkpoint itself (a ~1.1 GB .pt; the
+# discarded prototypes make up ~770 MB of it). No separate encoder artifact is
+# published. The path is pinned to a Hub commit (`@<sha>`) so the pickle cannot
+# change underneath us, and extra_config.weights_only makes the loader unpickle
+# it with torch.load(weights_only=True). The file's LFS SHA-256 is checked in
+# tests/unittests/test_official_models_checksums.py. To move to a new BirdCODE
+# release, update the commit, that hash and the output fingerprints together.
+checkpoint_path: hf://EarthSpeciesProject/sed-birdcode@fd16e12a98360db51b4b6e9c23e29309a804661d/checkpoint/best_model.pt
+
+model_spec:
+  name: convnext
+  pretrained: false
+  device: cuda
+  # Encoder-only: the checkpoint's prototype head cannot be represented by the
+  # convnext wrapper. Tells load_model() to skip probing the checkpoint for
+  # num_classes (which would unpickle the 1.1 GB file a second time).
+  # weights_only: unpickle the third-party .pt with torch.load(weights_only=True)
+  # (tensors and plain containers only, no code execution).
+  extra_config:
+    return_features_only: true
+    weights_only: true
+  init_config:
+    # ConvNeXt-Base (facebook/convnext-base-224-22k topology, 1 input channel).
+    depths: [3, 3, 27, 3]
+    hidden_sizes: [128, 256, 512, 1024]
+    # Mel front-end, identical to the BirdSet XCL / AudioProtoPNet pipeline the
+    # backbone was trained with: power spectrogram -> 256 mel bins -> dB
+    # (80 dB range) -> z-score. The window and mel filterbank are also stored
+    # in the checkpoint (mel_transform.spectrogram.window (2048,),
+    # mel_transform.mel_scale.fb (1025, 256)) and must match these values.
+    sample_rate: 32000
+    n_fft: 2048
+    hop_length: 256
+    n_mels: 256
+    top_db: 80.0
+    norm_mean: -13.369
+    norm_std: 13.162
+  # 32 kHz / 5.0 s -> 160000 samples -> (batch, 1, 256, 626) mel frames ->
+  # (batch, 1024, 8, 19) feature map from the last ConvNeXt stage.
+  audio_config:
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 5
+    window_selection: random
