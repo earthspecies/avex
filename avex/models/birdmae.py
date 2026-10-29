@@ -62,6 +62,8 @@ def _load_model_class(model_id: str, revision: Optional[str]) -> tuple[type, Any
     remote_cls = get_class_from_dynamic_module(class_ref, model_id, revision=revision)
 
     class _BirdMAEModel(remote_cls):  # type: ignore[valid-type, misc]
+        """Remote BirdMAE class that always calls ``post_init()`` once."""
+
         def post_init(self) -> None:
             self._avex_post_init_called = True
             super().post_init()
