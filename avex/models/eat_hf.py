@@ -119,6 +119,8 @@ def _load_backbone(model_name: str) -> nn.Module:
     remote_cls = get_class_from_dynamic_module(class_ref, model_name)
 
     class _EATModel(remote_cls):  # type: ignore[valid-type, misc]
+        """Remote EATModel class that always calls ``post_init()`` once."""
+
         def post_init(self) -> None:
             self._avex_post_init_called = True
             super().post_init()
