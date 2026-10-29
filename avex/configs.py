@@ -294,12 +294,14 @@ class ModelSpec(BaseModel):
     # BirdNet-specific configuration
     language: Optional[str] = Field(None, description="Language model for BirdNet (e.g., 'en_us', 'en_uk')")
 
-    # EAT HF model ID for HuggingFace model loading
+    # HuggingFace model ID for models loaded from the Hub
     model_id: Optional[str] = Field(
-        "worstchan/EAT-base_epoch30_pretrain",
+        None,
         description=(
-            "HuggingFace model repository ID or local path for EAT HF model "
-            "(e.g., 'worstchan/EAT-base_epoch30_pretrain')"
+            "HuggingFace model repository ID or local path (e.g., "
+            "'worstchan/EAT-base_epoch30_pretrain' for EAT HF, "
+            "'DBD-research-group/Bird-MAE-Base' for BirdMAE). "
+            "None uses the model's own default."
         ),
     )
 

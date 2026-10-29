@@ -1,0 +1,19 @@
+---
+# Bird-MAE Base (third-party, DBD research group): masked autoencoder
+# pretrained on BirdSet. 768-d pooled embeddings.
+# https://huggingface.co/DBD-research-group/Bird-MAE-Base
+#
+# Not an ESP model: weights and model code are loaded from the Hub with
+# trust_remote_code at the commit pinned in avex/models/birdmae.py
+# (_PINNED_REVISIONS). No checkpoint_path, so load_model() runs in
+# embedding-extraction mode. The upstream feature extractor pads or
+# truncates input to 5 s.
+
+model_spec:
+  name: birdmae
+  pretrained: true
+  device: cuda
+  model_id: DBD-research-group/Bird-MAE-Base
+  audio_config:
+    sample_rate: 32000
+    target_length_seconds: 5

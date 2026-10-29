@@ -181,12 +181,10 @@ def get_model(model_config: ModelSpec, num_classes: int) -> ModelBase:
             Model as BirdMAEModel,  # Local import to avoid transformers deps
         )
 
-        model_id = getattr(model_config, "model_id", "DBD-research-group/Bird-MAE-Base")
-
         return BirdMAEModel(
             num_classes=num_classes,
             pretrained=model_config.pretrained,
             device=model_config.device,
             audio_config=model_config.audio_config,
-            model_id=model_id,
+            model_id=model_config.model_id,
         )
