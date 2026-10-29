@@ -3,22 +3,14 @@
 This module provides HuggingFace-compatible EAT (Data2Vec) model implementation
 for audio representation learning tasks.
 
-.. warning::
-    **Transformers 5.0.0+ Compatibility Issue**
+The backbone code is loaded from the Hugging Face Hub with
+``trust_remote_code=True``. The upstream ``EATModel`` was written for
+transformers 4.x and never calls ``post_init()``, which transformers >= 5.0
+requires (loading otherwise fails with ``AttributeError: 'EATModel' object
+has no attribute 'all_tied_weights_keys'``). ``_load_backbone`` wraps the
+remote class and calls ``post_init()`` when upstream did not.
 
-    The upstream EAT model (worstchan/EAT-base_epoch30_pretrain) is not yet compatible
-    with transformers >= 5.0.0. The remote model's `EATModel` class is missing the
-    `_tied_weights_keys` class attribute required by the newer transformers library.
-
-    Error: ``AttributeError: 'EATModel' object has no attribute 'all_tied_weights_keys'``
-
-    **Workaround**: Pin transformers to version < 5.0.0 in your dependencies:
-    ``transformers>=4.40.0,<5.0.0``
-
-    This issue needs to be fixed in the upstream HuggingFace repository by adding
-    ``_tied_weights_keys = []`` to the EATModel class in modeling_eat.py.
-
-    See: https://huggingface.co/worstchan/EAT-base_epoch30_pretrain
+See: https://huggingface.co/worstchan/EAT-base_epoch30_pretrain
 """
 
 from __future__ import annotations
@@ -29,7 +21,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
-from transformers import AutoModel
+from transformers import AutoConfig
+from transformers.dynamic_module_utils import get_class_from_dynamic_module
 
 from avex.models.base_model import ModelBase
 from avex.models.eat.audio_processor import (
@@ -40,7 +33,7 @@ from avex.utils.utils import universal_torch_load
 logger = logging.getLogger(__name__)
 
 
-def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
+def load_fairseq_weights(model: nn.Module, weights_path: str) -> None:
     """Load fairseq weights into HuggingFace model.
 
     Temporary function to load weights from fairseq checkpoint format
@@ -103,13 +96,51 @@ def load_fairseq_weights(model: AutoModel, weights_path: str) -> None:
             print("   ", k)
 
 
+def _load_backbone(model_name: str) -> nn.Module:
+    """Load the remote EAT backbone, calling ``post_init()`` for transformers >= 5.
+
+    Returns
+    -------
+    nn.Module
+        The pretrained remote ``EATModel``.
+
+    Raises
+    ------
+    ValueError
+        If ``model_name`` is not a remote-code repository exposing ``AutoModel``.
+    """
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    class_ref = (getattr(config, "auto_map", None) or {}).get("AutoModel")
+    if not class_ref:
+        raise ValueError(
+            f"EAT model_name '{model_name}' is not a remote-code EAT repository "
+            "(config.auto_map has no 'AutoModel' entry)."
+        )
+    remote_cls = get_class_from_dynamic_module(class_ref, model_name)
+
+    class _EATModel(remote_cls):  # type: ignore[valid-type, misc]
+        def post_init(self) -> None:
+            self._avex_post_init_called = True
+            super().post_init()
+
+        def __init__(self, config: Any) -> None:  # noqa: ANN401
+            super().__init__(config)
+            # No-op once upstream calls post_init() itself.
+            if not getattr(self, "_avex_post_init_called", False):
+                self.post_init()
+
+    _EATModel.__name__ = remote_cls.__name__
+    _EATModel.__qualname__ = remote_cls.__qualname__
+    return _EATModel.from_pretrained(model_name, config=config)
+
+
 class EATHFModel(ModelBase):
     """Wrapper exposing HuggingFace EAT checkpoints.
 
     This class converts raw waveforms to
     **128-bin Mel FBanks** exactly like the original EAT pipeline and feeds
     the resulting spectrogram image to the Data2Vec-multi backbone obtained
-    from :pyfunc:`transformers.AutoModel.from_pretrained`.
+    from the Hub (see :func:`_load_backbone`).
 
     Parameters
     ----------
@@ -198,7 +229,7 @@ class EATHFModel(ModelBase):
         #  Backbone: HuggingFace Data2Vec-multi                        #
         # -------------------------------------------------------------- #
         logger.info("Loading EAT backbone from '%s' …", model_name)
-        self.backbone = AutoModel.from_pretrained(model_name, trust_remote_code=True).to(self.device)
+        self.backbone = _load_backbone(model_name).to(self.device)
 
         # Conditionally load fairseq weights if path is provided
         if fairseq_weights_path is not None:
