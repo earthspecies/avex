@@ -38,6 +38,10 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         # scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_5_0
         # Placeholder below is the torch 2.11 value and will NOT match.
         "esp_aves2_sed_birdcode_beats_encoder": "e6cf6dc452aa175883e712c85470d35bc4c152f022b82157a1eb7853931a9c9c",
+        # TODO: regenerate on a torch 2.5.x env --
+        # scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_5_0
+        # Placeholder below is the torch 2.11 value and will NOT match.
+        "esp_aves2_sed_birdcode_convnext_encoder": "962a4db602e60c2188ee02867c94c4a6e1cabc841229ec07cd2c0b6624dbe58f",
         "esp_aves2_sl_beats_all": "b6231fdcb855734ebfddf26e793a46d8e4b3bf61ee950273fdd85affcf85eefe",
         "esp_aves2_sl_beats_bio": "1ad22272d36f3e74d64c5fb98ec31810c9281c1c32e9a2178f10c08004c8bcd6",
         "esp_aves2_sl_eat_all_ssl_all": "0832f0c78523167e0a5439b9a4e96caf115131118549ff9161a01bd6d03a5b2e",
@@ -55,6 +59,10 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         # scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_6_0
         # Placeholder below is the torch 2.11 value and will NOT match.
         "esp_aves2_sed_birdcode_beats_encoder": "e6cf6dc452aa175883e712c85470d35bc4c152f022b82157a1eb7853931a9c9c",
+        # TODO: regenerate on a torch 2.6.x env --
+        # scripts/regenerate_official_model_output_fingerprints.py --profile torch_2_6_0
+        # Placeholder below is the torch 2.11 value and will NOT match.
+        "esp_aves2_sed_birdcode_convnext_encoder": "962a4db602e60c2188ee02867c94c4a6e1cabc841229ec07cd2c0b6624dbe58f",
         "esp_aves2_sl_beats_all": "c01e92839305633644aa62346b3b3a4cf086e46083ae6db2b7f4b3fede3a8f5d",
         "esp_aves2_sl_beats_bio": "1c9e8459e2cf0038a0d062b3f414d18678d10997db95300aa7f1dc7288411fb2",
         "esp_aves2_sl_eat_all_ssl_all": "cc2ce5ffe5a91c79552cddd5401fe001bcaf28abeb79f39dddae69c14cd93b73",
@@ -69,6 +77,7 @@ _OFFICIAL_MODEL_OUTPUT_FINGERPRINTS_BY_PROFILE: Final[dict[str, dict[str, str]]]
         "esp_aves2_effnetb0_bio": "3123856a920e27271a26fe29437119a90e2ebd5436d4bb9a4629d08828fef8ef",
         "esp_aves2_naturelm_audio_v1_beats": "a7c6ccf25fb251603c747c47ccdf632ddb703d0a7e5b7f4525e0f7e6788e34d0",
         "esp_aves2_sed_birdcode_beats_encoder": "e6cf6dc452aa175883e712c85470d35bc4c152f022b82157a1eb7853931a9c9c",
+        "esp_aves2_sed_birdcode_convnext_encoder": "962a4db602e60c2188ee02867c94c4a6e1cabc841229ec07cd2c0b6624dbe58f",
         "esp_aves2_sl_beats_all": "7dedd023d6b167c3aa23cfa5461cca3fd80cc5411e32598cc29941fe1820dcbf",
         "esp_aves2_sl_beats_bio": "824b0aa66302d4fe4fee452913c81770eb7f1bd63653890a0d84ede5ac461851",
         "esp_aves2_sl_eat_all_ssl_all": "cc21667c9aca79fc2fb946685b28c7ef5dfee587181297d52fc5110832e05616",

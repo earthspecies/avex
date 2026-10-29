@@ -39,6 +39,14 @@ OFFICIAL_MODEL_CHECKSUMS: dict[str, str] = {
     "esp_aves2_sl_eat_bio_ssl_all": "d787a181898e4ca68e0d0fa78dc2de83b27c2bd1648bce476534fc8c5ac2c7d7",
 }
 
+# Official models whose checkpoint is a pickle (.pt) published elsewhere on the
+# Hub rather than an ESP safetensors artifact with a .sha256 sidecar. The path
+# must be pinned to a commit (`repo@<sha>/...`) and the value is the file's Git
+# LFS SHA-256 at that commit, as reported by the Hub API.
+PINNED_PICKLE_CHECKPOINTS: dict[str, str] = {
+    "esp_aves2_sed_birdcode_convnext_encoder": "c7cf01801ecbecc34fde2b656f50df6f69cfef3369b559d31da1cc85c6ad2e88",
+}
+
 # Prefix for Hugging Face Hub checkpoint paths (only these are checked).
 _HF_PREFIX = "hf://"
 
@@ -49,9 +57,12 @@ _SHA256_LINE_RE = re.compile(r"^([0-9a-fA-F]{64})\s+\S+\s*$")
 def _official_hf_model_names() -> list[str]:
     """Return official ESP model names that have an hf:// checkpoint path.
 
-    Only includes models whose name starts with 'esp_' (ESP official models).
-    Third-party backbone models (e.g., BEATs from external repos) are excluded
-    since they don't have .sha256 sidecar files for checksum validation.
+    Only includes models whose name starts with 'esp_' (ESP official models)
+    and whose checkpoint is a `.safetensors` file published with a
+    `.safetensors.sha256` sidecar. Third-party backbone models, and official
+    models that reuse a checkpoint published elsewhere (e.g. the BirdCODE
+    ConvNeXt encoder, which loads `EarthSpeciesProject/sed-birdcode/.../best_model.pt`
+    directly), are excluded since they have no sidecar to validate against.
 
     Returns
     -------
@@ -68,7 +79,7 @@ def _official_hf_model_names() -> list[str]:
             checkpoint_path = get_checkpoint_path(name)
         except KeyError:
             continue
-        if checkpoint_path and checkpoint_path.startswith(_HF_PREFIX):
+        if checkpoint_path and checkpoint_path.startswith(_HF_PREFIX) and checkpoint_path.endswith(".safetensors"):
             names.append(name)
     return sorted(names)
 
@@ -224,3 +235,65 @@ class TestOfficialModelsSafetensorsMatchHardcodedChecksum:
             pytest.fail(f"Safetensors artifact for {model_name} has no model weights: {exc}")
         finally:
             tmp_path.unlink(missing_ok=True)
+
+
+def _official_hf_pickle_model_names() -> list[str]:
+    """Return official ESP models whose Hub checkpoint is not a safetensors file.
+
+    Returns
+    -------
+    list[str]
+        Sorted model names.
+    """
+    names: list[str] = []
+    for name in list_models().keys():
+        if not name.startswith("esp_"):
+            continue
+        checkpoint_path = get_checkpoint_path(name)
+        if checkpoint_path and checkpoint_path.startswith(_HF_PREFIX) and not checkpoint_path.endswith(".safetensors"):
+            names.append(name)
+    return sorted(names)
+
+
+class TestOfficialModelsPinnedPickleCheckpoints:
+    """Pickle checkpoints reused from other Hub repos must be pinned and hash-checked."""
+
+    @pytest.fixture(autouse=True)
+    def _ensure_registry_initialized(self) -> None:
+        """Ensure the model registry is populated before each test."""
+        from avex.models.utils import registry
+
+        registry.initialize_registry()
+
+    def test_every_pickle_checkpoint_has_a_pinned_hash(self) -> None:
+        """No official .pt checkpoint may escape integrity checking."""
+        assert set(_official_hf_pickle_model_names()) == set(PINNED_PICKLE_CHECKPOINTS)
+
+    @pytest.mark.parametrize("model_name", sorted(PINNED_PICKLE_CHECKPOINTS))
+    def test_checkpoint_path_is_pinned_to_a_commit(self, model_name: str) -> None:
+        """The hf:// path must name a 40-hex commit so the file cannot change silently."""
+        checkpoint_path = get_checkpoint_path(model_name)
+        assert checkpoint_path is not None
+        repo_part = checkpoint_path[len(_HF_PREFIX) :].split("/", 2)[1]
+        assert re.fullmatch(r"[^@]+@[0-9a-f]{40}", repo_part), (
+            f"{model_name}: checkpoint_path must be pinned as hf://<org>/<repo>@<commit-sha>/<file>, "
+            f"got {checkpoint_path}"
+        )
+
+    @pytest.mark.parametrize("model_name", sorted(PINNED_PICKLE_CHECKPOINTS))
+    def test_pinned_checkpoint_matches_hub_lfs_sha256(self, model_name: str) -> None:
+        """The Hub's LFS SHA-256 for the pinned file must match the hardcoded value."""
+        checkpoint_path = get_checkpoint_path(model_name)
+        assert checkpoint_path is not None
+        org, repo_rev, filename = checkpoint_path[len(_HF_PREFIX) :].split("/", 2)
+        repo, revision = repo_rev.split("@", 1)
+        try:
+            from huggingface_hub import HfApi
+
+            info = HfApi().model_info(f"{org}/{repo}", revision=revision, files_metadata=True)
+        except Exception as exc:  # pragma: no cover - network / HF issues
+            pytest.skip(f"Could not query HF for {org}/{repo}@{revision}: {exc}")
+
+        lfs = {s.rfilename: s.lfs for s in info.siblings}
+        assert filename in lfs and lfs[filename] is not None, f"{filename} not an LFS file in {org}/{repo}@{revision}"
+        assert lfs[filename].sha256 == PINNED_PICKLE_CHECKPOINTS[model_name]
