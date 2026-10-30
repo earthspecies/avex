@@ -64,6 +64,14 @@ model = load_model("esp_aves2_effnetb0_all", device="cpu")
 - Define a custom model class (subclassing `ModelBase`) with its own classifier head, or
 - Build a backbone via `build_model` / `build_model_from_spec` and attach a probe head with `build_probe_from_config` (supports both online and offline modes).
 
+**Probe contract for custom backbones.** Probes call
+`base_model.extract_embeddings(x, padding_mask=..., aggregation=..., freeze_backbone=...)`.
+Inheriting `ModelBase.extract_embeddings` (hook-based) satisfies this automatically. If you
+override it, keep that keyword-only signature; `freeze_backbone=True` should run the backbone
+under `torch.no_grad()`. Backbones with a single, non-hookable output (TensorFlow Hub, ONNX)
+override `register_hooks_for_layers` to return `self._register_single_output_layer(target_layers)`.
+`tests/unittests/test_model_probe_contract.py` enforces this for every `ModelBase` subclass.
+
 ### `build_model()` - Plugin Architecture
 
 **When to use:**

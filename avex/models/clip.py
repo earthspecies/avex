@@ -143,27 +143,32 @@ class CLIPModel(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | Dict[str, torch.Tensor],
-        layers: list[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
-    ) -> torch.Tensor:
-        """Extract audio embeddings from the CLIP model.
+        aggregation: str = "none",
+        freeze_backbone: bool = True,
+    ) -> torch.Tensor | list[torch.Tensor]:
+        """Extract projected audio embeddings from the CLIP model.
+
+        CLIP exposes a single (B, D) projected embedding, so there is no time
+        axis to pool: every aggregation method returns that tensor, and
+        ``"none"`` wraps it as a one-element list of shape (B, 1, D) for
+        sequence probes.
 
         Parameters
         ----------
         x : torch.Tensor | Dict[str, torch.Tensor]
             Input audio tensor or dictionary containing 'raw_wav' and 'padding_mask'
-        layers : list[str]
-            List of layer names (kept for interface compatibility but ignored)
         padding_mask : Optional[torch.Tensor]
             Padding mask for the input
-        average_over_time : bool
-            Kept for interface compatibility but ignored
+        aggregation : str
+            One of "none", "mean", "max", "cls_token"
+        freeze_backbone : bool
+            When True, run the encoder under ``torch.no_grad()``
 
         Returns
         -------
-        torch.Tensor
+        torch.Tensor | list[torch.Tensor]
             Projected audio embeddings suitable for contrastive learning
         """
         # Handle input format
@@ -183,7 +188,10 @@ class CLIPModel(ModelBase):
             )
 
         # Extract audio features and apply projection
-        audio_features = self.audio_encoder(raw_wav, p_mask)
-        projected_features = self.audio_projection(audio_features)
+        if freeze_backbone:
+            with torch.no_grad():
+                projected_features = self.audio_projection(self.audio_encoder(raw_wav, p_mask))
+        else:
+            projected_features = self.audio_projection(self.audio_encoder(raw_wav, p_mask))
 
-        return projected_features
+        return self._aggregate_single_embedding(projected_features, aggregation)

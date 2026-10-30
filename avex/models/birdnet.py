@@ -346,13 +346,45 @@ class Model(ModelBase):
             result = self.classifier(result)
         return result
 
+    def register_hooks_for_layers(self, target_layers: list[str | int]) -> list[str]:
+        """Accept generic layer selectors for the single ONNX embedding output.
+
+        The ONNX graph has no PyTorch modules to hook, so this only validates
+        ``target_layers`` and reports :attr:`ModelBase.SINGLE_OUTPUT_LAYER`.
+
+        Args:
+            target_layers: ``"last_layer"``, ``"all"`` or ``"embeddings"``.
+
+        Returns:
+            list[str]: ``["embeddings"]``.
+        """
+        return self._register_single_output_layer(target_layers)
+
     def extract_embeddings(
         self,
         x: torch.Tensor | Dict[str, torch.Tensor],
         *,
         padding_mask: Optional[torch.Tensor] = None,
         aggregation: str = "mean",
+        freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:
+        """Return BirdNet 1024-d embeddings for each clip.
+
+        Args:
+            x: Waveform tensor (B, T) or dict with ``"raw_wav"``.
+            padding_mask: Unused; BirdNet chunks each clip internally.
+            aggregation: ``"mean"``/``"max"``/``"cls_token"`` pool over chunks to
+                (B, 1024); ``"none"`` returns a list of (1, N_chunks, 1024) tensors.
+            freeze_backbone: Accepted for the probe API; ONNX Runtime never
+                tracks PyTorch gradients, so it has no effect here.
+
+        Returns:
+            torch.Tensor | list[torch.Tensor]: Pooled embeddings or per-clip chunk sequences.
+
+        Raises:
+            RuntimeError: If the ONNX graph exposes no embedding output.
+            ValueError: If ``aggregation`` is not supported.
+        """
         wav = x["raw_wav"] if isinstance(x, dict) else x
 
         batch: list[torch.Tensor] = []

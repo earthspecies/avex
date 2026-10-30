@@ -143,3 +143,16 @@ def test_return_features_only() -> None:
     # return_features_only=True overrides num_classes
     model3 = PerchModel(return_features_only=True, num_classes=50, device="cpu")
     assert model3.num_classes is None
+
+
+def test_online_linear_probe_on_surfperch(surfperch_model_no_classifier: PerchModel) -> None:
+    """Regression for issue #215: an online probe can be attached to the TF-Hub wrapper."""
+    from avex.configs import ProbeConfig
+    from avex.models.probes.utils.factory import build_probe_from_config
+
+    cfg = ProbeConfig(probe_type="linear", target_layers=["last_layer"], aggregation="mean", freeze_backbone=True)
+    probe = build_probe_from_config(
+        cfg, num_classes=3, device="cpu", base_model=surfperch_model_no_classifier, target_length=32000 * 5
+    )
+    out = probe(torch.randn(2, 32000 * 5))
+    assert out.shape == (2, 3)

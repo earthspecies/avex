@@ -98,8 +98,13 @@ def test_extract_embeddings_gradient_propagation() -> None:
     layers = ["model.0", "model.1"]  # Sequential layers are named 0 and 1
     model.register_hooks_for_layers(layers)
 
-    # Extract embeddings (use mean aggregation to get tensor)
-    embeddings = model.extract_embeddings(x, aggregation="mean")
+    # The default (freeze_backbone=True) runs under torch.no_grad(), as every
+    # backbone does for probes; fine-tuning must opt in explicitly.
+    frozen = model.extract_embeddings(x, aggregation="mean")
+    assert not frozen.requires_grad
+
+    # Extract embeddings with gradients enabled (use mean aggregation to get tensor)
+    embeddings = model.extract_embeddings(x, aggregation="mean", freeze_backbone=False)
 
     # Compute loss and backpropagate
     loss = embeddings.sum()

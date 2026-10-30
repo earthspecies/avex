@@ -4,7 +4,7 @@ This module provides the ATST (Audio Spectrogram Transformer) Frame encoder
 implementation for audio representation learning tasks.
 """
 
-from typing import List, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -102,25 +102,26 @@ class Model(ModelBase):
     def extract_embeddings(
         self,
         x: torch.Tensor | dict[str, torch.Tensor],
-        layers: List[str],
         *,
         padding_mask: Optional[torch.Tensor] = None,
-        average_over_time: bool = True,
-    ) -> torch.Tensor:
-        """
-        Extract embeddings using the forward pass.
+        aggregation: str = "none",
+        freeze_backbone: bool = True,
+    ) -> torch.Tensor | list[torch.Tensor]:
+        """Extract embeddings using the forward pass.
 
-        For ATST, we ignore the layers parameter and always return the final embeddings.
+        ATST yields a single time-averaged (B, D) embedding, so every
+        aggregation method returns that tensor and ``"none"`` wraps it as a
+        one-element list of shape (B, 1, D) for sequence probes.
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav' and 'padding_mask'
-            layers: List of layer names (ignored for ATST)
             padding_mask: Optional padding mask tensor
-            average_over_time: Whether to average over time dimension
+            aggregation: One of "none", "mean", "max", "cls_token"
+            freeze_backbone: When True, run the backbone under ``torch.no_grad()``
 
         Returns
         -------
-        torch.Tensor
+        torch.Tensor | list[torch.Tensor]
             ATST embeddings from the model.
         """
         # Handle input format
@@ -139,9 +140,12 @@ class Model(ModelBase):
                 dtype=torch.bool,
             )
 
-        # Get embeddings using forward pass
-        embeddings = self.forward(raw_wav, p_mask)
-        return embeddings
+        if freeze_backbone:
+            with torch.no_grad():
+                embeddings = self.forward(raw_wav, p_mask)
+        else:
+            embeddings = self.forward(raw_wav, p_mask)
+        return self._aggregate_single_embedding(embeddings, aggregation)
 
     def freeze(self) -> None:
         """Freeze the ATST backbone parameters."""
