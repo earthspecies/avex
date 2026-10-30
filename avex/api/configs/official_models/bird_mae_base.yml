@@ -17,3 +17,4 @@ model_spec:
   audio_config:
     sample_rate: 32000
     target_length_seconds: 5
+    representation: raw

@@ -13,7 +13,9 @@ with ``AttributeError: ... 'all_tied_weights_keys'``). ``_load_model_class``
 wraps the remote class and calls ``post_init()`` when upstream did not.
 """
 
+import functools
 import logging
+from collections.abc import Mapping
 from typing import Any, Optional
 
 import torch
@@ -34,6 +36,18 @@ _PINNED_REVISIONS: dict[str, str] = {
     "DBD-research-group/Bird-MAE-Base": "6cc416d1a7ae2af29b6b866499b3b047a8f01304",
     "DBD-research-group/Bird-MAE-huge": "61106f4d15a61fce956faef80cf17894e1ab9a48",
 }
+
+
+def _pinned_revision(model_id: str) -> Optional[str]:
+    """Look up the pinned commit for ``model_id`` (Hub repo ids are case-insensitive).
+
+    Returns
+    -------
+    Optional[str]
+        The pinned commit sha, or None if the repository is not pinned.
+    """
+    wanted = model_id.lower()
+    return next((rev for repo, rev in _PINNED_REVISIONS.items() if repo.lower() == wanted), None)
 
 
 def _load_model_class(model_id: str, revision: Optional[str]) -> tuple[type, Any]:
@@ -79,13 +93,18 @@ def _load_model_class(model_id: str, revision: Optional[str]) -> tuple[type, Any
     return _BirdMAEModel, config
 
 
-def _fit_time_axis(features: torch.Tensor, target_length: int) -> torch.Tensor:
-    """Pad (with the batch minimum) or crop the time axis of (B, 1, T, M) features to ``target_length``.
+def _pad_time_axis(features: torch.Tensor, target_length: int) -> torch.Tensor:
+    """Pad the time axis of (B, 1, T, M) features to ``target_length`` with the batch minimum.
 
     The pinned Bird-MAE-huge feature extractor compares ``target_length`` against
     the batch dimension instead of the time dimension, so it leaves batches of
     ``>= target_length`` clips unpadded. This mirrors the intended upstream
-    behaviour independent of batch size.
+    behaviour independent of batch size. Like upstream, the pad value is the
+    minimum over the whole batch, so a clip's embedding can depend slightly on
+    the clips it is batched with.
+
+    No cropping: upstream truncates the waveform to 5 s before computing the
+    filterbank, so ``T`` never exceeds ``target_length``.
 
     Returns
     -------
@@ -93,11 +112,25 @@ def _fit_time_axis(features: torch.Tensor, target_length: int) -> torch.Tensor:
         Features with ``features.shape[2] == target_length``.
     """
     length = features.shape[2]
-    if length > target_length:
-        return features[:, :, :target_length, :]
     if length < target_length:
         return F.pad(features, (0, 0, 0, target_length - length), value=features.min().item())
     return features
+
+
+def _checkpointed_block_forward(blk: nn.Module, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+    """Run ``blk``'s original forward under ``torch.utils.checkpoint`` when gradients are enabled.
+
+    Module-level rather than a per-block closure, so nothing captures the block twice.
+
+    Returns
+    -------
+    Any
+        Whatever the block's forward returns (``(hidden_states, attention_weights)``).
+    """
+    forward = functools.partial(type(blk).forward, blk)
+    if torch.is_grad_enabled():
+        return torch.utils.checkpoint.checkpoint(forward, *args, use_reentrant=False, **kwargs)
+    return forward(*args, **kwargs)
 
 
 class Model(ModelBase):
@@ -152,13 +185,13 @@ class Model(ModelBase):
         self.return_features_only = return_features_only
         self.gradient_checkpointing = False
         self.model_id = model_id or DEFAULT_MODEL_ID
-        self.revision = _PINNED_REVISIONS.get(self.model_id)
+        self.revision = _pinned_revision(self.model_id)
         if self.revision is None:
             logger.warning(f"BirdMAE model_id '{self.model_id}' has no pinned revision; using the Hub default branch.")
 
         model_cls, config = _load_model_class(self.model_id, self.revision)
         if pretrained:
-            self.model = model_cls.from_pretrained(self.model_id, revision=self.revision)
+            self.model = model_cls.from_pretrained(self.model_id, config=config, revision=self.revision)
         else:
             self.model = model_cls(config)
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(
@@ -196,9 +229,9 @@ class Model(ModelBase):
         if x.dim() == 4:
             return x.to(self.device)
         features = self.feature_extractor(x.detach().float().cpu(), return_tensors="pt")
-        if isinstance(features, dict):
+        if isinstance(features, Mapping):
             features = features["input_values"]
-        features = _fit_time_axis(features, self.feature_extractor.target_length)
+        features = _pad_time_axis(features, self.feature_extractor.target_length)
         return features.to(self.device)
 
     def enable_gradient_checkpointing(self) -> None:
@@ -212,19 +245,19 @@ class Model(ModelBase):
         for blk in self.model.blocks:
             if getattr(blk, "_avex_checkpointed", False):
                 continue
-            orig_forward = blk.forward
-
-            def forward(*args: Any, _orig: Any = orig_forward, **kwargs: Any) -> Any:  # noqa: ANN401
-                if torch.is_grad_enabled():
-                    return torch.utils.checkpoint.checkpoint(_orig, *args, use_reentrant=False, **kwargs)
-                return _orig(*args, **kwargs)
-
-            blk.forward = forward
+            blk.forward = functools.partial(_checkpointed_block_forward, blk)
             blk._avex_checkpointed = True
 
     def _embed(self, x: torch.Tensor) -> torch.Tensor:
-        # Upstream returns the globally pooled embedding as last_hidden_state.
-        return self.model(self.process_audio(x)).last_hidden_state
+        # Upstream returns the globally pooled embedding as last_hidden_state
+        # (unless config.global_pool is None, which this wrapper does not support).
+        embeddings = self.model(self.process_audio(x)).last_hidden_state
+        if embeddings.dim() != 2:
+            raise ValueError(
+                f"BirdMAE returned unpooled features of shape {tuple(embeddings.shape)}; "
+                "the wrapper expects config.global_pool to be 'mean' or 'cls'."
+            )
+        return embeddings
 
     def forward(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Forward pass through the model.

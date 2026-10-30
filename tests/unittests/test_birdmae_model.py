@@ -104,17 +104,26 @@ def test_model_spec_model_id_defaults_to_none() -> None:
     assert ModelSpec(name="birdmae").model_id is None
 
 
-@pytest.mark.parametrize("length, expected", [(498, 512), (512, 512), (600, 512)])
-def test_fit_time_axis_pads_and_crops(length: int, expected: int) -> None:
-    """Time axis is padded with the batch minimum or cropped to target_length, regardless of batch size."""
+@pytest.mark.parametrize("length", [498, 512])
+def test_pad_time_axis(length: int) -> None:
+    """Time axis is padded with the batch minimum to target_length, regardless of batch size.
+
+    Batch size 513 >= target_length reproduces the upstream Bird-MAE-huge bug
+    (it compares target_length against the batch dimension). Few mel bins keep
+    the tensors small; the helper never reads that axis.
+    """
     import torch
 
-    features = torch.rand(513, 1, length, 128) + 1.0
+    features = torch.rand(513, 1, length, 4) + 1.0
     features[0, 0, 0, 0] = -3.0
-    out = birdmae._fit_time_axis(features, 512)
-    assert out.shape == (513, 1, expected, 128)
-    if length < 512:
-        assert torch.all(out[:, :, length:, :] == -3.0)
-        assert torch.equal(out[:, :, :length, :], features)
-    else:
-        assert torch.equal(out, features[:, :, :512, :])
+    out = birdmae._pad_time_axis(features, 512)
+    assert out.shape == (513, 1, 512, 4)
+    assert torch.equal(out[:, :, :length, :], features)
+    assert torch.all(out[:, :, length:, :] == -3.0)
+
+
+def test_pinned_revision_is_case_insensitive() -> None:
+    """Hub repo ids are case-insensitive, so the pin lookup must be too."""
+    expected = birdmae._PINNED_REVISIONS[birdmae.DEFAULT_MODEL_ID]
+    assert birdmae._pinned_revision(birdmae.DEFAULT_MODEL_ID.lower()) == expected
+    assert birdmae._pinned_revision("someone/other-model") is None
