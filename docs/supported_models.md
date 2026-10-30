@@ -41,6 +41,22 @@ The ESP-AVES2 model collection is available on HuggingFace: [EarthSpeciesProject
 
 All official ESP-AVES2 models have both a checkpoint and a class mapping, so they support **classification with labels**. They also support **embedding extraction** with `load_model(..., return_features_only=True)`.
 
+## Third-Party Models
+
+Registered for convenience. Weights and model code come from the authors' Hugging Face repositories (`trust_remote_code`), pinned to a known commit in `avex/models/birdmae.py`. Embedding extraction only; the upstream feature extractor pads or truncates input to 5 s.
+
+| Model Name | Architecture | Embedding Dim | HuggingFace |
+|------------|--------------|---------------|-------------|
+| `bird_mae_base` | Bird-MAE (ViT-B) | 768 | [Link](https://huggingface.co/DBD-research-group/Bird-MAE-Base) |
+| `bird_mae_huge` | Bird-MAE (ViT-H) | 1280 | [Link](https://huggingface.co/DBD-research-group/Bird-MAE-huge) |
+
+```python
+from avex import load_model
+
+model = load_model("bird_mae_base", device="cpu")
+embeddings = model.extract_embeddings(audio_32khz)  # (batch, 768)
+```
+
 ## Model Configuration
 
 Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `avex/api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.
