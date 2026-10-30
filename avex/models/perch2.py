@@ -161,6 +161,7 @@ class Perch2Model(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         aggregation: str = "mean",
+        freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:
         audio = x["raw_wav"] if isinstance(x, dict) else x
         embeddings = self.extract_features(audio, padding_mask)

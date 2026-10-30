@@ -151,12 +151,20 @@ class PerchModel(ModelBase):
                 )
 
     def register_hooks_for_layers(self, target_layers: list[str | int]) -> list[str]:
-        """Perch does not support PyTorch forward hooks for TF-Hub internals."""
-        raise NotImplementedError(
-            "PerchModel does not support intermediate layer hooks. "
-            "This backbone is TensorFlow Hub based; use extract_embeddings() "
-            "without hook registration."
-        )
+        """Accept generic layer selectors for the single TF-Hub embedding output.
+
+        The TensorFlow Hub backbone has no PyTorch modules to hook, so this only
+        validates ``target_layers`` and reports the pseudo layer
+        :attr:`ModelBase.SINGLE_OUTPUT_LAYER`; ``extract_embeddings`` returns the
+        backbone embedding directly.
+
+        Args:
+            target_layers: ``"last_layer"``, ``"all"`` or ``"embeddings"``.
+
+        Returns:
+            list[str]: ``["embeddings"]``.
+        """
+        return self._register_single_output_layer(target_layers)
 
     # --------------------------------------------------------------------- #
     #  Private helpers
@@ -273,6 +281,7 @@ class PerchModel(ModelBase):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         aggregation: str = "mean",
+        freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:  # type: ignore[override]
         """Return Perch embeddings with support for different aggregation methods.
 
@@ -284,6 +293,8 @@ class PerchModel(ModelBase):
             x: Input audio tensor or dictionary containing 'raw_wav' key
             padding_mask: Optional padding mask (unused)
             aggregation: Aggregation method - "mean", "max", "cls_token", or "none"
+            freeze_backbone: Accepted for the probe API; the TensorFlow backbone
+                never tracks PyTorch gradients, so it has no effect here.
 
         Returns:
             Union[torch.Tensor, List[torch.Tensor]]: Extracted embeddings based on

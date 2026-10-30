@@ -49,6 +49,64 @@ class ModelBase(nn.Module):
                     self._layer_names.append(name)
             logger.info(f"Discovered {len(self._layer_names)} embedding layers: {self._layer_names}")
 
+    #: Pseudo layer name reported by backbones that expose exactly one embedding
+    #: output and cannot register PyTorch forward hooks (TF-Hub / ONNX wrappers).
+    SINGLE_OUTPUT_LAYER = "embeddings"
+
+    def _register_single_output_layer(self, target_layers: List[Union[str, int]]) -> List[str]:
+        """Resolve ``target_layers`` for a backbone with one fixed embedding output.
+
+        Wrappers around non-PyTorch runtimes (TensorFlow Hub, ONNX) have no
+        modules to hook, but probes still call ``register_hooks_for_layers``.
+        Such models delegate to this helper, which accepts the generic
+        selectors and records :attr:`SINGLE_OUTPUT_LAYER` as the only layer.
+
+        Args:
+            target_layers: Requested selectors. Accepted values are
+                ``"last_layer"``, ``"all"``, ``0``, ``-1`` and
+                :attr:`SINGLE_OUTPUT_LAYER`.
+
+        Returns:
+            List[str]: ``[SINGLE_OUTPUT_LAYER]``.
+
+        Raises:
+            ValueError: If any selector is not one of the accepted values.
+        """
+        allowed = {"last_layer", "all", self.SINGLE_OUTPUT_LAYER, 0, -1}
+        bad = [t for t in target_layers if isinstance(t, bool) or t not in allowed]
+        if bad:
+            raise ValueError(
+                f"{type(self).__name__} exposes a single embedding output and has no hookable "
+                f"layers; target_layers must be 'last_layer', 'all' or '{self.SINGLE_OUTPUT_LAYER}', got {bad}"
+            )
+        self.deregister_all_hooks()
+        self._hook_layers = [self.SINGLE_OUTPUT_LAYER]
+        return list(self._hook_layers)
+
+    @staticmethod
+    def _aggregate_single_embedding(
+        embeddings: torch.Tensor, aggregation: str
+    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """Apply the ``aggregation`` contract to a backbone that yields one (B, D) tensor.
+
+        Args:
+            embeddings: Tensor of shape (B, D).
+            aggregation: One of ``"none"``, ``"mean"``, ``"max"``, ``"cls_token"``.
+
+        Returns:
+            Union[torch.Tensor, List[torch.Tensor]]: ``[embeddings[:, None, :]]``
+            for ``"none"`` (one (B, 1, D) entry, as sequence probes expect),
+            otherwise ``embeddings`` unchanged since there is no time axis to pool.
+
+        Raises:
+            ValueError: If ``aggregation`` is not a supported method.
+        """
+        if aggregation == "none":
+            return [embeddings.unsqueeze(1)]
+        if aggregation in ("mean", "max", "cls_token"):
+            return embeddings
+        raise ValueError(f"Unsupported aggregation method: {aggregation}")
+
     def get_model_layers(self) -> list[str]:
         """Return the discoverable embedding/probe layers for this model instance.
 
@@ -345,14 +403,22 @@ class ModelBase(nn.Module):
         *,
         padding_mask: Optional[torch.Tensor] = None,
         aggregation: str = "none",
+        freeze_backbone: bool = True,
     ) -> Union[torch.Tensor, List[torch.Tensor]]:
         """Extract embeddings from all registered hooks in the model.
+
+        Every subclass override must accept this exact keyword-only contract
+        (``padding_mask``, ``aggregation``, ``freeze_backbone``) because probes
+        call it blindly; see ``tests/unittests/test_model_probe_contract.py``.
 
         Args:
             x: Input tensor or dictionary containing 'raw_wav'
             padding_mask: Optional padding mask for the input
             aggregation: Aggregation method for multiple layers ('mean', 'max',
                 'cls_token', 'none')
+            freeze_backbone: When True (the default) the forward pass runs under
+                ``torch.no_grad()`` so probes do not build an autograd graph
+                through the backbone. Pass False to fine-tune end to end.
 
         Returns:
             Union[torch.Tensor, List[torch.Tensor]]: Model embeddings (tensor if
@@ -372,7 +438,6 @@ class ModelBase(nn.Module):
             raise ValueError("No hooks registered. Call register_hooks_for_layers() first.")
 
         try:
-            # Forward pass (no torch.no_grad to allow fine-tuning when requested)
             if isinstance(x, dict):
                 # Input provided as dictionary with explicit padding mask
                 wav = x["raw_wav"]
@@ -384,8 +449,12 @@ class ModelBase(nn.Module):
                 mask = padding_mask
                 expected_batch_size = wav.shape[0]
 
-            # Forward pass to trigger hooks
-            self.forward(wav, mask)
+            # Forward pass to trigger hooks; skip autograd when the backbone is frozen
+            if freeze_backbone:
+                with torch.no_grad():
+                    self.forward(wav, mask)
+            else:
+                self.forward(wav, mask)
 
             # Collect embeddings from hook outputs
             embeddings: List[torch.Tensor] = []
