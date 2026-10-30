@@ -13,6 +13,12 @@ import torch.nn as nn
 from huggingface_hub import hf_hub_download
 
 from avex.models.base_model import ModelBase
+from avex.models.utils.onnx_runtime import (
+    import_onnxruntime,
+    ort_providers,
+    warn_cannot_unfreeze,
+    warn_if_cpu_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,21 +34,11 @@ def _load_ort_session(repo_id: str = _HF_REPO_ID, filename: str = _HF_FILENAME) 
     global _ort_session, _ort_session_key
     key = (repo_id, filename)
     if _ort_session is None or _ort_session_key != key:
-        try:
-            import onnxruntime as ort
-        except ModuleNotFoundError as e:
-            raise ImportError(
-                "onnxruntime is required for the Perch2 model.\n"
-                "uv pip install onnxruntime   # CPU\n"
-                "uv pip install onnxruntime-gpu  # CUDA"
-            ) from e
-
+        ort = import_onnxruntime()
         logger.info("Downloading Perch2 ONNX model from %s …", repo_id)
         model_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
-        # Prefer CUDA if available, fall back to CPU
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        _ort_session = ort.InferenceSession(model_path, providers=providers)
+        _ort_session = ort.InferenceSession(model_path, providers=ort_providers())
         _ort_session_key = key
         logger.info("Perch2 ONNX session ready (providers: %s)", _ort_session.get_providers())
     return _ort_session
@@ -60,6 +56,12 @@ class Perch2Model(ModelBase):
       • spatial_embedding  — shape [B, 16, 4, 1536]
       • spectrogram        — shape [B, 500, 128]
       • label              — shape [B, 14795]
+
+    Only the embedding is exposed, as the single non-hookable output
+    ``ModelBase.SINGLE_OUTPUT_LAYER`` that ``target_layers=["last_layer"]``
+    resolves to. ONNX Runtime runs outside autograd, so the backbone is
+    always frozen, whatever ``freeze_backbone`` says; a classifier on top
+    still trains.
     """
 
     def __init__(
@@ -82,8 +84,11 @@ class Perch2Model(ModelBase):
         self.return_features_only = return_features_only
         self._hf_repo_id = hf_repo_id
         self._hf_filename = hf_filename
+        if not freeze_backbone:
+            warn_cannot_unfreeze(self)
 
-        _load_ort_session(hf_repo_id, hf_filename)
+        # Warm up the session (downloads the model on first use).
+        warn_if_cpu_fallback("Perch2", device, _load_ort_session(hf_repo_id, hf_filename).get_providers())
 
         if not return_features_only and num_classes is not None and num_classes > 0:
             self.num_classes = num_classes
@@ -97,6 +102,23 @@ class Perch2Model(ModelBase):
     # ------------------------------------------------------------------ #
     #  Private helpers
     # ------------------------------------------------------------------ #
+    def _ort_forward(self, audio: torch.Tensor) -> torch.Tensor:
+        """Run the ONNX session and return the ``(B, 1536)`` embedding on ``self.device``.
+
+        Returns
+        -------
+        torch.Tensor
+            Embeddings with shape ``(B, 1536)``.
+        """
+        session = _load_ort_session(self._hf_repo_id, self._hf_filename)
+        # ONNX Runtime takes numpy, so the batch always goes through host memory,
+        # even with the CUDA provider. A 5 s clip is 640 KB; the copy is cheap
+        # next to the model, so IOBinding is not worth the complexity here.
+        audio_np = audio.detach().cpu().float().numpy()
+        # "embedding" is output 0 of the perch_v2 ONNX contract.
+        (embedding,) = session.run(["embedding"], {"inputs": audio_np})
+        return torch.from_numpy(embedding).to(self.device)
+
     def _prepare_waveform(self, wav: torch.Tensor) -> torch.Tensor:
         if wav.dim() == 3:
             # (B, C, N) → (B, N): downmix any channel count to mono
@@ -111,33 +133,25 @@ class Perch2Model(ModelBase):
             wav = nn.functional.pad(wav, (0, self.window_samples - n))
         return wav
 
-    def _ort_forward(self, audio: torch.Tensor) -> torch.Tensor:
-        """Run ONNX inference and return embeddings [B, embedding_dim].
-
-        perch_v2.onnx input/output contract:
-          in:  "inputs"          [B, 160000] float32
-          out[0]: "embedding"    [B, 1536]
-          out[1]: "spatial_embedding" [B, 16, 4, 1536]
-          out[2]: "spectrogram"  [B, 500, 128]
-          out[3]: "label"        [B, 14795]
-
-        Returns
-        -------
-        torch.Tensor
-            Embeddings with shape [B, embedding_dim].
-        """
-        session = _load_ort_session(self._hf_repo_id, self._hf_filename)
-        audio_np = audio.detach().cpu().float().numpy()
-        # output index 0 is always "embedding" per the perch_v2 ONNX contract
-        outputs = session.run(["embedding"], {"inputs": audio_np})
-        return torch.from_numpy(outputs[0])
-
     # ------------------------------------------------------------------ #
     #  ModelBase interface
     # ------------------------------------------------------------------ #
-    def _discover_embedding_layers(self) -> None:
-        if not self._layer_names:
-            self._layer_names = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
+    def register_hooks_for_layers(self, target_layers: list[str | int]) -> list[str]:
+        """Accept generic layer selectors for the single ONNX embedding output.
+
+        The ONNX graph has no PyTorch modules to hook, so this only validates
+        ``target_layers`` and reports :attr:`ModelBase.SINGLE_OUTPUT_LAYER`.
+
+        Args:
+            target_layers: ``"last_layer"``, ``"all"`` or ``"embeddings"``.
+
+        Returns:
+            list[str]: ``["embeddings"]``.
+        """
+        return self._register_single_output_layer(target_layers)
+
+    def enable_gradient_checkpointing(self) -> None:
+        logger.warning("Gradient checkpointing not supported for Perch2 ONNX.")
 
     def extract_features(
         self,
@@ -145,7 +159,7 @@ class Perch2Model(ModelBase):
         padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         audio = self._prepare_waveform(audio)
-        return self._ort_forward(audio).to(self.device)
+        return self._ort_forward(audio)
 
     def forward(
         self,
@@ -163,15 +177,29 @@ class Perch2Model(ModelBase):
         aggregation: str = "mean",
         freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:
+        """Return the Perch v2 embedding for a waveform batch.
+
+        The embedding is the model's only output for probes, so registered
+        layer selectors do not change it.
+
+        Args:
+            x: Waveform ``(B, N)`` or ``(B, C, N)`` at 32 kHz, or a dict with
+                ``"raw_wav"``.
+            padding_mask: Unused; accepted for interface compatibility.
+            aggregation: ``"mean"``, ``"max"`` or ``"cls_token"`` return
+                ``(B, 1536)``; ``"none"`` returns ``[(B, 1, 1536)]``.
+            freeze_backbone: Accepted for probe compatibility and ignored:
+                ONNX Runtime is never differentiable.
+
+        Returns:
+            torch.Tensor | list[torch.Tensor]: The embeddings.
+        """
+        if not freeze_backbone:
+            warn_cannot_unfreeze(self)
+
         audio = x["raw_wav"] if isinstance(x, dict) else x
         embeddings = self.extract_features(audio, padding_mask)
-
-        if aggregation == "none":
-            return [embeddings.unsqueeze(1)]  # (B, 1, D) for sequence probes
-        elif aggregation in ("mean", "max", "cls_token"):
-            return embeddings
-        else:
-            raise ValueError(f"Unsupported aggregation method: {aggregation}")
+        return self._aggregate_single_embedding(embeddings, aggregation)
 
 
 # Alias for auto-discovery consistency

@@ -1,0 +1,16 @@
+---
+# BirdNET v2.4 bird-sound classifier (third-party, not an ESP model):
+# 1024-d embeddings, 48 kHz mono, split into 3 s chunks internally.
+# https://github.com/kahst/BirdNET-Analyzer
+#
+# Nothing is redistributed by avex: the model runs on ONNX Runtime from the
+# ONNX export at justinchuby/BirdNET-onnx, downloaded on first use. There is
+# no checkpoint_path, so load_model() runs in embedding-extraction mode.
+
+model_spec:
+  name: birdnet
+  pretrained: true
+  device: cpu
+  audio_config:
+    sample_rate: 48000
+    target_length_seconds: 3
