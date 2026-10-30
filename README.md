@@ -169,7 +169,7 @@ The framework supports the following audio representation learning models:
 - **ResNet** - ResNet models (ResNet18, ResNet50, ResNet152)
 - **CLIP** - Contrastive Language-Audio Pretraining models
 - **BirdNet** - BirdNet v2.4 for bioacoustic classification (ONNX, no extra dependencies)
-- **Perch v2** - Google Perch v2 for bird vocalization (ONNX, no extra dependencies)
+- **Perch v2** - Google Perch v2 for bird vocalization (native PyTorch port, runs on GPU, no extra dependencies)
 - **Perch v1** *(deprecated)* - Google Perch v1 via TensorFlow Hub — requires `pip install 'avex[tensorflow]'`
 - **SurfPerch** *(deprecated)* - SurfPerch via TensorFlow Hub — requires `pip install 'avex[tensorflow]'`
 

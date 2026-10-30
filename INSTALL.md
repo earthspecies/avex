@@ -227,7 +227,7 @@ pip install 'avex[tensorflow]'
 uv add 'avex[tensorflow]'
 ```
 
-> **Note:** Perch v1 and SurfPerch are deprecated. Perch v2 (`perch2`) runs via ONNX and requires no extra dependencies. BirdNet also runs via ONNX. Prefer those where possible.
+> **Note:** Perch v1 and SurfPerch are deprecated. Perch v2 (`perch2`) is a native PyTorch port and requires no extra dependencies. BirdNet runs via ONNX. Prefer those where possible.
 
 ### CUDA Issues
 

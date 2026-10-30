@@ -27,9 +27,14 @@ layers** using hooks. This is useful for layer-wise analysis and multi-layer pro
 ### Limitations (models without intermediate layers)
 
 Some backbones do not expose intermediate layers through PyTorch modules (notably the
-TensorFlow / TFLite based models: **Perch**, **SurfPerch**, and **BirdNET**). For these
+TensorFlow / ONNX based models: **Perch v1**, **SurfPerch**, and **BirdNET**). For these
 models, `extract_embeddings` returns the **single available embedding output** and does
 not support internal layer selection via hooks.
+
+**Perch v2** is a native PyTorch port and does expose its layers:
+`backbone.stem`, `backbone.blocks.{stage}.{idx}` (26 MBConv blocks in 7 stages),
+`backbone.head` and `backbone.pool` (the pooled 1536-d embedding, which `last_layer`
+resolves to). With no hooks registered (`target_layers=[]`) it returns the pooled embedding.
 
 Some other backbones currently only expose the final embedding output in their
 `extract_embeddings` implementations (e.g. **BirdMAE**). In these cases, requesting

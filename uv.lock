@@ -316,6 +316,7 @@ version = "1.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "einops" },
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "gcsfs" },
     { name = "h5py" },
@@ -329,6 +330,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "s3fs" },
+    { name = "safetensors" },
     { name = "scikit-learn" },
     { name = "soundfile" },
     { name = "timm" },
@@ -385,6 +387,7 @@ requires-dist = [
     { name = "alp-data", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "einops", specifier = ">=0.8.1" },
     { name = "esp-sweep", marker = "extra == 'dev'", specifier = ">=0.1.0", index = "https://us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/" },
+    { name = "filelock", specifier = ">=3.12.0" },
     { name = "fsspec", specifier = ">=2024.2.0" },
     { name = "gcsfs", specifier = ">=2024.2.0" },
     { name = "gradio", marker = "extra == 'dev'", specifier = ">=4.0.0" },
@@ -403,6 +406,7 @@ requires-dist = [
     { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.5.1.post0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "s3fs", specifier = ">=2024.2.0" },
+    { name = "safetensors", specifier = ">=0.4.0" },
     { name = "scikit-learn", specifier = ">=1.6.0" },
     { name = "soundfile", specifier = ">=0.13.1" },
     { name = "tensorflow", marker = "python_full_version < '3.14' and extra == 'tensorflow'", specifier = ">=2.21.0" },

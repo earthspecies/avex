@@ -92,7 +92,42 @@ These configurations can be loaded directly with `load_model("path/to/config.yml
 | Model name | Description | Source |
 |------------|-------------|--------|
 | `birdnet` | BirdNet v2.4 — 6 522 species, 1 024-d embeddings, 48 kHz | [justinchuby/BirdNET-onnx](https://huggingface.co/justinchuby/BirdNET-onnx) |
-| `perch2` | Google Perch v2 — 14 795 species, 1 536-d embeddings, 32 kHz | [justinchuby/Perch-onnx](https://huggingface.co/justinchuby/Perch-onnx) |
+
+### Native PyTorch ports
+
+| Model name | Description | Source |
+|------------|-------------|--------|
+| `perch2` | Google Perch v2 — 14 795 species, 1 536-d embeddings, 32 kHz | Ported from [justinchuby/Perch-onnx](https://huggingface.co/justinchuby/Perch-onnx) (Google, Apache-2.0) |
+
+#### Perch v2
+
+`perch2` is a hand-written PyTorch port of Google's Perch v2 (frontend, EfficientNet-B3
+backbone, ProtoPNet classifier). It runs on any torch device, exposes named layers for
+probing (`backbone.blocks.{stage}.{idx}`, `last_layer` = pooled embedding) and supports
+gradients.
+
+```python
+from avex import load_model
+
+model = load_model("perch2", device="cuda")
+emb = model.extract_embeddings(audio_32khz)   # (B, 1536)
+spatial = model.spatial_embed(audio_32khz)    # (B, 16, 4, 1536): time x frequency x channels
+logits = model.species_logits(audio_32khz)    # (B, 14795), Perch's own classifier
+```
+
+- **Input:** mono, 32 kHz, no normalisation; clips are centre-cropped or zero-padded to 5 s.
+- **Weights:** not redistributed. On first use avex downloads the pinned ONNX export
+  (SHA-256-checked), converts it once (~15 s, ~1.5 GB peak RAM) and caches
+  `perch2-v1.safetensors` (~410 MB) in avex's cache, `$ESP_CACHE_HOME/perch2` (default `~/.cache/esp`).
+  The ONNX download is deleted after conversion.
+- **Offline / HPC:** run `avex fetch perch2` on a machine with internet access (with the
+  same `ESP_CACHE_HOME`), or pass a pre-downloaded file with `onnx_path=` /
+  `$AVEX_PERCH2_ONNX`. `Perch2Model(allow_download=False)` fails instead of downloading.
+- **Batch norm is folded** into the convolutions: there are no `BatchNorm` modules, and
+  train/eval mode does not change the backbone. Fine-tuning updates the folded weights.
+- **Parity:** outputs match ONNX Runtime on the original export to ~1e-5 (relative), not
+  bit-for-bit. Embeddings cached or probes trained with avex <= 1.4.0 (ONNX Runtime backend)
+  differ at that level. `scripts/perch2_parity.py` checks every layer.
 
 ### TensorFlow-based *(deprecated)*
 

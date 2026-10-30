@@ -75,5 +75,27 @@ def evaluate(config: Path, patches: tuple[str, ...]) -> None:
     eval_main(config_path=config, patches=patches)
 
 
+@cli.command()
+@click.argument("model", type=click.Choice(["perch2"]))
+@click.option(
+    "--onnx",
+    "onnx_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Pre-downloaded perch_v2.onnx to convert instead of downloading it.",
+)
+def fetch(model: str, onnx_path: Path | None) -> None:
+    """Download and convert model weights into the avex cache ahead of time.
+
+    Use this on a machine with internet access before running on compute
+    nodes without network (set the same ESP_CACHE_HOME on both).
+    """
+    from avex.models.perch2_net.weights import load_weights, resolve_weights
+
+    path = resolve_weights(onnx_path=onnx_path)
+    load_weights(path)
+    click.echo(f"{model} weights ready: {path}")
+
+
 if __name__ == "__main__":
     cli()
