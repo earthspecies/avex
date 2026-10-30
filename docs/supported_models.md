@@ -94,7 +94,16 @@ These configurations can be loaded directly with `load_model("path/to/config.yml
 | `birdnet` | BirdNet v2.4 — 6 522 species, 1 024-d embeddings, 48 kHz | [justinchuby/BirdNET-onnx](https://huggingface.co/justinchuby/BirdNET-onnx) |
 | `perch2` | Google Perch v2 — 14 795 species, 1 536-d embeddings, 32 kHz | [justinchuby/Perch-onnx](https://huggingface.co/justinchuby/Perch-onnx) |
 
-`perch2` is registered, so `load_model("perch2")` works. It runs on ONNX Runtime, which is outside autograd: the backbone is always frozen, and its output is copied to the model's device but computed on CPU unless a CUDA build of `onnxruntime-gpu` matching your CUDA version is installed. For probes, `target_layers=["last_layer"]` resolves to the 1 536-d embedding (the `backbone` layer).
+`perch2` is registered, so `load_model("perch2")` works. For probes, `target_layers=["last_layer"]` resolves to the 1 536-d embedding (the `backbone` layer). It runs on ONNX Runtime, which is outside autograd, so the backbone is always frozen.
+
+**GPU.** avex depends on the CPU build of ONNX Runtime, so by default Perch v2 runs on CPU and its outputs are copied to the model's device (a warning is logged when you ask for `cuda`). For GPU inference, replace it with `onnxruntime-gpu` 1.27 or newer, which is built for CUDA 13 like avex's PyTorch:
+
+```bash
+uv pip uninstall onnxruntime
+uv pip install "onnxruntime-gpu>=1.27"
+```
+
+Both packages provide the same `onnxruntime` module, so do not keep both installed. `uv sync` can put the CPU build back, so repeat the swap after syncing. This also moves `birdnet`, which uses the same runtime, to the GPU. Use `onnxruntime-gpu<1.27` only with a CUDA 12 PyTorch. The GPU session always uses CUDA device 0.
 
 ### TensorFlow-based *(deprecated)*
 

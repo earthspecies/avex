@@ -25,6 +25,9 @@ _SAMPLES = 160_000
 class _FakeSession:
     """Mimics the perch_v2 ONNX contract for the "embedding" output."""
 
+    def get_providers(self) -> list[str]:
+        return ["CPUExecutionProvider"]
+
     def run(self, output_names: list[str], feeds: dict[str, np.ndarray]) -> list[np.ndarray]:
         assert output_names == ["embedding"]
         audio = feeds["inputs"]
@@ -97,6 +100,12 @@ def test_registered_in_load_model() -> None:
     model = load_model("perch2", device="cpu")
     assert isinstance(model, Perch2Model)
     assert model(_audio(1)).shape == (1, _DIM)
+
+
+def test_warns_when_cuda_requested_without_cuda_provider(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="avex.models.perch2"):
+        Perch2Model(device="cuda")
+    assert "onnxruntime-gpu" in caplog.text
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")

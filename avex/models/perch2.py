@@ -117,6 +117,15 @@ class Perch2Model(ModelBase):
         self.embedding_dim = _EMBEDDING_DIM
         self.return_features_only = return_features_only
         self.backbone = _OnnxBackbone(hf_repo_id, hf_filename)
+        providers = _load_ort_session(hf_repo_id, hf_filename).get_providers()
+        if str(device).startswith("cuda") and "CUDAExecutionProvider" not in providers:
+            logger.warning(
+                "Perch2 runs on CPU (ONNX Runtime providers: %s); outputs are copied to %s. "
+                "For GPU inference replace onnxruntime with onnxruntime-gpu>=1.27 "
+                "(see docs/supported_models.md).",
+                providers,
+                device,
+            )
 
         if not return_features_only and num_classes is not None and num_classes > 0:
             self.num_classes = num_classes
