@@ -564,8 +564,10 @@ def describe_model(name: str, verbose: bool = False) -> dict:
                     else f"  💾 Checkpoint: {checkpoint_path}"
                 )
                 print("  💡 Note: Checkpoint contains pretrained weights but no classifier head")
-            else:
+            elif spec.pretrained:
                 print("  💡 Note: This is a pretrained backbone model without a checkpoint")
+            else:
+                print("  💡 Note: No bundled checkpoint; pass checkpoint_path= to load_model()")
 
         print("\n⚙️  Model Configuration:")
         if spec.audio_config:
@@ -585,9 +587,12 @@ def describe_model(name: str, verbose: bool = False) -> dict:
             print(f'  model = load_model("{name}")')
             print("\n  # Load for embedding extraction (classifier stripped when present):")
             print(f'  model = load_model("{name}", return_features_only=True)')
-        else:
+        elif has_checkpoint or spec.pretrained:
             print("  # Load for embedding extraction:")
             print(f'  model = load_model("{name}", return_features_only=True)')
+        else:
+            print("  # Load for embedding extraction (weights must be supplied):")
+            print(f'  model = load_model("{name}", checkpoint_path="/path/to/weights.pt")')
             print("\n  # For classification on a new task:")
             print("  #   - load a backbone with return_features_only=True")
             print("  #   - attach a probe head via build_probe_from_config()")
