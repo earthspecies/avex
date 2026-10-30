@@ -50,10 +50,12 @@ def _audio(batch: int = 2) -> torch.Tensor:
     return torch.randn(batch, _SAMPLES)
 
 
-def test_last_layer_resolves_to_backbone() -> None:
+def test_last_layer_resolves_to_single_output() -> None:
     """``target_layers=["last_layer"]`` used to fail: no hookable layers."""
     model = Perch2Model(num_classes=3)
-    assert model.register_hooks_for_layers(["last_layer"]) == ["backbone"]
+    assert model.register_hooks_for_layers(["last_layer"]) == [Perch2Model.SINGLE_OUTPUT_LAYER]
+    with pytest.raises(ValueError, match="single embedding output"):
+        model.register_hooks_for_layers(["classifier"])
 
 
 def test_extract_embeddings_accepts_freeze_backbone() -> None:
@@ -66,29 +68,20 @@ def test_extract_embeddings_accepts_freeze_backbone() -> None:
         torch.testing.assert_close(emb, audio[:, :_DIM] * 2.0)
 
 
-def test_warns_when_unfreezing_or_hooking_other_layers(caplog: pytest.LogCaptureFixture) -> None:
-    """Silent no-ops get a warning: the backbone cannot train, other hooks are ignored."""
+def test_warns_once_when_unfreezing(caplog: pytest.LogCaptureFixture) -> None:
+    """``freeze_backbone=False`` cannot train an ONNX backbone; say so, once."""
     model = Perch2Model(num_classes=3)
     with caplog.at_level("WARNING", logger="avex.models.perch2"):
         model.extract_embeddings(_audio(), freeze_backbone=False)
         model.extract_embeddings(_audio(), freeze_backbone=False)
     assert caplog.text.count("freeze_backbone=False has no effect") == 1
 
-    caplog.clear()
-    model.register_hooks_for_layers(["backbone", "classifier"])
-    with caplog.at_level("WARNING", logger="avex.models.perch2"):
-        emb = model.extract_embeddings(_audio())
-    assert emb.shape == (2, _DIM)
-    assert "ignoring hooks on ['classifier']" in caplog.text
 
-
-def test_hooked_extraction_matches_and_does_not_leak() -> None:
+def test_sequence_aggregation_shape() -> None:
     model = Perch2Model()
     model.register_hooks_for_layers(["last_layer"])
-    audio = _audio()
-    emb = model.extract_embeddings({"raw_wav": audio}, aggregation="none")
+    emb = model.extract_embeddings({"raw_wav": _audio()}, aggregation="none")
     assert isinstance(emb, list) and emb[0].shape == (2, 1, _DIM)
-    assert model._hook_outputs == {}
 
 
 def test_online_linear_probe_trains() -> None:
