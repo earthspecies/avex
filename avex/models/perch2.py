@@ -32,9 +32,9 @@ def _load_ort_session(repo_id: str = _HF_REPO_ID, filename: str = _HF_FILENAME) 
             import onnxruntime as ort
         except ModuleNotFoundError as e:
             raise ImportError(
-                "onnxruntime is required for the Perch2 model.\n"
-                "uv pip install onnxruntime   # CPU\n"
-                "uv pip install onnxruntime-gpu  # CUDA"
+                "onnxruntime is required for the Perch2 model: "
+                "uv pip install onnxruntime (CPU) or uv pip install 'onnxruntime-gpu>=1.27' (CUDA 13). "
+                "Install one of them, not both (see docs/supported_models.md)."
             ) from e
 
         logger.info("Downloading Perch2 ONNX model from %s …", repo_id)
@@ -72,6 +72,9 @@ class _OnnxBackbone(nn.Module):
             Embeddings ``(B, 1536)`` on the device of ``wav``.
         """
         session = _load_ort_session(self.repo_id, self.filename)
+        # ONNX Runtime takes numpy, so the batch always goes through host memory,
+        # even with the CUDA provider. A 5 s clip is 640 KB; the copy is cheap
+        # next to the model, so IOBinding is not worth the complexity here.
         audio_np = wav.detach().cpu().float().numpy()
         # "embedding" is output 0 of the perch_v2 ONNX contract.
         (embedding,) = session.run(["embedding"], {"inputs": audio_np})
@@ -116,6 +119,8 @@ class Perch2Model(ModelBase):
         self.embedding_dim = _EMBEDDING_DIM
         self.return_features_only = return_features_only
         self.backbone = _OnnxBackbone(hf_repo_id, hf_filename)
+        if not freeze_backbone:
+            self._warn_cannot_unfreeze()
         providers = _load_ort_session(hf_repo_id, hf_filename).get_providers()
         if str(device).startswith("cuda") and "CUDAExecutionProvider" not in providers:
             logger.warning(
@@ -138,6 +143,12 @@ class Perch2Model(ModelBase):
     # ------------------------------------------------------------------ #
     #  Private helpers
     # ------------------------------------------------------------------ #
+    def _warn_cannot_unfreeze(self) -> None:
+        logger.warning(
+            "freeze_backbone=False has no effect on Perch2: ONNX Runtime runs outside autograd, "
+            "so the backbone cannot be fine-tuned. Only layers on top of it train."
+        )
+
     def _prepare_waveform(self, wav: torch.Tensor) -> torch.Tensor:
         if wav.dim() == 3:
             # (B, C, N) → (B, N): downmix any channel count to mono
@@ -156,9 +167,10 @@ class Perch2Model(ModelBase):
     #  ModelBase interface
     # ------------------------------------------------------------------ #
     def _discover_embedding_layers(self) -> None:
+        # The ONNX graph is opaque, so the embedding (``backbone``) is the only
+        # layer worth hooking; ``last_layer`` resolves to it.
         if not self._layer_names:
-            linear = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
-            self._layer_names = ["backbone", *linear]
+            self._layer_names = ["backbone"]
 
     def extract_features(
         self,
@@ -186,8 +198,9 @@ class Perch2Model(ModelBase):
     ) -> torch.Tensor | list[torch.Tensor]:
         """Return the Perch v2 embedding for a waveform batch.
 
-        Registered hooks do not change the output: the only hookable layer
-        before any classifier is ``backbone``, whose output is this embedding.
+        Registered hooks do not change the output: ``backbone`` is the only
+        embedding layer, and its output is this embedding. Hooks on any other
+        submodule are ignored, with a warning.
 
         Args:
             x: Waveform ``(B, N)`` or ``(B, C, N)`` at 32 kHz, or a dict with
@@ -204,6 +217,13 @@ class Perch2Model(ModelBase):
         Raises:
             ValueError: If ``aggregation`` is not supported.
         """
+        if not freeze_backbone and not getattr(self, "_warned_unfreeze", False):
+            self._warned_unfreeze = True
+            self._warn_cannot_unfreeze()
+        ignored = [name for name in self._hook_layers if name != "backbone"]
+        if ignored:
+            logger.warning("Perch2 only exposes the 'backbone' embedding; ignoring hooks on %s.", ignored)
+
         audio = x["raw_wav"] if isinstance(x, dict) else x
         embeddings = self.extract_features(audio, padding_mask)
         self._clear_hook_outputs()

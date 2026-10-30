@@ -66,6 +66,22 @@ def test_extract_embeddings_accepts_freeze_backbone() -> None:
         torch.testing.assert_close(emb, audio[:, :_DIM] * 2.0)
 
 
+def test_warns_when_unfreezing_or_hooking_other_layers(caplog: pytest.LogCaptureFixture) -> None:
+    """Silent no-ops get a warning: the backbone cannot train, other hooks are ignored."""
+    model = Perch2Model(num_classes=3)
+    with caplog.at_level("WARNING", logger="avex.models.perch2"):
+        model.extract_embeddings(_audio(), freeze_backbone=False)
+        model.extract_embeddings(_audio(), freeze_backbone=False)
+    assert caplog.text.count("freeze_backbone=False has no effect") == 1
+
+    caplog.clear()
+    model.register_hooks_for_layers(["backbone", "classifier"])
+    with caplog.at_level("WARNING", logger="avex.models.perch2"):
+        emb = model.extract_embeddings(_audio())
+    assert emb.shape == (2, _DIM)
+    assert "ignoring hooks on ['classifier']" in caplog.text
+
+
 def test_hooked_extraction_matches_and_does_not_leak() -> None:
     model = Perch2Model()
     model.register_hooks_for_layers(["last_layer"])
