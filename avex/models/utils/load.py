@@ -26,6 +26,7 @@ from .registry import (
     get_model_spec,
     list_models,
     load_model_spec_from_yaml,
+    load_packaged_yaml_mapping,
     register_model,
 )
 
@@ -195,6 +196,16 @@ def _load_from_modelspec(
             if default_checkpoint:
                 checkpoint_path = default_checkpoint
                 logger.info(f"Using default checkpoint path from YAML config: {checkpoint_path}")
+            elif not model_spec.pretrained and _is_packaged_official_model(reg_key):
+                # Packaged "bring your own checkpoint" models (e.g. the upstream
+                # BEATs backbones) ship no weights and have no built-in pretrained
+                # weights either. Building them without a checkpoint would silently
+                # return a randomly initialised network, so fail loudly instead.
+                raise ValueError(
+                    f"Model '{reg_key}' does not bundle a checkpoint; pass checkpoint_path= "
+                    f"to load_model (a local file or a gs://, hf://, ... URI). See "
+                    f"avex/api/configs/official_models/{reg_key}.yml for where to obtain the weights."
+                )
 
     # Handle checkpoint loading
     # Note: If a checkpoint_path is provided (either explicitly or from YAML),
@@ -309,6 +320,23 @@ def _load_from_modelspec(
         _load_checkpoint(backbone, checkpoint_path, device, keep_classifier=keep_classifier)
 
     return backbone.to(device)
+
+
+def _is_packaged_official_model(name: str) -> bool:
+    """Return True when ``name`` is backed by a packaged official-model YAML.
+
+    Models registered at runtime via :func:`register_model` or loaded from a
+    user-supplied YAML path are not packaged and return False.
+
+    Returns
+    -------
+    bool
+        Whether ``avex/api/configs/official_models/{name}.yml`` exists.
+    """
+    try:
+        return bool(load_packaged_yaml_mapping(package=registry._OFFICIAL_MODELS_PKG, name=name))
+    except Exception:  # pragma: no cover - defensive
+        return False
 
 
 def _get_classification_layer_dim_from_state_dict(state_dict: Dict[str, torch.Tensor]) -> Optional[int]:

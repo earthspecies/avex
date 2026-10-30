@@ -28,10 +28,11 @@ import torch.nn.functional as F
 from avex.io import anypath, exists
 from avex.models.beats.beats import BEATsConfig
 from avex.models.utils.load import load_model
-from avex.models.utils.registry import get_checkpoint_path
+from avex.models.utils.registry import get_checkpoint_path, load_packaged_yaml_mapping
 from avex.utils import universal_torch_load
 
 _OFFICIAL_MODELS_PKG: Final[str] = "avex.api.configs.official_models"
+_CHECKPOINT_CONFIGS_PKG: Final[str] = "avex.api.configs.checkpoints"
 
 
 def _iter_official_model_keys() -> Iterable[str]:
@@ -93,13 +94,21 @@ def _run_linear_probe_smoke(*, model_key: str, device: str, seed: int) -> _Probe
     """
     with _determinism_ctx(seed):
         checkpoint_path = get_checkpoint_path(model_key)
+        explicit_checkpoint: str | None = None
         if checkpoint_path is None:
-            pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
+            # Bring-your-own-checkpoint models (e.g. the upstream BEATs backbones)
+            # bundle no weights; fall back to the ESP-internal URI recorded in the
+            # packaged `checkpoints` YAML of the same name, when one exists.
+            internal_cfg = load_packaged_yaml_mapping(package=_CHECKPOINT_CONFIGS_PKG, name=model_key)
+            internal = internal_cfg.get("checkpoint_path")
+            if not isinstance(internal, str) or not internal:
+                pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
+            checkpoint_path = explicit_checkpoint = internal
 
         if not exists(anypath(checkpoint_path)):
             pytest.skip(f"Checkpoint path not reachable: {checkpoint_path!r}")
 
-        model = load_model(model_key, device=device, return_features_only=True)
+        model = load_model(model_key, device=device, checkpoint_path=explicit_checkpoint, return_features_only=True)
         model.eval()
 
         batch = 8

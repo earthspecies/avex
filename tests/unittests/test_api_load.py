@@ -844,3 +844,42 @@ class TestLoadFromModelSpec:
 
         assert isinstance(model, ModelBase)
         assert getattr(model, "return_features_only", False) is True
+
+
+class TestBringYourOwnCheckpointModels:
+    """Packaged models that ship no weights must be loaded with an explicit checkpoint_path."""
+
+    _MODEL_NAMES = ("beats_iter3_plus_as2m_ssl", "beats_iter3_plus_as2m_finetuned_cpt2")
+
+    @pytest.fixture(autouse=True)
+    def _ensure_registry_initialized(self) -> None:
+        """Re-populate the global registry (other tests clear it)."""
+        from avex.models.utils import registry
+
+        registry._MODEL_REGISTRY.clear()
+        registry._MODEL_CLASSES.clear()
+        registry.initialize_registry()
+
+    @pytest.mark.parametrize("name", _MODEL_NAMES)
+    def test_registered_without_bundled_checkpoint(self, name: str) -> None:
+        """Both upstream BEATs backbones are registered and carry no default checkpoint."""
+        from avex.models.utils.registry import get_checkpoint_path, get_model_spec
+
+        spec = get_model_spec(name)
+        assert spec is not None, f"{name} should be auto-registered from official_models"
+        assert spec.name == "beats"
+        assert spec.pretrained is False
+        assert get_checkpoint_path(name) is None
+
+    @pytest.mark.parametrize("name", _MODEL_NAMES)
+    def test_load_without_checkpoint_raises(self, name: str) -> None:
+        """Loading by name alone must fail loudly instead of returning random weights."""
+        with pytest.raises(ValueError, match="checkpoint_path"):
+            load_model(name, device="cpu", return_features_only=True)
+
+    def test_runtime_registered_model_without_checkpoint_still_builds(self) -> None:
+        """The guard only applies to packaged official models, not register_model() specs."""
+        from avex.models.utils.load import _is_packaged_official_model
+
+        assert _is_packaged_official_model("beats_iter3_plus_as2m_ssl") is True
+        assert _is_packaged_official_model("not_a_packaged_model") is False
