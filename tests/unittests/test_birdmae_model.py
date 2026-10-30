@@ -104,22 +104,23 @@ def test_model_spec_model_id_defaults_to_none() -> None:
     assert ModelSpec(name="birdmae").model_id is None
 
 
-@pytest.mark.parametrize("length", [498, 512])
-def test_pad_time_axis(length: int) -> None:
-    """Time axis is padded with the batch minimum to target_length, regardless of batch size.
+def test_shim_instances_pickle_round_trip() -> None:
+    """The runtime-created shim class pickles via (model_id, revision) and keeps its state."""
+    import pickle
 
-    Batch size 513 >= target_length reproduces the upstream Bird-MAE-huge bug
-    (it compares target_length against the batch dimension). Few mel bins keep
-    the tensors small; the helper never reads that axis.
-    """
-    import torch
-
-    features = torch.rand(513, 1, length, 4) + 1.0
-    features[0, 0, 0, 0] = -3.0
-    out = birdmae._pad_time_axis(features, 512)
-    assert out.shape == (513, 1, 512, 4)
-    assert torch.equal(out[:, :, :length, :], features)
-    assert torch.all(out[:, :, length:, :] == -3.0)
+    config = SimpleNamespace(auto_map={"AutoModel": "modeling_bird_mae.BirdMAEModel"})
+    with (
+        patch("transformers.AutoConfig.from_pretrained", return_value=config),
+        patch("transformers.dynamic_module_utils.get_class_from_dynamic_module", return_value=_FakeRemoteModel),
+    ):
+        cls, cfg = birdmae._load_model_class(birdmae.DEFAULT_MODEL_ID, "abc")
+        model = cls(cfg)
+        model.extra = 5
+        restored = pickle.loads(pickle.dumps(model))
+    assert type(restored).__name__ == _FakeRemoteModel.__name__
+    assert isinstance(restored, _FakeRemoteModel)
+    assert restored.extra == 5
+    assert restored.post_init_count == 1  # state restored, __init__ not re-run
 
 
 def test_pinned_revision_is_case_insensitive() -> None:

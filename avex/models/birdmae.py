@@ -20,7 +20,6 @@ from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.checkpoint
 
 from avex.configs import AudioConfig
@@ -88,33 +87,42 @@ def _load_model_class(model_id: str, revision: Optional[str]) -> tuple[type, Any
             if not getattr(self, "_avex_post_init_called", False):
                 self.post_init()
 
+        def __reduce__(self) -> tuple:
+            # The class is created at runtime, so pickle cannot find it by
+            # name; rebuild it from (model_id, revision) when unpickling.
+            return _rebuild_remote_model, (model_id, revision), self.__dict__
+
     _BirdMAEModel.__name__ = remote_cls.__name__
     _BirdMAEModel.__qualname__ = remote_cls.__qualname__
     return _BirdMAEModel, config
 
 
-def _pad_time_axis(features: torch.Tensor, target_length: int) -> torch.Tensor:
-    """Pad the time axis of (B, 1, T, M) features to ``target_length`` with the batch minimum.
-
-    The pinned Bird-MAE-huge feature extractor compares ``target_length`` against
-    the batch dimension instead of the time dimension, so it leaves batches of
-    ``>= target_length`` clips unpadded. This mirrors the intended upstream
-    behaviour independent of batch size. Like upstream, the pad value is the
-    minimum over the whole batch, so a clip's embedding can depend slightly on
-    the clips it is batched with.
-
-    No cropping: upstream truncates the waveform to 5 s before computing the
-    filterbank, so ``T`` never exceeds ``target_length``.
+def _rebuild_remote_model(model_id: str, revision: Optional[str]) -> Any:  # noqa: ANN401
+    """Unpickling target for the shim class: recreate it, then let pickle restore the state.
 
     Returns
     -------
-    torch.Tensor
-        Features with ``features.shape[2] == target_length``.
+    Any
+        An uninitialised instance of the shim class for ``model_id``.
     """
-    length = features.shape[2]
-    if length < target_length:
-        return F.pad(features, (0, 0, 0, target_length - length), value=features.min().item())
-    return features
+    cls, _ = _load_model_class(model_id, revision)
+    return cls.__new__(cls)
+
+
+def _rebuild_wrapper(model_id: str, revision: Optional[str]) -> "Model":
+    """Unpickling target for :class:`Model`.
+
+    Resolving the remote code first puts the Hub module on ``sys.path`` so the
+    remote ``Block`` and feature-extractor classes in the pickled state can be
+    imported.
+
+    Returns
+    -------
+    Model
+        An uninitialised wrapper; pickle restores its state afterwards.
+    """
+    _load_model_class(model_id, revision)
+    return Model.__new__(Model)
 
 
 def _checkpointed_block_forward(blk: nn.Module, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
@@ -211,9 +219,16 @@ class Model(ModelBase):
         """Process audio input using BirdMAE's feature extractor.
 
         The upstream feature extractor pads or truncates to 5 s
-        (``feature_extractor.target_length`` frames). Already-processed
-        4-D features are returned unchanged, so this is safe to call twice
-        (``ModelBase.batch_inference`` does).
+        (``feature_extractor.target_length`` frames). It is called once per
+        clip rather than on the batch: upstream pads the filterbank with the
+        minimum over everything it is given, so a batched call would make a
+        clip's embedding depend on the other clips in the batch. Per-clip
+        calls also sidestep the pinned Bird-MAE-huge extractor's bug of
+        leaving batches of >= ``target_length`` clips unpadded (it compares
+        ``target_length`` against the batch dimension).
+
+        Already-processed 4-D features are returned unchanged, so this is
+        safe to call twice (``ModelBase.batch_inference`` does).
 
         Parameters
         ----------
@@ -228,11 +243,20 @@ class Model(ModelBase):
         """
         if x.dim() == 4:
             return x.to(self.device)
-        features = self.feature_extractor(x.detach().float().cpu(), return_tensors="pt")
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        waveforms = x.detach().float().cpu()
+        features = torch.cat([self._extract_clip_features(clip) for clip in waveforms], dim=0)
+        return features.to(self.device)
+
+    def _extract_clip_features(self, clip: torch.Tensor) -> torch.Tensor:
+        features = self.feature_extractor(clip, return_tensors="pt")
         if isinstance(features, Mapping):
             features = features["input_values"]
-        features = _pad_time_axis(features, self.feature_extractor.target_length)
-        return features.to(self.device)
+        return features
+
+    def __reduce__(self) -> tuple:
+        return _rebuild_wrapper, (self.model_id, self.revision), self.__dict__
 
     def enable_gradient_checkpointing(self) -> None:
         """Enable gradient checkpointing over the transformer blocks.
