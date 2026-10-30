@@ -181,3 +181,26 @@ def test_online_linear_probe_on_birdnet(birdnet_model_no_classifier: BirdNetMode
     )
     out = probe(torch.randn(2, 48000 * 3))
     assert out.shape == (2, 3)
+
+
+def test_registered_in_load_model() -> None:
+    """Regression for the registry half of #208: ``load_model("birdnet")`` works."""
+    from avex.models.utils.load import load_model
+    from avex.models.utils.registry import initialize_registry
+
+    initialize_registry()  # other tests clear the registry; re-populate from the packaged YAMLs
+    model = load_model("birdnet", device="cpu")
+    assert isinstance(model, BirdNetModel)
+    assert model.register_hooks_for_layers(["last_layer"]) == [BirdNetModel.SINGLE_OUTPUT_LAYER]
+    assert model.extract_embeddings(torch.randn(1, 48000 * 3), freeze_backbone=True).shape == (1, 1024)
+
+
+def test_warns_once_when_unfreezing(
+    birdnet_model_no_classifier: BirdNetModel, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``freeze_backbone=False`` cannot train an ONNX backbone; say so, once per model."""
+    audio = torch.randn(1, 48000 * 3)
+    with caplog.at_level("WARNING", logger="avex.models.utils.onnx_runtime"):
+        birdnet_model_no_classifier.extract_embeddings(audio, freeze_backbone=False)
+        birdnet_model_no_classifier.extract_embeddings(audio, freeze_backbone=False)
+    assert caplog.text.count("freeze_backbone=False has no effect on Model") == 1

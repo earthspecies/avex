@@ -17,6 +17,7 @@ from avex.configs import ProbeConfig
 from avex.models.perch2 import Perch2Model
 from avex.models.probes.utils.factory import build_probe_from_config
 from avex.models.utils.load import load_model
+from avex.models.utils.registry import initialize_registry
 
 _DIM = 1536
 _SAMPLES = 160_000
@@ -71,10 +72,10 @@ def test_extract_embeddings_accepts_freeze_backbone() -> None:
 def test_warns_once_when_unfreezing(caplog: pytest.LogCaptureFixture) -> None:
     """``freeze_backbone=False`` cannot train an ONNX backbone; say so, once."""
     model = Perch2Model(num_classes=3)
-    with caplog.at_level("WARNING", logger="avex.models.perch2"):
+    with caplog.at_level("WARNING", logger="avex.models.utils.onnx_runtime"):
         model.extract_embeddings(_audio(), freeze_backbone=False)
         model.extract_embeddings(_audio(), freeze_backbone=False)
-    assert caplog.text.count("freeze_backbone=False has no effect") == 1
+    assert caplog.text.count("freeze_backbone=False has no effect on Perch2Model") == 1
 
 
 def test_sequence_aggregation_shape() -> None:
@@ -106,15 +107,16 @@ def test_online_linear_probe_trains() -> None:
 
 
 def test_registered_in_load_model() -> None:
+    initialize_registry()  # other tests clear the registry; re-populate from the packaged YAMLs
     model = load_model("perch2", device="cpu")
     assert isinstance(model, Perch2Model)
     assert model(_audio(1)).shape == (1, _DIM)
 
 
 def test_warns_when_cuda_requested_without_cuda_provider(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level("WARNING", logger="avex.models.perch2"):
+    with caplog.at_level("WARNING", logger="avex.models.utils.onnx_runtime"):
         Perch2Model(device="cuda")
-    assert "onnxruntime-gpu" in caplog.text
+    assert "Perch2 runs on CPU" in caplog.text and "onnxruntime-gpu" in caplog.text
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")

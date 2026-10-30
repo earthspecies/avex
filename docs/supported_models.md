@@ -94,16 +94,16 @@ These configurations can be loaded directly with `load_model("path/to/config.yml
 | `birdnet` | BirdNet v2.4 — 6 522 species, 1 024-d embeddings, 48 kHz | [justinchuby/BirdNET-onnx](https://huggingface.co/justinchuby/BirdNET-onnx) |
 | `perch2` | Google Perch v2 — 14 795 species, 1 536-d embeddings, 32 kHz | [justinchuby/Perch-onnx](https://huggingface.co/justinchuby/Perch-onnx) |
 
-`perch2` is registered, so `load_model("perch2")` works. Only the final 1 536-d embedding (the `embeddings` pseudo-layer, which `target_layers=["last_layer"]` resolves to) can be probed: the network runs as one ONNX Runtime call, so its intermediate layers cannot be hooked and the backbone is always frozen.
+Both are registered, so `load_model("birdnet")` and `load_model("perch2")` work. They run on ONNX Runtime, outside autograd, so only the final embedding can be probed (`target_layers=["last_layer"]` resolves to the `embeddings` pseudo-layer; intermediate layers cannot be hooked) and the backbone is always frozen (`freeze_backbone=False` logs a warning). BirdNET's embedding has a time axis of 3 s chunks; Perch v2's is a single vector per 5 s clip.
 
-**GPU.** avex depends on the CPU build of ONNX Runtime, so by default Perch v2 runs on CPU and its outputs are copied to the model's device (a warning is logged when you ask for `cuda`). For GPU inference, replace it with `onnxruntime-gpu` 1.27 or newer, which is built for CUDA 13 like avex's PyTorch:
+**GPU.** avex depends on the CPU build of ONNX Runtime, so by default these models run on CPU and their outputs are copied to the model's device (a warning is logged when you ask for `cuda`). For GPU inference, replace it with `onnxruntime-gpu` 1.27 or newer, which is built for CUDA 13 like avex's PyTorch:
 
 ```bash
 uv pip uninstall onnxruntime
 uv pip install "onnxruntime-gpu>=1.27"
 ```
 
-Both packages provide the same `onnxruntime` module, so do not keep both installed. `uv sync` can put the CPU build back, so repeat the swap after syncing. This also moves `birdnet`, which uses the same runtime, to the GPU. Use `onnxruntime-gpu<1.27` only with a CUDA 12 PyTorch. The GPU session always uses CUDA device 0.
+Both packages provide the same `onnxruntime` module, so do not keep both installed. `uv sync` can put the CPU build back, so repeat the swap after syncing. Use `onnxruntime-gpu<1.27` only with a CUDA 12 PyTorch. The GPU session always uses CUDA device 0.
 
 ### TensorFlow-based *(deprecated)*
 

@@ -14,6 +14,12 @@ import torch
 import torch.nn as nn
 
 from avex.models.base_model import ModelBase
+from avex.models.utils.onnx_runtime import (
+    import_onnxruntime,
+    ort_providers,
+    warn_cannot_unfreeze,
+    warn_if_cpu_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,22 +103,13 @@ def _build_session(repo_id: str, model_filename: str) -> tuple[Any, str, str, st
     tuple[Any, str, str, str | None]
         ONNX Runtime session, input name, classifier output name, and optional
         embedding output name.
-
-    Raises
-    ------
-    ImportError
-        If onnxruntime or onnx is not installed.
     """
+    import onnx as onnx_lib
+    import onnx.shape_inference
     from huggingface_hub import hf_hub_download
 
-    try:
-        import onnx as onnx_lib
-        import onnx.shape_inference
-        import onnxruntime as ort
-    except ImportError as e:
-        raise ImportError("onnxruntime and onnx are required.\nuv pip install onnxruntime onnx") from e
-
-    providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    ort = import_onnxruntime()
+    providers = ort_providers()
 
     def _try_load(filename: str) -> tuple[Any, str, str, str | None]:
         model_path = hf_hub_download(repo_id=repo_id, filename=filename)
@@ -207,9 +204,12 @@ class Model(ModelBase):
         self._hf_labels_filename = hf_labels_filename
         self.freeze_backbone = freeze_backbone
         self.return_features_only = return_features_only
+        if not freeze_backbone:
+            warn_cannot_unfreeze(self)
 
         # Warm up session (downloads model on first use)
-        _load_session(hf_repo_id, hf_model_filename)  # noqa: F841
+        session, *_ = _load_session(hf_repo_id, hf_model_filename)
+        warn_if_cpu_fallback("BirdNet", device, session.get_providers())
 
         # Load species labels from HF repo
         from huggingface_hub import hf_hub_download
@@ -376,7 +376,7 @@ class Model(ModelBase):
             aggregation: ``"mean"``/``"max"``/``"cls_token"`` pool over chunks to
                 (B, 1024); ``"none"`` returns a list of (1, N_chunks, 1024) tensors.
             freeze_backbone: Accepted for the probe API; ONNX Runtime never
-                tracks PyTorch gradients, so it has no effect here.
+                tracks PyTorch gradients, so False only logs a warning.
 
         Returns:
             torch.Tensor | list[torch.Tensor]: Pooled embeddings or per-clip chunk sequences.
@@ -385,6 +385,8 @@ class Model(ModelBase):
             RuntimeError: If the ONNX graph exposes no embedding output.
             ValueError: If ``aggregation`` is not supported.
         """
+        if not freeze_backbone:
+            warn_cannot_unfreeze(self)
         wav = x["raw_wav"] if isinstance(x, dict) else x
 
         batch: list[torch.Tensor] = []

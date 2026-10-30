@@ -13,6 +13,12 @@ import torch.nn as nn
 from huggingface_hub import hf_hub_download
 
 from avex.models.base_model import ModelBase
+from avex.models.utils.onnx_runtime import (
+    import_onnxruntime,
+    ort_providers,
+    warn_cannot_unfreeze,
+    warn_if_cpu_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,22 +34,11 @@ def _load_ort_session(repo_id: str = _HF_REPO_ID, filename: str = _HF_FILENAME) 
     global _ort_session, _ort_session_key
     key = (repo_id, filename)
     if _ort_session is None or _ort_session_key != key:
-        try:
-            import onnxruntime as ort
-        except ModuleNotFoundError as e:
-            raise ImportError(
-                "onnxruntime is required for the Perch2 model: "
-                "uv pip install onnxruntime (CPU) or uv pip install 'onnxruntime-gpu>=1.27' (CUDA 13). "
-                "Install one of them, not both (see docs/supported_models.md)."
-            ) from e
-
+        ort = import_onnxruntime()
         logger.info("Downloading Perch2 ONNX model from %s …", repo_id)
         model_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
-        # Prefer CUDA when this onnxruntime build has it (onnxruntime-gpu), else CPU.
-        available = ort.get_available_providers()
-        providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in available]
-        _ort_session = ort.InferenceSession(model_path, providers=providers)
+        _ort_session = ort.InferenceSession(model_path, providers=ort_providers())
         _ort_session_key = key
         logger.info("Perch2 ONNX session ready (providers: %s)", _ort_session.get_providers())
     return _ort_session
@@ -90,18 +85,10 @@ class Perch2Model(ModelBase):
         self._hf_repo_id = hf_repo_id
         self._hf_filename = hf_filename
         if not freeze_backbone:
-            self._warn_cannot_unfreeze()
+            warn_cannot_unfreeze(self)
 
         # Warm up the session (downloads the model on first use).
-        providers = _load_ort_session(hf_repo_id, hf_filename).get_providers()
-        if str(device).startswith("cuda") and "CUDAExecutionProvider" not in providers:
-            logger.warning(
-                "Perch2 runs on CPU (ONNX Runtime providers: %s); outputs are copied to %s. "
-                "For GPU inference replace onnxruntime with onnxruntime-gpu>=1.27 "
-                "(see docs/supported_models.md).",
-                providers,
-                device,
-            )
+        warn_if_cpu_fallback("Perch2", device, _load_ort_session(hf_repo_id, hf_filename).get_providers())
 
         if not return_features_only and num_classes is not None and num_classes > 0:
             self.num_classes = num_classes
@@ -115,12 +102,6 @@ class Perch2Model(ModelBase):
     # ------------------------------------------------------------------ #
     #  Private helpers
     # ------------------------------------------------------------------ #
-    def _warn_cannot_unfreeze(self) -> None:
-        logger.warning(
-            "freeze_backbone=False has no effect on Perch2: ONNX Runtime runs outside autograd, "
-            "so the backbone cannot be fine-tuned. Only layers on top of it train."
-        )
-
     def _ort_forward(self, audio: torch.Tensor) -> torch.Tensor:
         """Run the ONNX session and return the ``(B, 1536)`` embedding on ``self.device``.
 
@@ -213,9 +194,8 @@ class Perch2Model(ModelBase):
         Returns:
             torch.Tensor | list[torch.Tensor]: The embeddings.
         """
-        if not freeze_backbone and not getattr(self, "_warned_unfreeze", False):
-            self._warned_unfreeze = True
-            self._warn_cannot_unfreeze()
+        if not freeze_backbone:
+            warn_cannot_unfreeze(self)
 
         audio = x["raw_wav"] if isinstance(x, dict) else x
         embeddings = self.extract_features(audio, padding_mask)
