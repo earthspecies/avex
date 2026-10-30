@@ -50,12 +50,11 @@ def _load_ort_session(repo_id: str = _HF_REPO_ID, filename: str = _HF_FILENAME) 
 
 
 class _OnnxBackbone(nn.Module):
-    """Runs the Perch v2 ONNX graph and returns the ``(B, 1536)`` embedding.
+    """Thin wrapper around the ONNX Runtime call; adds no computation.
 
-    ONNX Runtime is not part of the autograd graph, so this module has no
-    parameters and its output carries no gradient. It exists so the embedding
-    is produced by a named submodule (``backbone``) that forward hooks, and
-    therefore ``target_layers=["last_layer"]``, can resolve to.
+    It exists only so probes have a named layer (``backbone``) to hook, which
+    is what ``target_layers=["last_layer"]`` resolves to. No parameters, no
+    gradients: ONNX Runtime runs outside autograd.
     """
 
     def __init__(self, repo_id: str, filename: str) -> None:
