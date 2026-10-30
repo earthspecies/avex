@@ -7,8 +7,11 @@ that ONNX Runtime produced on deterministic clips
 onnxruntime at test time. It does need the converted weights: it reuses the
 avex cache, or downloads and converts the pinned ONNX (~410 MB) once.
 
-``test_live_layerwise_parity`` (marked slow, optional) reruns the full
-layer-by-layer comparison against ONNX Runtime.
+``test_live_layerwise_parity`` reruns the full layer-by-layer comparison
+against ONNX Runtime.
+
+Both are marked slow (excluded from CI's ``-m "not slow"`` run) because of
+the weight download; run them with ``pytest -m slow``.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import torch
 
 from avex.models.perch2_net.golden import CLIP_NAMES, golden_clips
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "fixtures" / "perch2" / "golden.npz"
@@ -69,7 +72,6 @@ def test_matches_golden_fixtures(outputs: dict[str, np.ndarray]) -> None:
         assert int(outputs["label"][clip].argmax()) == int(top[clip, 0]), CLIP_NAMES[clip]
 
 
-@pytest.mark.slow
 def test_live_layerwise_parity() -> None:
     """Layer-by-layer comparison with ONNX Runtime (needs onnxruntime and the ONNX file)."""
     pytest.importorskip("onnxruntime")
