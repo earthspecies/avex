@@ -40,12 +40,43 @@ def _load_ort_session(repo_id: str = _HF_REPO_ID, filename: str = _HF_FILENAME) 
         logger.info("Downloading Perch2 ONNX model from %s …", repo_id)
         model_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
-        # Prefer CUDA if available, fall back to CPU
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        # Prefer CUDA when this onnxruntime build has it (onnxruntime-gpu), else CPU.
+        available = ort.get_available_providers()
+        providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in available]
         _ort_session = ort.InferenceSession(model_path, providers=providers)
         _ort_session_key = key
         logger.info("Perch2 ONNX session ready (providers: %s)", _ort_session.get_providers())
     return _ort_session
+
+
+class _OnnxBackbone(nn.Module):
+    """Runs the Perch v2 ONNX graph and returns the ``(B, 1536)`` embedding.
+
+    ONNX Runtime is not part of the autograd graph, so this module has no
+    parameters and its output carries no gradient. It exists so the embedding
+    is produced by a named submodule (``backbone``) that forward hooks, and
+    therefore ``target_layers=["last_layer"]``, can resolve to.
+    """
+
+    def __init__(self, repo_id: str, filename: str) -> None:
+        super().__init__()
+        self.repo_id = repo_id
+        self.filename = filename
+        _load_ort_session(repo_id, filename)
+
+    def forward(self, wav: torch.Tensor) -> torch.Tensor:
+        """Embed a ``(B, 160000)`` 32 kHz waveform batch.
+
+        Returns
+        -------
+        torch.Tensor
+            Embeddings ``(B, 1536)`` on the device of ``wav``.
+        """
+        session = _load_ort_session(self.repo_id, self.filename)
+        audio_np = wav.detach().cpu().float().numpy()
+        # "embedding" is output 0 of the perch_v2 ONNX contract.
+        (embedding,) = session.run(["embedding"], {"inputs": audio_np})
+        return torch.from_numpy(embedding).to(wav.device)
 
 
 class Perch2Model(ModelBase):
@@ -60,6 +91,11 @@ class Perch2Model(ModelBase):
       • spatial_embedding  — shape [B, 16, 4, 1536]
       • spectrogram        — shape [B, 500, 128]
       • label              — shape [B, 14795]
+
+    Only the embedding is exposed. It is produced by the ``backbone``
+    submodule, which is what ``target_layers=["last_layer"]`` resolves to.
+    ONNX Runtime runs outside autograd, so the backbone is always frozen,
+    whatever ``freeze_backbone`` says; a classifier on top still trains.
     """
 
     def __init__(
@@ -80,10 +116,7 @@ class Perch2Model(ModelBase):
         self.window_samples = int(window_seconds * self.target_sr)
         self.embedding_dim = _EMBEDDING_DIM
         self.return_features_only = return_features_only
-        self._hf_repo_id = hf_repo_id
-        self._hf_filename = hf_filename
-
-        _load_ort_session(hf_repo_id, hf_filename)
+        self.backbone = _OnnxBackbone(hf_repo_id, hf_filename)
 
         if not return_features_only and num_classes is not None and num_classes > 0:
             self.num_classes = num_classes
@@ -111,33 +144,13 @@ class Perch2Model(ModelBase):
             wav = nn.functional.pad(wav, (0, self.window_samples - n))
         return wav
 
-    def _ort_forward(self, audio: torch.Tensor) -> torch.Tensor:
-        """Run ONNX inference and return embeddings [B, embedding_dim].
-
-        perch_v2.onnx input/output contract:
-          in:  "inputs"          [B, 160000] float32
-          out[0]: "embedding"    [B, 1536]
-          out[1]: "spatial_embedding" [B, 16, 4, 1536]
-          out[2]: "spectrogram"  [B, 500, 128]
-          out[3]: "label"        [B, 14795]
-
-        Returns
-        -------
-        torch.Tensor
-            Embeddings with shape [B, embedding_dim].
-        """
-        session = _load_ort_session(self._hf_repo_id, self._hf_filename)
-        audio_np = audio.detach().cpu().float().numpy()
-        # output index 0 is always "embedding" per the perch_v2 ONNX contract
-        outputs = session.run(["embedding"], {"inputs": audio_np})
-        return torch.from_numpy(outputs[0])
-
     # ------------------------------------------------------------------ #
     #  ModelBase interface
     # ------------------------------------------------------------------ #
     def _discover_embedding_layers(self) -> None:
         if not self._layer_names:
-            self._layer_names = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
+            linear = [name for name, mod in self.named_modules() if isinstance(mod, nn.Linear)]
+            self._layer_names = ["backbone", *linear]
 
     def extract_features(
         self,
@@ -145,7 +158,7 @@ class Perch2Model(ModelBase):
         padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         audio = self._prepare_waveform(audio)
-        return self._ort_forward(audio).to(self.device)
+        return self.backbone(audio).to(self.device)
 
     def forward(
         self,
@@ -163,8 +176,29 @@ class Perch2Model(ModelBase):
         aggregation: str = "mean",
         freeze_backbone: bool = True,
     ) -> torch.Tensor | list[torch.Tensor]:
+        """Return the Perch v2 embedding for a waveform batch.
+
+        Registered hooks do not change the output: the only hookable layer
+        before any classifier is ``backbone``, whose output is this embedding.
+
+        Args:
+            x: Waveform ``(B, N)`` or ``(B, C, N)`` at 32 kHz, or a dict with
+                ``"raw_wav"``.
+            padding_mask: Unused; accepted for interface compatibility.
+            aggregation: ``"mean"``, ``"max"`` or ``"cls_token"`` return
+                ``(B, 1536)``; ``"none"`` returns ``[(B, 1, 1536)]``.
+            freeze_backbone: Accepted for probe compatibility and ignored:
+                ONNX Runtime is never differentiable.
+
+        Returns:
+            torch.Tensor | list[torch.Tensor]: The embeddings.
+
+        Raises:
+            ValueError: If ``aggregation`` is not supported.
+        """
         audio = x["raw_wav"] if isinstance(x, dict) else x
         embeddings = self.extract_features(audio, padding_mask)
+        self._clear_hook_outputs()
 
         if aggregation == "none":
             return [embeddings.unsqueeze(1)]  # (B, 1, D) for sequence probes

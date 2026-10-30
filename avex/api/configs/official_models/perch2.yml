@@ -1,0 +1,16 @@
+---
+# Google Perch v2 bird-vocalization classifier (third-party, not an ESP model):
+# 1536-d embeddings, 32 kHz mono, cropped or zero-padded to 5 s.
+# https://www.kaggle.com/models/google/bird-vocalization-classifier
+#
+# Nothing is redistributed by avex: the model runs on ONNX Runtime from the
+# ONNX export at justinchuby/Perch-onnx, downloaded on first use. There is
+# no checkpoint_path, so load_model() runs in embedding-extraction mode.
+
+model_spec:
+  name: perch2
+  pretrained: true
+  device: cpu
+  audio_config:
+    sample_rate: 32000
+    target_length_seconds: 5
