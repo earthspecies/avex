@@ -32,8 +32,12 @@ class TestAPIIntegration:
         """
         models = list_models()
         assert len(models) > 0, "Registry should contain at least one model"
-        beats_models = [name for name in models.keys() if "beats" in name.lower()]
-        assert len(beats_models) > 0, "Registry should contain at least one BEATs model"
+        # Restrict to models that bundle a checkpoint: bring-your-own-checkpoint
+        # entries (e.g. the upstream BEATs backbones) cannot be loaded by name alone.
+        beats_models = [
+            name for name in models.keys() if "beats" in name.lower() and models[name]["checkpoint_path"] is not None
+        ]
+        assert len(beats_models) > 0, "Registry should contain at least one BEATs model with a checkpoint"
         return beats_models[0]
 
     def test_registry_api(self) -> None:
@@ -97,8 +101,10 @@ class TestAPIIntegration:
         models = list_models()
         assert len(models) > 0, "Registry should contain at least one model"
 
-        beats_models = [name for name in models.keys() if "beats" in name.lower()]
-        assert len(beats_models) > 0, "Registry should contain at least one BEATs model"
+        beats_models = [
+            name for name in models.keys() if "beats" in name.lower() and models[name]["checkpoint_path"] is not None
+        ]
+        assert len(beats_models) > 0, "Registry should contain at least one BEATs model with a checkpoint"
 
         model = load_model(beats_models[0], device="cpu", return_features_only=True)
         model.eval()

@@ -41,6 +41,36 @@ The ESP-AVES2 model collection is available on HuggingFace: [EarthSpeciesProject
 
 All official ESP-AVES2 models have both a checkpoint and a class mapping, so they support **classification with labels**. They also support **embedding extraction** with `load_model(..., return_features_only=True)`.
 
+## Upstream BEATs Backbones (bring your own checkpoint)
+
+The two Microsoft BEATs checkpoints that the ESP-AVES2 BEATs models were trained from are
+registered so they can be loaded through the same API, but their weights are **not bundled**
+and are not mirrored on the Hugging Face Hub. Download them from the
+[upstream BEATs release](https://github.com/microsoft/unilm/tree/master/beats) and pass the
+file via `checkpoint_path`:
+
+| Model Name | Description | Upstream file |
+|------------|-------------|---------------|
+| `beats_iter3_plus_as2m_ssl` | BEATs iter3+, self-supervised on AudioSet-2M (SSL backbone) | `BEATs_iter3_plus_AS2M.pt` |
+| `beats_iter3_plus_as2m_finetuned_cpt2` | BEATs iter3+, SSL then fine-tuned on AudioSet-2M (checkpoint "cpt2") | `BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt` |
+
+```python
+from avex import load_model
+
+model = load_model(
+    "beats_iter3_plus_as2m_ssl",
+    checkpoint_path="/path/to/BEATs_iter3_plus_AS2M.pt",  # local file or gs://, hf://, ... URI
+    device="cpu",
+)
+features = model(audio)  # (batch, frames, 768)
+```
+
+The upstream `.pt` files are accepted as-is. Both models are backbones only, so they always load
+in embedding-extraction mode (the fine-tuned checkpoint's 527-class AudioSet predictor is loaded
+into the backbone but is not exposed as a classifier). Calling `load_model` on either name
+without `checkpoint_path` raises a `ValueError` rather than silently returning a randomly
+initialised network.
+
 ## Model Configuration
 
 Models are configured using YAML files which contain the model specifications `model_spec`. The official config files are in the `avex/api/configs/official_models/` directory. These files define the model architecture, audio preprocessing parameters, and optional checkpoint/label mapping paths.

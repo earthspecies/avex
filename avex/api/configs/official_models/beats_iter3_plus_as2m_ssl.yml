@@ -1,0 +1,60 @@
+---
+# Upstream BEATs iter3+ backbone, self-supervised pre-trained on AudioSet-2M
+# (Microsoft, https://github.com/microsoft/unilm/tree/master/beats). This is
+# the SSL starting point for the ESP-AVES2 BEATs models.
+#
+# Bring your own checkpoint: the weights are not bundled or mirrored on the
+# Hugging Face Hub, so `checkpoint_path` must be passed to `load_model`:
+#
+#     load_model("beats_iter3_plus_as2m_ssl",
+#                checkpoint_path="/path/to/BEATs_iter3_plus_AS2M.pt")
+#
+# The loader accepts the upstream `.pt` release as-is (a dict with `cfg` and
+# `model` keys). ESP-internal source of truth for the file is recorded in
+# avex/api/configs/checkpoints/beats_iter3_plus_as2m_ssl.yml (a gs:// URI that
+# also works as `checkpoint_path` with GCS credentials).
+#
+# Backbone only (no classifier head), so this model always loads in
+# embedding-extraction mode. No class_mapping_path is provided.
+
+model_spec:
+  name: beats
+  pretrained: false
+  fine_tuned: false
+  device: cuda
+  init_config:
+    activation_dropout: 0.0
+    activation_fn: gelu
+    attention_dropout: 0.1
+    conv_bias: false
+    conv_pos: 128
+    conv_pos_groups: 16
+    deep_norm: true
+    dropout: 0.1
+    dropout_input: 0.1
+    embed_dim: 512
+    encoder_attention_heads: 12
+    encoder_embed_dim: 768
+    encoder_ffn_embed_dim: 3072
+    encoder_layerdrop: 0.05
+    encoder_layers: 12
+    finetuned_model: false
+    gru_rel_pos: true
+    input_patch_size: 16
+    layer_norm_first: false
+    layer_wise_gradient_decay_ratio: 1.0
+    max_distance: 800
+    num_buckets: 320
+    relative_position_embedding: true
+    sample_frequency: 16000.0
+    num_mel_bins: 128
+    frame_length: 25.0
+    frame_shift: 10.0
+    fbank_mean: 15.41663
+    fbank_std: 6.55582
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
