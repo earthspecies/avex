@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 from collections.abc import Generator
 from dataclasses import dataclass
 from importlib import resources
@@ -30,6 +31,8 @@ from avex.models.beats.beats import BEATsConfig
 from avex.models.utils.load import load_model
 from avex.models.utils.registry import get_checkpoint_path, load_packaged_yaml_mapping
 from avex.utils import universal_torch_load
+
+logger = logging.getLogger(__name__)
 
 _OFFICIAL_MODELS_PKG: Final[str] = "avex.api.configs.official_models"
 _CHECKPOINT_CONFIGS_PKG: Final[str] = "avex.api.configs.checkpoints"
@@ -105,7 +108,12 @@ def _run_linear_probe_smoke(*, model_key: str, device: str, seed: int) -> _Probe
                 pytest.skip(f"Checkpoint not available in registry for {model_key!r}")
             checkpoint_path = explicit_checkpoint = internal
 
-        if not exists(anypath(checkpoint_path)):
+        try:
+            reachable = exists(anypath(checkpoint_path))
+        except Exception as exc:  # noqa: BLE001 - e.g. gcsfs raises 401 for anonymous callers on private buckets
+            reachable = False
+            logger.info("Checkpoint reachability check failed for %s: %s", checkpoint_path, exc)
+        if not reachable:
             pytest.skip(f"Checkpoint path not reachable: {checkpoint_path!r}")
 
         model = load_model(model_key, device=device, checkpoint_path=explicit_checkpoint, return_features_only=True)
