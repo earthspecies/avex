@@ -15,7 +15,7 @@ import librosa
 import numpy as np
 from alp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
 from alp_data.backends import BackendType
-from alp_data.io import AnyPathT, anypath, audio_stereo_to_mono, read_audio
+from alp_data.io import DATA_HOME, AnyPathT, anypath, audio_stereo_to_mono, read_audio
 
 _LEGACY_SPLIT_PATHS: dict[str, str] = {
     "HSN-train": "gs://foundation-model-data/data/birdset-train/HSN/HSN_taxonomic.jsonl",
@@ -49,6 +49,9 @@ _LEGACY_SPLIT_PATHS: dict[str, str] = {
 @register_dataset
 class BirdSetTrainSplits(Dataset):
     """BirdSet with legacy train/validation/test split paths."""
+
+    # Pre-resampled audio columns on train/validation rows (see _process).
+    _PRESAMPLED_COLUMNS: dict[int | None, str] = {16000: "16khz_path", 32000: "32khz_path"}
 
     info = DatasetInfo(
         name="birdset_train",
@@ -181,7 +184,17 @@ class BirdSetTrainSplits(Dataset):
         return len(self._data)
 
     def _process(self, row: dict[str, Any]) -> dict[str, Any]:
-        audio_path = anypath(self.data_root) / row["path"]
+        # Train/validation rows are full Xeno-canto recordings whose `path` is the raw
+        # mp3; reading that and resampling the whole file with kaiser_best costs
+        # 1-5 s per sample. They also carry pre-resampled copies (16khz_path /
+        # 32khz_path, relative to alp-data's DATA_HOME, as in the xeno_canto
+        # dataset) -- use those when the requested rate matches. Test rows (5 s
+        # BirdSet soundscape clips) have no such columns and keep the old path.
+        presampled_col = self._PRESAMPLED_COLUMNS.get(self.sample_rate)
+        if presampled_col and row.get(presampled_col):
+            audio_path = anypath(DATA_HOME) / row[presampled_col]
+        else:
+            audio_path = anypath(self.data_root) / row["path"]
         audio, sample_rate = read_audio(audio_path)
         audio = audio.astype(np.float32)
         audio = audio_stereo_to_mono(audio, mono_method="average")

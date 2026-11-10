@@ -79,6 +79,43 @@ class Model(ModelBase):
         # -------------------------------------------------------------- #
         # Convolutional layers will be discovered in _discover_embedding_layers override
 
+    # ------------------------------------------------------------------ #
+    #  Post-training hooks (shared avex recipe: init_checkpoint + two-stage)
+    # ------------------------------------------------------------------ #
+    @property
+    def backbone(self) -> torch.nn.Module:
+        """The convolutional encoder, ``model.features``.
+
+        avex's two-stage post-training freezes/unfreezes ``model.backbone`` and
+        ``load_init_checkpoint`` loads into it. A property (not a submodule
+        attribute) so the module is not registered twice: state-dict keys stay
+        ``model.features.*`` and existing checkpoints/evals are unaffected. The
+        head (``model.classifier``) is trained from the start, as for EAT/PupuJEPA.
+        """
+        return self.model.features
+
+    # The previous training run's classification head -- its class set differs
+    # from the new task's, so it is the ONLY thing not loaded.
+    _INIT_DISCARD_PREFIXES: tuple[str, ...] = ("model.classifier.",)
+
+    def map_init_checkpoint(self, state_dict: dict) -> dict:
+        """Map an avex EfficientNet training checkpoint EXACTLY onto ``self.backbone``.
+
+        Keys ``model.features.*`` become backbone keys; ``model.classifier.*`` is
+        discarded. Anything else raises, so nothing is dropped silently; the caller
+        then loads with ``strict=True``.
+
+        Raises:
+            KeyError: on a key that is neither encoder nor declared head.
+        """
+        out = {}
+        for k, v in state_dict.items():
+            if k.startswith("model.features."):
+                out[k[len("model.features."):]] = v
+            elif not k.startswith(self._INIT_DISCARD_PREFIXES):
+                raise KeyError(f"unexpected key in EfficientNet init checkpoint: {k}")
+        return out
+
     def _discover_embedding_layers(self) -> None:
         """Discover and cache only the EfficientNet layers that are useful
         for embeddings.

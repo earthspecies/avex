@@ -6,7 +6,7 @@
 #     bash jobs/icassp_2026/train_pupujepa_posttrain.sh              # 8 GPUs, per-GPU 32 -> global 256
 #     NGPU=6 BS=32 bash jobs/icassp_2026/train_pupujepa_posttrain.sh # 6 GPUs -> global 192
 #     TIME=24:00:00 bash jobs/icassp_2026/train_pupujepa_posttrain.sh
-#     RESUME=runs/icassp2026/sl_pupujepa_audioset_xeno_inat/<timestamp> bash ...
+#     RESUME=runs/icassp2026/sl_pupujepa_audioset_xeno_inat/<timestamp>/checkpoint_epoch_00N.pt bash ...  (the .pt FILE)
 # It generates the sbatch file (so NGPU can vary -- #SBATCH directives are static).
 #
 # DDP: avex only creates a process group when world_size > 1, and world_size comes

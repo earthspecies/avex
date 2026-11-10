@@ -223,6 +223,39 @@ class EATHFModel(ModelBase):
         # -------------------------------------------------------------- #
         # MLP layers will be discovered in _discover_embedding_layers override
 
+    # Tensors in the published EAT SSL checkpoints that belong to the
+    # pretraining-only reconstruction decoder. The deployed encoder has no
+    # decoder, so these are discarded -- and they are the ONLY thing discarded.
+    _INIT_DISCARD_PREFIXES: tuple[str, ...] = ("modality_encoders.IMAGE.decoder.",)
+
+    def map_init_checkpoint(self, state_dict: dict[str, Any]) -> dict[str, Any]:
+        """Map a published EAT SSL checkpoint EXACTLY onto ``self.backbone`` keys.
+
+        Used to initialise post-training (``RunConfig.init_checkpoint``). Unlike
+        :meth:`remap_checkpoint_state_dict`, this never silently drops a key:
+        every tensor is renamed with :func:`_rename_eat_key` and passed through,
+        except the explicitly declared SSL-decoder tensors in
+        ``_INIT_DISCARD_PREFIXES``. The caller loads the result with
+        ``strict=True``, so any tensor that fails to map -- or any backbone
+        parameter the checkpoint lacks -- raises instead of being left at its
+        constructor default.
+
+        For ``esp-aves2-eat-all`` this is 164 tensors in: 144 ``blocks.*`` plus 6
+        input-stage tensors mapped (150, exactly the backbone), and 14 decoder
+        tensors discarded.
+
+        Args:
+            state_dict: Raw checkpoint state dict (fairseq/data2vec key names).
+
+        Returns:
+            A state dict keyed relative to ``self.backbone`` (``model.*``).
+        """
+        return {
+            _rename_eat_key(k): v
+            for k, v in state_dict.items()
+            if not k.startswith(self._INIT_DISCARD_PREFIXES)
+        }
+
     def remap_checkpoint_state_dict(self, state_dict: dict[str, Any]) -> dict[str, Any]:
         """Map a fairseq/data2vec-multi EAT checkpoint onto this wrapper's keys.
 

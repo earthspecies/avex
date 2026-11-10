@@ -12,6 +12,7 @@ Key points
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,7 +67,10 @@ logger = logging.getLogger("run_finetune")
 # Per-batch DataLoader worker timeout (seconds) for raw-audio eval loaders.
 # Decoding/resampling long clips from remote storage can stall well past the
 # PyTorch default; 120s tolerates slow GCS reads without hanging forever.
-_EVAL_WORKER_TIMEOUT_SECONDS = 120
+# Overridable via AVEX_EVAL_WORKER_TIMEOUT_SECONDS: GCS tail latency can exceed
+# 120s (eval job 91649_1 died on one batch at CBI after 2.5 h; post-train job
+# 91247 saw a ~6 min stall on one rank).
+_EVAL_WORKER_TIMEOUT_SECONDS = int(os.environ.get("AVEX_EVAL_WORKER_TIMEOUT_SECONDS", "120"))
 
 
 # -------------------------------------------------------------------- #
@@ -183,6 +187,15 @@ def run_experiment(
 
     # Flags to determine which embeddings we need
     need_probe = "probe" in eval_cfg.eval_modes
+    # Skip the probe for an evaluation set that lists no classification metric --
+    # e.g. vocal-repertoire sets (Bengalese Finch), which AVEX Table 9 scores by
+    # retrieval + clustering only. Previously the probe was trained anyway and then
+    # crashed in train_and_eval_offline ("Expected metrics to be specified", job 92800).
+    _set_metrics = evaluation_set_metrics or getattr(dataset_cfg, "metrics", None) or []
+    if need_probe and _set_metrics and all(m.startswith("clustering_") for m in _set_metrics):
+        logger.info("No classification metric for %s -- skipping probe (retrieval/clustering only)",
+                    evaluation_dataset_name or dataset_cfg.dataset_name)
+        need_probe = False
     need_retrieval = "retrieval" in eval_cfg.eval_modes
     need_clustering = "clustering" in eval_cfg.eval_modes
 
@@ -659,7 +672,7 @@ def run_experiment(
     val_metrics: Dict[str, float] = {}
     probe_test_metrics: Dict[str, float] = {}
 
-    if "probe" in eval_cfg.eval_modes:
+    if need_probe:
         dataset_metrics = evaluation_set_metrics or getattr(dataset_cfg, "metrics", None)
 
         # TODO: metrics per task-group
@@ -833,17 +846,25 @@ def run_experiment(
             # EmbeddingDataSource already saved the embeddings, just extract
             # for retrieval
             # Get the first sample to determine the structure
+            # Mirrors the test branch below. This branch used to set train_embeds but
+            # never train_labels, so train_vs_test retrieval (the R-AUC* of AVEX
+            # Table 9) crashed in eval_retrieval_cross_set on labels=None (job
+            # 92787); it also took the FIRST dict key, which may be "label".
             sample = train_ds_retrieval[0]
             if isinstance(sample, dict):
-                # Multi-layer case - use the first layer
-                first_layer_name = list(sample.keys())[0] if sample else "embed"
+                layer_keys = [k for k in sample.keys() if k != "label"]
+                layer_name = layer_keys[-1] if layer_keys else "embed"
                 train_embeds = torch.stack(
-                    [train_ds_retrieval[i][first_layer_name] for i in range(len(train_ds_retrieval))]
+                    [train_ds_retrieval[i][layer_name] for i in range(len(train_ds_retrieval))]
                 )
-                logger.info(f"Using layer '{first_layer_name}' for retrieval evaluation")
+                train_labels = torch.stack([train_ds_retrieval[i]["label"] for i in range(len(train_ds_retrieval))])
+                logger.info(f"Using layer '{layer_name}' for retrieval evaluation")
             else:
                 # Single tensor case
                 train_embeds = torch.stack([train_ds_retrieval[i] for i in range(len(train_ds_retrieval))])
+                train_labels = getattr(train_ds_retrieval, "labels", None)
+            if train_labels is None:
+                raise ValueError("train_vs_test retrieval: could not obtain train labels")
 
     # ------------------- embeddings for retrieval and clustering -------- #
     test_labels: Optional[torch.Tensor] = None

@@ -13,6 +13,7 @@ from alp_data.io import anypath, filesystem_from_path
 from avex.configs import RunConfig
 from avex.data.dataset import build_dataloaders
 from avex.models.get_model import get_model
+from avex.models.utils.load import load_init_checkpoint
 from avex.training.distributed import (
     get_local_device_index,
     init_distributed,
@@ -106,6 +107,11 @@ def main(config_path: Path, patches: tuple[str, ...] | None = None) -> None:
         num_classes=num_labels,
     ).to(device)
     logger.info("Model → %s parameters", sum(p.numel() for p in model.parameters()))
+
+    # Initialise from a published/SSL checkpoint BEFORE freezing and before the
+    # trainer wraps the model in DDP, so checkpoint keys match the unwrapped model.
+    if config.init_checkpoint:
+        load_init_checkpoint(model, config.init_checkpoint, device=str(device))
 
     # --------------------------------------------------------------
     # Optional 1st-stage backbone freeze for two-stage fine-tuning

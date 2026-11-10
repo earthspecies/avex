@@ -814,6 +814,20 @@ class RunConfig(BaseCLIConfig, extra="forbid", validate_assignment=True):
     # Resume from checkpoint
     resume_from_checkpoint: Optional[str] = None
 
+    # Weights to INITIALISE the model from before training (e.g. a published SSL
+    # checkpoint to post-train). Distinct from resume_from_checkpoint, which
+    # resumes an interrupted run including optimiser/scheduler/epoch state.
+    # Loaded through the same prefix-reconciling loader that evaluation uses, and
+    # hard-fails unless every backbone tensor is replaced -- see
+    # avex.run_train._load_init_checkpoint.
+    init_checkpoint: Optional[str] = Field(
+        None,
+        description=(
+            "Checkpoint to initialise model weights from before training "
+            "(local path, gs://, or hf://). The classifier head is not loaded."
+        ),
+    )
+
     # Distributed training options
     distributed: bool = Field(
         False,

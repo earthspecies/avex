@@ -518,6 +518,70 @@ def load_label_mapping(model_or_path: Union[str, Path]) -> Optional[dict]:
         return None
 
 
+def load_init_checkpoint(model: torch.nn.Module, checkpoint_path: str, device: str) -> None:
+    """Initialise ``model.backbone`` from a checkpoint with an EXACT, strict key match.
+
+    For post-training: loads the SSL/published weights a run starts from. The
+    classifier head is never touched -- post-training starts from a fresh head.
+
+    This deliberately does NOT use :func:`_load_checkpoint`. That loader guesses
+    prefixes and then calls ``load_state_dict(strict=False)``, so a key that fails
+    to reconcile leaves its parameter at the constructor default without raising.
+    For ``eat_hf`` that default is the public ``worstchan/EAT-base_epoch30_pretrain``
+    weights, which is how an earlier post-training run silently trained the wrong
+    base model.
+
+    Instead the model must declare an exact mapping via ``map_init_checkpoint``,
+    and the result is loaded with ``strict=True``: any backbone parameter missing
+    from the checkpoint, any checkpoint tensor that maps to nothing, or any shape
+    mismatch raises. There is no fallback to heuristics.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Freshly constructed, not yet DDP-wrapped model exposing ``backbone`` and
+        ``map_init_checkpoint``.
+    checkpoint_path : str
+        Local path, ``gs://`` or ``hf://`` URI.
+    device : str
+        Device to map the checkpoint onto.
+
+    Raises
+    ------
+    NotImplementedError
+        If the model defines no ``map_init_checkpoint`` -- we refuse to guess.
+    FileNotFoundError
+        If ``checkpoint_path`` does not exist.
+    RuntimeError
+        From ``load_state_dict(strict=True)`` on any missing or unexpected key, or
+        any shape mismatch.
+    """
+    mapper = getattr(model, "map_init_checkpoint", None)
+    if not callable(mapper) or not hasattr(model, "backbone"):
+        raise NotImplementedError(
+            f"{type(model).__name__} defines no `map_init_checkpoint`, so there is no exact "
+            "checkpoint->backbone key mapping for it. Refusing to guess; add one to the "
+            "model wrapper before using init_checkpoint."
+        )
+
+    ckpt_path = anypath(checkpoint_path)
+    if not exists(ckpt_path):
+        raise FileNotFoundError(f"init_checkpoint not found: {ckpt_path}")
+    raw = universal_torch_load(ckpt_path, map_location=device)
+    if isinstance(raw, dict) and "model_state_dict" in raw:
+        raw = raw["model_state_dict"]
+
+    mapped = mapper(raw)
+    model.backbone.load_state_dict(mapped, strict=True)  # type: ignore[union-attr]
+    logger.info(
+        "init_checkpoint %s: %d/%d checkpoint tensors loaded into backbone (strict), %d declared-discarded",
+        checkpoint_path,
+        len(mapped),
+        len(raw),
+        len(raw) - len(mapped),
+    )
+
+
 def _load_checkpoint(model: object, checkpoint_path: str, device: str, keep_classifier: bool = False) -> None:
     """Load checkpoint weights into model.
 

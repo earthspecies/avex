@@ -205,6 +205,28 @@ class PupuJEPAModel(ModelBase):
 
         self.backbone = backbone.to(self.device).eval()
 
+        # Which teacher tensor becomes the embedding (pooled the same way either way).
+        #   "final"          -- teacher output after its final norm (default; the
+        #                       paper's "final layer").
+        #   "last_attn_proj" -- output of teacher.blocks[-1].attn.proj, the attention
+        #                       branch of the last block. This is what avex's
+        #                       `last_layer` resolves to for EAT, and the layer that
+        #                       reproduces the paper's EAT rows; it exists so the two
+        #                       models can be compared on the same kind of layer.
+        # A forward hook cannot be set from the eval config instead: _embed_one runs
+        # the teacher once per clip, so an avex hook would keep only the last clip.
+        self.embed_layer = str(extra_config.get("embed_layer", "final"))
+        if self.embed_layer not in ("final", "last_attn_proj"):
+            raise ValueError(f"extra_config.embed_layer must be 'final' or 'last_attn_proj', got {self.embed_layer!r}")
+        self._tap: Optional[torch.Tensor] = None
+        if self.embed_layer == "last_attn_proj":
+
+            def _store(_m: nn.Module, _inp: Any, out: torch.Tensor) -> None:
+                self._tap = out
+
+            self.backbone.teacher.blocks[-1].attn.proj.register_forward_hook(_store)
+        logger.info("PupuJEPA embedding layer: %s", self.embed_layer)
+
         self.target_sr = self.pupu_cfg.preprocess.sample_rate            # 24000
         self.frame_len = (
             self.pupu_cfg.preprocess.cut_mel_frame * self.pupu_cfg.preprocess.hop_size
@@ -267,6 +289,8 @@ class PupuJEPAModel(ModelBase):
         idx = torch.arange(P, device=self.device).unsqueeze(0).expand(C, P)
         rope_sel = rope_full[idx].unsqueeze(1)                       # (C, 1, P, rope_dim)
         h = self.backbone.teacher(x_all, rope=rope_sel)              # (C, P, D)
+        if self.embed_layer == "last_attn_proj":
+            h, self._tap = self._tap, None                           # (C, P, D)
         # Mean over patches within a window, then across windows — PupuJEPA's
         # native clip embedding.
         return h.mean(dim=1).mean(dim=0)

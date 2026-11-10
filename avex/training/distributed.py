@@ -148,11 +148,27 @@ def init_distributed(port: int = 29500, backend: str = "nccl") -> Tuple[int, int
                 f"Initializing distributed training with rank {rank}, "
                 f"world size {world_size}, master addr {master_addr}:{job_port}"
             )
+            # Collective timeout. Configurable via AVEX_NCCL_TIMEOUT_MINUTES; the
+            # default stays 5 so behaviour is unchanged unless opted in.
+            #
+            # 5 minutes is too short for GCS-backed data. The DataLoader has no
+            # timeout (worker_timeout=0), so if one rank's batch is slow -- a slow
+            # GCS read, or an on-the-fly resample of a long file -- that rank
+            # stalls before its backward while every other rank waits in the
+            # gradient all-reduce, and the whole job dies. In job 91247 rank 5
+            # stalled for ~6 min (00:05:55 -> ~00:11:51) and then RECOVERED, but
+            # the other 7 ranks had already timed out at 00:10:55. The NCCL flight
+            # recorder confirmed it was a stall, not a desync: all 8 ranks issued
+            # identical collectives for 1,984 steps, and rank 5 simply had not
+            # enqueued the next step. A longer timeout turns that into a slow
+            # step instead of a lost run.
+            nccl_timeout_min = float(os.environ.get("AVEX_NCCL_TIMEOUT_MINUTES", "5"))
+            logger.info("NCCL collective timeout: %.0f min", nccl_timeout_min)
             dist.init_process_group(
                 backend=backend,
                 world_size=world_size,
                 rank=rank,
-                timeout=_dt.timedelta(minutes=5),
+                timeout=_dt.timedelta(minutes=nccl_timeout_min),
             )
             is_distributed = True
             logger.info("Distributed training initialized successfully.")

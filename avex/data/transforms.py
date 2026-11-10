@@ -83,11 +83,21 @@ class TrainValSplitTransform:
             train_idxs: list[int] = []
             val_idxs: list[int] = []
 
-            # Per-class proportional split via alp_data backend API
-            indexed = data.add_column("__row_idx__", list(range(n)))
-            for class_val in indexed.get_unique(self.stratify_column):
-                group = indexed.filter_isin(self.stratify_column, [class_val])
-                group_row_idxs = [row["__row_idx__"] for row in group]
+            # Per-class proportional split. Groups are built in Python rather than
+            # with the backend's get_unique/filter_isin, which fail on list-valued
+            # columns (BirdSet's `labels_as_list`: "unhashable type: 'list'"). A
+            # list is keyed by its tuple, so each distinct label set is one stratum.
+            # Matches get_unique exactly for scalar columns -- strata visited in
+            # sorted order, null-valued rows left out of both subsets -- so existing
+            # splits are unchanged (verified against the old code).
+            groups: dict[Any, list[int]] = {}
+            for i, row in enumerate(data):
+                v = row[self.stratify_column]
+                if v is None or (isinstance(v, float) and np.isnan(v)):
+                    continue
+                groups.setdefault(tuple(v) if isinstance(v, list) else v, []).append(i)
+            for key in sorted(groups):
+                group_row_idxs = groups[key]
                 perm = rng.permutation(len(group_row_idxs)).tolist()
                 n_train = max(1, int(len(perm) * self.train_size)) if len(perm) > 1 else len(perm)
                 train_idxs.extend([group_row_idxs[perm[i]] for i in range(n_train)])

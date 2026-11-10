@@ -221,9 +221,11 @@ class EmbeddingDataSource:
                             self.num_labels = int(nl)
                         else:
                             lbls = np.asarray(h5f["labels"])  # type: ignore[index]
-                            if lbls.ndim > 1 and lbls.shape[-1] > 1:
-                                lbls = lbls.argmax(axis=-1)
-                            self.num_labels = int(np.unique(lbls).size)
+                            # (N, C) targets: width, not distinct argmax (see the
+                            # in-memory save path below for why).
+                            self.num_labels = (
+                                int(lbls.shape[-1]) if lbls.ndim > 1 and lbls.shape[-1] > 1 else int(np.unique(lbls).size)
+                            )
 
                         # Read embedding_dims from H5 attributes if not already set
                         if self.embedding_dims is None:
@@ -445,7 +447,14 @@ class EmbeddingDataSource:
                 if labels.dim() == 1:
                     num_labels = int(labels.unique().numel())
                 else:
-                    num_labels = int(torch.argmax(labels, dim=-1).unique().numel())
+                    # (N, C) target matrix: the class count is its width. Counting the
+                    # distinct argmax values instead gave ~1 for multi-label detection
+                    # targets (mostly all-zero rows argmax to 0), so the offline probe
+                    # was built with one output and then fed C-column BCE targets --
+                    # the CUDA assert that kept detection out of benchmark_beans_gcs_
+                    # classification.yml. It could also undercount single-label
+                    # one-hot targets whenever a split lacks some class.
+                    num_labels = int(labels.shape[-1])
             else:
                 num_labels = None  # Should not happen; keep guard
             save_embeddings_arrays(

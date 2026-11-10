@@ -27,6 +27,8 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from alp_data.io import anypath
+
 from avex.configs import RunConfig
 from avex.training.checkpoint_manager import (
     CheckpointManager,
@@ -44,7 +46,7 @@ from avex.training.training_strategies import (
     TrainingStrategy,
 )
 from avex.training.training_utils import build_scheduler
-from avex.utils import ExperimentLogger
+from avex.utils import ExperimentLogger, universal_torch_load
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +147,9 @@ class Trainer:
             logger.info("Clustering evaluation enabled")
 
         # Load checkpoint if specified
-        if is_main_process() and resume_from_checkpoint:
+        # On EVERY rank, not just rank 0: each rank has its own optimiser, and the
+        # replicas must also start from identical weights (see _load_checkpoint).
+        if resume_from_checkpoint:
             self._load_checkpoint(resume_from_checkpoint)
 
         # Broadcast training state in distributed setting
@@ -521,7 +525,33 @@ class Trainer:
             logger.error(f"Failed to save label_map: {e}")
 
     def _load_checkpoint(self, checkpoint_path: str) -> None:
-        """Load checkpoint using the checkpoint manager."""
+        """Restore model, optimiser, scheduler, scaler and epoch from a checkpoint.
+
+        Runs on every rank. It used to run on rank 0 only, which left ranks 1..N
+        with a fresh optimiser (AdamW moments at zero) and, until the next DDP
+        rebuild, their own initial weights.
+
+        Two-stage runs: a checkpoint saved AFTER the unfreeze holds a stage-2
+        optimiser (all parameters) and a stage-2 scheduler (built at epoch
+        freeze+1 with its own warm-up and step count). The optimiser/scheduler the
+        trainer was constructed with are the stage-1 ones, so the saved state has
+        to go into stage-2 objects: re-create stage 2 exactly as it was built at
+        epoch freeze+1, then load into it. Previously the loop re-activated stage 2
+        at the first resumed epoch instead, discarding the restored state --
+        AdamW moments reset and the LR warm-up restarted from zero.
+
+        Raises:
+            RuntimeError: if the checkpoint did not load (the manager falls back to
+                epoch 1 silently) or the stage-2 state was not restored.
+        """
+        raw = universal_torch_load(anypath(checkpoint_path), map_location="cpu")
+        ckpt_epoch = int(raw.get("epoch", 0))
+        del raw
+        in_stage2 = self.freeze_backbone_epochs > 0 and ckpt_epoch > self.freeze_backbone_epochs
+        if in_stage2:
+            logger.info("[Resume] checkpoint epoch %d is past the freeze period; re-creating stage 2", ckpt_epoch)
+            self._activate_second_stage(current_epoch=self.freeze_backbone_epochs + 1)
+
         unwrapped_model = self._get_unwrapped_model()
         state = self.checkpoint_manager.load_checkpoint(
             checkpoint_path=checkpoint_path,
@@ -530,8 +560,20 @@ class Trainer:
             scheduler=self.scheduler,
             scaler=self.scaler,
         )
+        if state["start_epoch"] != ckpt_epoch + 1:
+            raise RuntimeError(f"Resume from {checkpoint_path} failed: expected start epoch {ckpt_epoch + 1}, "
+                               f"got {state['start_epoch']} (model state did not load)")
+        if len(self.optimizer.state) == 0:
+            raise RuntimeError(f"Resume from {checkpoint_path} failed: optimiser state was not restored")
         self.start_epoch = state["start_epoch"]
         self.best_val_acc = state["best_val_acc"]
+        logger.info(
+            "[Resume] start epoch %d | scheduler step %s | lr %.3e | optimiser state for %d tensors",
+            self.start_epoch,
+            getattr(self.scheduler, "last_epoch", "n/a"),
+            self.optimizer.param_groups[0]["lr"],
+            len(self.optimizer.state),
+        )
 
     def _broadcast_training_state(self) -> None:
         """Broadcast training state in distributed setting."""

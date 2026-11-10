@@ -340,7 +340,11 @@ class FineTuneTrainer:
                         y.to(dtype=torch.int64),
                         num_classes=self.num_labels,
                     )
-                elif y.ndim == 2 and y.shape[-1] == 1:
+                # (N, 1) is ambiguous: a column of class indices, or the binary
+                # target matrix of a ONE-class detection task (BEANS hiceas). In the
+                # latter it already matches the (N, 1) logits; one-hot encoding its 1s
+                # as index 1 of a 1-class head was a device-side assert (job 92465).
+                elif y.ndim == 2 and y.shape[-1] == 1 and self.num_labels > 1:
                     y = torch.nn.functional.one_hot(
                         y.squeeze(-1).to(dtype=torch.int64),
                         num_classes=self.num_labels,

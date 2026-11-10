@@ -1203,8 +1203,9 @@ class HDF5EmbeddingDataset(torch.utils.data.Dataset):
                 sample_size = min(10000, f["labels"].shape[0])
                 labels = f["labels"][:sample_size]
 
+                # (N, C) targets: the width (distinct argmax undercounts multi-label).
                 if labels.ndim > 1 and labels.shape[-1] > 1:
-                    labels = labels.argmax(axis=-1)
+                    return int(labels.shape[-1])
 
                 return int(np.unique(labels).size)
         except Exception as e:
