@@ -1,0 +1,95 @@
+---
+# REPRODUCTION of the AVEX paper's EffNetB0-all: EfficientNet-B0, ImageNet init,
+# post-trained supervised on the paper's "All" mix (AudioSet + Xeno-canto +
+# iNaturalist + Watkins + Animal Sound Archive) at 16 kHz.
+#
+# Reference number: paper Table 3, EffNetB0-all^SL -- BEANS Classification
+# probe 0.800, R-AUC 0.809, C-NMI 0.584.
+#
+# Why this is a useful second validation next to sl-EAT-all: it exercises the
+# pipeline WITHOUT the two riskiest pieces. There is no init_checkpoint (ImageNet
+# weights come from torchvision via `pretrained: true`) and no two-stage freeze
+# (Table 5 lists stage-1 as NA for EfficientNet), so the strict-init mapping and
+# the DDP unfreeze/rewrap never run. Verified: gradients reach 211/211 backbone
+# tensors and the forward returns (B, 14747).
+#
+# Hyperparameters are paper Table 5, row EffNetB0-all, and match the AAAI config
+# ESP trained with (aaai_train/sl_efficientnet_animalspeak_audioset.yml) except
+# for the data mix, which follows the paper (Table 4) rather than `animalspeak`.
+
+model_spec:
+  name: efficientnet
+  efficientnet_variant: b0
+  pretrained: true           # ImageNet init. (The published spec says false only
+                             # because it loads the finished post-trained weights.)
+  device: cuda
+  # Spectrogram front-end copied exactly from the published esp_aves2_effnetb0_all.yml.
+  audio_config:
+    sample_rate: 16000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 128
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/icassp_2026/data_avex_all_16k.yml
+output_dir: "./runs/icassp2026/sl_effnetb0_all_repro"
+run_name: sl_effnetb0_all_repro
+label_type: supervised
+# REQUIRED -- loss_function has no default in RunConfig. Multi-label BCE per paper S3.3.
+loss_function: bce
+preprocessing: null
+sr: 16000
+debug_mode: false
+logging: wandb
+wandb_project: avex-icassp2026
+resume_from_checkpoint: null
+
+# Paper Table 5, row EffNetB0-all.
+training_params:
+  train_epochs: 50
+  lr: 0.0005
+  # PER-GPU. Global batch = batch_size * num_gpus; 32 x 8 = 256 = paper.
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  # No freeze_backbone_epochs: EfficientNet has no stage-1 in the paper (NA).
+
+scheduler:
+  name: cosine
+  warmup_steps: 4000
+  min_lr: 1e-6
+
+# Paper S3.3, identical to sl_eat_all_repro.yml.
+augmentations:
+  - noise:
+      noise_dirs:
+        - gs://foundation-model-data/audio_16k/noise_clean/demand_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/idmt
+        - gs://foundation-model-data/audio_16k/noise_clean/tut2016_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/urbansound
+        - gs://foundation-model-data/audio_16k/noise_clean/orcasound_shipnoise_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/deepship_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/shipsear_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/wham_noise
+      snr_db_range: [-10, 20]
+      augmentation_prob: 0.5
+      mask_signal_prob: 0.0
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 0.5
+
+# Disabled: avex runs it on rank 0 only with no barrier, which deadlocked DDP
+# (job 91244). See sl_eat_all_repro.yml for the full explanation.
+clustering_eval:
+  enabled: false
+
+seed: 42
+num_workers: 8

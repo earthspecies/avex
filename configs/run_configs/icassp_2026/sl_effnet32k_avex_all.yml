@@ -1,0 +1,109 @@
+# POST-TRAINING of Marius's 32 kHz EfficientNet-B0 (effnet_32khz_v0) with the SAME recipe, data
+# and trainer as sl_xenomae_avex_all_32k.yml / sl_pupujepa_avex_all_32k.yml -- only model_spec and
+# init_checkpoint differ (diff the files). The spectrogram front end is Marius's (n_fft 800,
+# hop 160, 256 mels at 32 kHz), so it matches how the encoder was trained.
+model_spec:
+  name: efficientnet
+  efficientnet_variant: b0
+  pretrained: false
+  device: cuda
+  audio_config:
+    sample_rate: 32000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 256
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/icassp_2026/data_avex_all_32k.yml
+output_dir: "./runs/icassp2026/sl_effnet32k_avex_all"
+run_name: sl_effnet32k_avex_all
+label_type: supervised
+loss_function: bce           # multi-label (AudioSet ontology + species), as in the paper
+preprocessing: null
+sr: 32000
+debug_mode: false
+logging: wandb
+# Set explicitly: the default in avex/configs.py is "audio-experiments" whose
+# hyphen is U+2011 (non-breaking), giving a project you cannot search for.
+wandb_project: avex-icassp2026
+resume_from_checkpoint: null
+# Marius's 32 kHz EfficientNet-B0. Encoder loaded STRICTLY (model.features.*); its 8,463-class
+# AnimalSpeak head is the only thing discarded (EfficientNet.map_init_checkpoint).
+init_checkpoint: gs://representation-learning/models/v1/effnet_32khz_v0/final_model.pt
+
+training_params:
+  train_epochs: 10
+  lr: 0.0001                 # stage-1 (frozen backbone) LR, paper Table 5
+  # PER-GPU batch size: passed straight to the DataLoader alongside a
+  # DistributedSampler, so GLOBAL batch = batch_size * num_gpus.
+  # 32 x 8 GPUs = 256, the paper's batch size. avex has no gradient accumulation,
+  # so if you change the GPU count, change this too or the effective batch (and
+  # therefore the LR schedule) silently shifts.
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  freeze_backbone_epochs: 2
+  second_stage_lr: 0.00008
+  second_stage_warmup_steps: 6000
+
+scheduler:
+  name: cosine
+  warmup_steps: 2000
+  min_lr: 1e-6
+
+# Noise + mixup. Block copied verbatim from sl_eat_audioset_xeno_inat.yml so the
+# PuPuJEPA vs EAT comparison is clean -- same augmentation, different backbone.
+# Paper says SNR U(-10,20) dB; the committed EAT config uses [-5,20], and we
+# match the EAT config rather than the paper so the two runs stay comparable.
+# Mixup sets the target to the union of the mixed clips' labels (element-wise OR).
+# Noise corpora are 16 kHz -- no 32 kHz set exists, and bio-jepa pretraining also
+# mixed 16 kHz noise into 32 kHz audio.
+augmentations:
+  - noise:
+      noise_dirs:
+        - gs://foundation-model-data/audio_16k/noise_clean/demand_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/idmt
+        - gs://foundation-model-data/audio_16k/noise_clean/tut2016_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/urbansound
+        - gs://foundation-model-data/audio_16k/noise_clean/orcasound_shipnoise_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/deepship_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/shipsear_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/wham_noise
+        # audioset noise dir is empty at 16 kHz (0 wav) -> omitted; 8 dirs, ~65k files
+      snr_db_range: [-10, 20]
+      augmentation_prob: 0.5
+      mask_signal_prob: 0.0   # paper: no signal masking (old run used 0.1)
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 0.5
+
+# NOTE on metrics: `metrics` is a TOP-LEVEL RunConfig field (not training_params),
+# and it is left at its default ["accuracy"] deliberately.
+#
+# That default is single-label top-1 (argmax logits vs argmax of the multi-hot
+# target) and is close to meaningless here -- it is what made the EAT run report
+# val_accuracy=0.0000 every epoch. mAP would be the right metric, BUT it is not
+# usable at this scale: beans_metrics.AveragePrecision accumulates every score and
+# target into growing NxK tensors, which at 14348 classes x ~1.35M samples/epoch is
+# ~77 GB of logits + ~155 GB of targets PER RANK, held on the GPU -> OOM partway
+# through epoch 1. It is built for BEANS-scale problems, not a 14k-class corpus.
+#
+# So train/val accuracy here is decoration only; it never touches a gradient. The
+# real read-out is the AVEX benchmark eval on the resulting checkpoint. A
+# streaming//chunked mAP would fix this properly and is worth doing separately.
+
+seed: 42
+num_workers: 8
+
+# Disabled: avex runs it on rank 0 only with no barrier, which deadlocked DDP
+# (job 91244). Same as sl_eat_all_repro.yml.
+clustering_eval:
+  enabled: false

@@ -1,0 +1,45 @@
+# EVAL run config: XC_1M MAE SSL, mean-pooled patch tokens. Generated from pupujepa_bigrun.yml; only model_spec and names differ.
+---
+# PupuJEPA-Base, pretrained from scratch (self-supervised only, no post-training)
+# on pooled Xeno-canto + iNaturalist + AudioSet for 200k steps.
+#
+# Unlike eat_ssl_all.yml this sets pretrained: true and passes the checkpoint via
+# extra_config rather than the experiment-level checkpoint_path. Deliberate: the
+# wrapper loads the weights itself and HARD-FAILS if any deployed-path tensor
+# (teacher.* / patch_embed.* / rope_encoder.*) is unmatched. Routing through
+# _load_checkpoint's prefix reconciliation risks the silent partial-load failure
+# mode PR #202 addresses -- for EAT that path still leaves 6 of 150 tensors
+# unmatched (patch embed, CLS token, pre-norm), which loads without error.
+model_spec:
+  name: xenomae
+  pretrained: true
+  device: cuda
+  extra_config:
+    checkpoint_path: /home/eklavya_earthspecies_org/moritz_mvp/model.safetensors
+    pooling: mean
+  audio_config:
+    sample_rate: 32000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+dataset_config: configs/data_configs/data_base.yml
+run_name: xenomae_xc1m
+output_dir: "./runs/icassp2026/xenomae_xc1m"
+loss_function: cross_entropy
+label_type: supervised
+preprocessing: null
+sr: 32000
+debug_mode: false
+logging: mlflow
+resume_from_checkpoint: null
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+seed: 42
+num_workers: 8
+augmentations: []

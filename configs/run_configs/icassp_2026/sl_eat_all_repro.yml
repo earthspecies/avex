@@ -1,0 +1,116 @@
+---
+# REPRODUCTION of the AVEX paper's sl-EAT-all ("SSL + All"): supervised
+# post-training of the published EAT-all SSL checkpoint on the paper's "All" mix:
+# AudioSet + Xeno-canto + iNaturalist + Watkins + Animal Sound Archive, at 16 kHz.
+#
+# Purpose: validate the avex post-training pipeline against a published number
+# before trusting it on any other model. sl-EAT-all is the one model with both a
+# published SSL start point (esp-aves2-eat-all) and a published post-trained
+# result (Table 1: CBI probe 0.755, Watkins 0.885, ...). If this lands near those,
+# the pipeline is sound; if not, it is broken and every other model's numbers are
+# uninterpretable.
+#
+# Every setting below is chosen to match the paper, and each deviation from the
+# earlier icassp EAT run (sl_eat_audioset_xeno_inat.yml) is marked [REPRO].
+
+model_spec:
+  name: eat_hf
+  pretrained: false
+  device: cuda
+  # ESP EAT normalisation stats, identical to the published esp_aves2_eat_all.yml.
+  eat_norm_mean: -5.553
+  eat_norm_std: 4.606
+  audio_config:
+    sample_rate: 16000
+    representation: raw
+    normalize: false
+    target_length_seconds: 10
+    window_selection: random
+
+# [REPRO] THE fix for the earlier run, which had no init and therefore post-trained
+# eat_hf's constructor default, the public worstchan/EAT-base_epoch30_pretrain.
+# This is the paper's "EAT-all" -- the SSL checkpoint the paper post-trains from
+# ("We use the EAT-all SSL checkpoint as the basis for post-training", S3.3).
+# Loaded with an exact key map and strict=True (avex.models.utils.load.
+# load_init_checkpoint): all 150 backbone tensors must load and only the 14 SSL
+# decoder tensors may be discarded, or the run refuses to start.
+init_checkpoint: hf://EarthSpeciesProject/esp-aves2-eat-all/esp-aves2-eat-all.safetensors
+
+# [REPRO] Paper's "All" mix (Table 4 "Ours": AS + XC + WTK + ASA + INAT) at 16 kHz,
+# union label space. The earlier icassp run omitted Watkins and ASA.
+dataset_config: configs/data_configs/icassp_2026/data_avex_all_16k.yml
+output_dir: "./runs/icassp2026/sl_eat_all_repro"
+run_name: sl_eat_all_repro
+label_type: supervised
+loss_function: bce           # multi-label BCE, per paper S3.3
+preprocessing: null
+sr: 16000
+debug_mode: false
+logging: wandb
+wandb_project: avex-icassp2026
+resume_from_checkpoint: null
+
+# Paper Table 5, row sl-EAT-all.
+training_params:
+  train_epochs: 10
+  lr: 0.0001                 # stage-1 LR (backbone frozen)
+  # PER-GPU. Global batch = batch_size * num_gpus; 32 x 8 = 256 = paper.
+  batch_size: 32
+  optimizer: adamw           # [REPRO] paper states AdamW (the icassp run used adamw8bit)
+  weight_decay: 0.01
+  amp: true
+  amp_dtype: bf16
+  freeze_backbone_epochs: 2
+  second_stage_lr: 0.00008   # stage-2 LR (full model)
+  second_stage_warmup_steps: 6000
+
+scheduler:
+  name: cosine
+  warmup_steps: 2000
+  min_lr: 1e-6
+
+# Paper S3.3: noise with p=0.5 at SNR ~ U(-10, 20) dB, and with p=0.5 mix random
+# pairs within a batch, target = union of labels (element-wise OR).
+augmentations:
+  - noise:
+      noise_dirs:
+        - gs://foundation-model-data/audio_16k/noise_clean/demand_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/idmt
+        - gs://foundation-model-data/audio_16k/noise_clean/tut2016_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/urbansound
+        - gs://foundation-model-data/audio_16k/noise_clean/orcasound_shipnoise_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/deepship_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/shipsear_10s
+        - gs://foundation-model-data/audio_16k/noise_clean/wham_noise
+      snr_db_range: [-10, 20]  # [REPRO] paper range (icassp run used [-5, 20])
+      augmentation_prob: 0.5
+      mask_signal_prob: 0.0    # [REPRO] not in the paper's recipe (icassp run used 0.1)
+  - mixup:
+      alpha: 0.4
+      n_mixup: 1
+      augmentation_prob: 0.5
+
+# In-loop species clustering is DISABLED -- it crashed job 91244, and is not safe
+# to run under DDP as avex implements it:
+#   * _run_clustering_evaluation() returns early on every rank except 0, with no
+#     barrier afterwards. Ranks 1-7 race into training and block on the first
+#     gradient all-reduce while rank 0 is still clustering.
+#   * avex's NCCL timeout is 5 min. Rank 0's clustering (3,451 samples, 428
+#     classes) was still running after 15 min, so all ranks died on
+#     "Watchdog caught collective operation timeout ... ALLREDUCE, NumelIn=14747".
+#   * frequency: 1 would hit the same deadlock at the end of every epoch.
+#   * Its default layers: "last_layer" also resolves to the classifier head, not
+#     the encoder (clustering_evaluator.py:155) -- if re-enabled, set
+#     layers: backbone.model.blocks.11.mlp.fc2.
+# Per-epoch species-structure tracking is done instead by running the AVEX
+# retrieval + clustering eval on the saved checkpoint_epoch_*.pt files: same
+# validated code as the final eval, no DDP involvement.
+clustering_eval:
+  enabled: false
+
+# `metrics` stays at its default ["accuracy"]: mAP accumulates every score and
+# target (N x 14k) on the GPU and OOMs at this scale. Train/val accuracy is
+# therefore a crude top-1 signal; the real read-out is the AVEX eval.
+
+seed: 42
+num_workers: 8

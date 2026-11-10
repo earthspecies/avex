@@ -1,0 +1,58 @@
+# AVEX Table 8 (BirdSet), 16k: probe (mAP) + retrieval (R-AUC),
+# pooled cache. Generated from eat_repro_sl_all_probe_attnproj.yml; only dataset_config, run_name, save_dir,
+# results_csv_path, eval_modes (no clustering -- the paper reports none here) and
+# num_workers (16, extraction is GCS-bound) differ.
+# PROBE ON attn.proj: identical to eat_repro_sl_all_probe.yml except target_layers (output paths are
+# patched by jobs/icassp_2026/eval_eat_probe_attnproj.sh). The retrieval layer
+# ablation (job 91665) showed blocks.11.attn.proj -- what avex's 'last_layer'
+# resolves to for EAT -- reproduces the paper's EAT-all row; mlp.fc2 does not.
+#
+# Linear probing of PupuJEPA-Base SSL, to produce the Probe column of AVEX Table 6.
+#
+# Hyperparameters are the PAPER's probing spec, not the committed icassp configs:
+#   "a learning rate of 1e-4, weight decay of 0.1, batch size of 32, and 900 epochs"
+# (the older configs/evaluation_configs/icassp/*.yml say 50 epochs / lr 1e-3 /
+# wd 0.01, which does not match the published protocol).
+#
+# Protocol, per paper S3.4: "linear probing on time-averaged embeddings ...
+# extracted from the final layer (excluding classification heads)". PupuJEPA's
+# wrapper already returns its native pooled final-layer embedding as (B, 1, 768),
+# so aggregation: mean over the length-1 axis is a no-op.
+dataset_config: configs/data_configs/benchmark_birdset_gcs_16k.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+
+experiments:
+  - run_name: eat_repro_sl_all_t8
+    run_config: configs/run_configs/icassp_2026/eat_ssl_all.yml
+    pretrained: false
+    checkpoint_path: runs/icassp2026/sl_eat_all_repro/2026-09-26_09-24-00/final_model.pt
+    probe_config:
+      probe_type: linear
+      target_layers: ["backbone.model.blocks.11.attn.proj"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+save_dir: evaluation_results/icassp2026_eat_repro_sl_all_t8
+results_csv_path: evaluation_results/icassp2026_eat_repro_sl_all_t8/results.csv
+device: cuda
+seed: 42
+num_workers: 16
+eval_modes:
+  - probe
+  - retrieval
+offline_embeddings:
+  overwrite_embeddings: true
+  # Store time-averaged (N, 768) embeddings. The default 'none' stores (N, 513, 768)
+  # and the linear probe then FLATTENS it into a 393,984-d input instead of
+  # mean-pooling -- not the paper's protocol, and 900 epochs take hours.
+  probe_storage_aggregation: mean
+disable_tqdm: true

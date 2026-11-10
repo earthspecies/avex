@@ -1,0 +1,42 @@
+# Evaluate Marius Miron's existing 32 kHz EfficientNet-B0 (effnet_32khz_v0) on
+# BEANS classification, same protocol as the PupuJEPA and EAT evals.
+#
+# target_layers is EXPLICIT on purpose. The EffNet wrapper only replaces
+# model.classifier[-1] when training; at eval time that slot is still torchvision's
+# 1000-class ImageNet Linear, so "last_layer" (the last nn.Linear) would probe that
+# head, not the encoder. model.features.8.0 is EfficientNet-B0's final 1280-channel
+# conv -- "the final layer (excluding classification heads)", paper S3.4 --
+# mean-pooled.
+dataset_config: configs/data_configs/benchmark_beans_gcs_32k.yml
+
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+
+experiments:
+  - run_name: effnet_32khz_v0_linear_last
+    run_config: configs/run_configs/icassp_2026/effnet_32khz_v0.yml
+    pretrained: false
+    checkpoint_path: gs://representation-learning/models/v1/effnet_32khz_v0/final_model.pt
+    probe_config:
+      probe_type: linear
+      target_layers: ["model.features.8.0"]
+      aggregation: "mean"
+      input_processing: "pooled"
+      freeze_backbone: true
+      online_training: false
+
+save_dir: evaluation_results/icassp2026_effnet_32khz_v0_probe
+results_csv_path: evaluation_results/icassp2026_effnet_32khz_v0_probe/results.csv
+device: cuda
+seed: 42
+num_workers: 8
+eval_modes:
+  - probe
+offline_embeddings:
+  overwrite_embeddings: true
+disable_tqdm: true

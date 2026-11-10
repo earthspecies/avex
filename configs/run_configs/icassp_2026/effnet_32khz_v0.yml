@@ -1,0 +1,57 @@
+---
+# Run-config wrapper for EVALUATING Marius Miron's existing 32 kHz EfficientNet-B0
+# (`effnet_32khz_v0`) through the AVEX BEANS pipeline.
+#
+# The model spec below is copied verbatim from configs/run_configs/32kHz/
+# effnet_32khz_v0.yml, whose header records: "EfficientNet B0 model fine-tuned at
+# 32kHz on AnimalSpeak (AudioSet + Xeno-Canto + iNaturalist). Performance: 83.6% on
+# CBI (vs. classifier V0 64%, sl-beats-all 76%, Perch 74.4%, NatureLM-audio 77.8%)".
+# That file is an official-model spec (checkpoint_path / class_mapping_path /
+# model_spec), not a full RunConfig, so evaluation cannot point at it directly --
+# this wraps the same model_spec in the fields RunConfig requires, the same way
+# pupujepa_bigrun.yml does. The training fields below are placeholders; nothing
+# here is trained.
+#
+# The weights are loaded by the EVAL config's experiment-level checkpoint_path,
+# not here.
+#
+# Spectrogram: Marius kept n_fft/hop/win at 800/160/800 SAMPLES (the 16 kHz values),
+# which at 32 kHz is a 25 ms window / 5 ms hop -- twice the time resolution -- and
+# doubled the mel bins to 256. Do not "correct" these; they must match training.
+model_spec:
+  name: efficientnet
+  efficientnet_variant: b0
+  pretrained: false
+  device: cuda
+  audio_config:
+    sample_rate: 32000
+    n_fft: 800
+    hop_length: 160
+    win_length: 800
+    window: hann
+    n_mels: 256
+    representation: mel_spectrogram
+    normalize: true
+    target_length_seconds: 10
+    window_selection: random
+
+dataset_config: configs/data_configs/data_base.yml
+run_name: effnet_32khz_v0
+output_dir: "./runs/icassp2026/effnet_32khz_v0"
+loss_function: cross_entropy
+label_type: supervised
+preprocessing: null
+sr: 32000
+debug_mode: false
+logging: mlflow
+resume_from_checkpoint: null
+training_params:
+  train_epochs: 900
+  lr: 0.0001
+  batch_size: 32
+  optimizer: adamw
+  weight_decay: 0.1
+  amp: false
+seed: 42
+num_workers: 8
+augmentations: []

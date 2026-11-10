@@ -1,0 +1,98 @@
+# Post-training data mix for REPRODUCING the AVEX paper's sl-EAT-all.
+#
+# Source: AVEX paper (arXiv 2508.11845v3), Table 4 "Ours" column, Post-training
+# Data = AS + XC + WTK + ASA + INAT; Table 2 names this mix "All"; S3.1 describes
+# the bioacoustic part (Xeno-canto, iNaturalist, Animal Sound Archive, Watkins
+# "all cuts"). Five separate datasets, nothing else.
+#
+#   dataset               paper Table 1 hours   paper snapshot (Appendix B.4)
+#   AudioSet                     5,700           2021
+#   Xeno-canto                  10,416           June 2023
+#   iNaturalist                  1,539           June 2023
+#   Watkins "all cuts"              27           2023
+#   Animal Sound Archive            78           2023
+#
+# KNOWN DEVIATION: alp-data holds a single version (v0.1.0) of each of these, and
+# its Xeno-canto / iNaturalist are the expanded post-paper dumps (see David's
+# 20260622 dumps, alp-data 1.11), not the June-2023 snapshot. There is no older
+# version to pin. scripts/preflight_posttrain_labels.py reports per-source size so
+# the gap from Table 1 is measured, not assumed.
+#
+# LABELS: AudioSet keeps its classes in `labels` (a JSON string, parsed per
+# dataset with `parse_json_list`); all four bioacoustic datasets keep the species
+# in `canonical_name` (GBIF-linked, matching S3.1 "link all species to a common
+# taxonomic backbone (GBIF)"). The joint map is built from BOTH columns, giving the
+# single shared {AudioSet classes} U {species} head the paper uses. Building it
+# from `labels` alone (as the old AAAI config did) would leave every bioacoustic
+# row with an empty target.
+#
+# 16 kHz throughout, per S3.3 ("we train and evaluate all our models at 16kHz").
+
+train_datasets:
+  - dataset_name: audioset
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    # Same root the earlier icassp EAT run trained 10 epochs on cleanly at 16 kHz.
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: parse_json_list
+        feature: labels
+
+  - dataset_name: xeno-canto        # registered name uses a hyphen
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+  - dataset_name: inaturalist
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+  - dataset_name: watkins
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+  - dataset_name: animal-sound-archive  # registered name uses hyphens
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+# Watkins ships a train split only, so it is absent from validation.
+val_datasets:
+  # AudioSet must be present in val, otherwise the `labels` column does not exist
+  # on val and the joint labels_from_features errors.
+  - dataset_name: audioset
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: parse_json_list
+        feature: labels
+
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+  - dataset_name: inaturalist
+    split: val                      # iNaturalist's split is "val", not "validation"
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+  - dataset_name: animal-sound-archive  # registered name uses hyphens
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft
+
+transformations:
+  - type: labels_from_features
+    features: [labels, canonical_name]
+    output_feature: label
+    override: true
