@@ -202,3 +202,13 @@ cython_debug/
 
 # Notebooks
 notebooks/*
+
+# Local outputs and personal analysis (pupujepa-benchmark branch)
+logs/
+gs:/
+hf:/
+nbs/
+*.pt
+*.ckpt
+*.safetensors
+*.h5
