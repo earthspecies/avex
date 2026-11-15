@@ -70,6 +70,43 @@ with torch.no_grad():
 
 For complete evaluation examples, see `examples/04_training_and_evaluation.py`.
 
+### Classification ROC-AUC
+
+`get_metric_class("roc_auc")` returns `avex.metrics.sklearn_metrics.ROCAUC`.
+It accumulates batches before computing the score. Inputs must be finite score
+matrices `(N, C)`, with columns in class-index order:
+
+- **Class indices `(N,)`:** categorical binary or multiclass classification.
+  Logits are converted to categorical scores. Existing probabilities in `[0, 1]`
+  whose rows sum to one within input-precision tolerance are used unchanged.
+  Binary tasks score positive class 1; multiclass tasks macro-average one-vs-rest
+  AUCs. For logits, stable categorical log-odds preserve the mathematical
+  softmax rankings even when explicitly computing probabilities would saturate.
+- **Binary indicators `(N, C)`:** independent per-label rankings, including
+  one-hot matrices. Scores are used unchanged, without softmax or sigmoid. This
+  preserves multilabel rankings and the existing one-hot behavior. For example,
+  one-hot targets supplied by the training strategy still follow this path.
+  If categorical normalization is intended, explicitly convert single-label
+  one-hot targets to indices with `targets.argmax(dim=1)` before updating the
+  metric. Do not do this for true multilabel targets.
+
+For class-index targets, the default recognizes probability matrices over the
+complete accumulated input, not separately per minibatch. To avoid ambiguity if
+raw logits happen to be nonnegative and sum to one, instantiate the metric with
+`ROCAUC(from_logits=True)`. Use `ROCAUC(from_logits=False)` to require categorical
+probabilities instead. Keep the score representation, target format, and number
+of score columns consistent across batches. The override does not alter the
+independent-ranking contract for indicator targets.
+
+Classes with no positive or no negative examples are excluded from the macro
+average with an `UndefinedMetricWarning`. If no class is defined, the value is
+`NaN`, not `0.0`. Malformed inputs raise `ValueError` rather than being reported
+as zero AUC. For backward compatibility, a metric with no accumulated samples
+still returns the existing `0.0` no-data sentinel. A genuine reversed ranking
+can also have AUC `0.0`; constant scores with both classes present have AUC `0.5`.
+
+This classification metric is separate from retrieval ROC-AUC.
+
 ## Script-Based Training and Evaluation
 
 For supervised learning experiments, the framework provides dedicated scripts that handle the full training and evaluation pipeline using YAML configuration files.
