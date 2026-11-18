@@ -222,20 +222,25 @@ def _extract_embeddings_streaming(
         inp = {"raw_wav": wav, "padding_mask": mask}
         sample_emb = model.extract_embeddings(inp, aggregation=aggregation)
 
-    # Handle single tensor, list of tensors, or dictionary
+    # Handle single tensor, list of tensors, or dictionary.
+    # Coerce each shape to a plain ``tuple`` of ints: downstream we build HDF5
+    # shapes via ``(None,) + embedding_dim`` / ``(total_samples,) + embedding_dim``.
+    # On torch>=2.11 ``tuple + torch.Size`` yields a ``torch.Size`` whose
+    # constructor rejects the ``None`` (unlimited) maxshape entry, so keep them
+    # as plain tuples (the in-memory path already does this).
     if isinstance(sample_emb, list):
         # For multi-layer, collect dimensions for each layer
         # Exclude batch dimension (0)
-        embedding_dims = [emb.shape[1:] for emb in sample_emb]
+        embedding_dims = [tuple(emb.shape[1:]) for emb in sample_emb]
         logger.info(f"Multi-layer embedding dimensions: {embedding_dims}")
     elif isinstance(sample_emb, dict):
         # For multi-layer dictionary, collect dimensions for each layer
         # Exclude batch dimension (0)
-        embedding_dims = [emb.shape[1:] for emb in sample_emb.values()]
+        embedding_dims = [tuple(emb.shape[1:]) for emb in sample_emb.values()]
         logger.info(f"Multi-layer embedding dimensions (dict): {embedding_dims}")
     else:
         # Single tensor case - still store as list for consistency
-        embedding_dims = [sample_emb.shape[1:]]  # Exclude batch dimension
+        embedding_dims = [tuple(sample_emb.shape[1:])]  # Exclude batch dimension
         logger.info(f"Single-layer embedding dimensions: {embedding_dims}")
 
     total_samples = len(dataloader.dataset)
@@ -382,7 +387,7 @@ def _create_and_fill_h5_datasets_hybrid(
     if sample_labels is None:
         raise ValueError("Labels not found in batch")
 
-    label_shape = sample_labels.shape[1:] if sample_labels.dim() > 1 else ()
+    label_shape = tuple(sample_labels.shape[1:]) if sample_labels.dim() > 1 else ()
     label_dtype = sample_labels.dtype
 
     logger.info(f"Sample labels info: shape={sample_labels.shape}, dims={sample_labels.dim()}, dtype={label_dtype}")

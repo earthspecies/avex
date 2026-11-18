@@ -1,0 +1,61 @@
+# SMOKE variant of data_audioset_xeno_inat.yml: tiny subsets so a single-GPU training
+# run builds + steps quickly. Same label-unification logic (parse_json_list on AudioSet,
+# joint labels_from_features over [labels, canonical_name]).
+train_datasets:
+  - dataset_name: audioset
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    subset_percentage: 0.004
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: parse_json_list
+        feature: labels
+
+  - dataset_name: xeno-canto
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    subset_percentage: 0.02
+
+  - dataset_name: inaturalist
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    subset_percentage: 0.05
+
+val_datasets:
+  # AudioSet must be present in val too, otherwise the `labels` column doesn't exist and
+  # the joint labels_from_features (features: [labels, canonical_name]) errors on val.
+  - dataset_name: audioset
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    subset_percentage: 0.02
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: parse_json_list
+        feature: labels
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    subset_percentage: 0.02
+  - dataset_name: inaturalist
+    split: val
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    subset_percentage: 0.05
+
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft
+
+transformations:
+  - type: labels_from_features
+    features: [labels, canonical_name]
+    output_feature: label
+    override: true
+    allow_missing_labels: false
+  - type: deduplicate
+    subset: ['local_path']

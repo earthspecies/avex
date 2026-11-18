@@ -1,0 +1,69 @@
+# ICASSP 2026: supervised post-training corpus = AudioSet + Xeno-canto + iNaturalist,
+# using the now-SEPARATE alp-data datasets (previously bundled as `animalspeak`).
+#
+# Unified multi-label space (Option B: unify AFTER concatenation):
+#   - AudioSet: native `labels` is a JSON STRING (e.g. '["Music","Speech"]'); parse it into a
+#     real list per-dataset with `parse_json_list` so individual AudioSet classes become labels
+#     (otherwise each full combo string becomes one opaque label -> ~40k junk classes).
+#   - Xeno-canto / iNaturalist: native scalar `canonical_name` (species string).
+#   - Global `labels_from_features features: [labels, canonical_name]` builds ONE joint map over
+#     {AudioSet classes} U {species}. Each column stays single-typed after soft concat
+#     (`labels` = List, null on species rows; `canonical_name` = str, null on AudioSet rows),
+#     so no mixed-dtype column. A species shared by iNat and Xeno is the SAME string -> ONE id.
+# Registered dataset names: `audioset`, `xeno-canto` (hyphen!), `inaturalist`.
+
+train_datasets:
+  - dataset_name: audioset
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: parse_json_list
+        feature: labels
+
+  - dataset_name: xeno-canto
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    # native label column: canonical_name (species)
+
+  - dataset_name: inaturalist
+    split: train
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    # native label column: canonical_name (species)
+
+val_datasets:
+  # AudioSet must be present in val too, otherwise the `labels` column doesn't exist and
+  # the joint labels_from_features (features: [labels, canonical_name]) errors on val.
+  - dataset_name: audioset
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+    data_root: gs://esp-ml-datasets/audioset/v0.1.0/raw/
+    transformations:
+      - type: parse_json_list
+        feature: labels
+  - dataset_name: xeno-canto
+    split: validation
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+  - dataset_name: inaturalist
+    split: val
+    sample_rate: 16000
+    audio_max_length_seconds: 10
+
+concatenate_train: true
+concatenate_val: true
+concatenate_method: soft
+
+# Global transforms after concatenation: unified joint label space + dedup.
+transformations:
+  - type: labels_from_features
+    features: [labels, canonical_name]
+    output_feature: label
+    override: true
+    allow_missing_labels: false     # drop rows that end up with no label
+  - type: deduplicate
+    subset: ['local_path']

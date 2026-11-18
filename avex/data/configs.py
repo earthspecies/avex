@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import List, Literal, Optional, Tuple
 
 from alp_data import DatasetConfig
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 
 class DatasetCollectionConfig(BaseModel):
@@ -89,6 +89,30 @@ class DatasetCollectionConfig(BaseModel):
         ),
     )
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("transformations", mode="after")
+    @classmethod
+    def _parse_global_transformations(cls, v: list | None) -> list | None:
+        """Convert raw dict transforms into typed alp_data transform configs.
+
+        The post-concatenation (global) transforms declared here are handed to
+        ``Dataset.apply_transformations``, which requires typed
+        ``RegisteredTransformConfigs`` (it reads ``cfg.type``). alp_data's own
+        ``DatasetConfig`` runs the equivalent conversion on its per-dataset
+        transforms; this collection-level field otherwise stays raw dicts and
+        crashes with ``KeyError: <class 'dict'>``. Mirror that conversion here.
+
+        Returns
+        -------
+        list | None
+            The transforms as typed ``RegisteredTransformConfigs`` (``None`` if empty).
+        """
+        if not v:
+            return None
+        from alp_data.transforms.registry import RegisteredTransformConfigs
+
+        adapter = TypeAdapter(RegisteredTransformConfigs)
+        return [adapter.validate_python(t) if isinstance(t, dict) else t for t in v]
 
     @model_validator(mode="after")
     def check_nonempty_datasets(self) -> "DatasetCollectionConfig":

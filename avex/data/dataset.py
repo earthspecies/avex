@@ -21,6 +21,9 @@ from alp_data import (
     dataset_from_config,
 )
 
+# Import for its side effect: registers the ``parse_json_list`` transform
+# (used to decode JSON-string multi-label columns, e.g. BirdSet ebird_code_multilabel).
+import avex.data.parse_json_list  # noqa: F401
 from avex.data import birdset_train_splits  # noqa: F401 - registers birdset_train
 
 # Temporary patch for AnimalSpeak for compatibility
@@ -187,6 +190,26 @@ def _build_datasets(
     label_map = {}
     num_classes = 0
 
+    def _val_test_transforms(transforms: list, fitted_label_map: dict) -> list:
+        """Pin the train-fitted label_map onto the label-building transform so val/test
+        reuse the SAME class->id mapping as train (otherwise each split rebuilds its own
+        map and the ids silently disagree with the model's output layer).
+
+        Returns
+        -------
+        list
+            The transforms with the train label_map injected into the label builder.
+        """
+        out = []
+        for t in transforms:
+            if getattr(t, "type", None) in ("labels_from_features", "label_from_feature") and (
+                "label_map" in getattr(type(t), "model_fields", {})
+            ):
+                out.append(t.model_copy(update={"label_map": fitted_label_map}))
+            else:
+                out.append(t)
+        return out
+
     # Handle multi-label case - check for labels_from_features transform metadata
     if "labels_from_features" in train_metadata:
         label_transform_metadata = train_metadata["labels_from_features"]
@@ -196,11 +219,11 @@ def _build_datasets(
         else:
             num_classes = len(label_map)
 
-        # Apply same transformations to val/test datasets to ensure consistency
+        # Apply same transformations to val/test, reusing the train-fitted label_map
         if val_ds and cfg.transformations:
-            val_ds.apply_transformations(cfg.transformations)
+            val_ds.apply_transformations(_val_test_transforms(cfg.transformations, label_map))
         if test_ds and cfg.transformations:
-            test_ds.apply_transformations(cfg.transformations)
+            test_ds.apply_transformations(_val_test_transforms(cfg.transformations, label_map))
 
     # Handle single-label case - check for label_from_feature transform metadata
     elif "label_from_feature" in train_metadata:
@@ -211,11 +234,11 @@ def _build_datasets(
         else:
             num_classes = len(label_map)
 
-        # Apply same transformations to val/test datasets to ensure consistency
+        # Apply same transformations to val/test, reusing the train-fitted label_map
         if val_ds and cfg.transformations:
-            val_ds.apply_transformations(cfg.transformations)
+            val_ds.apply_transformations(_val_test_transforms(cfg.transformations, label_map))
         if test_ds and cfg.transformations:
-            test_ds.apply_transformations(cfg.transformations)
+            test_ds.apply_transformations(_val_test_transforms(cfg.transformations, label_map))
 
     train_ds = AudioDataset(
         train_ds,
